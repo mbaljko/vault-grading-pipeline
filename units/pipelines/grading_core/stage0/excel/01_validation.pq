@@ -1,6 +1,20 @@
+// Stage 0 — Validation join (Excel/Power Query)
+// Purpose:
+// - Map each LMS export row to the grading worksheet’s stable identifier (`Identifier` like "Participant 7835077")
+// - Emit an explicit canonical `submission_id` (digits-only) while preserving the original `GW.Identifier`
+// - Emit `__join_status` that gates grading eligibility (grade only `matched_unique`)
+
 let
     Raw = Excel.CurrentWorkbook(){[Name="Table_raw"]}[Content],
     GW  = Excel.CurrentWorkbook(){[Name="grading_worksheet"]}[Content],
+
+    // Collapse multiple spaces deterministically (bounded passes are sufficient for typical names)
+    CollapseSpaces = (s as nullable text) as nullable text =>
+        let
+            s0 = if s = null then null else s,
+            s1 = if s0 = null then null else List.Accumulate({1..10}, s0, (state, _) => Text.Replace(state, "  ", " "))
+        in
+            s1,
 
     // Strip leading non-alphanumeric noise (e.g., leading "." seen in some exports)
     StripLeadingJunk = (s as nullable text) as nullable text =>
@@ -8,20 +22,38 @@ let
             s0 = if s = null then null else Text.Trim(s),
             chars = if s0 = null then null else Text.ToList(s0),
             allowed = List.Combine({{"a".."z"}, {"0".."9"}}),
-            kept = if chars = null then null else List.SkipWhile(chars, each not List.Contains(allowed, Text.Lower(_))),
+            lowered = if chars = null then null else List.Transform(chars, each Text.Lower(_)),
+            flags = if lowered = null then null else List.Transform(lowered, each List.Contains(allowed, _)),
+            pos = if flags = null then -1 else List.PositionOf(flags, true),
+            kept = if chars = null then null else if pos = -1 then {} else List.Skip(chars, pos),
             out = if kept = null then null else Text.Combine(kept)
         in
             out,
 
-    // Collapse multiple spaces deterministically
-    CollapseSpaces = (s as nullable text) as nullable text =>
+    // Extract the trailing digits from a string (robust to prefix changes like "Participant", "User", etc.)
+    ExtractTrailingDigits = (s as nullable text) as nullable text =>
         let
-            s0 = if s = null then null else s,
-            s1 = if s0 = null then null else
-                 List.Accumulate({1..10}, s0, (state, _) => Text.Replace(state, "  ", " "))
+            s0 = if s = null then null else Text.Trim(s),
+            chars = if s0 = null then null else Text.ToList(s0),
+            reversed = if chars = null then null else List.Reverse(chars),
+            digits = {"0".."9"},
+            takeWhileDigits =
+                if reversed = null then
+                    null
+                else
+                    List.FirstN(
+                        reversed,
+                        (c) => List.Contains(digits, c)
+                    ),
+            out =
+                if takeWhileDigits = null then
+                    null
+                else
+                    Text.Combine(List.Reverse(takeWhileDigits))
         in
-            s1,
+            out,
 
+    // Normalise join key derived from display name
     NormNameKey = (t as nullable any) as nullable text =>
         let
             s0 = if t = null then null else Text.From(t),
@@ -100,16 +132,19 @@ let
             {"GW.Identifier", "GW.Full name"}
         ),
 
-    // Make the grading-sheet Identifier the explicit stable submission_id
+    // Canonical internal submission_id: digits-only version of GW.Identifier
     WithSubmissionId =
         Table.AddColumn(
             ExpandedResolved,
             "submission_id",
-            each [GW.Identifier],
+            each ExtractTrailingDigits([GW.Identifier]),
             type text
         ),
 
-    // Tighten join_status vocabulary so only matched_unique is eligible for grading
+    // Join status gates grading:
+    // - matched_unique: safe to grade
+    // - excluded_ambiguous: name collision in grading worksheet (duplicate name)
+    // - no_match: not found in grading worksheet
     JoinStatus =
         Table.AddColumn(
             WithSubmissionId,
@@ -121,24 +156,16 @@ let
             type text
         ),
 
-    // Output only identifier + join diagnostics (now includes explicit submission_id and __key_name for audit)
     Output =
         Table.SelectColumns(
             JoinStatus,
             {
-                // from database export
                 "User",
                 "Username",
-
-                // normalised join key (audit)
                 "__key_name",
-
-                // from grading worksheet (only when unique match)
                 "GW.Full name",
                 "GW.Identifier",
                 "submission_id",
-
-                // diagnostics
                 "__join_status",
                 "__gw_name_count"
             }
