@@ -31,8 +31,6 @@ No row may represent multiple grading units.
 - If LMS export is wide (one column per dimension), reshape into long form.
 - Typical implementation: use `pandas.melt()` to convert wide rubric exports to long format.
 - Assert that each `(submission_id, component_id, dimension_id)` tuple appears exactly once.
-#### Instantiation and Implementation Details v2
-The canonical grading dataset will be a worksheet within an excel workbook.  
 ### 3.2 Primary Key Uniqueness
 Each row must be uniquely identifiable by the composite key:
 ```
