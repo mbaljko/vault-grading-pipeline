@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/01_design/STEPS - DESIGN.md",
+                "file": "docs/01_design/Stage 0 — Prepare Canonical Inputs.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "STEPS - DESIGN"
+              "title": "Stage 0 — Prepare Canonical Inputs"
             }
           }
         ]
@@ -167,13 +167,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/01_design/STEPS - DESIGN.md",
+                "file": "docs/01_design/Stage 0 — Prepare Canonical Inputs.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of STEPS - DESIGN"
+              "title": "Outline of Stage 0 — Prepare Canonical Inputs"
             }
           }
         ],
@@ -198,11 +198,14 @@
   },
   "active": "54094073c657b04c",
   "lastOpenFiles": [
+    "docs/01_design/Generalised Dimension-First Grading Process.md",
+    "docs/01_design/prior-docs-from-migration/STEP 0 - DATA PREPARATION.md",
+    "docs/01_design/Stage 0 — Prepare Canonical Inputs.md",
+    "docs/01_design/prior-docs-from-migration/STEP 1 - CALIBRATION.md",
+    "docs/01_design/prior-docs-from-migration/STEP 2 - EXECUTION.md",
+    "docs/01_design/prior-docs-from-migration/STEPS - DESIGN.md",
+    "docs/01_design/prior-docs-from-migration",
     "README.md",
-    "docs/01_design/STEP 2 - EXECUTION.md",
-    "docs/01_design/STEP 1 - CALIBRATION.md",
-    "docs/01_design/STEP 0 - DATA PREPARATION.md",
-    "docs/01_design/STEPS - DESIGN.md",
     "DIR ORGANIZATION.md",
     "Design Note - Extensible Architecture for `vault-grading-pipeline`.md",
     "Untitled.md",
@@ -220,7 +223,6 @@
     "units/pipelines",
     "units/apps",
     "units",
-    "runs",
     "Welcome.md"
   ]
 }
