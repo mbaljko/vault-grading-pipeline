@@ -45,12 +45,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/01_design/Stage 0A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
+                "file": "docs/01_design/Stage 0 (Excel,MCode) — Implementation Mapping to Specification.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Stage 0A - Prepare Canonical Grading Targets (Rubric-Agnostic)"
+              "title": "Stage 0 (Excel,MCode) — Implementation Mapping to Specification"
             }
           }
         ],
@@ -200,13 +200,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/01_design/Stage 0A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
+                "file": "docs/01_design/Stage 0 (Excel,MCode) — Implementation Mapping to Specification.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Stage 0A - Prepare Canonical Grading Targets (Rubric-Agnostic)"
+              "title": "Outline of Stage 0 (Excel,MCode) — Implementation Mapping to Specification"
             }
           }
         ],
@@ -231,11 +231,12 @@
   },
   "active": "6ddc07391a51fdfa",
   "lastOpenFiles": [
-    "docs/01_design/Stage 0 — Prepare Canonical Inputs.md",
+    "docs/01_design/implement recommendations.md",
+    "docs/01_design/prior-docs-from-migration/Stage 0 — Prepare Canonical Inputs.md",
+    "docs/01_design/Stage 0 (Excel,MCode) — Implementation Mapping to Specification.md",
+    "docs/01_design/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
     "docs/01_design/Stage 0A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
     "docs/01_design/xxx.md",
-    "docs/01_design/Stage 0 (Excel,MCode) — Implementation Mapping to Specification.md",
-    "docs/01_design/implement recommendations.md",
     "units/pipelines/README.md",
     "units/pipelines/grading_core/stage0/excel/Stage0_Excel_Runbook.md",
     "units/pipelines/grading_core/stage0/excel/Stage0_Excel_Implementation_Standard.md",
