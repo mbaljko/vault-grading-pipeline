@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Design Note - Extensible Architecture for `vault-grading-pipeline`.md",
+                "file": "Untitled.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Design Note - Extensible Architecture for `vault-grading-pipeline`"
+              "title": "Untitled"
             }
           }
         ]
@@ -167,13 +167,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Design Note - Extensible Architecture for `vault-grading-pipeline`.md",
+                "file": "Untitled.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Design Note - Extensible Architecture for `vault-grading-pipeline`"
+              "title": "Outline of Untitled"
             }
           }
         ],
@@ -198,14 +198,15 @@
   },
   "active": "54094073c657b04c",
   "lastOpenFiles": [
-    "DIR ORGANIZATION.md",
     "README.md",
+    "Untitled.md",
+    "DIR ORGANIZATION.md",
+    "Design Note - Extensible Architecture for `vault-grading-pipeline`.md",
     "README~.md",
     "docs/README.md",
     "units/pipelines/README.md",
     "units/apps/README.md",
     "libs/common/README.md",
-    "Design Note - Extensible Architecture for `vault-grading-pipeline`.md",
     "bin/run",
     "libs/common/src/common",
     "libs/common/tests",
