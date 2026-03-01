@@ -2,7 +2,7 @@
 // Purpose:
 // - Map each LMS export row to the grading worksheet’s stable identifier (`Identifier` like "Participant 7835077")
 // - Emit an explicit canonical `submission_id` (digits-only) while preserving the original `GW.Identifier`
-// - Emit `__join_status` that gates grading eligibility (grade only `matched_unique`)
+// - Emit `__join_status` that gates grading eligibility (grade only `matched_unique`) 
 
 let
     Raw = Excel.CurrentWorkbook(){[Name="Table_raw"]}[Content],
