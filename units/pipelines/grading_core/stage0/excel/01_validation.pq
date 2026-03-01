@@ -2,14 +2,34 @@ let
     Raw = Excel.CurrentWorkbook(){[Name="Table_raw"]}[Content],
     GW  = Excel.CurrentWorkbook(){[Name="grading_worksheet"]}[Content],
 
+    // Strip leading non-alphanumeric noise (e.g., leading "." seen in some exports)
+    StripLeadingJunk = (s as nullable text) as nullable text =>
+        let
+            s0 = if s = null then null else Text.Trim(s),
+            chars = if s0 = null then null else Text.ToList(s0),
+            allowed = List.Combine({{"a".."z"}, {"0".."9"}}),
+            kept = if chars = null then null else List.SkipWhile(chars, each not List.Contains(allowed, Text.Lower(_))),
+            out = if kept = null then null else Text.Combine(kept)
+        in
+            out,
+
+    // Collapse multiple spaces deterministically
+    CollapseSpaces = (s as nullable text) as nullable text =>
+        let
+            s0 = if s = null then null else s,
+            s1 = if s0 = null then null else
+                 List.Accumulate({1..10}, s0, (state, _) => Text.Replace(state, "  ", " "))
+        in
+            s1,
+
     NormNameKey = (t as nullable any) as nullable text =>
         let
             s0 = if t = null then null else Text.From(t),
             s1 = if s0 = null then null else Text.Replace(s0, Character.FromNumber(160), " "),
             s2 = if s1 = null then null else Text.Trim(Text.Clean(s1)),
-            s3 = if s2 = null then null else Text.Replace(s2, "  ", " "),
-            s4 = if s3 = null then null else Text.Replace(s3, "  ", " "),
-            s5 = if s4 = null then null else Text.Lower(s4)
+            s3 = if s2 = null then null else CollapseSpaces(s2),
+            s4 = if s3 = null then null else Text.Lower(s3),
+            s5 = if s4 = null then null else StripLeadingJunk(s4)
         in
             s5,
 
@@ -80,18 +100,28 @@ let
             {"GW.Identifier", "GW.Full name"}
         ),
 
-    JoinStatus =
+    // Make the grading-sheet Identifier the explicit stable submission_id
+    WithSubmissionId =
         Table.AddColumn(
             ExpandedResolved,
-            "__join_status",
-            each
-                if [__gw_name_count] = null then "no_match"
-                else if [__gw_name_count] = 1 then "matched_unique"
-                else "matched_ambiguous",
+            "submission_id",
+            each [GW.Identifier],
             type text
         ),
 
-    // Output only identifier + join diagnostics
+    // Tighten join_status vocabulary so only matched_unique is eligible for grading
+    JoinStatus =
+        Table.AddColumn(
+            WithSubmissionId,
+            "__join_status",
+            each
+                if [__gw_name_count] = null then "no_match"
+                else if [__gw_name_count] = 1 and [submission_id] <> null then "matched_unique"
+                else "excluded_ambiguous",
+            type text
+        ),
+
+    // Output only identifier + join diagnostics (now includes explicit submission_id and __key_name for audit)
     Output =
         Table.SelectColumns(
             JoinStatus,
@@ -100,9 +130,13 @@ let
                 "User",
                 "Username",
 
+                // normalised join key (audit)
+                "__key_name",
+
                 // from grading worksheet (only when unique match)
                 "GW.Full name",
                 "GW.Identifier",
+                "submission_id",
 
                 // diagnostics
                 "__join_status",
