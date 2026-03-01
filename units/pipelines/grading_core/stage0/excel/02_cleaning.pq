@@ -1,3 +1,119 @@
+## Query: `cleaned_entries`  
+### Stage 0 — Canonical Component-Level Dataset (Long Format)
+
+### Purpose
+
+This Power Query (MCode) query implements **Stage 0 canonicalisation** for grading.
+
+It transforms heterogeneous LMS exports into a structurally stable, identity-safe, component-level dataset suitable for:
+
+- calibration
+- sampling
+- dimension-level scoring
+- audit and reproducibility
+
+The output of this query is the **canonical Stage 0 dataset** for this assessment.
+
+---
+
+### Canonical Unit Definition (Current Implementation)
+
+Each row produced by this query represents exactly one:
+
+> `submission_id × component_id`
+
+This is the atomic grading unit at the component level.
+
+Dimension-level expansion may occur in a later stage.
+
+---
+
+### Identity Guarantees
+
+Each canonical row contains:
+
+- `submission_id`  
+  Stable numeric identifier derived from the grading worksheet `Identifier`  
+  (digits-only; authoritative identity)
+
+- `__row_id`  
+  Local anonymised row handle (stable within this workbook/run)
+
+- `__key`  
+  Deterministic join key used for validation audit
+
+Only rows with:
+
+```
+__join_status = matched_unique
+```
+
+are included.
+
+No unmatched or ambiguous identities are permitted to enter this dataset.
+
+---
+
+### Transformations Performed
+
+1. Cleans raw HTML and encoding artefacts from LMS exports.
+2. Normalises mojibake and whitespace.
+3. Joins LMS export to grading worksheet via validated identity mapping.
+4. Filters out all non-eligible submissions.
+5. Adds per-submission anonymised `__row_id`.
+6. Unpivots component columns into long format.
+7. Derives explicit `component_id` from column name.
+8. Computes `word_count` per component.
+9. Produces a flat, uniform canonical dataset.
+
+---
+
+### Structural Properties of Output
+
+The output dataset guarantees:
+
+- Explicit identity columns (`submission_id`, `component_id`)
+- No duplicate `(submission_id, component_id)` pairs
+- No null `submission_id`
+- Cleaned response text only (no raw HTML)
+- Uniform schema across all rows
+- Deterministic transformation from identical inputs
+
+This dataset becomes the sole input for all downstream grading stages.
+
+---
+
+### Non-Goals of This Query
+
+This query does **not**:
+
+- Apply rubric scoring
+- Perform calibration logic
+- Modify rubric definitions
+- Perform cross-dimension checks
+- Alter grading scales
+
+It performs data normalisation and canonicalisation only.
+
+---
+
+### Future Extension
+
+If the grading engine migrates to full dimension-level canonical units, this dataset will be expanded to:
+
+> `submission_id × component_id × dimension_id`
+
+via cross-join with a rubric dimension table.
+
+The current component-level representation is intentionally chosen as an intermediate canonical form.
+
+---
+
+### Operational Rule
+
+`cleaned_entries` SHALL be treated as the canonical Stage 0 dataset for this assessment.
+
+All downstream queries must reference this output rather than raw LMS exports.
 let
     Source = Excel.CurrentWorkbook(){[Name="Table_raw"]}[Content],
     Validation = Excel.CurrentWorkbook(){[Name="validation"]}[Content],
@@ -109,31 +225,8 @@ let
         in
             n,
 
-    // Extract trailing digits (used to derive submission_id from "Participant #######" if needed)
-    ExtractTrailingDigits = (s as nullable text) as nullable text =>
-        let
-            s0 = if s = null then null else Text.Trim(s),
-            chars = if s0 = null then null else Text.ToList(s0),
-            reversed = if chars = null then null else List.Reverse(chars),
-            digits = {"0".."9"},
-            takeDigits =
-                if reversed = null then
-                    null
-                else
-                    List.FirstN(
-                        reversed,
-                        (c) => List.Contains(digits, c)
-                    ),
-            out =
-                if takeDigits = null then
-                    null
-                else
-                    Text.Combine(List.Reverse(takeDigits))
-        in
-            out,
-
-    // --- clean the response columns ---
-    Cleaned =
+    // --- clean the response columns (wide, before unpivot) ---
+    CleanedWide =
         Table.TransformColumns(
             Source,
             {
@@ -147,59 +240,25 @@ let
             MissingField.Error
         ),
 
-    // --- filter validation rows: keep only eligible rows for grading ---
-    // Preferred gating: grade only matched_unique (and exclude ambiguous collisions as well as no_match)
+    // --- filter validation rows: grade only matched_unique ---
     ValidationFiltered =
         if Table.HasColumns(Validation, {"__join_status"}) then
             Table.SelectRows(Validation, each [__join_status] = "matched_unique")
         else
             Validation,
 
-    // --- ensure validation has __key (stable, deterministic) ---
-    ValidationWithKey =
-        if Table.HasColumns(ValidationFiltered, {"__key"}) then
-            ValidationFiltered
-        else
-            Table.AddColumn(
-                ValidationFiltered,
-                "__key",
-                each
-                    let
-                        u = try Text.From([User]) otherwise null,
-                        u1 = if u = null then null else Text.Trim(u),
-                        u2 = if u1 = null then null else Text.Combine(List.Select(Text.SplitAny(u1, " #(tab)"), each _ <> ""), " "),
-                        u3 = if u2 = null then null else Text.Lower(Text.Replace(Text.Replace(u2, "#(lf)", " "), "#(cr)", " "))
-                    in
-                        if u3 = null or u3 = "" then null else "user:" & u3,
-                type text
-            ),
-
-    // --- ensure validation has submission_id (prefer explicit column; otherwise derive from GW.Identifier) ---
-    ValidationWithSubmissionId =
-        if Table.HasColumns(ValidationWithKey, {"submission_id"}) then
-            ValidationWithKey
-        else if Table.HasColumns(ValidationWithKey, {"GW.Identifier"}) then
-            Table.AddColumn(
-                ValidationWithKey,
-                "submission_id",
-                each ExtractTrailingDigits(try Text.From([GW.Identifier]) otherwise null),
-                type text
-            )
-        else
-            error "The 'validation' table must contain either 'submission_id' or 'GW.Identifier' to derive it.",
-
-    // --- map for join (include submission_id so it can be brought into cleaned_entries) ---
+    // --- map for join (must include submission_id) ---
     ValidationMap =
-        if Table.HasColumns(ValidationWithSubmissionId, {"User", "__key", "submission_id"}) then
-            Table.Distinct(Table.SelectColumns(ValidationWithSubmissionId, {"User", "__key", "submission_id"}))
+        if Table.HasColumns(ValidationFiltered, {"User", "__key", "submission_id"}) then
+            Table.Distinct(Table.SelectColumns(ValidationFiltered, {"User", "__key", "submission_id"}))
         else
             error "The 'validation' table must contain columns 'User', '__key', and 'submission_id'.",
 
     // --- bring __key and submission_id onto the cleaned table via User ---
     WithJoinFields =
-        if Table.HasColumns(Cleaned, {"User"}) then
+        if Table.HasColumns(CleanedWide, {"User"}) then
             Table.ExpandTableColumn(
-                Table.NestedJoin(Cleaned, {"User"}, ValidationMap, {"User"}, "__v", JoinKind.LeftOuter),
+                Table.NestedJoin(CleanedWide, {"User"}, ValidationMap, {"User"}, "__v", JoinKind.LeftOuter),
                 "__v",
                 {"__key", "submission_id"},
                 {"__key", "submission_id"}
@@ -208,7 +267,7 @@ let
             error "The source table 'Table_raw' must contain a 'User' column to join to validation.",
 
     // --- filter: keep only rows that successfully got a submission_id (and key) ---
-    Filtered =
+    Eligible =
         Table.SelectRows(
             WithJoinFields,
             each
@@ -216,100 +275,86 @@ let
                 and [submission_id] <> null and Text.Trim(Text.From([submission_id])) <> ""
         ),
 
-    // --- add unique numeric row id as FIRST column ---
+    // --- add per-submission anonymised handle (stable within this workbook/run) ---
     WithRowId =
         Table.ReorderColumns(
-            Table.AddIndexColumn(Filtered, "__row_id", 1, 1, Int64.Type),
-            List.Combine({{"__row_id"}, List.RemoveItems(Table.ColumnNames(Filtered), {"__row_id"})})
+            Table.AddIndexColumn(Eligible, "__row_id", 1, 1, Int64.Type),
+            List.Combine({{"__row_id"}, List.RemoveItems(Table.ColumnNames(Eligible), {"__row_id"})})
         ),
 
-    // --- prepend +++row_id=value to response columns (row-wise so __row_id is in scope) ---
-    WithRowTaggedResponses =
-        let
-            t = WithRowId,
-            colOrder = Table.ColumnNames(t),
-            rows = Table.ToRecords(t),
-            rows2 =
-                List.Transform(
-                    rows,
-                    (r as record) as record =>
-                        let
-                            rid = Text.From(Record.Field(r, "__row_id")),
-                            prefix = "+++row_id=" & rid & "#(lf)",
-                            r2 =
-                                Record.TransformFields(
-                                    r,
-                                    {
-                                        {"SectionAResponse", (x) => if x = null then null else prefix & Text.From(x)},
-                                        {"SectionBResponse", (x) => if x = null then null else prefix & Text.From(x)},
-                                        {"SectionCResponse", (x) => if x = null then null else prefix & Text.From(x)},
-                                        {"SectionDResponse", (x) => if x = null then null else prefix & Text.From(x)},
-                                        {"SectionEResponse", (x) => if x = null then null else prefix & Text.From(x)}
-                                    }
-                                )
-                        in
-                            r2
-                ),
-            out0 = Table.FromRecords(rows2, colOrder),
-            out = Table.ReorderColumns(out0, colOrder)
-        in
-            out,
+    // --- unpivot components to long form (one row per submission × component) ---
+    ResponseColumns = {"SectionAResponse", "SectionBResponse", "SectionCResponse", "SectionDResponse", "SectionEResponse"},
 
-    // --- add word counts AFTER each section column ---
-    WithA_WC =
-        Table.AddColumn(WithRowTaggedResponses, "SectionAResponse__wc", each WordCount([SectionAResponse]), Int64.Type),
-    ReorderA =
-        let
-            cols = Table.ColumnNames(WithA_WC),
-            insertPos = List.PositionOf(cols, "SectionAResponse") + 1,
-            colsNoNew = List.RemoveItems(cols, {"SectionAResponse__wc"}),
-            newOrder = List.InsertRange(colsNoNew, insertPos, {"SectionAResponse__wc"})
-        in
-            Table.ReorderColumns(WithA_WC, newOrder),
+    Long0 =
+        Table.Unpivot(
+            WithRowId,
+            ResponseColumns,
+            "component_source_column",
+            "cleaned_response_text"
+        ),
 
-    WithB_WC =
-        Table.AddColumn(ReorderA, "SectionBResponse__wc", each WordCount([SectionBResponse]), Int64.Type),
-    ReorderB =
-        let
-            cols = Table.ColumnNames(WithB_WC),
-            insertPos = List.PositionOf(cols, "SectionBResponse") + 1,
-            colsNoNew = List.RemoveItems(cols, {"SectionBResponse__wc"}),
-            newOrder = List.InsertRange(colsNoNew, insertPos, {"SectionBResponse__wc"})
-        in
-            Table.ReorderColumns(WithB_WC, newOrder),
+    // --- derive a stable component_id from the column name ---
+    WithComponentId =
+        Table.AddColumn(
+            Long0,
+            "component_id",
+            each
+                let
+                    col = [component_source_column],
+                    // e.g., "SectionAResponse" -> "A"
+                    afterSection = if col = null then null else try Text.AfterDelimiter(col, "Section") otherwise null,
+                    letter = if afterSection = null then null else try Text.BeforeDelimiter(afterSection, "Response") otherwise null
+                in
+                    if letter = null then null else "section_" & Text.Lower(letter),
+            type text
+        ),
 
-    WithC_WC =
-        Table.AddColumn(ReorderB, "SectionCResponse__wc", each WordCount([SectionCResponse]), Int64.Type),
-    ReorderC =
-        let
-            cols = Table.ColumnNames(WithC_WC),
-            insertPos = List.PositionOf(cols, "SectionCResponse") + 1,
-            colsNoNew = List.RemoveItems(cols, {"SectionCResponse__wc"}),
-            newOrder = List.InsertRange(colsNoNew, insertPos, {"SectionCResponse__wc"})
-        in
-            Table.ReorderColumns(WithC_WC, newOrder),
+    // --- prepend +++row_id=... to the response text (optional but keeps your current prompt/tracing convention) ---
+    WithRowTaggedText =
+        Table.TransformColumns(
+            WithComponentId,
+            {
+                {
+                    "cleaned_response_text",
+                    (x as nullable text) as nullable text =>
+                        if x = null then null else ("+++row_id=" & Text.From([__row_id]) & "#(lf)" & Text.From(x)),
+                    type text
+                }
+            }
+        ),
 
-    WithD_WC =
-        Table.AddColumn(ReorderC, "SectionDResponse__wc", each WordCount([SectionDResponse]), Int64.Type),
-    ReorderD =
-        let
-            cols = Table.ColumnNames(WithD_WC),
-            insertPos = List.PositionOf(cols, "SectionDResponse") + 1,
-            colsNoNew = List.RemoveItems(cols, {"SectionDResponse__wc"}),
-            newOrder = List.InsertRange(colsNoNew, insertPos, {"SectionDResponse__wc"})
-        in
-            Table.ReorderColumns(WithD_WC, newOrder),
+    // --- compute word count per canonical unit (submission × component) ---
+    WithWC =
+        Table.AddColumn(
+            WithRowTaggedText,
+            "word_count",
+            each WordCount([cleaned_response_text]),
+            Int64.Type
+        ),
 
-    WithE_WC =
-        Table.AddColumn(ReorderD, "SectionEResponse__wc", each WordCount([SectionEResponse]), Int64.Type),
-    ReorderE =
-        let
-            cols = Table.ColumnNames(WithE_WC),
-            insertPos = List.PositionOf(cols, "SectionEResponse") + 1,
-            colsNoNew = List.RemoveItems(cols, {"SectionEResponse__wc"}),
-            newOrder = List.InsertRange(colsNoNew, insertPos, {"SectionEResponse__wc"})
-        in
-            Table.ReorderColumns(WithE_WC, newOrder)
+    // --- final column order (canonical long dataset) ---
+    Output =
+        Table.SelectColumns(
+            WithWC,
+            {
+                "__row_id",
+                "submission_id",
+                "__key",
 
+                "component_id",
+                "component_source_column",
+
+                "cleaned_response_text",
+                "word_count",
+
+                // keep metadata (optional but useful)
+                "User",
+                "Username",
+                "Email address",
+                "Time added",
+                "Time modified",
+                "Tags"
+            }
+        )
 in
-    ReorderE
+    Output
