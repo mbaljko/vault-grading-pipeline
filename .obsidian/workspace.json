@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/01_design/Stage 0 (Excel,MCode) — Implementation Mapping to Specification.md",
+                "file": "units/pipelines/README.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Stage 0 (Excel,MCode) — Implementation Mapping to Specification"
+              "title": "README"
             }
           }
         ]
@@ -167,13 +167,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/01_design/Stage 0 (Excel,MCode) — Implementation Mapping to Specification.md",
+                "file": "units/pipelines/README.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Stage 0 (Excel,MCode) — Implementation Mapping to Specification"
+              "title": "Outline of README"
             }
           }
         ],
@@ -196,10 +196,19 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "54094073c657b04c",
+  "active": "e5174a9fca7b05c1",
   "lastOpenFiles": [
-    "docs/01_design/implement recommendations.md",
+    "units/pipelines/grading_core/stage0/excel/Stage0_Excel_Runbook.md",
+    "units/pipelines/grading_core/stage0/excel/Stage0_Excel_Implementation_Standard.md",
+    "units/pipelines/grading_core/stage0/excel/README.md",
+    "units/pipelines/grading_core/stage0/excel/03_sampling.pq",
+    "units/pipelines/grading_core/stage0/excel/02_cleaning.pq",
+    "units/pipelines/grading_core/stage0/excel/01_validation.pq",
+    "units/pipelines/grading_core/stage0/excel",
+    "units/pipelines/grading_core/stage0",
+    "units/pipelines/grading_core",
     "docs/01_design/Stage 0 (Excel,MCode) — Implementation Mapping to Specification.md",
+    "docs/01_design/implement recommendations.md",
     "docs/01_design/xxx.md",
     "docs/01_design/Stage 0 — Prepare Canonical Inputs.md",
     "docs/01_design/Stage 0 (Excel",
@@ -221,12 +230,6 @@
     "libs/common/README.md",
     "bin/run",
     "libs/common/src/common",
-    "libs/common/tests",
-    "libs/common/src",
-    "libs/common",
-    "libs",
-    "units/pipelines",
-    "units/apps",
     "Welcome.md"
   ]
 }
