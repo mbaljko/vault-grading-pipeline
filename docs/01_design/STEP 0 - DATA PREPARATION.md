@@ -1,0 +1,4 @@
+- export the database entries
+- export the grading worksheet
+- run validation - flag the dropped students (`no_match` under `__join_status`)
+- `cleaned_entries` will be cleaned data (strip out html and emojibake) also filter out dropped students
