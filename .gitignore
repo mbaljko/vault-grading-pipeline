@@ -1,23 +1,115 @@
-# Ignore everything by default
-*
+```gitignore
+###############################################################################
+# vault-grading-pipeline — Canonical .gitignore
+#
+# MODEL: EXPLICIT BLACKLIST (NOT WHITELIST)
+#
+# This monorepo uses the standard development model:
+#
+#   • Everything durable is tracked by default.
+#   • Only ephemeral, machine-local, sensitive, or reproducible artefacts
+#     are explicitly ignored.
+#
+# We DO NOT use a blanket "ignore everything, then whitelist" approach,
+# because this repository is:
+#
+#   • a multi-pipeline operational workspace
+#   • expected to grow and evolve frequently
+#   • intended to support many independent units over time
+#
+# Structural discipline is enforced by directory architecture, not by
+# aggressive ignore rules.
+#
+###############################################################################
 
-# Allow directories so Git can descend
-!*/
+###############################################################################
+# 1. Python environments (shared or per-unit)
+#
+# These are machine-local and reproducible; never commit them.
+###############################################################################
 
-# Allow these file types
-!*.md
-!*.py
-!*.js
-
-# Allow git config files
-!.gitignore
-
-# Always ignore local/tooling noise (even if extension allowed elsewhere)
-.obsidian/
-.DS_Store
-__pycache__/
-*.pyc
+env/
 .venv/
 venv/
-.env
+**/.venv/
+
+###############################################################################
+# 2. Secrets and local machine configuration
+#
+# These may contain API keys, tokens, or credentials.
+# They must NEVER be versioned.
+###############################################################################
+
+secrets/
+*.env
+*.secret
+*.key
+
+###############################################################################
+# 3. Pipeline run artefacts (always ephemeral)
+#
+# The runs/ directory contains logs, manifests, and generated outputs.
+# These are reproducible and should never be tracked.
+###############################################################################
+
 runs/
+
+###############################################################################
+# 4. Python build and cache artefacts
+###############################################################################
+
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+
+###############################################################################
+# 5. Testing and tooling caches
+###############################################################################
+
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+###############################################################################
+# 6. Logs and temporary files
+###############################################################################
+
+*.log
+*.tmp
+*.bak
+
+###############################################################################
+# 7. macOS system files
+###############################################################################
+
+.DS_Store
+.AppleDouble
+.LSOverride
+
+###############################################################################
+# 8. Editor and IDE metadata
+#
+# We intentionally keep `.obsidian/` because it is part of the vault workflow.
+###############################################################################
+
+.vscode/
+.idea/
+
+###############################################################################
+# 9. Large or generated data (future-proofing)
+#
+# Uncomment if large datasets or generated output directories are introduced.
+###############################################################################
+
+# data/
+# outputs/
+
+###############################################################################
+# END OF FILE
+###############################################################################
