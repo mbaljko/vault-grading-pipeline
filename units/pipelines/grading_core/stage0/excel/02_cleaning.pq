@@ -109,6 +109,29 @@ let
         in
             n,
 
+    // Extract trailing digits (used to derive submission_id from "Participant #######" if needed)
+    ExtractTrailingDigits = (s as nullable text) as nullable text =>
+        let
+            s0 = if s = null then null else Text.Trim(s),
+            chars = if s0 = null then null else Text.ToList(s0),
+            reversed = if chars = null then null else List.Reverse(chars),
+            digits = {"0".."9"},
+            takeDigits =
+                if reversed = null then
+                    null
+                else
+                    List.FirstN(
+                        reversed,
+                        (c) => List.Contains(digits, c)
+                    ),
+            out =
+                if takeDigits = null then
+                    null
+                else
+                    Text.Combine(List.Reverse(takeDigits))
+        in
+            out,
+
     // --- clean the response columns ---
     Cleaned =
         Table.TransformColumns(
@@ -124,14 +147,15 @@ let
             MissingField.Error
         ),
 
-    // --- filter validation rows: exclude no_match ---
+    // --- filter validation rows: keep only eligible rows for grading ---
+    // Preferred gating: grade only matched_unique (and exclude ambiguous collisions as well as no_match)
     ValidationFiltered =
         if Table.HasColumns(Validation, {"__join_status"}) then
-            Table.SelectRows(Validation, each [__join_status] <> "no_match")
+            Table.SelectRows(Validation, each [__join_status] = "matched_unique")
         else
             Validation,
 
-    // --- if validation doesn't have __key, create it (stable, deterministic) ---
+    // --- ensure validation has __key (stable, deterministic) ---
     ValidationWithKey =
         if Table.HasColumns(ValidationFiltered, {"__key"}) then
             ValidationFiltered
@@ -150,28 +174,47 @@ let
                 type text
             ),
 
-    // --- map for join ---
-    ValidationMap =
-        if Table.HasColumns(ValidationWithKey, {"User", "__key"}) then
-            Table.Distinct(Table.SelectColumns(ValidationWithKey, {"User", "__key"}))
+    // --- ensure validation has submission_id (prefer explicit column; otherwise derive from GW.Identifier) ---
+    ValidationWithSubmissionId =
+        if Table.HasColumns(ValidationWithKey, {"submission_id"}) then
+            ValidationWithKey
+        else if Table.HasColumns(ValidationWithKey, {"GW.Identifier"}) then
+            Table.AddColumn(
+                ValidationWithKey,
+                "submission_id",
+                each ExtractTrailingDigits(try Text.From([GW.Identifier]) otherwise null),
+                type text
+            )
         else
-            error "The 'validation' table must contain column 'User'.",
+            error "The 'validation' table must contain either 'submission_id' or 'GW.Identifier' to derive it.",
 
-    // --- bring __key onto the cleaned table via User ---
-    WithKey =
+    // --- map for join (include submission_id so it can be brought into cleaned_entries) ---
+    ValidationMap =
+        if Table.HasColumns(ValidationWithSubmissionId, {"User", "__key", "submission_id"}) then
+            Table.Distinct(Table.SelectColumns(ValidationWithSubmissionId, {"User", "__key", "submission_id"}))
+        else
+            error "The 'validation' table must contain columns 'User', '__key', and 'submission_id'.",
+
+    // --- bring __key and submission_id onto the cleaned table via User ---
+    WithJoinFields =
         if Table.HasColumns(Cleaned, {"User"}) then
             Table.ExpandTableColumn(
                 Table.NestedJoin(Cleaned, {"User"}, ValidationMap, {"User"}, "__v", JoinKind.LeftOuter),
                 "__v",
-                {"__key"},
-                {"__key"}
+                {"__key", "submission_id"},
+                {"__key", "submission_id"}
             )
         else
             error "The source table 'Table_raw' must contain a 'User' column to join to validation.",
 
-    // --- filter: keep only rows that successfully got a key ---
+    // --- filter: keep only rows that successfully got a submission_id (and key) ---
     Filtered =
-        Table.SelectRows(WithKey, each [__key] <> null and Text.Trim(Text.From([__key])) <> ""),
+        Table.SelectRows(
+            WithJoinFields,
+            each
+                [__key] <> null and Text.Trim(Text.From([__key])) <> ""
+                and [submission_id] <> null and Text.Trim(Text.From([submission_id])) <> ""
+        ),
 
     // --- add unique numeric row id as FIRST column ---
     WithRowId =

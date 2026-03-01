@@ -38,9 +38,23 @@
               "icon": "lucide-file",
               "title": "implement recommendations"
             }
+          },
+          {
+            "id": "6ddc07391a51fdfa",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "docs/01_design/Stage 0 (Excel,MCode) — Implementation Mapping to Specification.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Stage 0 (Excel,MCode) — Implementation Mapping to Specification"
+            }
           }
         ],
-        "currentTab": 1
+        "currentTab": 2
       }
     ],
     "direction": "vertical"
@@ -186,13 +200,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/01_design/implement recommendations.md",
+                "file": "docs/01_design/Stage 0 (Excel,MCode) — Implementation Mapping to Specification.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of implement recommendations"
+              "title": "Outline of Stage 0 (Excel,MCode) — Implementation Mapping to Specification"
             }
           }
         ],
@@ -215,8 +229,9 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "11a8b585e1dbf754",
+  "active": "6ddc07391a51fdfa",
   "lastOpenFiles": [
+    "docs/01_design/implement recommendations.md",
     "docs/01_design/Stage 0 (Excel,MCode) — Implementation Mapping to Specification.md",
     "units/pipelines/README.md",
     "units/pipelines/grading_core/stage0/excel/Stage0_Excel_Runbook.md",
@@ -228,7 +243,6 @@
     "units/pipelines/grading_core/stage0/excel",
     "units/pipelines/grading_core/stage0",
     "units/pipelines/grading_core",
-    "docs/01_design/implement recommendations.md",
     "docs/01_design/xxx.md",
     "docs/01_design/Stage 0 — Prepare Canonical Inputs.md",
     "docs/01_design/Stage 0 (Excel",
