@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/01_design/Stage 0 (Excel/Stage 0 (Excel,MCode) — Implementation Mapping to Specification.md",
+                "file": "docs/01_design/Stage 0 (Excel,MCode) — Implementation Mapping to Specification.md",
                 "mode": "source",
                 "source": false
               },
@@ -167,7 +167,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/01_design/Stage 0 (Excel/Stage 0 (Excel,MCode) — Implementation Mapping to Specification.md",
+                "file": "docs/01_design/Stage 0 (Excel,MCode) — Implementation Mapping to Specification.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -198,10 +198,11 @@
   },
   "active": "54094073c657b04c",
   "lastOpenFiles": [
-    "docs/01_design/Stage 0 — Prepare Canonical Inputs.md",
-    "docs/01_design/Stage 0 (Excel/Stage 0 (Excel,MCode) — Implementation Mapping to Specification.md",
-    "docs/01_design/Stage 0 (Excel",
+    "docs/01_design/implement recommendations.md",
+    "docs/01_design/Stage 0 (Excel,MCode) — Implementation Mapping to Specification.md",
     "docs/01_design/xxx.md",
+    "docs/01_design/Stage 0 — Prepare Canonical Inputs.md",
+    "docs/01_design/Stage 0 (Excel",
     "docs/01_design/asd.md",
     "docs/01_design/Generalised Dimension-First Grading Process.md",
     "docs/01_design/prior-docs-from-migration/STEP 0 - DATA PREPARATION.md",
