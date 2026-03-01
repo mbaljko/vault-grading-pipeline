@@ -1,0 +1,23 @@
+# Ignore everything by default
+*
+
+# Allow directories so Git can descend
+!*/
+
+# Allow these file types
+!*.md
+!*.py
+!*.js
+
+# Allow git config files
+!.gitignore
+
+# Always ignore local/tooling noise (even if extension allowed elsewhere)
+.obsidian/
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+runs/
