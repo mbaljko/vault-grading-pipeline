@@ -89,13 +89,14 @@ All fields below MUST be derived from the frozen canonical dataset snapshot.
 | `count_unique_components`     | integer | derived_from_snapshot | Distinct component_id count           |
 Coverage validation:
 
-| field | type | freeze rule | notes |
-|-------|------|------------|-------|
-| `eligible_submissions` | integer | derived_from_snapshot | Distinct eligible submissions |
-| `components` | integer | derived_from_snapshot | Distinct component_id count |
-| `expected_rows_formula` | string | metadata_static | Text representation only |
-| `expected_rows_value` | integer | derived_from_snapshot | eligible_submissions × components |
-| `coverage_check_pass` | boolean | derived_from_snapshot | Must equal TRUE |
+| field                   | type    | freeze rule           | notes                                                                                      |
+| ----------------------- | ------- | --------------------- | ------------------------------------------------------------------------------------------ |
+| `eligible_submissions`  | integer | derived_from_snapshot | Distinct `submission_id` in canonical snapshot (Stage 0A defines eligibility by inclusion) |
+| `components`            | integer | derived_from_snapshot | Distinct `component_id` in canonical snapshot                                              |
+| `expected_rows_formula` | string  | metadata_static       | Text representation only                                                                   |
+| `expected_rows_value`   | integer | derived_from_snapshot | eligible_submissions × components                                                          |
+| `coverage_check_pass`   | boolean | derived_from_snapshot | Must equal TRUE                                                                            |
+
 ### 4.6 Reproducibility Contract
 
 | field | type | freeze rule | notes |
@@ -113,6 +114,7 @@ At completion of Stage 0A:
 4. All fields marked `derived_from_snapshot` reflect the frozen canonical dataset.  
 5. `coverage_check_pass = TRUE`.  
 6. Canonical dataset identity matches declared unit definition.  
+7. `eligible_submissions` = `count_unique_submission_ids`
 If any invariant fails, Stage 0A is incomplete.
 ## 6. Snapshot Derivation and Freeze Enforcement
 The Stage 0A manifest must be derived from a **frozen canonical dataset snapshot**.
