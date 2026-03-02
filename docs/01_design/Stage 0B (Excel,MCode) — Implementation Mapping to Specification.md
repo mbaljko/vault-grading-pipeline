@@ -6,17 +6,37 @@ This document maps the current Excel/MCode workflow to the Stage 0B specificatio
 (c) what gaps or clarifications are required for explicit compliance.
 ## 0. Excel Workbook Mental Model (Stage 0B)
 Stage 0B is implemented within the same Excel workbook used for Stage 0A, but introduces rubric-dependent structure.
-### 0.1 Workbook Inputs (as worksheets)
-- `cleaned_entries_snapshot`  
-  - Frozen Stage 0A canonical dataset snapshot  
-  - Long format targets:
-    - `submission_id`
-    - `component_id`
-    - `response_text` (cleaned)
-    - optional metadata (e.g., `response_wc`, `__row_id`)
-- `rubric_definition`  
-  - A rubric table defining dimensions per component  
-  - Must be maintained deterministically (see Section 3.4)
+### 0.1 Workbook Inputs (as Worksheets)
+#### Stage 0A Canonical Snapshot Worksheet
+**Role**  
+Frozen Stage 0A canonical dataset snapshot (rubric-agnostic grading targets).
+**Worksheet Name**  
+The worksheet name varies by run and must be recorded in the Stage 0A manifest via the field:
+`canonical_snapshot_worksheet`
+Example:
+`stage0A_snapshot_2026_03_01`
+**Required Columns (Long Format Targets)**  
+`submission_id`  
+`component_id`  
+`response_text` (cleaned)
+**Optional Metadata Columns**  
+`response_wc`  
+`__row_id`
+This worksheet must contain static values only. It represents the frozen canonical dataset state for the run.
+#### `rubric_definition`
+**Role**  
+Authoritative rubric table defining the dimension set per component for Stage 0B expansion.
+**Required Structure**  
+`component_id`  
+`dimension_id`  
+Optional (recommended):  
+`dimension_order`
+**Requirements**  
+The rubric definition must be:
+- deterministic  
+- version-traceable  
+- stable across re-runs of Stage 0B  
+Rubric identifiers must not depend on display labels.
 ### 0.2 Stage 0B Outputs (as worksheets)
 - `grading_units`  
   - Canonical grading unit dataset (Stage 0B output)

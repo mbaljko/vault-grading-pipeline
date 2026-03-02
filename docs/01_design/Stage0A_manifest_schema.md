@@ -73,14 +73,15 @@ Sampling queries must NOT be listed in Stage 0A.
 The `pipeline_commit` value must correspond to a committed state (working tree clean).
 ### 4.4 Canonical Identity Definition
 
-| field | type | freeze rule | notes |
-|-------|------|------------|-------|
-| `canonical_dataset` | string | static_literal | Must equal `cleaned_entries` |
-| `canonical_unit` | string | static_literal | `submission_id × component_id` |
-| `primary_key` | string | static_literal | `(submission_id, component_id)` |
-| `sort_order` | string | metadata_static | Must match snapshot ordering |
-| `identifier_source_submission_id` | string | metadata_static | Documented identifier origin |
-| `component_id_source` | string | metadata_static | Documented component derivation |
+| field                             | type   | freeze rule     | notes                                                        |
+| --------------------------------- | ------ | --------------- | ------------------------------------------------------------ |
+| `canonical_snapshot_worksheet`    | string | metadata_static | Exact worksheet name containing the frozen Stage 0A snapshot |
+| `canonical_dataset`               | string | static_literal  | Must equal `cleaned_entries`                                 |
+| `canonical_unit`                  | string | static_literal  | `submission_id × component_id`                               |
+| `primary_key`                     | string | static_literal  | `(submission_id, component_id)`                              |
+| `sort_order`                      | string | metadata_static | Must match snapshot ordering                                 |
+| `identifier_source_submission_id` | string | metadata_static | Documented identifier origin                                 |
+| `component_id_source`             | string | metadata_static | Documented component derivation                              |
 ### 4.5 Row Counts and Scope Validation
 All fields below MUST be derived from the frozen canonical dataset snapshot.
 
@@ -171,8 +172,8 @@ Course run instances:  ==belong in COURSE-SPECIFIC VAULT==
     <ASSESSMENT>/
       03_runs/
         <YYYY-MM-DD>/
-          cleaned_entries_snapshot.csv
-          stage0A_manifest.xlsx
+          cleaned_entries_snapshot.csv (OPTIONAL)
+          <assessment>_stage0A.xlsx
 ```
 The manifest must remain paired with its corresponding canonical dataset snapshot.
 
