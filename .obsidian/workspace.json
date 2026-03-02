@@ -59,12 +59,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/01_design/Stage0A_manifest_schema.md",
+                "file": "docs/01_design/Stage 0B (Excel,MCode) — Implementation Mapping to Specification.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Stage0A_manifest_schema"
+              "title": "Stage 0B (Excel,MCode) — Implementation Mapping to Specification"
             }
           }
         ],
@@ -214,13 +214,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/01_design/Stage0A_manifest_schema.md",
+                "file": "docs/01_design/Stage 0B (Excel,MCode) — Implementation Mapping to Specification.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Stage0A_manifest_schema"
+              "title": "Outline of Stage 0B (Excel,MCode) — Implementation Mapping to Specification"
             }
           }
         ],
@@ -245,8 +245,8 @@
   },
   "active": "23a062eef0767e14",
   "lastOpenFiles": [
-    "docs/01_design/Stage 0B (Excel,MCode) — Implementation Mapping to Specification.md",
     "docs/01_design/Stage0A_manifest_schema.md",
+    "docs/01_design/Stage 0B (Excel,MCode) — Implementation Mapping to Specification.md",
     "docs/01_design/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
     "docs/01_design/xxx.md",
     "docs/01_design/asd.md",

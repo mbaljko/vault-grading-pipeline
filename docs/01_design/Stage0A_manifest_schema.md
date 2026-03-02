@@ -163,7 +163,8 @@ Schema definition (pipeline repository):
 ```
 docs/01_design/Stage0A_manifest_schema.md
 ```
-Course run instances:
+Course run instances:  ==belong in COURSE-SPECIFIC VAULT==
+
 ```
 <course-vault>/
   06_grading/
