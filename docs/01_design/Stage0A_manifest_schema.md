@@ -86,13 +86,13 @@ These fields validate deterministic coverage.
 | `count_unique_components` | integer | Distinct component_id count |
 Coverage validation:
 
-| field | type | description |
-|-------|------|-------------|
-| `eligible_submissions` | integer | Count of matched submissions |
-| `components` | integer | Count of components per submission |
-| `expected_rows_formula` | string | Textual formula representation |
-| `expected_rows_value` | integer | Computed expected count |
-| `coverage_check_pass` | boolean | Must be TRUE |
+| field                   | type    | description                        |
+| ----------------------- | ------- | ---------------------------------- |
+| `eligible_submissions`  | integer | Count of matched submissions       |
+| `components`            | integer | Count of components per submission |
+| `expected_rows_formula` | string  | Textual formula representation     |
+| `expected_rows_value`   | integer | Computed expected count            |
+| `coverage_check_pass`   | boolean | Must be TRUE                       |
 ### 4.6 Reproducibility Contract
 
 | field | type | description |
