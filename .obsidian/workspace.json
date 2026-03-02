@@ -45,12 +45,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/01_design/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
+                "file": "docs/01_design/Stage0A_manifest_schema.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Stage 0A (Excel,MCode) — Implementation Mapping to Specification"
+              "title": "Stage0A_manifest_schema"
             }
           }
         ],
@@ -200,13 +200,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/01_design/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
+                "file": "docs/01_design/Stage0A_manifest_schema.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Stage 0A (Excel,MCode) — Implementation Mapping to Specification"
+              "title": "Outline of Stage0A_manifest_schema"
             }
           }
         ],
@@ -231,8 +231,9 @@
   },
   "active": "6ddc07391a51fdfa",
   "lastOpenFiles": [
-    "docs/01_design/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
     "docs/01_design/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
+    "docs/01_design/Stage0A_manifest_schema.md",
+    "docs/01_design/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
     "docs/01_design/implement recommendations.md",
     "docs/01_design/prior-docs-from-migration/Stage 0 — Prepare Canonical Inputs.md",
     "docs/01_design/Stage 0A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
