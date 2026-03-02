@@ -5,7 +5,7 @@
 - Define what you are scoring in one sentence (e.g., “quality of boundary-marking around where responsibility stops / is handed off”).
 - Define the unit you will score: one cell = one score for this dimension, regardless of what else is in the response.
 Deliverable: a 3–5 line “dimension header” kept visible while scoring.  
-`CAL_PPP_SectionA_Step01_dimension_header_v01`
+`CAL_PPP_SectionA_Step01_dimensiovaultn_header_v01`
 #### 2) Translate the dimension into observable indicators
 Convert abstract rubric language into things you can point to in text.
 - Phrase indicators as “does the response do X”, not “shows understanding of Y”.
