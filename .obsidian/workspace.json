@@ -4,87 +4,24 @@
     "type": "split",
     "children": [
       {
-        "id": "5bdc1cc3631a680c",
+        "id": "45d34d3097761dce",
         "type": "tabs",
         "children": [
           {
-            "id": "54094073c657b04c",
-            "type": "leaf",
-            "pinned": true,
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "docs/01_design/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
-                "mode": "source",
-                "source": false
-              },
-              "pinned": true,
-              "icon": "lucide-file",
-              "title": "Stage 0A (Excel,MCode) — Implementation Mapping to Specification"
-            }
-          },
-          {
-            "id": "11a8b585e1dbf754",
-            "type": "leaf",
-            "pinned": true,
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "docs/01_design/implement recommendations.md",
-                "mode": "source",
-                "source": false
-              },
-              "pinned": true,
-              "icon": "lucide-file",
-              "title": "implement recommendations"
-            }
-          },
-          {
-            "id": "d2b48a756d8bed9c",
-            "type": "leaf",
-            "pinned": true,
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "docs/01_design/Stage 0B (Excel,MCode) — Implementation Mapping to Specification.md",
-                "mode": "source",
-                "source": false
-              },
-              "pinned": true,
-              "icon": "lucide-file",
-              "title": "Stage 0B (Excel,MCode) — Implementation Mapping to Specification"
-            }
-          },
-          {
-            "id": "195c484623eb8361",
+            "id": "a1638eb866e06f32",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/01_design/prior-docs-from-migration/STEP 2 - EXECUTION.md",
+                "file": "docs/01_design/rubric_construction/Rubric Construction Pipeline — Dimension-Level Specification.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "STEP 2 - EXECUTION"
-            }
-          },
-          {
-            "id": "0a163f4147cb96c3",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "docs/01_design/nomenclature.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "nomenclature"
+              "title": "Rubric Construction Pipeline — Dimension-Level Specification"
             }
           }
-        ],
-        "currentTab": 4
+        ]
       }
     ],
     "direction": "vertical"
@@ -230,13 +167,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/01_design/nomenclature.md",
+                "file": "docs/01_design/rubric_construction/Rubric Construction Pipeline — Dimension-Level Specification.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of nomenclature"
+              "title": "Outline of Rubric Construction Pipeline — Dimension-Level Specification"
             }
           }
         ],
@@ -259,23 +196,27 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "0a163f4147cb96c3",
+  "active": "a1638eb866e06f32",
   "lastOpenFiles": [
-    "docs/01_design/prior-docs-from-migration/STEP 1 - CALIBRATION.md",
-    "docs/01_design/nomenclature.md",
-    "docs/01_design/prior-docs-from-migration/STEPS - DESIGN.md",
-    "docs/01_design/Stage 0B (Excel,MCode) — Implementation Mapping to Specification.md",
-    "docs/01_design/Stage0A_manifest_schema.md",
-    "docs/01_design/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
-    "docs/01_design/prior-docs-from-migration/STEP 2 - EXECUTION.md",
-    "docs/01_design/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
+    "docs/01_design/grading_core/prior-docs-from-migration/STEP 1 - CALIBRATION.md",
+    "docs/01_design/rubric_construction/Rubric Construction Pipeline — Dimension-Level Specification.md",
+    "docs/01_design/grading_core/prior-docs-from-migration/STEP 2 - EXECUTION.md",
+    "docs/01_design/grading_core/prior-docs-from-migration/STEPS - DESIGN.md",
+    "docs/01_design/grading_core/prior-docs-from-migration/STEP 0 - DATA PREPARATION.md",
+    "docs/01_design/grading_core/prior-docs-from-migration/Stage 0 — Prepare Canonical Inputs.md",
     "docs/01_design/rubric_definition.md",
+    "docs/01_design/rubric_construction",
+    "docs/01_design/Nomenclature Standard — Grading Ontology and Calibration Alignment.md",
+    "docs/01_design/implement recommendations.md",
+    "docs/01_design/grading_core/Generalised Dimension-First Grading Process.md",
+    "docs/01_design/grading_core/Stage0A_manifest_schema.md",
+    "docs/01_design/grading_core/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
+    "docs/01_design/grading_core/Stage 0B (Excel,MCode) — Implementation Mapping to Specification.md",
+    "docs/01_design/grading_core",
     "docs/01_design/xxx.md",
     "docs/01_design/asd.md",
-    "docs/01_design/Generalised Dimension-First Grading Process.md",
-    "docs/01_design/implement recommendations.md",
-    "docs/01_design/Stage 0A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
-    "docs/01_design/prior-docs-from-migration/Stage 0 — Prepare Canonical Inputs.md",
+    "docs/01_design/grading_core/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
+    "docs/01_design/grading_core/Stage 0A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
     "units/pipelines/README.md",
     "units/pipelines/grading_core/stage0/excel/Stage0_Excel_Runbook.md",
     "units/pipelines/grading_core/stage0/excel/Stage0_Excel_Implementation_Standard.md",
@@ -287,15 +228,11 @@
     "units/pipelines/grading_core/stage0",
     "units/pipelines/grading_core",
     "docs/01_design/Stage 0 (Excel",
-    "docs/01_design/prior-docs-from-migration/STEP 0 - DATA PREPARATION.md",
-    "docs/01_design/prior-docs-from-migration",
+    "docs/01_design/grading_core/prior-docs-from-migration",
     "README.md",
     "DIR ORGANIZATION.md",
     "Design Note - Extensible Architecture for `vault-grading-pipeline`.md",
     "Untitled.md",
-    "README~.md",
-    "docs/README.md",
-    "bin/run",
-    "libs/common/src/common"
+    "README~.md"
   ]
 }
