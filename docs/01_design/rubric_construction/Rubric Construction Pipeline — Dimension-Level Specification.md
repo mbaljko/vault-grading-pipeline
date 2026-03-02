@@ -77,7 +77,7 @@ Revision Actions:
 - Add one positive anchor condition.
 - Tighten hardest boundary rule.
 Deliverable:
-`<ASSESSMENT>_<Component>_Step06_boundary_rules_v02`
+`<ASSESSMENT>_<Component>_Step06_boundary_rules_v1``
 ## 5. Anchor Bank Construction
 ### 5.1 Select Anchors
 Purpose:

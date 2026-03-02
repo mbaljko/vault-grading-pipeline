@@ -198,8 +198,9 @@
   },
   "active": "a1638eb866e06f32",
   "lastOpenFiles": [
-    "docs/01_design/grading_core/prior-docs-from-migration/STEP 1 - CALIBRATION.md",
+    "docs/01_design/rubric_construction/template for dimenion header.md",
     "docs/01_design/rubric_construction/Rubric Construction Pipeline — Dimension-Level Specification.md",
+    "docs/01_design/grading_core/prior-docs-from-migration/STEP 1 - CALIBRATION.md",
     "docs/01_design/grading_core/prior-docs-from-migration/STEP 2 - EXECUTION.md",
     "docs/01_design/grading_core/prior-docs-from-migration/STEPS - DESIGN.md",
     "docs/01_design/grading_core/prior-docs-from-migration/STEP 0 - DATA PREPARATION.md",
@@ -232,7 +233,6 @@
     "README.md",
     "DIR ORGANIZATION.md",
     "Design Note - Extensible Architecture for `vault-grading-pipeline`.md",
-    "Untitled.md",
-    "README~.md"
+    "Untitled.md"
   ]
 }
