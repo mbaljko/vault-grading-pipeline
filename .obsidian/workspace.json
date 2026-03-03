@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/01_design/grading_core/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
+                "file": "docs/01_design/grading_core/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Stage 0A (Excel,MCode) — Implementation Mapping to Specification"
+              "title": "Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent)"
             }
           }
         ]
@@ -167,13 +167,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/01_design/grading_core/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
+                "file": "docs/01_design/grading_core/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Stage 0A (Excel,MCode) — Implementation Mapping to Specification"
+              "title": "Outline of Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent)"
             }
           }
         ],
@@ -198,6 +198,8 @@
   },
   "active": "b407aaa8ad55d172",
   "lastOpenFiles": [
+    "docs/01_design/grading_core/Stage 0A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
+    "docs/01_design/grading_core/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
     "docs/01_design/Nomenclature Standard — Grading Ontology and Calibration Alignment.md",
     "docs/01_design/rubric_construction/Rubric Construction Pipeline — Dimension-Level Specification.md",
     "docs/01_design/rubric_construction/template for dimenion header.md",
@@ -211,13 +213,11 @@
     "docs/01_design/implement recommendations.md",
     "docs/01_design/grading_core/Generalised Dimension-First Grading Process.md",
     "docs/01_design/grading_core/Stage0A_manifest_schema.md",
-    "docs/01_design/grading_core/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
     "docs/01_design/grading_core/Stage 0B (Excel,MCode) — Implementation Mapping to Specification.md",
     "docs/01_design/grading_core",
     "docs/01_design/xxx.md",
     "docs/01_design/asd.md",
     "docs/01_design/grading_core/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
-    "docs/01_design/grading_core/Stage 0A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
     "units/pipelines/README.md",
     "units/pipelines/grading_core/stage0/excel/Stage0_Excel_Runbook.md",
     "units/pipelines/grading_core/stage0/excel/Stage0_Excel_Implementation_Standard.md",
