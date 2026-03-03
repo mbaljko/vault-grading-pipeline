@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/01_design/Three Pipeline Model.md",
+                "file": "docs/01_design/Four Pipeline Model.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Three Pipeline Model"
+              "title": "Four Pipeline Model"
             }
           }
         ]
@@ -167,13 +167,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/01_design/Three Pipeline Model.md",
+                "file": "docs/01_design/Four Pipeline Model.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Three Pipeline Model"
+              "title": "Outline of Four Pipeline Model"
             }
           }
         ],
@@ -196,42 +196,41 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "e5174a9fca7b05c1",
+  "active": "b407aaa8ad55d172",
   "lastOpenFiles": [
+    "docs/01_design/pl1B_rubric_devt/Rubric Construction Pipeline — Dimension-Level Specification.md",
+    "docs/01_design/pl2_calibration/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
+    "docs/01_design/Generalised Dimension-First Grading Process.md",
+    "docs/01_design/Four Pipeline Model.md",
+    "docs/01_design/pl3_grading_core",
+    "docs/01_design/untitled folder",
+    "docs/01_design/pl2_calibration",
+    "docs/01_design/pl1B_rubric_devt",
+    "docs/01_design/pl1A_canonical_population_prep",
     "units/pipelines/pl1B_rubric_devt",
     "units/pipelines/pl1A_canonical_population_prep",
     "units/pipelines/pl2_rubric_devt",
-    "docs/01_design/grading_core/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
-    "docs/01_design/Three Pipeline Model.md",
     "units/pipelines/pl2_calibration_runs",
     "units/pipelines/pl1_canonical_population_prep",
-    "docs/01_design/grading_core/Stage 0A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
-    "docs/01_design/grading_core/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
+    "docs/01_design/pl1A_canonical_population_prep/Stage 0A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
+    "docs/01_design/pl1A_canonical_population_prep/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
     "docs/01_design/Nomenclature Standard — Grading Ontology and Calibration Alignment.md",
-    "docs/01_design/rubric_construction/Rubric Construction Pipeline — Dimension-Level Specification.md",
-    "docs/01_design/rubric_construction/template for dimenion header.md",
-    "docs/01_design/grading_core/prior-docs-from-migration/STEP 1 - CALIBRATION.md",
-    "docs/01_design/grading_core/prior-docs-from-migration/STEP 2 - EXECUTION.md",
-    "docs/01_design/grading_core/prior-docs-from-migration/STEPS - DESIGN.md",
-    "docs/01_design/grading_core/prior-docs-from-migration/STEP 0 - DATA PREPARATION.md",
-    "docs/01_design/grading_core/prior-docs-from-migration/Stage 0 — Prepare Canonical Inputs.md",
+    "docs/01_design/pl1B_rubric_devt/template for dimenion header.md",
+    "docs/01_design/prior-docs-from-migration/STEP 1 - CALIBRATION.md",
+    "docs/01_design/prior-docs-from-migration/STEP 2 - EXECUTION.md",
+    "docs/01_design/prior-docs-from-migration/STEPS - DESIGN.md",
+    "docs/01_design/prior-docs-from-migration/STEP 0 - DATA PREPARATION.md",
+    "docs/01_design/prior-docs-from-migration/Stage 0 — Prepare Canonical Inputs.md",
     "docs/01_design/rubric_definition.md",
-    "docs/01_design/rubric_construction",
     "docs/01_design/implement recommendations.md",
-    "docs/01_design/grading_core/Generalised Dimension-First Grading Process.md",
-    "docs/01_design/grading_core/Stage0A_manifest_schema.md",
-    "docs/01_design/grading_core/Stage 0B (Excel,MCode) — Implementation Mapping to Specification.md",
-    "docs/01_design/grading_core",
+    "docs/01_design/pl1A_canonical_population_prep/Stage0A_manifest_schema.md",
+    "docs/01_design/pl2_calibration/Stage 0B (Excel,MCode) — Implementation Mapping to Specification.md",
     "docs/01_design/xxx.md",
     "docs/01_design/asd.md",
     "units/pipelines/README.md",
     "units/pipelines/pl3_grading_core/stage0/excel/Stage0_Excel_Runbook.md",
     "units/pipelines/pl3_grading_core/stage0/excel/Stage0_Excel_Implementation_Standard.md",
     "units/pipelines/pl3_grading_core/stage0/excel/README.md",
-    "units/pipelines/pl3_grading_core/stage0/excel/03_sampling.pq",
-    "units/pipelines/pl3_grading_core/stage0/excel/02_cleaning.pq",
-    "units/pipelines/pl3_grading_core/stage0/excel/01_validation.pq",
-    "units/pipelines/pl3_grading_core/stage0/excel",
     "README.md",
     "DIR ORGANIZATION.md"
   ]
