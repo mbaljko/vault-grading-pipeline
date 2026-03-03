@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/01_design/grading_core/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
+                "file": "docs/01_design/Three Pipeline Model.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent)"
+              "title": "Three Pipeline Model"
             }
           }
         ]
@@ -167,13 +167,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/01_design/grading_core/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
+                "file": "docs/01_design/Three Pipeline Model.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent)"
+              "title": "Outline of Three Pipeline Model"
             }
           }
         ],
@@ -196,8 +196,15 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "b407aaa8ad55d172",
+  "active": "e5174a9fca7b05c1",
   "lastOpenFiles": [
+    "units/pipelines/pl1B_rubric_devt",
+    "units/pipelines/pl1A_canonical_population_prep",
+    "units/pipelines/pl2_rubric_devt",
+    "docs/01_design/grading_core/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
+    "docs/01_design/Three Pipeline Model.md",
+    "units/pipelines/pl2_calibration_runs",
+    "units/pipelines/pl1_canonical_population_prep",
     "docs/01_design/grading_core/Stage 0A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
     "docs/01_design/grading_core/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
     "docs/01_design/Nomenclature Standard — Grading Ontology and Calibration Alignment.md",
@@ -217,22 +224,15 @@
     "docs/01_design/grading_core",
     "docs/01_design/xxx.md",
     "docs/01_design/asd.md",
-    "docs/01_design/grading_core/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
     "units/pipelines/README.md",
-    "units/pipelines/grading_core/stage0/excel/Stage0_Excel_Runbook.md",
-    "units/pipelines/grading_core/stage0/excel/Stage0_Excel_Implementation_Standard.md",
-    "units/pipelines/grading_core/stage0/excel/README.md",
-    "units/pipelines/grading_core/stage0/excel/03_sampling.pq",
-    "units/pipelines/grading_core/stage0/excel/02_cleaning.pq",
-    "units/pipelines/grading_core/stage0/excel/01_validation.pq",
-    "units/pipelines/grading_core/stage0/excel",
-    "units/pipelines/grading_core/stage0",
-    "units/pipelines/grading_core",
-    "docs/01_design/Stage 0 (Excel",
-    "docs/01_design/grading_core/prior-docs-from-migration",
+    "units/pipelines/pl3_grading_core/stage0/excel/Stage0_Excel_Runbook.md",
+    "units/pipelines/pl3_grading_core/stage0/excel/Stage0_Excel_Implementation_Standard.md",
+    "units/pipelines/pl3_grading_core/stage0/excel/README.md",
+    "units/pipelines/pl3_grading_core/stage0/excel/03_sampling.pq",
+    "units/pipelines/pl3_grading_core/stage0/excel/02_cleaning.pq",
+    "units/pipelines/pl3_grading_core/stage0/excel/01_validation.pq",
+    "units/pipelines/pl3_grading_core/stage0/excel",
     "README.md",
-    "DIR ORGANIZATION.md",
-    "Design Note - Extensible Architecture for `vault-grading-pipeline`.md",
-    "Untitled.md"
+    "DIR ORGANIZATION.md"
   ]
 }
