@@ -44,7 +44,7 @@ submission_id × component_id × dimension_id
 ```
 This is the atomic scoring unit.
 All calibration and scoring must operate at this level.
-### 1.4 Section A Correction (Option A Adopted)
+### 1.4 Prior Practice: Correction
 Previously, calibration materials used “dimension” to refer to what was structurally a component.
 Under this standard:
 - `SectionAResponse` is a **component**.

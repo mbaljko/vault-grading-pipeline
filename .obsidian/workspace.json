@@ -11,10 +11,14 @@
             "id": "b407aaa8ad55d172",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "docs/01_design/grading_core/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "New tab"
+              "title": "Stage 0A (Excel,MCode) — Implementation Mapping to Specification"
             }
           }
         ]
@@ -163,12 +167,13 @@
             "state": {
               "type": "outline",
               "state": {
+                "file": "docs/01_design/grading_core/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline"
+              "title": "Outline of Stage 0A (Excel,MCode) — Implementation Mapping to Specification"
             }
           }
         ],
@@ -193,6 +198,7 @@
   },
   "active": "b407aaa8ad55d172",
   "lastOpenFiles": [
+    "docs/01_design/Nomenclature Standard — Grading Ontology and Calibration Alignment.md",
     "docs/01_design/rubric_construction/Rubric Construction Pipeline — Dimension-Level Specification.md",
     "docs/01_design/rubric_construction/template for dimenion header.md",
     "docs/01_design/grading_core/prior-docs-from-migration/STEP 1 - CALIBRATION.md",
@@ -202,7 +208,6 @@
     "docs/01_design/grading_core/prior-docs-from-migration/Stage 0 — Prepare Canonical Inputs.md",
     "docs/01_design/rubric_definition.md",
     "docs/01_design/rubric_construction",
-    "docs/01_design/Nomenclature Standard — Grading Ontology and Calibration Alignment.md",
     "docs/01_design/implement recommendations.md",
     "docs/01_design/grading_core/Generalised Dimension-First Grading Process.md",
     "docs/01_design/grading_core/Stage0A_manifest_schema.md",
