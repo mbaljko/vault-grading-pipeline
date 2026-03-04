@@ -5,168 +5,301 @@ BEGIN GENERATION
 ```
 
 # .
-`````
-## CAL_PPP_SectionA_Step00_CalibrationPayloadFormat_v01
+````
+## Wrapper Prompt — Generate `CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step00_CalibrationPayloadFormat_v01`
 
 ## Purpose
 
-Define the canonical payload structure used during calibration runs for component `SectionA`.
+This wrapper prompt generates the artefact:
 
-This artefact specifies the exact input structure that calibration scoring prompts will receive when evaluating dimensions associated with this component.
+```
+CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step00_CalibrationPayloadFormat_v01
+```
 
-The payload format establishes the execution contract between:
+The artefact defines the **canonical payload structure used during calibration runs** for a specific component of an assessment.
 
-- the calibration dataset
-- calibration scoring prompts generated for the component’s dimensions
+The generated document establishes the **execution contract** between:
 
-All calibration scoring prompts for dimensions belonging to `SectionA` must assume this payload structure exactly.
+- the calibration dataset produced from the canonical population, and  
+- the calibration scoring prompts used to evaluate rubric **dimensions** belonging to the component.
 
-## Calibration Evidence Surface
+The wrapper prompt derives all structural information from the authoritative input:
 
-Calibration operates over responses to the component:
+```
+<ASSESSMENT_ID>_Step00_AssignmentPayloadSpec_v01
+```
+
+The user must then specify:
+
+```
+component_id = <value from AssignmentPayloadSpec>
+```
+
+The generated payload format must **exactly match the structure defined in the assignment payload specification**.
+
+This wrapper prompt generates documentation only.  
+It does **not** generate calibration datasets or scoring prompts.
+
+---
+
+## Task Classification
+
+This wrapper prompt performs:
+
+- payload schema extraction
+- component-level evidence surface specification
+- calibration execution contract definition
+
+This wrapper prompt does **not** perform:
+
+- rubric construction
+- dimension definition
+- indicator generation
+- boundary rule definition
+- scoring or grading.
+
+---
+
+## Authoritative Inputs (Required)
+
+The model may rely **only** on the following inputs, supplied verbatim by the user and delimited by `===`.
+
+### Input 1 — Assignment Payload Specification
+
+```
+<ASSESSMENT_ID>_Step00_AssignmentPayloadSpec_v01
+```
+
+This document defines:
+
+- the assessment identity
+- canonical identifier fields
+- canonical response fields
+- the set of valid `component_id` values
+- wrapper handling rules
+- structural dataset invariants.
+
+The wrapper prompt must treat this document as **normative**.
+
+All payload fields must be derived from this specification.
+
+---
+
+### Input 2 — Target Component
+
+The user must provide:
+
+```
+component_id = <value from AssignmentPayloadSpec>
+```
+
+The component must exist in the authoritative component list defined in the assignment payload specification.
+
+Example:
 
 ```
 component_id = SectionA
 ```
 
-Each payload item represents the text submitted by a participant for this component.
+---
 
-Dimensions such as `A1`, `A2`, `A3`, etc., will be evaluated against the same `response_text`.
+## Generation Rules
 
-## Calibration Scoring Unit
+The generated artefact must:
 
-Each calibration item represents one participant response to the component.
+- reference the selected `component_id`
+- inherit identifier and evidence field definitions from the assignment payload specification
+- preserve canonical field names
+- preserve wrapper handling rules
+- preserve dataset constraints.
 
-Calibration scoring unit:
+The wrapper prompt must **not invent additional payload fields**.
+
+---
+
+## Stage Discipline
+
+### Stage 1 — Input
+
+The user supplies the authoritative inputs between `===` delimiters.
+
+The model reads silently.
+
+No output is produced.
+
+### Stage 2 — Execution
+
+The model generates output **only after the command**:
+
+```
+BEGIN GENERATION
+```
+
+Silence is the correct behaviour until this command appears.
+
+---
+
+## Output Artefact Requirements
+
+The model must generate **exactly one artefact**.
+
+Title:
+
+```
+CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step00_CalibrationPayloadFormat_v01
+```
+
+The artefact must:
+
+- describe the canonical calibration payload structure
+- define the calibration scoring unit
+- define the payload fields
+- define wrapper handling rules
+- define evidence rules
+- define dataset constraints
+- include an example payload.
+
+The document must assume that **multiple rubric dimensions will evaluate the same payload structure**.
+
+---
+
+## Output Structure (Strict)
+
+The generated document must contain the following sections **in this order**.
+
+### Purpose
+
+Explain that the document defines the canonical payload structure used during calibration runs for the specified component.
+
+Describe the role of the payload format as the execution contract between the calibration dataset and calibration scoring prompts.
+
+---
+
+### Calibration Evidence Surface
+
+State:
+
+```
+component_id = <value>
+```
+
+Explain that each calibration item represents a participant response to this component.
+
+Clarify that all rubric dimensions associated with the component evaluate the same response text.
+
+---
+
+### Calibration Scoring Unit
+
+Define the scoring unit:
 
 ```
 participant_id × component_id
 ```
 
-Each dimension applied during calibration evaluates the same response independently.
+Explain that dimensions applied during calibration evaluate the same response independently.
 
-## Payload Fields
+---
 
-Each calibration item must contain exactly the following fields.
+### Payload Fields
 
-### participant_id
+List each canonical payload field inherited from the assignment payload specification.
 
-Type: string or integer
+For each field:
 
-Description:
+- field name
+- field type
+- field description
+- constraints
+- example value
 
-Unique identifier for the participant whose response appears in the calibration dataset.
+The wrapper prompt must reproduce the identifier field and response field exactly as defined in the assignment payload specification.
 
-Requirements:
+---
 
-- must be unique within the dataset
-- must remain stable across calibration runs
-- must not encode scoring information
-- must not contain personally identifiable information unless explicitly permitted by the data governance policy
+### Independence Rule
+
+State that calibration items must be evaluated independently.
+
+Calibration prompts must not:
+
+- compare participants
+- infer context from dataset order
+- use neighbouring responses as evidence.
+
+---
+
+### Evidence Rule
+
+State that evidence must be derived strictly from explicit textual content within the response field.
+
+External inference is prohibited.
+
+---
+
+### Dataset Constraints
+
+Specify dataset requirements inherited from the assignment payload specification.
+
+Constraints typically include:
+
+- required fields
+- encoding
+- wrapper handling rules
+- prohibition of scoring annotations.
+
+---
+
+### Example Calibration Payload
+
+Provide an example dataset fragment demonstrating the payload format.
+
+Examples must contain only the canonical fields.
+
+Wrapper artefacts may be illustrated but must be declared ignorable.
+
+---
+
+### Normative Status
+
+State that the payload format defines the authoritative calibration input structure for the specified component.
+
+List example calibration scoring prompts that will consume this payload.
 
 Example:
 
 ```
-participant_id: P017
+CAL_<ASSESSMENT_ID>_<DIMENSION_ID>_Step05_provisional_scoring_prompt_v01
 ```
 
-### response_text
+Explain that deviation from the defined payload structure invalidates calibration runs.
 
-Type: UTF-8 text string
+---
 
-Description:
+## Content Rules
 
-The participant-authored response corresponding to component `SectionA`.
+The model must:
 
-Requirements:
+- use only the assignment payload specification and provided component_id
+- preserve canonical field names
+- preserve structural terminology.
 
-- must contain the original participant-authored text
-- must not include rubric definitions
-- must not include scoring annotations
-- must not include additional metadata fields
+The model must not:
 
-Permitted wrapper artefacts:
+- introduce new fields
+- introduce rubric terminology
+- modify the assignment payload schema.
 
-- dataset boundary markers such as `+++`
-- header lines such as `participant_id=<value>`
+---
 
-These wrapper artefacts must be ignored during scoring.
+## Failure Handling
 
-Example:
+If:
 
-```
-participant_id=P017
-+++
-I think the responsibility lies primarily with the engineering team because they designed the algorithm and understand how the data was collected...
-+++
-```
+- the assignment payload specification is missing
+- the provided component_id does not exist in the specification
 
-## Independence Rule
+the model must produce **no output** and wait for corrected inputs.
 
-Each calibration item must be evaluated independently.
-
-Scoring prompts must not:
-
-- compare responses across participants
-- infer context from neighbouring rows
-- assume dataset ordering carries meaning
-
-Only the `response_text` for that participant may be used as evidence.
-
-## Evidence Rule
-
-Evidence must be derived strictly from explicit textual content within `response_text`.
-
-Calibration scoring prompts must not:
-
-- infer unstated reasoning
-- assume intent beyond the text
-- incorporate external knowledge
-
-## Dataset Constraints
-
-The calibration dataset must satisfy the following constraints:
-
-- all rows must include `participant_id`
-- all rows must include `response_text`
-- no additional fields are permitted
-- encoding must be UTF-8
-- whitespace normalization is permitted but content must not be altered
-
-## Example Calibration Payload
-
-Example dataset fragment:
-
-```
-participant_id=P012
-+++
-The engineers should be responsible for identifying bias in the dataset because they built the model and understand its assumptions. However, the company leadership also shares responsibility because they decide whether the system is deployed.
-+++
-
-participant_id=P013
-+++
-Responsibility should not rest solely with the engineers. While they create the system, regulators and company leadership must ensure safeguards exist before deployment.
-+++
-```
-
-## Normative Status
-
-This payload format defines the authoritative calibration input structure for all calibration scoring prompts associated with component:
-
-```
-SectionA
-```
-
-Calibration scoring prompts for dimensions such as:
-
-```
-CAL_PPP_A1_Step05_provisional_scoring_prompt_v01
-CAL_PPP_A2_Step05_provisional_scoring_prompt_v01
-CAL_PPP_A3_Step05_provisional_scoring_prompt_v01
-```
-
-must assume this payload structure exactly.
-
-Deviation from this format invalidates the calibration run.
-
+===
 ````
