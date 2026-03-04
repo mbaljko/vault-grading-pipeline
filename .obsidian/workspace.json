@@ -61,12 +61,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/Prompt for Step00 - Generate CalibrationPayloadFormat.md",
+                "file": "01_units/pipelines/pl2_calibration_runs/pl2_wrapper_prompt_generate_calibration_scoring_prompt.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Prompt for Step00 - Generate CalibrationPayloadFormat"
+              "title": "pl2_wrapper_prompt_generate_calibration_scoring_prompt"
             }
           }
         ],
@@ -216,13 +216,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/Prompt for Step00 - Generate CalibrationPayloadFormat.md",
+                "file": "01_units/pipelines/pl2_calibration_runs/pl2_wrapper_prompt_generate_calibration_scoring_prompt.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Prompt for Step00 - Generate CalibrationPayloadFormat"
+              "title": "Outline of pl2_wrapper_prompt_generate_calibration_scoring_prompt"
             }
           }
         ],
@@ -245,10 +245,10 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "e5174a9fca7b05c1",
+  "active": "ca848a3e488a4d05",
   "lastOpenFiles": [
-    "01_units/pipelines/pl2_calibration_runs/pl2_wrapper_prompt_generate_calibration_scoring_prompt.md",
     "01_units/pipelines/pl1B_rubric_devt/Prompt for Step00 - Generate CalibrationPayloadFormat.md",
+    "01_units/pipelines/pl2_calibration_runs/pl2_wrapper_prompt_generate_calibration_scoring_prompt.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification.md",
     "05_docs/01_design/pl2B_recalibration_optional",
     "01_units/pipelines/pl2B_recalibration (optional)",
