@@ -45,12 +45,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "05_docs/01_design/Nomenclature Standard — Grading Ontology and Calibration Alignment.md",
+                "file": "05_docs/00_overview/Four Pipeline Model.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Nomenclature Standard — Grading Ontology and Calibration Alignment"
+              "title": "Four Pipeline Model"
             }
           }
         ],
@@ -122,7 +122,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 356.5
+    "width": 594.5
   },
   "right": {
     "id": "9f47bf4168842e60",
@@ -200,13 +200,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "05_docs/01_design/Nomenclature Standard — Grading Ontology and Calibration Alignment.md",
+                "file": "05_docs/00_overview/Four Pipeline Model.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Nomenclature Standard — Grading Ontology and Calibration Alignment"
+              "title": "Outline of Four Pipeline Model"
             }
           }
         ],
@@ -229,12 +229,16 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "57b9d54b331b76b1",
+  "active": "e5174a9fca7b05c1",
   "lastOpenFiles": [
+    "05_docs/00_overview/prev_versions",
+    "05_docs/00_overview/Nomenclature Standard — Grading Ontology and Calibration Alignment.md",
+    "05_docs/00_overview/prev_versions/Nomenclature Standard — Grading Ontology and Calibration Alignment 1.md",
+    "05_docs/01_design/pl1B_rubric_devt/Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification.md",
+    "01_units/pipelines/pl2_calibration_runs/prev versions/pl2_wrapper_prompt_generate_calibration_scoring_prompt 1.md",
     "01_units/pipelines/pl2_calibration_runs/pl2_wrapper_prompt_generate_calibration_scoring_prompt.md",
     "01_units/pipelines/pl2_calibration_runs/prev versions/PROMPT - create tightly bounded script - prev v1.md",
     "01_units/pipelines/pl2_calibration_runs/prev versions",
-    "05_docs/01_design/pl1B_rubric_devt/Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A (Excel,MCode) — Implementation Mapping to Specification.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
     "05_docs/01_design/pl2_calibration/Pipeline2 - Calibration Runs  Specification.md",
@@ -254,17 +258,14 @@
     "05_docs/01_design/pl2_calibration",
     "05_docs/01_design/pl1B_rubric_devt",
     "05_docs/01_design/pl1A_canonical_population_prep",
-    "05_docs/01_design/Nomenclature Standard — Grading Ontology and Calibration Alignment.md",
-    "05_docs/01_design/Generalised Dimension-First Grading Process.md",
-    "05_docs/01_design/Four Pipeline Model.md",
+    "05_docs/00_overview/Generalised Dimension-First Grading Process.md",
+    "05_docs/00_overview/Four Pipeline Model.md",
     "05_docs/README.md",
     "05_docs/01_design",
     "05_docs/03_operations",
     "05_docs/00_overview",
     "05_docs/02_specs",
     "02_libs/common/README.md",
-    "01_units/pipelines/pl1A_canonical_population_prep/excel/Pipeline1A_Excel_Implementation_Standard.md",
-    "01_units/pipelines/pl1A_canonical_population_prep/excel/README.md",
-    "01_units/pipelines/pl1A_canonical_population_prep/excel/Pipeline1A_Excel_Runbook.md"
+    "01_units/pipelines/pl1A_canonical_population_prep/excel/Pipeline1A_Excel_Implementation_Standard.md"
   ]
 }

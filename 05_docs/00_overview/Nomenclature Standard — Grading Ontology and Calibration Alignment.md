@@ -130,6 +130,7 @@ Calibration artefacts must reference `dimension_id`, not `component_id`.
 | Facet        | No         | No                  | Sub-test within a dimension |
 | Indicator    | No         | No                  | Observable presence check |
 | Boundary rule| No         | No                  | Score-level threshold logic |
+
 ## 7. Architectural Principle
 Ontology precedes interpretation.
 - Stage 0A defines canonical grading targets.
