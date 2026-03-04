@@ -7,211 +7,373 @@ BEGIN GENERATION
 
 # .
 ```
-### pl2_wrapper_prompt, to generate_calibration_scoring_prompt
+## pl2_wrapper_prompt_generate_calibration_scoring_prompt_v02
 
-Wrapper prompt: Generate a tightly bounded provisional scoring prompt (a prompt to be used to accomplish scoring via an API call or via interactive UI).
-The resultant prompt can be used to assign provisional scoring for a set of student submissions for one assignment component.    
-This scoring is intended for diagnostic use, as part of calibration stage.
-This resultant assigned scores will have extracted analytic structure.
+Wrapper prompt: Generate a tightly bounded provisional scoring prompt for calibration use.
 
-### Purpose
-This wrapper prompt generates a **single, repeatable, tightly bounded scoring prompt** that can be reused to assign **provisional scores for exactly one rubric dimension** over a fixed-format calibration set.
+This wrapper prompt generates a prompt. It does not score student work.
 
-Its purpose is to:
-- produce a **dimension-specific scoring prompt** that scores *only* the target dimension,
-- enforce the provided **indicator checklist** and **boundary rules** as the sole scoring logic,
-- ensure the resulting scoring prompt is **diagnostic and non-authoritative** (used to detect drift and stress-test rules),
-- ensure the scoring prompt produces **structured outputs** suitable for inspection, comparison, and rule refinement,
-- ensure the scoring prompt **extracts and surfaces analytic structure implicit in the supplied materials** (facets, quality checks, boundary gates),
-- ensure the scoring prompt **emits standardized, rubric-referential student feedback** in a fixed, reusable format,
-- ensure the scoring prompt **explicitly signals the boundary between Meets and Exceeds**, even when all indicators are present.
+## Required Input Artefacts (Overview)
 
-This wrapper prompt generates a prompt; it does **not** score student work.
+Before this wrapper prompt can execute, the following input artefacts must be provided verbatim.
 
-### Task classification (authoritative)
+These artefacts correspond to the upstream **rubric construction pipeline** outputs.
+
+All artefacts must use the authoritative nomenclature:
+
+- `component_id`
+- `dimension_id`
+- indicators
+- boundary rules
+
+The wrapper prompt will read these artefacts silently during Stage 1.
+
+Required artefacts:
+
+- `CAL_<ASSESSMENT_ID>_<DIMENSION_ID>_Step01_dimension_header_v01`
+- `CAL_<ASSESSMENT_ID>_<DIMENSION_ID>_Step02_indicators_checklist_v01`
+- `CAL_<ASSESSMENT_ID>_<DIMENSION_ID>_Step03_boundary_rules_v01`
+
+Additionally, the calibration run requires the calibration dataset payload format.
+
+Required runtime payload definition:
+
+- `CAL_<ASSESSMENT_ID>_<DIMENSION_ID>_CalibrationPayloadFormat`
+
+All artefacts must be supplied in full and delimited using `===`.
+
+If any artefact is missing or inconsistent, the wrapper prompt must produce no output.
+
+## Purpose
+
+- Generate one reusable scoring prompt that assigns provisional scores for a single rubric dimension (`dimension_id`).
+- Enforce the supplied indicators and boundary rules as the sole scoring logic.
+- Produce diagnostic, non-authoritative outputs intended for calibration analysis.
+- Emit structured scoring diagnostics to allow rule inspection and boundary stress-testing.
+
+Calibration scoring prompts must strictly follow the grading ontology:
+
+- `submission_id` identifies the submission.
+- `component_id` identifies the grading surface.
+- `dimension_id` identifies the atomic rubric criterion.
+
+Facets are optional analytic constructs and are never structural identifiers.
+
+## Task Classification
+
 This wrapper prompt performs:
-- prompt synthesis (bounded),
-- constraint propagation from rubric definition to scoring instructions,
-- analytic-structure extraction from supplied materials,
-- output-schema specification.
 
-It does **not** perform:
-- scoring, grading, or evaluation of student work,
-- rewriting or improving rubric dimensions,
-- inventing indicators, facets, questions, rules, or score levels,
-- adding coaching, advice, or normative judgement.
+- prompt synthesis
+- rubric constraint propagation
+- scoring prompt specification
 
-### Authoritative inputs (required, verbatim)
-The model may rely **only** on the following inputs, supplied verbatim by the user and delimited by `===`:
+This wrapper prompt does not perform:
 
-===
-Step 1 — Dimension header  
-- Dimension name (exact rubric label)  
-- Unit of analysis (one cell = one score)  
-- One-sentence definition of what is being scored  
-===
+- grading or scoring
+- rubric improvement
+- rule invention
+- indicator invention
+- coaching or pedagogical advice
+
+## Authoritative Inputs (Verbatim)
+
+The model may rely only on the following inputs supplied verbatim and delimited by `===`.
 
 ===
-Step 2 — Observable indicators checklist  
-- 3–6 indicators phrased as observable “does the response do X”  
-- Indicators function strictly as **presence checks**, not performance guarantees  
-===
+Input Artefact  
+`CAL_<ASSESSMENT_ID>_<DIMENSION_ID>_Step01_dimension_header_v01`
 
-===
-Step 3 — Boundary rules by score level  
-- Score level labels (exact)  
-- For each level: minimum threshold and knock-down conditions  
-- Explicit hardest boundary rule (e.g., Approaching vs Meets)  
-- Any language implying required facets, quality checks, exemplification, or differential thresholds  
+Contents must include:
+
+- `assessment_id`
+- `component_id`
+- `dimension_id`
+- `dimension_label`
+- one-sentence definition of what is being scored
+- unit of analysis statement
+- evidence rule (explicit-text only; no inference)
 ===
 
 ===
-Step 4 — Fixed calibration set payload format (authoritative)  
-Each item presented to the scoring prompt will have **exactly this structure**:
-- `row_id` : integer  
-- `response_text` : text  
+Input Artefact  
+`CAL_<ASSESSMENT_ID>_<DIMENSION_ID>_Step02_indicators_checklist_v01`
+
+Contents must include:
+
+- 3–6 observable indicators
+- indicators phrased as presence checks
+- indicators referencing observable textual evidence
+- optional facet tags (if used)
+===
+
+===
+Input Artefact  
+`CAL_<ASSESSMENT_ID>_<DIMENSION_ID>_Step03_boundary_rules_v01`
+
+Contents must include:
+
+- score level labels
+- minimum conditions per level
+- knock-down conditions
+- explicit hardest boundary rule
+- any explicit quality gates
+===
+
+===
+Input Artefact  
+`CAL_<ASSESSMENT_ID>_<DIMENSION_ID>_CalibrationPayloadFormat`
+
+Each calibration item will have exactly:
+
+- `row_id`
+- `response_text`
 
 Formatting guarantees:
-- `response_text` may include wrapper markers like `+++` and a header line of the form `row_id=<value>`; these **must be ignored for scoring**.
-- No other metadata, context, rubric text, or neighbouring responses will be provided.
-- Each item is scored independently.
+
+- wrapper markers such as `+++` may appear and must be ignored
+- no other metadata will be present
+- each row must be scored independently
 ===
 
 ===
-Output requirements  
-- Required fields (choose from):  
-  `score`, `indicator_hits`, `indicator_facets`, `question_hits`, `boundary_checks`, `rationale`, `evidence_quote`, `confidence`, `flags`, `feedback`  
-- Confidence scale (e.g., high / medium / low)  
-- Fixed list of allowed flags  
+Output Requirements
+
+Allowed fields include:
+
+- `score`
+- `indicator_hits`
+- `facet_hits`
+- `boundary_checks`
+- `rationale`
+- `evidence_quote`
+- `confidence`
+- `flags`
+- `feedback`
+
+Confidence scale and flag vocabulary must be provided by the user.
 ===
 
-No external knowledge, inference, or interpretation is permitted.
+No external knowledge or interpretation is permitted.
 
-### Stage discipline (mandatory)
-Stage 1: Input  
-- The user supplies all authoritative inputs, delimited by `===`.
+## Stage Discipline (Mandatory)
+
+Stage 1 — Input
+
+- The user provides all required artefacts delimited by `===`.
 - The model reads silently.
 - No output is generated.
 
-Stage 2: Execution  
-- The model generates output **only after** the explicit command:  
-  `BEGIN GENERATION`
+If the message `BEGIN GENERATION` is not present, the model must produce no output.
 
-Silence is the correct behaviour until `BEGIN GENERATION`.
+Stage 2 — Execution
 
-### Output artefact
-The model must generate **exactly one artefact**:
-- a **stand-alone provisional scoring prompt** titled  
-  `CAL_<DIMENSION>_Step05_provisional_scoring_prompt_v01`,
-- written so it can be reused unchanged across calibration cycles,
-- assuming the fixed payload format defined above.
+- When the user sends `BEGIN GENERATION`, the model generates the scoring prompt artefact.
 
-### Required output structure (strict)
+## Output Artefact
+
+The model must generate exactly one artefact:
+
+`CAL_<ASSESSMENT_ID>_<DIMENSION_ID>_Step05_provisional_scoring_prompt_v01`
+
+The artefact must:
+
+- score exactly one `dimension_id`
+- reference the correct `component_id`
+- assume the fixed calibration payload format
+- be reusable across calibration runs
+
+## Generated Scoring Prompt Structure
+
 The generated scoring prompt must:
-- be contained in **one fenced Markdown block and nothing else**,
-- use **level-3 headings only**,
-- avoid nested lists,
-- use bullet lists only,
-- contain the following sections **in this exact order**:
 
-### Prompt title and use restrictions
-- State that the prompt assigns provisional scores only.
-- State that it scores exactly one dimension and ignores all others.
-- State that outputs are diagnostic and non-authoritative.
-- State that the prompt generates standardized, non-coaching student feedback.
+- appear in a single fenced Markdown block
+- use headings no deeper than level 2
+- avoid nested lists
+- use bullet lists only
 
-### Authoritative scoring materials
-- Restate the dimension header verbatim.
-- Restate the indicator checklist verbatim.
-- Restate the boundary rules verbatim.
-- Explicitly state:
-  - indicators are **presence checks only**,
-  - facets, question coverage, and quality thresholds are **extracted from the boundary rules**, not from the indicator list,
-  - indicator completeness does **not** guarantee the highest score.
+Sections must appear in this order:
 
-### Extracted analytic structure (mandatory)
-- Identify and name each **required facet** implied by the boundary rules.
-- Identify any **implicit question obligations** (i.e., what the response must answer or take a position on).
-- Identify any **quality checks** (e.g., coherence, specificity) implied by the boundary rules.
-- Identify any **explicit boundary gates** that distinguish score levels (e.g., hardest boundary; Meets vs Exceeds).
-- State explicitly that this structure is **derivative**, not newly invented.
+- Prompt title and restrictions
+- Authoritative scoring materials
+- Input format
+- Scoring procedure
+- Feedback generation rules
+- Feedback format
+- Output schema
+- Constraints
+- Content rules
+- Failure mode handling
 
-### Input format (fixed and enforced)
-- Define `row_id` and `response_text`.
-- Specify wrapper-stripping rules.
-- State that no additional context may be inferred.
+## Required Scoring Semantics
 
-### Scoring procedure (mandatory)
-- Require a single-pass judgement per item.
-- Require application of boundary rules before confirming indicator presence.
-- Require explicit evaluation of:
-  - indicator presence,
-  - facet presence and adequacy,
-  - question coverage (if extracted),
-  - quality checks,
-  - hardest boundary rule,
-  - Meets vs Exceeds boundary gate.
-- Prohibit inference beyond the text.
-- If indeterminate, require `needs_review`.
+The generated scoring prompt must enforce:
 
-### Feedback generation rules (mandatory)
-- Require generation of **one standardized feedback block per item**.
-- Require feedback to be derived strictly from:
-  - the assigned score,
-  - indicator hit pattern,
-  - extracted facet, question, and boundary results.
-- Prohibit advice, coaching, rewriting, or improvement guidance.
-- Require feedback to explain **why this score level was assigned**, not how to improve.
+- one score per `(row_id × dimension_id)`
+- application of boundary rules before indicator confirmation
+- explicit evaluation of the hardest boundary rule
+- evaluation of indicator presence
+- evaluation of optional facet sufficiency (if facets exist)
 
-### Feedback format (fixed, abstract)
-The scoring prompt must enforce the following **dimension-agnostic** feedback template:
+If scoring is indeterminate:
 
-<Dimension Label>: <score>  
-Indicators: <indicator_index><✓/✗> … (one entry per supplied indicator, in order)  
-Facets: <facet_id><✓/✗> … (one entry per extracted facet, in order)  
-Questions: <question_id><✓/✗/—> … (only if question obligations were extracted)  
-Reason: <single concise sentence citing the facet, question, or boundary gate that determined the score>
+- assign the lowest evaluable score label
+- include flag `needs_review`
 
-Rules:
-- The number and labels of indicators, facets, and questions must be generated dynamically from the supplied materials.
-- If all indicators are ✓ but the score is **not the highest level**, the Reason **must explicitly reference the Meets vs Exceeds boundary gate**.
-- Maximum length for Reason: one sentence.
+## Failure Mode Handling
 
-### Output schema (mandatory)
-- The scoring prompt must output **structured data** with one output object per input item and the same order as input.
-- The scoring prompt must include all required fields specified by the user.
-- The scoring prompt must always include:
-  - `score`,
-  - `indicator_hits`,
-  - `indicator_facets`,
-  - `question_hits` (only if questions were extracted),
-  - `boundary_checks`,
-  - `rationale`,
-  - `evidence_quote`,
-  - `confidence`,
-  - `flags`,
-  - `feedback`.
+If any required artefact is missing, inconsistent, or contradictory:
 
-### Constraints and failure handling
-- Prohibit feedback beyond the standardized block.
-- Prohibit cross-dimension commentary.
-- Prohibit mid-run rule modification.
-- If scoring is indeterminate:
-  - assign the lowest evaluable score label,
-  - include `needs_review`,
-  - generate feedback reflecting indeterminacy.
+- produce no output
+- wait silently for corrected inputs
 
-### Content rules (strict)
-- Use only supplied materials.
-- Do not invent indicators, facets, questions, rules, flags, or score levels.
-- Do not add theory, examples, or advice.
-- Do not reference prior versions of this wrapper prompt.
 
-### Failure mode handling
-If any required input block is missing or contradictory:
-- generate nothing,
-- wait silently for correction.
 
+## pl3_wrapper_prompt_generate_production_scoring_prompt_v02
+
+Wrapper prompt: Generate a production scoring prompt that evaluates all rubric dimensions for a single component in one pass.
+
+This wrapper prompt generates a prompt. It does not score student work.
+
+## Required Input Artefacts (Overview)
+
+The following artefacts must be supplied.
+
+These correspond to the frozen rubric produced by the rubric construction pipeline.
+
+Required artefacts:
+
+- `<ASSESSMENT_ID>_<COMPONENT_ID>_Step01_dimension_set_v01`
+- `<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_indicators_checklist_v01`
+- `<ASSESSMENT_ID>_<COMPONENT_ID>_Step03_boundary_rules_v01`
+- `<ASSESSMENT_ID>_<COMPONENT_ID>_ScoringPayloadFormat`
+
+All artefacts must be supplied verbatim and delimited using `===`.
+
+## Purpose
+
+- Generate one production scoring prompt for a single `component_id`.
+- Score all dimensions of that component in one pass.
+- Emit per-dimension audit diagnostics.
+- Enforce a frozen rubric definition.
+
+## Task Classification
+
+This wrapper prompt performs:
+
+- prompt synthesis
+- scoring prompt specification
+
+It does not perform:
+
+- rubric calibration
+- rule modification
+- indicator invention
+- coaching or pedagogical advice
+
+## Authoritative Inputs (Verbatim)
+
+The model may rely only on the following artefacts.
+
+===
+Input Artefact  
+`<ASSESSMENT_ID>_<COMPONENT_ID>_Step01_dimension_set_v01`
+
+Contents must include:
+
+- `component_id`
+- list of `dimension_id`
+- `dimension_label`
+- one-sentence dimension definition
+===
+
+===
+Input Artefact  
+`<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_indicators_checklist_v01`
+
+Contents must include the full indicator checklist for the component.
+===
+
+===
+Input Artefact  
+`<ASSESSMENT_ID>_<COMPONENT_ID>_Step03_boundary_rules_v01`
+
+Contents must define the boundary rules for each dimension.
+===
+
+===
+Input Artefact  
+`<ASSESSMENT_ID>_<COMPONENT_ID>_ScoringPayloadFormat`
+
+Each scoring item includes:
+
+- `row_id`
+- `submission_id`
+- `component_id`
+- `response_text`
+===
+
+===
+Output Requirements
+
+Allowed per-dimension fields:
+
+- `score`
+- `indicator_hits`
+- `boundary_checks`
+- `evidence_quote`
+- `confidence`
+- `flags`
+- `feedback`
+===
+
+## Stage Discipline
+
+Stage 1 — Input
+
+- The user supplies all artefacts delimited by `===`.
+- The model reads silently.
+- No output is produced.
+
+If the message `BEGIN GENERATION` is not present, the model must produce no output.
+
+Stage 2 — Execution
+
+- After receiving `BEGIN GENERATION`, the model generates the scoring prompt artefact.
+
+## Output Artefact
+
+The model must generate:
+
+`SCORE_<ASSESSMENT_ID>_<COMPONENT_ID>_component_multi_dimension_prompt_v01`
+
+The generated scoring prompt must:
+
+- evaluate all dimensions of the component
+- emit per-dimension diagnostic bundles
+- preserve atomic scoring units
+
+## Output Structure
+
+For each scoring item:
+
+- return `row_id`
+- return `submission_id`
+- return `component_id`
+- return a `dimension_results` list
+
+Each `dimension_results` entry must include:
+
+- `dimension_id`
+- `dimension_label`
+- `score`
+- selected diagnostics
+
+## Failure Mode Handling
+
+If any required artefact is missing or contradictory:
+
+- produce no output
+- wait silently for corrected inputs
 ===
   
 ```

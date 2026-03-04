@@ -2,9 +2,9 @@
 ### Purpose
 This document establishes the authoritative terminology used throughout the `vault-grading-pipeline`.
 Its purpose is to:
-- eliminate ambiguity between **submission**, **component**, **dimension**, and **facet**,
-- align Stage 0A, Stage 0B, calibration, and production scoring,
-- define how cross-component grading criteria are represented structurally.
+- eliminate ambiguity between **submission**, **component**, **dimension**, **facet**, and **indicator**
+- align Stage 0A, Stage 0B, calibration, and production scoring
+- define how cross-component grading criteria are represented structurally
 This nomenclature is normative. All future artefacts must conform to it.
 ## 1. Structural Ontology (Authoritative)
 The grading ontology has three structural levels.
@@ -51,11 +51,11 @@ Under this standard:
 - Accountability framing, role boundary, and professional obligations are **dimensions** within that component.
 Example:
 
-| component_id        | dimension_id | dimension_label                |
-|---------------------|--------------|--------------------------------|
-| SectionAResponse    | A1           | Accountability framing         |
-| SectionAResponse    | A2           | Role boundary and hand-off     |
-| SectionAResponse    | A3           | Professional obligations       |
+| component_id     | dimension_id | dimension_label              |
+|------------------|--------------|------------------------------|
+| SectionAResponse | A1           | Accountability framing       |
+| SectionAResponse | A2           | Role boundary and hand-off   |
+| SectionAResponse | A3           | Professional obligations     |
 These must appear in `rubric_definition`.
 Calibration must operate on `A1`, `A2`, `A3` separately.
 ## 2. Cross-Component Evaluation (Synthetic Components)
@@ -63,14 +63,14 @@ Some grading criteria span multiple student-authored components (e.g., cohesion,
 These must be modelled as **synthetic components**, not as structure-breaking exceptions.
 ### 2.1 Definition
 A synthetic component is:
-- structurally equivalent to any other component,
-- not tied to a single student-authored section,
-- defined explicitly in `rubric_definition`.
+- structurally equivalent to any other component
+- not tied to a single student-authored section
+- defined explicitly in `rubric_definition`
 Example:
 
-| component_id | dimension_id | dimension_label              |
-|--------------|--------------|------------------------------|
-| Global       | G1           | Cross-component cohesion     |
+| component_id | dimension_id | dimension_label          |
+|--------------|--------------|--------------------------|
+| Global       | G1           | Cross-component cohesion |
 Stage 0B expansion:
 ```
 submission_id × Global × G1
@@ -82,22 +82,62 @@ For synthetic components:
 - Evidence may be derived by:
   - concatenating relevant component texts, or
   - evaluating across structured references.
-- Structural keys remain unchanged.
+Structural keys remain unchanged.
 Inter-component scope is epistemic, not structural.
-## 3. Facets (Reserved Meaning)
-The term **facet** is reserved exclusively for:
-> Sub-criteria used to evaluate a single dimension.
-
+## 3. Facets and Indicators (Interpretive Layer)
+Facets and indicators are **interpretive constructs used during calibration and scoring**.  
+They are **not structural entities** and do not appear in Stage 0B datasets.
+They exist to support the interpretation and evaluation of a **dimension**.
+### 3.1 Facet (Optional)
+A facet is an optional analytic sub-criterion used to evaluate a single dimension.
 Facets:
-- do not appear in Stage 0B datasets,
-- are not structural entities,
-- are interpretive tools used during calibration.
+- represent conceptual aspects of the dimension being evaluated
+- help organise the analytic structure of a rubric
+- are primarily used during calibration
+Facets do not appear in canonical grading datasets.
 Example:
 For dimension `A1 Accountability framing`, possible facets may include:
-- locus named,
-- position taken,
-- distribution acknowledged.
-Facets must never be used to refer to dimensions.
+- locus named
+- position taken
+- distribution acknowledged
+Facets are optional.  
+A dimension may be evaluated without defining explicit facets.
+### 3.2 Indicator (Optional)
+An indicator is an observable presence check used to detect whether a conceptual element appears in the response.
+Indicators:
+- reference observable textual evidence
+- function strictly as **presence checks**, not performance guarantees
+- may support detection of facets or may apply directly to a dimension
+Indicators do not appear in Stage 0B datasets.
+### 3.3 Relationship Between Dimensions, Facets, and Indicators
+Facets and indicators are optional interpretive layers.
+Possible structures include:
+Dimension evaluated directly via indicators:
+```
+dimension
+    indicators
+```
+Dimension structured into facets and indicators:
+```
+dimension
+    facets
+        indicators
+```
+Dimension structured only into facets:
+```
+dimension
+    facets
+```
+Indicators may be used:
+- to detect the presence of facets, or
+- to detect observable features of the dimension directly.
+### 3.4 Boundary Rules
+Boundary rules define how evidence from indicators and facets is translated into a score.
+Boundary rules:
+- specify score thresholds
+- define knock-down conditions
+- identify the hardest boundaries between score levels
+Boundary rules operate at the **dimension level**.
 ## 4. Calibration Alignment
 Calibration is conducted one **dimension** at a time.
 Naming pattern:
@@ -121,16 +161,15 @@ Calibration artefacts must reference `dimension_id`, not `component_id`.
 6. Structural keys must not change during calibration.
 ## 6. Summary of Terms
 
-| Term         | Structural | Appears in Stage 0B | Meaning |
-|--------------|------------|---------------------|--------|
-| Submission   | Yes        | Yes                 | Entire student assignment |
-| Component    | Yes        | Yes                 | Grading surface (authored or synthetic) |
-| Dimension    | Yes        | Yes                 | Atomic rubric criterion |
-| Synthetic Component | Yes | Yes                 | Cross-component grading surface |
-| Facet        | No         | No                  | Sub-test within a dimension |
-| Indicator    | No         | No                  | Observable presence check |
-| Boundary rule| No         | No                  | Score-level threshold logic |
-
+| Term                 | Structural | Appears in Stage 0B | Meaning |
+|----------------------|------------|---------------------|--------|
+| Submission           | Yes        | Yes                 | Entire student assignment |
+| Component            | Yes        | Yes                 | Grading surface (authored or synthetic) |
+| Dimension            | Yes        | Yes                 | Atomic rubric criterion |
+| Synthetic Component  | Yes        | Yes                 | Cross-component grading surface |
+| Facet                | No         | No                  | Optional analytic sub-criterion for a dimension |
+| Indicator            | No         | No                  | Observable presence check used to detect evidence |
+| Boundary rule        | No         | No                  | Score-level threshold logic |
 ## 7. Architectural Principle
 Ontology precedes interpretation.
 - Stage 0A defines canonical grading targets.
@@ -139,6 +178,7 @@ Ontology precedes interpretation.
 - Scoring applies calibrated rules.
 Cross-component evaluation must be represented structurally as synthetic components.
 Structural invariants must remain stable across calibration cycles.
+Interpretive constructs (facets, indicators, boundary rules) must not alter structural identifiers.
 ## 8. Normative Status
 This document supersedes prior informal terminology.
 All future artefacts in `vault-grading-pipeline` must adhere strictly to this nomenclature.
