@@ -1,5 +1,6 @@
 
 ## Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification
+
 This document defines the upstream process for constructing and stabilising a single rubric dimension (i.e., a grading dimension within a component).
 This pipeline is epistemic and iterative.  
 Its output must be frozen before execution stages (Stage 0A / Stage 0B).
