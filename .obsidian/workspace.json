@@ -4,21 +4,17 @@
     "type": "split",
     "children": [
       {
-        "id": "b06e75e027d58f5f",
+        "id": "b0e68ce688c4c9c1",
         "type": "tabs",
         "children": [
           {
-            "id": "b407aaa8ad55d172",
+            "id": "ba3332dc3f29e449",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "docs/01_design/Four Pipeline Model.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "Four Pipeline Model"
+              "title": "New tab"
             }
           }
         ]
@@ -167,13 +163,12 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/01_design/Four Pipeline Model.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Four Pipeline Model"
+              "title": "Outline"
             }
           }
         ],
@@ -196,42 +191,43 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "b407aaa8ad55d172",
+  "active": "ba3332dc3f29e449",
   "lastOpenFiles": [
-    "docs/01_design/pl1B_rubric_devt/Rubric Construction Pipeline — Dimension-Level Specification.md",
-    "docs/01_design/pl2_calibration/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
-    "docs/01_design/Generalised Dimension-First Grading Process.md",
-    "docs/01_design/Four Pipeline Model.md",
-    "docs/01_design/pl3_grading_core",
-    "docs/01_design/untitled folder",
-    "docs/01_design/pl2_calibration",
-    "docs/01_design/pl1B_rubric_devt",
-    "docs/01_design/pl1A_canonical_population_prep",
-    "units/pipelines/pl1B_rubric_devt",
-    "units/pipelines/pl1A_canonical_population_prep",
-    "units/pipelines/pl2_rubric_devt",
-    "units/pipelines/pl2_calibration_runs",
-    "units/pipelines/pl1_canonical_population_prep",
-    "docs/01_design/pl1A_canonical_population_prep/Stage 0A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
-    "docs/01_design/pl1A_canonical_population_prep/Stage 0A (Excel,MCode) — Implementation Mapping to Specification.md",
-    "docs/01_design/Nomenclature Standard — Grading Ontology and Calibration Alignment.md",
-    "docs/01_design/pl1B_rubric_devt/template for dimenion header.md",
-    "docs/01_design/prior-docs-from-migration/STEP 1 - CALIBRATION.md",
-    "docs/01_design/prior-docs-from-migration/STEP 2 - EXECUTION.md",
-    "docs/01_design/prior-docs-from-migration/STEPS - DESIGN.md",
-    "docs/01_design/prior-docs-from-migration/STEP 0 - DATA PREPARATION.md",
-    "docs/01_design/prior-docs-from-migration/Stage 0 — Prepare Canonical Inputs.md",
-    "docs/01_design/rubric_definition.md",
-    "docs/01_design/implement recommendations.md",
-    "docs/01_design/pl1A_canonical_population_prep/Stage0A_manifest_schema.md",
-    "docs/01_design/pl2_calibration/Stage 0B (Excel,MCode) — Implementation Mapping to Specification.md",
-    "docs/01_design/xxx.md",
-    "docs/01_design/asd.md",
-    "units/pipelines/README.md",
-    "units/pipelines/pl3_grading_core/stage0/excel/Stage0_Excel_Runbook.md",
-    "units/pipelines/pl3_grading_core/stage0/excel/Stage0_Excel_Implementation_Standard.md",
-    "units/pipelines/pl3_grading_core/stage0/excel/README.md",
+    "Design Note - Extensible Architecture for `vault-grading-pipeline`.md",
+    "05_docs/01_design/prior-docs-from-migration/Stage 0 — Prepare Canonical Inputs.md",
+    "05_docs/01_design/prior-docs-from-migration/STEPS - DESIGN.md",
+    "05_docs/01_design/prior-docs-from-migration/STEP 2 - EXECUTION.md",
+    "05_docs/01_design/prior-docs-from-migration/STEP 1 - CALIBRATION.md",
+    "05_docs/01_design/prior-docs-from-migration/STEP 0 - DATA PREPARATION.md",
+    "05_docs/01_design/pl2_calibration/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
+    "05_docs/01_design/pl2_calibration/Stage 0B (Excel,MCode) — Implementation Mapping to Specification.md",
+    "05_docs/01_design/pl1B_rubric_devt/template for dimenion header.md",
+    "05_docs/01_design/pl1B_rubric_devt/rubric_definition.md",
+    "05_docs/01_design/pl1B_rubric_devt/Pipeline1B _ Rubric Construction Pipeline — Dimension-Level Specification.md",
+    "05_docs/01_design/pl1A_canonical_population_prep/Pipeline1A_manifest_schema.md",
+    "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
+    "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A (Excel,MCode) — Implementation Mapping to Specification.md",
+    "05_docs/01_design/prior-docs-from-migration",
+    "05_docs/01_design/pl3_grading_core",
+    "05_docs/01_design/pl2_calibration",
+    "05_docs/01_design/pl1B_rubric_devt",
+    "05_docs/01_design/pl1A_canonical_population_prep",
+    "05_docs/01_design/Nomenclature Standard — Grading Ontology and Calibration Alignment.md",
+    "05_docs/01_design/Generalised Dimension-First Grading Process.md",
+    "05_docs/01_design/Four Pipeline Model.md",
+    "05_docs/README.md",
+    "05_docs/01_design",
+    "05_docs/03_operations",
+    "05_docs/00_overview",
+    "05_docs/02_specs",
+    "05_docs",
+    "02_libs/common/README.md",
+    "01_units/pipelines/pl1A_canonical_population_prep/excel/Pipeline1A_Excel_Implementation_Standard.md",
+    "01_units/pipelines/pl1A_canonical_population_prep/excel/README.md",
+    "01_units/pipelines/pl1A_canonical_population_prep/excel/Pipeline1A_Excel_Runbook.md",
+    "01_units/apps/README.md",
+    "01_units/pipelines/README.md",
     "README.md",
-    "DIR ORGANIZATION.md"
+    "Untitled.md"
   ]
 }

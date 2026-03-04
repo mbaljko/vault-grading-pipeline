@@ -1,11 +1,11 @@
-## Stage 0B — Expand Canonical Grading Targets into Grading Units (Rubric-Dependent)
+## Pipeline 2 — Expand Canonical Grading Targets into Grading Units (Rubric-Dependent)
 ## Generalised Specification with Required Post-Conditions
-This document defines the **necessary and sufficient post-conditions** for Stage 0B of the grading workflow.
-Stage 0B transforms the rubric-agnostic canonical grading target dataset produced in Stage 0A into a **rubric-aware canonical grading unit dataset**.
-Stage 0B is complete only when all required conditions below are satisfied.
+This document defines the **necessary and sufficient post-conditions** for Pipeline 2 of the grading workflow.
+Pipeline 2 transforms the rubric-agnostic canonical grading target dataset produced in Stage 0A into a **rubric-aware canonical grading unit dataset**.
+Pipeline 2 is complete only when all required conditions below are satisfied.
 All downstream stages — calibration, scoring, review, QA, and reporting — assume the guarantees established here.
-## 1. Purpose of Stage 0B
-Stage 0B introduces rubric structure into the grading pipeline.
+## 1. Purpose of Pipeline 2
+Pipeline 2 introduces rubric structure into the grading pipeline.
 Its purpose is to convert each grading target:
 ```
 submission × component
@@ -14,9 +14,9 @@ into the full set of scorable grading units:
 ```
 submission × component × dimension
 ```
-Stage 0B therefore establishes the **true atomic grading unit** required for reliable, dimension-level calibration and scoring.
-## 2. Inputs to Stage 0B
-Stage 0B requires two authoritative inputs:
+Pipeline 2 therefore establishes the **true atomic grading unit** required for reliable, dimension-level calibration and scoring.
+## 2. Inputs to Pipeline 2
+Pipeline 2 requires two authoritative inputs:
 ### 2.1 Canonical Grading Targets (from Stage 0A)
 A dataset containing one row per:
 ```
@@ -34,7 +34,7 @@ Rubric definitions must be:
 - version-controlled
 - deterministic
 ## 3. Required Post-Conditions (Normative Requirements)
-Stage 0B is complete **only when ALL post-conditions below are satisfied**.
+Pipeline 2 is complete **only when ALL post-conditions below are satisfied**.
 These invariants define the structural, identity, and integrity guarantees of the canonical grading unit dataset.
 ### 3.1 Canonical Grading Unit Definition
 The canonical grading dataset must be organised so that:
@@ -52,7 +52,7 @@ Each grading unit must be uniquely identifiable by the composite key:
 ```
 Duplicate key combinations are strictly prohibited.
 #### Implementation Requirements
-- Duplicate detection must halt Stage 0B.
+- Duplicate detection must halt Pipeline 2.
 - A materialised key must be constructible:
 ```
 grading_unit_id = submission_id::component_id::dimension_id
@@ -78,7 +78,7 @@ Expansion from targets to units must be deterministic.
 Given identical inputs:
 - canonical targets
 - rubric definitions
-Stage 0B must produce identical grading unit datasets.
+Pipeline 2 must produce identical grading unit datasets.
 Expansion order must not affect output.
 ### 3.6 Text Association Integrity
 Each grading unit must contain:
@@ -106,16 +106,16 @@ submission_id → component_id → dimension_id
 ```
 Sorting must be stable and reproducible.
 ### 3.10 Reproducibility and Manifest Recording
-Stage 0B must produce a processing manifest recording:
+Pipeline 2 must produce a processing manifest recording:
 - rubric version used
 - input dataset identifiers
 - expansion method
 - row counts before and after expansion
 - timestamp
 - processing environment or script version
-Re-running Stage 0B with identical inputs must produce identical outputs.
-## 4. Required Outputs of Stage 0B
-Stage 0B must produce:
+Re-running Pipeline 2 with identical inputs must produce identical outputs.
+## 4. Required Outputs of Pipeline 2
+Pipeline 2 must produce:
 ### 4.1 Canonical Grading Unit Dataset
 A structured table containing:
 - submission_id
@@ -143,15 +143,15 @@ The grading unit dataset may include additional metadata such as:
 - sampling flags
 - section identifiers
 These fields must not affect identity integrity.
-## 6. Explicit Non-Goals of Stage 0B
-Stage 0B does NOT:
+## 6. Explicit Non-Goals of Pipeline 2
+Pipeline 2 does NOT:
 - assign scores
 - perform calibration
 - evaluate response quality
 - modify rubric definitions
 Its sole function is rubric expansion and validation.
 ## 7. Completion Criteria Checklist
-Stage 0B is considered complete when:
+Pipeline 2 is considered complete when:
 - A canonical dataset exists with one row per grading unit.
 - All identifiers are stable and unique.
 - All rubric dimensions are represented.
@@ -160,17 +160,17 @@ Stage 0B is considered complete when:
 - A rubric coverage report exists.
 - A processing manifest has been generated.
 ## 8. Relationship to Downstream Stages
-Stage 0B produces the canonical grading unit dataset required for:
+Pipeline 2 produces the canonical grading unit dataset required for:
 - dimension-first calibration
 - batch scoring workflows
 - consistency review passes
 - automated QA checks
-All downstream processes assume Stage 0B guarantees hold.
+All downstream processes assume Pipeline 2 guarantees hold.
 ## 9. Summary
-Stage 0B introduces rubric structure into the grading pipeline by expanding rubric-agnostic grading targets into fully specified grading units.
+Pipeline 2 introduces rubric structure into the grading pipeline by expanding rubric-agnostic grading targets into fully specified grading units.
 Once complete, downstream workflows can assume:
 - atomic grading units
 - complete rubric coverage
 - stable identity integrity
 - deterministic reproducibility
-Without Stage 0B guarantees, reliable dimension-level calibration and scoring cannot be conducted.
+Without Pipeline 2 guarantees, reliable dimension-level calibration and scoring cannot be conducted.

@@ -1,21 +1,21 @@
-## Stage 0A (Excel/MCode) — Implementation Mapping to Specification  
+## Pipeline 1A (Excel/MCode) — Implementation Mapping to Specification  
 ### Rubric-Agnostic Canonicalisation of Grading Targets
-This document maps the current Excel/MCode workflow specifically to **Stage 0A** of the grading pipeline.
-Stage 0A is the rubric-agnostic phase that produces a canonical dataset of **grading targets**, defined as:
+This document maps the current Excel/MCode workflow specifically to **Pipeline 1A** of the grading pipeline.
+Pipeline 1A is the rubric-agnostic phase that produces a canonical dataset of **grading targets**, defined as:
 ```
 submission_id × component_id
 ```
 This document shows:
-- where each Stage 0A post-condition is satisfied
+- where each Pipeline 1A post-condition is satisfied
 - which worksheets and artefacts implement it
 - what clarifications or small adjustments are needed for full compliance
-## 0. Excel Workbook Mental Model (Stage 0A Context)
-Stage 0A is implemented as a single Excel workbook containing multiple worksheets produced from:
+## 0. Excel Workbook Mental Model (Pipeline 1A Context)
+Pipeline 1A is implemented as a single Excel workbook containing multiple worksheets produced from:
 - LMS submission export (wide CSV → saved as `.xlsx`)
 - grading upload worksheet (downloaded from LMS)
 - Power Query / MCode transformations
-Sampling worksheets exist but are **not part of Stage 0A**.
-### Stable Worksheet Roles (Stage 0A)
+Sampling worksheets exist but are **not part of Pipeline 1A**.
+### Stable Worksheet Roles (Pipeline 1A)
 Recommended canonical worksheet names:
 - `raw_export`  
   LMS submissions in wide format
@@ -24,9 +24,9 @@ Recommended canonical worksheet names:
 - `validation`  
   Join diagnostics and `__join_status`
 - `cleaned_entries`  
-  Canonical Stage 0A dataset (grading targets)
-## 1. Canonical Dataset Definition (Stage 0A)
-For Stage 0A, the canonical dataset is:
+  Canonical Pipeline 1A dataset (grading targets)
+## 1. Canonical Dataset Definition (Pipeline 1A)
+For Pipeline 1A, the canonical dataset is:
 ```
 cleaned_entries
 ```
@@ -36,9 +36,9 @@ submission_id × component_id
 ```
 This is called a **grading target**.
 Rubric dimensions are intentionally NOT present at this stage.
-## 2. Mapping to Stage 0A Required Post-Conditions
+## 2. Mapping to Pipeline 1A Required Post-Conditions
 ### 2.1 Canonical Unit Definition
-#### Spec Requirement (Stage 0A)
+#### Spec Requirement (Pipeline 1A)
 Each row must represent exactly one:
 ```
 submission_id × component_id
@@ -150,7 +150,7 @@ Enforced through:
 Satisfied.
 ### 2.9 Deterministic Reproducibility
 #### Spec Requirement
-Stage 0A must produce reproducible outputs.
+Pipeline 1A must produce reproducible outputs.
 #### Excel/MCode Implementation
 Reproducibility ensured by:
 - deterministic Power Query steps
@@ -167,16 +167,16 @@ Canonical dataset must be a flat tabular structure.
 `cleaned_entries` is a flat table.
 #### Compliance Status
 Fully satisfied.
-## 3. What Stage 0A Explicitly Does NOT Do
-Stage 0A intentionally does NOT:
+## 3. What Pipeline 1A Explicitly Does NOT Do
+Pipeline 1A intentionally does NOT:
 - introduce rubric dimensions
 - create dimension identifiers
 - perform rubric expansion
 - perform calibration sampling
 - apply scoring
 These functions belong to Stage 0B and later stages.
-## 4. Remaining Minimal Alignment Actions for Full Stage 0A Compliance
-To fully satisfy Stage 0A specification:
+## 4. Remaining Minimal Alignment Actions for Full Pipeline 1A Compliance
+To fully satisfy Pipeline 1A specification:
 1. Create a `stage0_manifest` worksheet recording:
    - input filenames
    - export timestamps
@@ -185,11 +185,11 @@ To fully satisfy Stage 0A specification:
 2. Add duplicate-key validation:
    - ensure uniqueness of `(submission_id, component_id)`
 3. Explicitly document `cleaned_entries` as:
-   > The canonical Stage 0A dataset.
+   > The canonical Pipeline 1A dataset.
 
 No further structural changes are required.
 ## 5. Summary
-The current Excel/MCode workflow already satisfies nearly all Stage 0A requirements.
+The current Excel/MCode workflow already satisfies nearly all Pipeline 1A requirements.
 Specifically, it successfully guarantees:
 - canonical grading targets
 - stable identity integrity
@@ -198,4 +198,4 @@ Specifically, it successfully guarantees:
 - full submission scope coverage
 - uniform dataset structure
 The only remaining step for full compliance is the addition of an explicit reproducibility manifest.
-Stage 0A is therefore structurally complete and ready to serve as the foundation for Stage 0B rubric expansion.
+Pipeline 1A is therefore structurally complete and ready to serve as the foundation for Stage 0B rubric expansion.

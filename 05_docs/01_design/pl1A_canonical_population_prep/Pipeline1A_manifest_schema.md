@@ -1,23 +1,23 @@
-## Stage0A_manifest_schema.md  
-### Schema Definition for Stage 0A Processing Manifest  
+## Pipeline1A_manifest_schema.md  
+### Schema Definition for Pipeline 1A Processing Manifest  
 ### Rubric-Agnostic Canonicalisation of Grading Targets  
 ## 1. Purpose  
-This document defines the **authoritative schema** for the Stage 0A processing manifest.
-The Stage 0A manifest records:
+This document defines the **authoritative schema** for the Pipeline 1A processing manifest.
+The Pipeline 1A manifest records:
 - input identity  
 - transformation lineage  
 - scope counts  
 - canonical identity guarantees  
 - reproducibility contract  
 It is a structured metadata artefact, not narrative documentation.
-Each Stage 0A run must instantiate this schema.
+Each Pipeline 1A run must instantiate this schema.
 ## 2. Scope  
-Stage 0A produces a rubric-agnostic canonical dataset of grading targets defined as:
+Pipeline 1A produces a rubric-agnostic canonical dataset of grading targets defined as:
 ```
 submission_id × component_id
 ```
-The manifest captures the state of that dataset at the moment Stage 0A completes.
-Stage 0A does NOT include rubric expansion.  
+The manifest captures the state of that dataset at the moment Pipeline 1A completes.
+Pipeline 1A does NOT include rubric expansion.  
 Dimension identifiers belong to Stage 0B.
 ## 3. Structural Format  
 The manifest must be stored as a flat two-column table:
@@ -59,7 +59,7 @@ All fields must be static (no formulas) after freeze.
 | `input_database_export_filename` (optional) | string | metadata_static | Institutional export filename |
 | `input_database_exported_timestamp` (optional) | string | metadata_static | Database export timestamp |
 ### 4.3 Query Lineage and Logic Version
-Stage 0A must record the exact version of transformation logic used to produce the frozen snapshot.
+Pipeline 1A must record the exact version of transformation logic used to produce the frozen snapshot.
 
 | field | type | freeze rule | notes |
 |-------|------|------------|-------|
@@ -69,13 +69,13 @@ Stage 0A must record the exact version of transformation logic used to produce t
 | `pq_query_cleaned_entries_name` | string | metadata_static | Power Query name used |
 | `pq_query_validation_file` | string | metadata_static | File name under version control |
 | `pq_query_cleaned_entries_file` | string | metadata_static | File name under version control |
-Sampling queries must NOT be listed in Stage 0A.
+Sampling queries must NOT be listed in Pipeline 1A.
 The `pipeline_commit` value must correspond to a committed state (working tree clean).
 ### 4.4 Canonical Identity Definition
 
 | field                             | type   | freeze rule     | notes                                                        |
 | --------------------------------- | ------ | --------------- | ------------------------------------------------------------ |
-| `canonical_snapshot_worksheet`    | string | metadata_static | Exact worksheet name containing the frozen Stage 0A snapshot |
+| `canonical_snapshot_worksheet`    | string | metadata_static | Exact worksheet name containing the frozen Pipeline 1A snapshot |
 | `canonical_dataset`               | string | static_literal  | Must equal `cleaned_entries`                                 |
 | `canonical_unit`                  | string | static_literal  | `submission_id × component_id`                               |
 | `primary_key`                     | string | static_literal  | `(submission_id, component_id)`                              |
@@ -110,10 +110,10 @@ Coverage validation:
 | `re_run_rule` | string | static_literal | Deterministic equality condition |
 Required value:
 ```
-If inputs unchanged and pipeline_commit unchanged, counts must match exactly; otherwise Stage 0A is considered changed.
+If inputs unchanged and pipeline_commit unchanged, counts must match exactly; otherwise Pipeline 1A is considered changed.
 ```
 ## 5. Invariants
-At completion of Stage 0A:
+At completion of Pipeline 1A:
 1. All required fields exist.  
 2. No field names are duplicated.  
 3. All values are static (no formulas remain).  
@@ -121,9 +121,9 @@ At completion of Stage 0A:
 5. `coverage_check_pass = TRUE`.  
 6. `eligible_submissions = count_unique_submission_ids`.  
 7. `pipeline_commit` corresponds to a committed repository state.  
-If any invariant fails, Stage 0A is incomplete.
+If any invariant fails, Pipeline 1A is incomplete.
 ## 6. Snapshot Derivation and Freeze Enforcement
-The Stage 0A manifest must be derived from a **frozen canonical dataset snapshot**.
+The Pipeline 1A manifest must be derived from a **frozen canonical dataset snapshot**.
 Operational requirements:
 1. Refresh all Power Query outputs.
 2. Commit any query logic changes.
@@ -133,12 +133,12 @@ Operational requirements:
 6. Convert all formula-derived fields to static values.
 7. Save workbook and record freeze timestamp.
 After freeze, refreshing Power Query must not alter any manifest value.
-If any manifest value changes after refresh, Stage 0A has not been properly frozen.
+If any manifest value changes after refresh, Pipeline 1A has not been properly frozen.
 The manifest describes a **snapshot state**, not a live workbook state.
 
 
 ## 6. Snapshot Derivation and Freeze Enforcement
-The Stage 0A manifest must be derived from a **frozen canonical dataset snapshot**.
+The Pipeline 1A manifest must be derived from a **frozen canonical dataset snapshot**.
 Operational requirements:
 1. Refresh all Power Query outputs.
 2. Commit any query logic changes.
@@ -148,13 +148,13 @@ Operational requirements:
 6. Convert all formula-derived fields to static values.
 7. Save workbook and record freeze timestamp.
 After freeze, refreshing Power Query must not alter any manifest value.
-If any manifest value changes after refresh, Stage 0A has not been properly frozen.
+If any manifest value changes after refresh, Pipeline 1A has not been properly frozen.
 The manifest describes a **snapshot state**, not a live workbook state.
 
 ## 8. Storage Location
 Schema definition (pipeline repository):
 ## 7. Deterministic Behaviour Definition
-Stage 0A is deterministic if:
+Pipeline 1A is deterministic if:
 - Input files are identical  
 - `pipeline_commit` is identical  
 - Snapshot-derived counts match exactly  
@@ -180,12 +180,12 @@ The manifest must remain paired with its corresponding canonical dataset snapsho
 **Optional export (not required):** **If you also export a disk snapshot for portability, store it alongside the frozen workbook as `cleaned_entries_snapshot_<YYYY-MM-DD>.csv`.**
 The manifest must remain paired with its corresponding canonical dataset snapshot.
 ## 9. Relationship to Stage 0B
-Stage 0A manifest does NOT include:
+Pipeline 1A manifest does NOT include:
 - dimension identifiers  
 - rubric version  
 - dimension counts  
 These belong exclusively to Stage 0B.
-Stage 0A guarantees only:
+Pipeline 1A guarantees only:
 ```
 submission_id × component_id
 ```
@@ -194,11 +194,11 @@ Stage 0B expands to:
 submission_id × component_id × dimension_id
 ```
 ## 10. Summary
-The Stage 0A manifest is a reproducibility contract tied to a frozen canonical dataset snapshot and a specific logic revision.
+The Pipeline 1A manifest is a reproducibility contract tied to a frozen canonical dataset snapshot and a specific logic revision.
 It guarantees that:
 - grading targets are canonical  
 - joins are validated  
 - scope is complete  
 - identity is stable  
 - processing is deterministic  
-Without a compliant Stage 0A manifest derived from a frozen snapshot and pinned to a specific `pipeline_commit`, reproducibility cannot be asserted.
+Without a compliant Pipeline 1A manifest derived from a frozen snapshot and pinned to a specific `pipeline_commit`, reproducibility cannot be asserted.

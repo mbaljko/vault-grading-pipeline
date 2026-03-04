@@ -1,19 +1,19 @@
-## Stage 0A — Prepare Canonical Grading Targets (Rubric-Agnostic)
+## Pipeline 1A — Prepare Canonical Grading Targets (Rubric-Agnostic)
 ## Generalised Specification with Required Post-Conditions
-This document defines the **necessary and sufficient post-conditions** for Stage 0A of the grading workflow.
-Stage 0A establishes a **rubric-agnostic canonical grading target dataset** that normalises and validates heterogeneous source data prior to any rubric-dependent processing.
-All downstream stages — including rubric instantiation (Stage 0B), calibration, scoring, and review — assume the guarantees established here.
-## 1. Purpose of Stage 0A
-Stage 0A transforms heterogeneous source data (LMS exports, grading sheets, database extracts) into a **single canonical grading target dataset** that is:
+This document defines the **necessary and sufficient post-conditions** for Pipeline 1A of the grading workflow.
+Pipeline 1A establishes a **rubric-agnostic canonical grading target dataset** that normalises and validates heterogeneous source data prior to any rubric-dependent processing.
+All downstream Pipelines — including rubric instantiation (Pipeline 0B), calibration, scoring, and review — assume the guarantees established here.
+## 1. Purpose of Pipeline 1A
+Pipeline 1A transforms heterogeneous source data (LMS exports, grading sheets, database extracts) into a **single canonical grading target dataset** that is:
 - identity-safe  
 - structurally consistent  
 - free of join ambiguity  
 - cleaned and standardised  
 - reproducible  
 Its goal is to eliminate ambiguity, inconsistency, and data integrity risks before any rubric-dependent processing begins.
-Stage 0A is explicitly **rubric-agnostic**. It does not depend on dimension definitions or rubric structure.
-## 2. Inputs to Stage 0A
-Stage 0A operates on:
+Pipeline 1A is explicitly **rubric-agnostic**. It does not depend on dimension definitions or rubric structure.
+## 2. Inputs to Pipeline 1A
+Pipeline 1A operates on:
 - Raw LMS submission exports (text responses)
 - Grading worksheet exports (roster + eligibility)
 - Institutional database exports (if applicable)
@@ -21,9 +21,9 @@ These inputs may differ across:
 - courses
 - LMS platforms
 - assessment formats
-Stage 0A must normalise these into a single unified dataset.
+Pipeline 1A must normalise these into a single unified dataset.
 ## 3. Required Post-Conditions (Normative Requirements)
-Stage 0A is complete **only when ALL post-conditions below are satisfied**.
+Pipeline 1A is complete **only when ALL post-conditions below are satisfied**.
 These invariants define the structural, identity, and integrity guarantees of the canonical grading target dataset.
 ### 3.1 Canonical Unit Definition (Rubric-Agnostic)
 The canonical dataset must be organised so that:
@@ -47,7 +47,7 @@ Each row must be uniquely identifiable by the composite key:
 Duplicate key combinations are prohibited.
 #### Instantiation and Implementation Details
 - Uniqueness must be validated explicitly.
-- Duplicate key detection must halt Stage 0A.
+- Duplicate key detection must halt Pipeline 1A.
 - A materialised key may optionally be created:
 ```
 grading_target_id = submission_id::component_id
@@ -111,8 +111,8 @@ The canonical dataset must have a uniform tabular schema:
 - no missing required fields
 A schema definition must be declared and validated.
 ### 3.9 Deterministic Reproducibility
-Stage 0A must produce reproducible outputs.
-Re-running Stage 0A with identical inputs must produce identical results.
+Pipeline 1A must produce reproducible outputs.
+Re-running Pipeline 1A with identical inputs must produce identical results.
 #### Instantiation and Implementation Details
 - Dataset must be sorted deterministically by:
   - `submission_id`
@@ -129,15 +129,15 @@ Permitted formats include:
 - Parquet
 - workbook table (for Excel-based workflows)
 Data must be UTF-8 encoded and column ordering explicit.
-## 4. Required Outputs of Stage 0A
-Stage 0A must produce:
+## 4. Required Outputs of Pipeline 1A
+Pipeline 1A must produce:
 ### 4.1 Canonical Grading Target Dataset
 A structured table containing:
 - submission identifiers
 - component identifiers
 - cleaned response text
 - optional metadata
-This dataset becomes the sole input to Stage 0B.
+This dataset becomes the sole input to Pipeline 0B.
 ### 4.2 Join Validation Audit
 A record documenting:
 - excluded submissions
@@ -156,15 +156,15 @@ The canonical dataset may include:
 - anonymised row identifiers
 - preprocessing flags
 These fields must not affect identity integrity.
-## 6. Explicit Non-Goals of Stage 0A
-Stage 0A does NOT:
+## 6. Explicit Non-Goals of Pipeline 1A
+Pipeline 1A does NOT:
 - reference rubric definitions
 - include dimension identifiers
 - perform rubric expansion
 - apply scoring or calibration
 Its sole function is data normalisation and validation.
 ## 7. Completion Criteria Checklist
-Stage 0A is complete when:
+Pipeline 1A is complete when:
 - A canonical dataset exists with one row per `submission × component`.
 - All identifiers are stable and unique.
 - All joins have been validated.
@@ -172,15 +172,15 @@ Stage 0A is complete when:
 - All response text has been cleaned.
 - Dataset size matches expected coverage.
 - A processing manifest exists.
-## 8. Relationship to Stage 0B
-Stage 0A produces a rubric-agnostic canonical grading target dataset.
-Stage 0B subsequently expands this dataset using rubric definitions to create:
+## 8. Relationship to Pipeline 0B
+Pipeline 1A produces a rubric-agnostic canonical grading target dataset.
+Pipeline 0B subsequently expands this dataset using rubric definitions to create:
 ```
 submission × component × dimension
 ```
 which becomes the true grading unit.
 ## 9. Summary
-Stage 0A establishes the foundational data guarantees required for reliable grading workflows.
+Pipeline 1A establishes the foundational data guarantees required for reliable grading workflows.
 Once complete, all downstream processes can assume:
 - identity correctness  
 - structural integrity  
