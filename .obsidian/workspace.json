@@ -61,12 +61,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl2_calibration_runs/pl2_wrapper_prompt_generate_calibration_scoring_prompt.md",
+                "file": "01_units/pipelines/pl1B_rubric_devt/Component Rubric Input Schema (CRIS).md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "pl2_wrapper_prompt_generate_calibration_scoring_prompt"
+              "title": "Component Rubric Input Schema (CRIS)"
             }
           }
         ],
@@ -216,13 +216,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl2_calibration_runs/pl2_wrapper_prompt_generate_calibration_scoring_prompt.md",
+                "file": "01_units/pipelines/pl1B_rubric_devt/Component Rubric Input Schema (CRIS).md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of pl2_wrapper_prompt_generate_calibration_scoring_prompt"
+              "title": "Outline of Component Rubric Input Schema (CRIS)"
             }
           }
         ],
@@ -247,8 +247,9 @@
   },
   "active": "ca848a3e488a4d05",
   "lastOpenFiles": [
-    "01_units/pipelines/pl1B_rubric_devt/Prompt for Step00 - Generate CalibrationPayloadFormat.md",
     "01_units/pipelines/pl2_calibration_runs/pl2_wrapper_prompt_generate_calibration_scoring_prompt.md",
+    "01_units/pipelines/pl1B_rubric_devt/Component Rubric Input Schema (CRIS).md",
+    "01_units/pipelines/pl1B_rubric_devt/Prompt for Step00 - Generate CalibrationPayloadFormat.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification.md",
     "05_docs/01_design/pl2B_recalibration_optional",
     "01_units/pipelines/pl2B_recalibration (optional)",
@@ -281,7 +282,6 @@
     "05_docs/00_overview/Generalised Dimension-First Grading Process.md",
     "05_docs/README.md",
     "05_docs/01_design",
-    "02_libs/common/README.md",
-    "01_units/pipelines/pl1A_canonical_population_prep/excel/Pipeline1A_Excel_Implementation_Standard.md"
+    "02_libs/common/README.md"
   ]
 }
