@@ -25,7 +25,7 @@ let
     // -----------------------------------------
     // Required columns check
     // -----------------------------------------
-    RequiredCols = {"__row_id", "component_id", "response_wc"},
+    RequiredCols = {"submission_id", "component_id", "response_wc"},
     MissingCols = List.Difference(RequiredCols, Table.ColumnNames(Source)),
     _assert =
         if List.Count(MissingCols) = 0 then
@@ -40,7 +40,7 @@ let
         Table.TransformColumnTypes(
             Source,
             {
-                {"__row_id", Int64.Type},
+                {"submission_id", type text},
                 {"component_id", type text},
                 {"response_wc", Int64.Type}
             }
@@ -53,21 +53,26 @@ let
         Table.AddColumn(
             Typed,
             "__unit_key",
-            each Text.From([__row_id]) & "::" & Text.From([component_id]),
+            each Text.From([submission_id]) & "::" & Text.From([component_id]),
             type text
         ),
-
+        
     // -----------------------------------------
     // Helper: sample m keys by interior-uniform spacing over wc-ranked rows
     // (expects a single component_id group table)
     // -----------------------------------------
+    // Inside SampleInteriorUniformKeys, tighten the row filter to exclude wc = 0
+
     SampleInteriorUniformKeys = (t as table, wcCol as text, keyCol as text, m as number) as list =>
         let
             t0 =
                 if Table.HasColumns(t, {wcCol, keyCol}) then
                     Table.SelectRows(
                         Table.SelectColumns(t, {keyCol, wcCol}),
-                        each Record.Field(_, wcCol) <> null and Value.Is(Record.Field(_, wcCol), type number)
+                        each
+                            Record.Field(_, wcCol) <> null
+                            and Value.Is(Record.Field(_, wcCol), type number)
+                            and Record.Field(_, wcCol) > 0
                     )
                 else
                     error "Missing required columns for sampling within group.",

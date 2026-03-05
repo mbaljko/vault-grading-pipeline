@@ -245,8 +245,9 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "ca848a3e488a4d05",
+  "active": "e5174a9fca7b05c1",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1B_rubric_devt/excel",
     "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning - TO DO.md",
     "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning.pq POTENTIAL OPTIMIZATIONS.md",
     "05_docs/01_design/pl1A_canonical_population_prep/01_validation.pq - TO DO.md",
@@ -278,7 +279,6 @@
     "05_docs/01_design/prior-docs-from-migration/STEPS - DESIGN.md",
     "05_docs/01_design/prior-docs-from-migration/STEP 2 - EXECUTION.md",
     "05_docs/01_design/prior-docs-from-migration/STEP 1 - CALIBRATION.md",
-    "05_docs/01_design/prior-docs-from-migration/STEP 0 - DATA PREPARATION.md",
     "05_docs/01_design/prior-docs-from-migration",
     "05_docs/01_design/pl3_grading_core",
     "05_docs/01_design/pl2_calibration",
