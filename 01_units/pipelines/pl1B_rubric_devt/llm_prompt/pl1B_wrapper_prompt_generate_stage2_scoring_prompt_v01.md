@@ -33,8 +33,6 @@ All artefacts must use the authoritative grading ontology:
 - `component_id`
 - `dimension_id`
 - `indicator_id`
-- evidence levels
-- mapping tables
 
 All artefacts must be supplied in full and delimited using `===`.
 
@@ -118,7 +116,7 @@ The model must extract from this document:
 - the indicator evidence status scale
 - the dimension evidence levels
 - the evidence coherence rule
-- the indicator → dimension evidence mapping tables
+- the mapping table evaluation semantics defined in Section 6 (cell semantics, row semantics, table semantics)
 - the dimension evidence → submission score mapping table
 - performance level labels
 
@@ -227,36 +225,12 @@ Q1–Qn
 
 including cross-dimension response indicators.
 
-The generated prompt must compute **dimension evidence levels and final scores entirely from these indicator evidence rows**.
+
+The generated prompt must compute dimension evidence levels and final scores entirely from the indicator evidence statuses contained in these rows.
 
 ---
 
-## Required Stage 2 Evaluation Procedure
-
-The generated scoring prompt must enforce the following evaluation sequence:
-
-1. Retrieve all Stage 1 indicator evidence for the `(submission_id × component_id)` unit.
-
-2. Partition indicator evidence into:
-   - dimension indicators (e.g., `I1–In`)
-   - cross-dimension response indicators (e.g., `Q1–Qn`).
-
-3. Determine **dimension evidence levels** using the embedded **indicator → dimension mapping tables**.
-
-4. Apply the **evidence coherence rule**:
-
-```
-evidence satisfies partial_evidence
-Level 1 satisfies Level 2
-```
-
-5. Evaluate the **dimension evidence → submission score mapping table**.
-
-6. Evaluate rows **top to bottom**.
-
-7. The **first satisfied row determines the `score_label`**.
-
-Evaluation must be deterministic.
+collect all rows before proceeding.
 
 ---
 
@@ -414,6 +388,7 @@ The field must contain the computed dimension evidence level:
 ```
 Level 1
 Level 2
+Level 3
 ```
 
 Each cross-dimension response indicator must also be written to its own field.
@@ -429,7 +404,7 @@ The field must contain the indicator evidence status:
 ```
 evidence
 partial_evidence
-not_in_evidence
+little_to_no_evidence
 ```
 
 `confidence` must represent evaluator confidence on a scale between:
