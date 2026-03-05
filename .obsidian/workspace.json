@@ -295,6 +295,9 @@
   },
   "active": "bb02de274e442c4e",
   "lastOpenFiles": [
+    "01_units/pipelines/pl2_calibration_runs/python/invoke_chatgpt_with_payload.py",
+    "01_units/pipelines/pl2_calibration_runs/python/apply_stage1_scoring.py",
+    "01_units/pipelines/pl2_calibration_runs/python",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v01.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v01.md",
     "05_docs/01_design/pl3_production_scoring/Pipeline PL3 — Production Scoring Pipeline (Two-Stage Model) v2.md",
@@ -317,19 +320,16 @@
     "01_units/pipelines/pl2_calibration_runs/excel/04_build_component_samples copy.pq",
     "01_units/pipelines/pl2_calibration_runs/excel/04_build_component_samples.pq",
     "01_units/pipelines/pl2_calibration_runs/excel/03_sampling 1.pq",
-    "01_units/pipelines/pl2_calibration_runs/excel",
     "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning - TO DO.md",
     "05_docs/01_design/pl1A_canonical_population_prep/01_validation.pq - TO DO.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A (Excel,MCode) — Implementation Mapping to Specification.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
     "05_docs/01_design/pl1A_canonical_population_prep/prev_ver/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
-    "05_docs/01_design/pl1A_canonical_population_prep/prev_ver",
     "05_docs/01_design/pl1B_rubric_devt/prev_versions/Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification.md",
     "01_units/pipelines/pl1B_rubric_devt/Component Rubric Input Schema (CRIS).md",
     "01_units/pipelines/pl1B_rubric_devt/Prompt for Step00 - Generate CalibrationPayloadFormat.md",
     "05_docs/00_overview/Nomenclature Standard — Grading Ontology and Calibration Alignment.md",
     "05_docs/00_overview/Four Pipeline Model.md",
-    "05_docs/00_overview/prev_versions/Nomenclature Standard — Grading Ontology and Calibration Alignment 1.md",
-    "01_units/pipelines/pl2_calibration_runs/prev versions/pl2_wrapper_prompt_generate_calibration_scoring_prompt 1.md"
+    "05_docs/00_overview/prev_versions/Nomenclature Standard — Grading Ontology and Calibration Alignment 1.md"
   ]
 }
