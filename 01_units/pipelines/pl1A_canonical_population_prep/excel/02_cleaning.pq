@@ -160,7 +160,9 @@ let
         if txt = null then null
         else
             "+++submission_id=" & Text.From(sid) & "#(lf)" &
+            "#(lf)" &
             "+++" & "#(lf)" &
+            "#(lf)" &
             txt,
 
     Prefixed =
