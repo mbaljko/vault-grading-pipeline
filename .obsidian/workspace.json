@@ -263,11 +263,11 @@
   },
   "active": "bb02de274e442c4e",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v01.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v01.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v01.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v01.md",
     "05_docs/01_design/pl1A_canonical_population_prep/FORMATTING ASSUMPTION.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v01.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v01.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v01 1.md",
     "README.md",
     "secrets/openai_api_key.txt",
