@@ -276,7 +276,7 @@ def write_output_files(
 
     with csv_output_path.open("w", encoding="utf-8", newline="") as csv_file:
         writer = csv.writer(csv_file)
-        writer.writerow(["output_text"])
+        # writer.writerow(["output_text"])
         writer.writerow([text or ""])
 
 

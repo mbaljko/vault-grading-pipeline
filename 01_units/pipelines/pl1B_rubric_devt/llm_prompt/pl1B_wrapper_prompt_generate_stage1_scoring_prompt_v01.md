@@ -14,6 +14,8 @@ TO DO:
 read the full response_text once, and the  evaluate all rubric indicators at once
 e.g.,
 - Read response_text exactly once. Then, in a single evaluation step, determine evidence status for **all** indicators (I1–I6, Q1–Q2) before writing any output. Do not re-read or re-scan the text separately per indicator.
+- revise Strict quoting and escaping rules, I just want to ensure that the evaluation_notes appears in quotes. 
+- also, drop the requirement of the evidence_excerpt
 # .
 ````
 ## pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v02
