@@ -1,16 +1,13 @@
 /*
 ===============================================================================
-Stage 0 — cleaned_entries (Canonical Long Dataset Builder)
+Stage 0 — cleaned_entries (Canonical Long Dataset Builder) — dynamic components
 
 Purpose:
-- Cleans LMS export text
-- Joins to validation roster
-- Ensures submission_id exists
-- Excludes no_match students
+- Cleans LMS export text for all response fields (columns before the fixed tail)
+- Joins to validation roster (matched_unique only)
+- Ensures submission_id exists (from validation)
 - Converts wide LMS export → long canonical format
-- Produces one row per (submission × component)
-
-This is the canonical Stage-0 dataset for downstream grading.
+- Produces one row per (submission_id × component_id)
 ===============================================================================
 */
 
@@ -18,14 +15,39 @@ let
     // ------------------------------------------------------------------------
     // SOURCE TABLES
     // ------------------------------------------------------------------------
-
     Source = Excel.CurrentWorkbook(){[Name="Table_raw"]}[Content],
     Validation = Excel.CurrentWorkbook(){[Name="validation"]}[Content],
 
     // ------------------------------------------------------------------------
-    // TEXT CLEANING HELPERS (UNCHANGED FROM YOUR WORKFLOW)
+    // RESPONSE-FIELD DISCOVERY (DYNAMIC)
     // ------------------------------------------------------------------------
+    TailCols = {"Tags", "User", "Username", "Email address", "Time added", "Time modified"},
+    AllCols = Table.ColumnNames(Source),
 
+    // Find the first tail column that appears (prefer the earliest occurrence)
+    TailPositions =
+        List.RemoveNulls(
+            List.Transform(
+                TailCols,
+                (c) =>
+                    let p = List.PositionOf(AllCols, c)
+                    in if p = -1 then null else p
+            )
+        ),
+
+    TailStart =
+        if List.Count(TailPositions) = 0
+        then error "02_cleaning: None of the tail columns were found (Tags/User/Username/Email address/Time added/Time modified). Cannot infer response fields."
+        else List.Min(TailPositions),
+
+    ResponseCols =
+        if TailStart = 0
+        then error "02_cleaning: Tail columns begin at position 0, leaving no response columns to unpivot."
+        else List.FirstN(AllCols, TailStart),
+
+    // ------------------------------------------------------------------------
+    // TEXT CLEANING HELPERS (AS PROVIDED)
+    // ------------------------------------------------------------------------
     NormaliseHtml = (t as nullable text) as nullable text =>
         let
             s0 = t,
@@ -90,55 +112,41 @@ let
             n,
 
     // ------------------------------------------------------------------------
-    // CLEAN RESPONSE TEXT
+    // CLEAN RESPONSE TEXT (DYNAMIC COLUMNS)
     // ------------------------------------------------------------------------
+    CleanTransforms =
+        List.Transform(
+            ResponseCols,
+            (c) => {c, StripHtmlSafe, type text}
+        ),
 
     Cleaned =
         Table.TransformColumns(
             Source,
-            {
-                {"SectionAResponse", StripHtmlSafe, type text},
-                {"SectionBResponse", StripHtmlSafe, type text},
-                {"SectionCResponse", StripHtmlSafe, type text},
-                {"SectionDResponse", StripHtmlSafe, type text},
-                {"SectionEResponse", StripHtmlSafe, type text}
-            }
+            CleanTransforms
         ),
 
     // ------------------------------------------------------------------------
-    // VALIDATION PREPARATION
+    // VALIDATION PREPARATION (GATE ELIGIBILITY)
     // ------------------------------------------------------------------------
-
     ValidationFiltered =
         Table.SelectRows(Validation, each [__join_status] = "matched_unique"),
 
-    ValidationWithSubmissionId =
-        if Table.HasColumns(ValidationFiltered, {"submission_id"}) then
-            ValidationFiltered
+    // Require submission_id from validation (single authoritative source)
+    ValidationMap =
+        if not Table.HasColumns(ValidationFiltered, {"User", "submission_id"}) then
+            error "02_cleaning: validation table must include columns User and submission_id."
         else
-            Table.AddColumn(
-                ValidationFiltered,
-                "submission_id",
-                each
-                    let
-                        s = Text.From([GW.Identifier]),
-                        digits = Text.Select(s, {"0".."9"})
-                    in digits,
-                type text
+            Table.Distinct(
+                Table.SelectColumns(
+                    ValidationFiltered,
+                    {"User", "submission_id"}
+                )
             ),
 
-    ValidationMap =
-        Table.Distinct(
-            Table.SelectColumns(
-                ValidationWithSubmissionId,
-                {"User", "submission_id"}
-            )
-        ),
-
     // ------------------------------------------------------------------------
-    // JOIN CLEANED DATA WITH ROSTER
+    // JOIN CLEANED DATA WITH ROSTER MAP
     // ------------------------------------------------------------------------
-
     Joined =
         Table.NestedJoin(Cleaned, {"User"}, ValidationMap, {"User"}, "__v", JoinKind.Inner),
 
@@ -146,50 +154,42 @@ let
         Table.ExpandTableColumn(Joined, "__v", {"submission_id"}),
 
     // ------------------------------------------------------------------------
-    // ADD ROW ID
+    // OPTIONAL DEBUG ROW ID (NON-AUTHORITATIVE)
     // ------------------------------------------------------------------------
-
     WithRowId = Table.AddIndexColumn(Expanded, "__row_id", 1, 1, Int64.Type),
 
-    // ------------------------------------------------------------------------
-    // TAG RESPONSES WITH ROW ID
-    // ------------------------------------------------------------------------
-
-    AddPrefix = (txt as nullable text, rid as number) =>
-        if txt = null then null else "+++row_id=" & Text.From(rid) & "#(lf)" & txt,
+    // Prefix responses with stable submission_id (preferred) and optional __row_id
+    AddPrefix = (txt as nullable text, sid as nullable text, rid as number) as nullable text =>
+        if txt = null then null
+        else
+            "+++submission_id=" & Text.From(sid) & "#(lf)"
+            & "+++row_id=" & Text.From(rid) & "#(lf)"
+            & txt,
 
     Prefixed =
         Table.TransformRows(
             WithRowId,
             (r) =>
-                Record.TransformFields(
-                    r,
-                    {
-                        {"SectionAResponse", (x) => AddPrefix(x, r[__row_id])},
-                        {"SectionBResponse", (x) => AddPrefix(x, r[__row_id])},
-                        {"SectionCResponse", (x) => AddPrefix(x, r[__row_id])},
-                        {"SectionDResponse", (x) => AddPrefix(x, r[__row_id])},
-                        {"SectionEResponse", (x) => AddPrefix(x, r[__row_id])}
-                    }
-                )
+                let
+                    sid = r[submission_id],
+                    rid = r[__row_id],
+                    fields = List.Transform(
+                        ResponseCols,
+                        (c) => {c, (x) => AddPrefix(x, sid, rid)}
+                    )
+                in
+                    Record.TransformFields(r, fields)
         ),
 
     PrefixedTable = Table.FromRecords(Prefixed),
 
     // ------------------------------------------------------------------------
-    // UNPIVOT → LONG FORMAT
+    // UNPIVOT → LONG FORMAT (DYNAMIC COMPONENTS)
     // ------------------------------------------------------------------------
-
     Unpivoted =
         Table.Unpivot(
             PrefixedTable,
-            {
-                "SectionAResponse",
-                "SectionBResponse",
-                "SectionCResponse",
-                "SectionDResponse",
-                "SectionEResponse"
-            },
+            ResponseCols,
             "component_id",
             "response_text"
         ),
@@ -197,24 +197,21 @@ let
     // ------------------------------------------------------------------------
     // ADD WORD COUNT
     // ------------------------------------------------------------------------
-
     WithWC = Table.AddColumn(Unpivoted, "response_wc", each WordCount([response_text]), Int64.Type),
 
     // ------------------------------------------------------------------------
-    // FINAL CANONICAL STRUCTURE
+    // FINAL CANONICAL STRUCTURE (PIPELINE 1A)
     // ------------------------------------------------------------------------
-
     Final =
         Table.SelectColumns(
             WithWC,
             {
                 "submission_id",
-                "__row_id",
                 "component_id",
                 "response_text",
-                "response_wc"
+                "response_wc",
+                "__row_id"
             }
         )
-
 in
     Final
