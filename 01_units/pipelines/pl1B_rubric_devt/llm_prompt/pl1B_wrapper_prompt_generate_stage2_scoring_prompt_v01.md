@@ -9,10 +9,27 @@ inputs:
 BEGIN GENERATION
 ```
 
-# .
+
+remove this
 ````
+
+Escaping rules
+
+If special characters occur inside quoted text, apply these escapes.
+
+```
+"  →  \"
+\  →  \\
+newline → \n
+```
+These rules must be applied consistently to every output row.
+````
+
+# .
+
 ## pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v02
 
+````
 Wrapper prompt: Generate a tightly bounded **Stage 2 scoring prompt** for **dimension evaluation and boundary rule execution**.
 
 This wrapper prompt generates a prompt. It does not score student work.
