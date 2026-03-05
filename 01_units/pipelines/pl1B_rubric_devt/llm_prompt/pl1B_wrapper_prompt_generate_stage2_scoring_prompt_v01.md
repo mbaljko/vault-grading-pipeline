@@ -2,7 +2,7 @@ this document sets out a WRAPPER PROMPT - which is used to create tightly bounde
 
 inputs:
 - `<ASSESSMENT_ID>_AssignmentPayloadSpec_v01`
-- `CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_RubricSpec_v01`
+- `CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_RubricSpec_v*`
 
 # .
 ```
