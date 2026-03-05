@@ -2,7 +2,7 @@ this document sets out a WRAPPER PROMPT - which is used to create tightly bounde
 
 inputs:
 - `<ASSESSMENT_ID>_AssignmentPayloadSpec_v01`
-- `CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_RubricSpec_v01`
+- `CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_RubricSpec_v*`
 
 # .
 ```
@@ -138,7 +138,7 @@ submission_id × component_id
 
 This artefact defines the authoritative rubric specification for the component.
 
-The model must extract the full **indicator registry**, including:
+The model must extract the full **indicator registry** defined in **Section 5**, including:
 
 - `indicator_id`
 - `indicator_definition`
@@ -149,15 +149,24 @@ This includes both:
 - component indicators (e.g., `I1–In`)
 - cross-dimension response-quality indicators (e.g., `Q1–Qn`)
 
-Indicator detection must rely only on:
+Indicator evidence detection must rely only on:
 
 - the response text
 - the indicator definition
 - the indicator assessment guidance
+- the **indicator evidence status scale** defined in **Section 5.2**
 
 Indicators must be interpreted strictly as **observable textual evidence checks** referencing explicit textual evidence.
 
-Dimension evidence levels, dimension satisfaction rules, and boundary rules **must not be executed during Stage 1**.
+The following rubric sections must **not** be used during Stage 1:
+
+- dimension evidence levels (Section 3.2)
+- indicator → dimension mapping tables (Section 6)
+- dimension → submission score rules (Section 7)
+- boundary rules (Section 8)
+
+Stage 1 determines only the **indicator evidence status** for each indicator.
+No dimension-level or submission-level reasoning may occur during this stage.
 
 ===
 
@@ -281,7 +290,7 @@ The generated scoring prompt must enforce:
 
 - one evaluation per `(submission_id × component_id × indicator_id)`
 - explicit evaluation of **all rubric indicators**
-- assignment of an **evidence status** for each indicator, using the rubric’s indicator evidence status vocabulary
+- assignment of an **indicator evidence status** for each indicator, using the evidence status scale defined in Section 5.2 of the rubric
 - deterministic results based on explicit text
 
 The generated scoring prompt must also enforce this evaluation discipline:
@@ -289,6 +298,15 @@ The generated scoring prompt must also enforce this evaluation discipline:
 - Read `response_text` exactly once.
 - Then, in a single evaluation step, determine evidence status for **all** indicators (`I1–In`, `Q1–Qn`) before writing any output.
 - Do not re-read or re-scan the text separately per indicator.
+  
+Stage 1 evaluates indicators independently.
+
+Indicator evidence status must be determined without considering:
+
+- other indicators
+- dimension definitions
+- indicator combinations
+- mapping table rows
 
 Stage 1 must **not**:
 
@@ -299,7 +317,7 @@ Stage 1 must **not**:
 
 If indicator evidence detection is uncertain:
 
-- assign the indicator the lowest evidence status
+- assign the status `little_to_no_evidence`
 - include flag `needs_review`
 
 ---
