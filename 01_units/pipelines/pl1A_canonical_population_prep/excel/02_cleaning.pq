@@ -26,7 +26,7 @@ let
         let
             Replacements = {
                 {"¬†", " "}, {"‚Äî", "—"}, {"‚Äú", "“"}, {"‚Äù", "”"},
-                {"‚Äò", "‘"}, {"‚Äô", "’"}, {Character.FromNumber(160), " "}
+                {"‚Äò", "‘"}, {"‚Äô", "’"}, {Character.FromNumber(160), " "}   // NBSP
             },
             s1 =
                 if t = null then
@@ -53,6 +53,7 @@ let
             q0 = NormaliseHtmlQuotes(t0),
             s0 = SanitiseMojibake(q0),
 
+            // Normalise common line break tags to actual line breaks BEFORE tag stripping
             br0 =
                 if s0 = null then
                     null
@@ -76,6 +77,64 @@ let
         in
             s1,
 
+    // ------------------------------------------------------------------------
+    // ROBUST "EFFECTIVELY BLANK" TEST
+    // Removes common whitespace + zero-width characters before testing length.
+    // ------------------------------------------------------------------------
+    RemoveWhitespaceAndZeroWidth = (t as nullable text) as nullable text =>
+        let
+            s0 = if t = null then null else t,
+            // remove typical whitespace
+            s1 =
+                if s0 = null then
+                    null
+                else
+                    Text.Remove(
+                        s0,
+                        {
+                            " ", "#(tab)", "#(lf)", "#(cr)",
+                            Character.FromNumber(160),     // NBSP
+                            Character.FromNumber(65279),   // BOM / zero-width no-break space
+                            Character.FromNumber(8203),    // zero-width space
+                            Character.FromNumber(8204),    // zero-width non-joiner
+                            Character.FromNumber(8205)     // zero-width joiner
+                        }
+                    )
+        in
+            s1,
+
+    IsEffectivelyBlank = (t as nullable text) as logical =>
+        let
+            s0 = if t = null then null else Text.Clean(t),
+            s1 = RemoveWhitespaceAndZeroWidth(s0),
+            out = (s1 = null) or (Text.Length(s1) = 0)
+        in
+            out,
+
+    // ------------------------------------------------------------------------
+    // PRESENCE CLASSIFIER
+    // - NULL: raw cell is null (missing)
+    // - EMPTY: raw cell is exactly ""
+    // - BLANKS: raw cell contains only whitespace/zero-width (pre-clean)
+    // - EMPTY_AFTER_CLEANING: raw had content, but cleaning stripped it to blank (e.g., HTML scaffolding only)
+    // - NONEMPTY: cleaned text contains evidence-bearing characters
+    // ------------------------------------------------------------------------
+    ClassifyPresence = (raw as nullable any, cleaned as nullable text) as text =>
+        let
+            rawTxt = if raw = null then null else Text.From(raw),
+            rawIsNull = (raw = null),
+            rawIsEmpty = (rawTxt <> null and rawTxt = ""),
+            rawIsBlanksOnly = (rawTxt <> null and (rawTxt <> "") and IsEffectivelyBlank(rawTxt)),
+            cleanedIsBlank = IsEffectivelyBlank(cleaned),
+            status =
+                if rawIsNull then "NULL"
+                else if rawIsEmpty then "EMPTY"
+                else if rawIsBlanksOnly then "BLANKS"
+                else if cleanedIsBlank then "EMPTY_AFTER_CLEANING"
+                else "NONEMPTY"
+        in
+            status,
+
     WordCount = (t as nullable text) as nullable number =>
         let
             s1 = if t = null then null else Text.Replace(Text.Replace(Text.Replace(t, "+++", " "), "#(lf)", " "), "#(cr)", " "),
@@ -84,19 +143,6 @@ let
             n = List.Count(parts)
         in
             n,
-
-    // ------------------------------------------------------------------------
-    // RESPONSE PRESENCE CLASSIFIER
-    // ------------------------------------------------------------------------
-    ClassifyPresence = (txt as nullable text) as text =>
-        if txt = null then
-            "NULL"
-        else if txt = "" then
-            "EMPTY"
-        else if Text.Trim(txt) = "" then
-            "BLANKS"
-        else
-            "NONEMPTY",
 
     // ------------------------------------------------------------------------
     // VALIDATION PREPARATION (ELIGIBILITY GATE)
@@ -137,6 +183,7 @@ let
 
     // ------------------------------------------------------------------------
     // UNPIVOT → LONG FORMAT (submission_id × component_id)
+    // Keep BOTH raw and cleaned, so presence classification can distinguish cases.
     // ------------------------------------------------------------------------
     Unpivoted =
         Table.Unpivot(
@@ -149,40 +196,41 @@ let
     // ------------------------------------------------------------------------
     // CLEAN RESPONSE TEXT
     // ------------------------------------------------------------------------
-    Cleaned =
-        Table.TransformColumns(
-            Unpivoted,
-            {{"response_text_raw", StripHtmlFastPlain, type text}}
-        ),
-
-    Renamed =
-        Table.RenameColumns(
-            Cleaned,
-            {{"response_text_raw", "response_text"}}
-        ),
-
-    // ------------------------------------------------------------------------
-    // CLASSIFY PRESENCE (NULL / EMPTY / BLANKS / NONEMPTY)
-    // ------------------------------------------------------------------------
-    WithPresence =
+    WithClean =
         Table.AddColumn(
-            Renamed,
-            "response_presence",
-            each ClassifyPresence([response_text]),
+            Unpivoted,
+            "response_text_clean",
+            each StripHtmlFastPlain([response_text_raw]),
             type text
         ),
 
     // ------------------------------------------------------------------------
-    // PREFIX WITH submission_id AND PRESERVE NULL/EMPTY/BLANKS
+    // CLASSIFY PRESENCE USING RAW + CLEANED
     // ------------------------------------------------------------------------
-    AddSubmissionPrefix = (txt as nullable text, sid as nullable text) as nullable text =>
+    WithPresence =
+        Table.AddColumn(
+            WithClean,
+            "response_presence",
+            each ClassifyPresence([response_text_raw], [response_text_clean]),
+            type text
+        ),
+
+    // ------------------------------------------------------------------------
+    // PREFIX WITH submission_id AND PRESERVE NULL/EMPTY/BLANKS/EMPTY_AFTER_CLEANING
+    // Desired:
+    // +++submission_id=7835077
+    // +++
+    // Currently, ...
+    // +++
+    // ------------------------------------------------------------------------
+    AddSubmissionPrefix = (cleaned as nullable text, sid as nullable text, presence as text) as nullable text =>
         let
-            status = ClassifyPresence(txt),
             payload =
-                if status = "NULL" then "<<NULL>>"
-                else if status = "EMPTY" then "<<EMPTY>>"
-                else if status = "BLANKS" then "<<BLANKS>>"
-                else txt
+                if presence = "NULL" then "<<NULL>>"
+                else if presence = "EMPTY" then "<<EMPTY>>"
+                else if presence = "BLANKS" then "<<BLANKS>>"
+                else if presence = "EMPTY_AFTER_CLEANING" then "<<EMPTY_AFTER_CLEANING>>"
+                else cleaned
         in
             "+++submission_id=" & Text.From(sid) & "#(lf)"
             & "+++" & "#(lf)"
@@ -193,7 +241,7 @@ let
         Table.AddColumn(
             WithPresence,
             "response_text_prefixed",
-            each AddSubmissionPrefix([response_text], [submission_id]),
+            each AddSubmissionPrefix([response_text_clean], [submission_id], [response_presence]),
             type text
         ),
 
