@@ -19,14 +19,50 @@ Produced by Pipeline 1A:
 ```
 PPP_CanonicalGradingTargets_v01
 ```
-This dataset contains one row per grading target:
+This artefact contains the **canonical grading targets** used by all downstream scoring pipelines.
+The canonical grading unit is defined as:
 ```
 submission_id × component_id
 ```
-Each row includes the canonical response evidence field:
+Each row represents **one submission evaluated for one assessment component**.
+Required fields include:
+- `submission_id`
+- `component_id`
+- `cleaned_response_text`
+Additional metadata fields may be present but must not affect canonical identity.
+#### Workbook Structure
+`PPP_CanonicalGradingTargets_v01` may be stored as an **Excel workbook** containing multiple sheets.
+Example structure:
 ```
-cleaned_response_text
+Sheet: canonical_targets
+    submission_id
+    component_id
+    cleaned_response_text
+    optional_metadata_fields
+Sheet: manifest
+    processing_timestamp
+    input_sources
+    row_counts
+    pipeline_version
 ```
+The **canonical_targets sheet** must contain the grading target dataset keyed by:
+```
+submission_id × component_id
+```
+Other sheets may store supporting metadata or audit information.
+#### Explicit Constraint
+The canonical dataset must remain **rubric-agnostic**.
+Therefore it must **not contain**:
+- `dimension_id`
+- indicator fields
+- rubric identifiers
+- scoring outputs
+Dimension expansion occurs later during production scoring when the rubric specification is available.
+At that stage the evaluation surface becomes:
+```
+submission_id × component_id × dimension_id
+```
+This expansion is performed dynamically by the scoring pipeline using the rubric’s dimension registry.
 ### 1.2 Rubric Specification
 Produced by Pipeline 1B:
 ```
