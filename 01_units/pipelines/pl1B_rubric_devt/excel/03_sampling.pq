@@ -2,7 +2,7 @@
 // Query: sampled_entries
 // Stage 0 — Calibration Sampling (Long Format)
 //
-// Input:  cleaned_entries  (one row per submission_id × component_id)
+// Input:  output_from_pipeline1A  (one row per submission_id × component_id)
 // Output: same rows + sample_flag
 //
 // Sampling rule (per component_id):
@@ -20,7 +20,7 @@ let
     // -----------------------------------------
     // Source
     // -----------------------------------------
-    Source = Excel.CurrentWorkbook(){[Name="cleaned_entries"]}[Content],
+    Source = Excel.CurrentWorkbook(){[Name="output_from_pipeline1A"]}[Content],
 
     // -----------------------------------------
     // Required columns check
@@ -31,7 +31,7 @@ let
         if List.Count(MissingCols) = 0 then
             true
         else
-            error "Expected columns missing in 'cleaned_entries': " & Text.Combine(MissingCols, ", "),
+            error "Expected columns missing in 'output_from_pipeline1A': " & Text.Combine(MissingCols, ", "),
 
     // -----------------------------------------
     // Type normalisation
