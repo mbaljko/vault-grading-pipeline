@@ -1,26 +1,9 @@
-// ======================================================================
-// Query: sampled_entries
-// Stage 0 — Calibration Sampling (Long Format)
-//
-// Input:  output_from_pipeline1A  (one row per submission_id × component_id)
-// Output: same rows + sample_flag
-//
-// Sampling rule (per component_id):
-// - rank rows by response_wc (ascending)
-// - drop the shortest and longest (interior only)
-// - pick m rows by interior-uniform spacing over the ranked interior
-// - flag picked rows with sample_flag = "F"
-//
-// Notes:
-// - Sampling operates on the composite unit (__row_id, component_id) via __unit_key.
-// - If interior count ≤ m, all interior rows are flagged.
-// ======================================================================
-
 let
     // -----------------------------------------
-    // Source
+    // Source (long format): one row per submission_id × component_id
     // -----------------------------------------
-    Source = Excel.CurrentWorkbook(){[Name="output_from_pipeline1A"]}[Content],
+    Source0 = Excel.CurrentWorkbook(){[Name="cleaned_entries"]}[Content],
+    Source = Table.Buffer(Source0),
 
     // -----------------------------------------
     // Required columns check
@@ -31,7 +14,7 @@ let
         if List.Count(MissingCols) = 0 then
             true
         else
-            error "Expected columns missing in 'output_from_pipeline1A': " & Text.Combine(MissingCols, ", "),
+            error "Expected columns missing in 'cleaned_entries': " & Text.Combine(MissingCols, ", "),
 
     // -----------------------------------------
     // Type normalisation
@@ -56,30 +39,24 @@ let
             each Text.From([submission_id]) & "::" & Text.From([component_id]),
             type text
         ),
-        
+
     // -----------------------------------------
     // Helper: sample m keys by interior-uniform spacing over wc-ranked rows
     // (expects a single component_id group table)
     // -----------------------------------------
-    // Inside SampleInteriorUniformKeys, tighten the row filter to exclude wc = 0
-
     SampleInteriorUniformKeys = (t as table, wcCol as text, keyCol as text, m as number) as list =>
         let
+            // Keep rows where wc is a number (0 is allowed)
             t0 =
-                if Table.HasColumns(t, {wcCol, keyCol}) then
-                    Table.SelectRows(
-                        Table.SelectColumns(t, {keyCol, wcCol}),
-                        each
-                            Record.Field(_, wcCol) <> null
-                            and Value.Is(Record.Field(_, wcCol), type number)
-                            and Record.Field(_, wcCol) > 0
-                    )
-                else
-                    error "Missing required columns for sampling within group.",
+                Table.SelectRows(
+                    Table.SelectColumns(t, {keyCol, wcCol}),
+                    each Record.Field(_, wcCol) <> null and Value.Is(Record.Field(_, wcCol), type number)
+                ),
 
             t1 = Table.Sort(t0, {{wcCol, Order.Ascending}}),
             n = Table.RowCount(t1),
 
+            // Drop shortest and longest
             interior =
                 if n <= 2 then
                     #table({keyCol, wcCol}, {})
@@ -98,8 +75,6 @@ let
 
             withIdx = Table.AddIndexColumn(interior, "__i", 0, 1, Int64.Type),
             picked = Table.SelectRows(withIdx, each List.Contains(idxToKeep, [__i])),
-
-            // IMPORTANT: dynamic column extraction must use Table.Column(...)
             keys = Table.Column(picked, keyCol)
         in
             keys,
@@ -123,17 +98,38 @@ let
     SampleKeyList = List.Combine(Grouped[__sample_keys]),
 
     // -----------------------------------------
-    // Apply flags
+    // Convert sampled keys to a table and join (faster than List.Contains)
     // -----------------------------------------
+    SampleKeyTable =
+        Table.Distinct(
+            Table.FromList(
+                SampleKeyList,
+                Splitter.SplitByNothing(),
+                {"__unit_key"}
+            )
+        ),
+
+    SampleKeyTableBuffered = Table.Buffer(SampleKeyTable),
+
+    Joined =
+        Table.NestedJoin(
+            WithUnitKey,
+            {"__unit_key"},
+            SampleKeyTableBuffered,
+            {"__unit_key"},
+            "__hit",
+            JoinKind.LeftOuter
+        ),
+
     WithFlag =
         Table.AddColumn(
-            WithUnitKey,
+            Joined,
             "sample_flag",
-            each if List.Contains(SampleKeyList, [__unit_key]) then "F" else null,
+            each if Table.RowCount([__hit]) > 0 then "F" else null,
             type text
         ),
 
-    Output = Table.RemoveColumns(WithFlag, {"__unit_key"})
-
+    Output =
+        Table.RemoveColumns(WithFlag, {"__unit_key", "__hit"})
 in
     Output
