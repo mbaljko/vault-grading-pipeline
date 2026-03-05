@@ -9,28 +9,12 @@ inputs:
 BEGIN GENERATION
 ```
 
-
-remove this
-````
-
-Escaping rules
-
-If special characters occur inside quoted text, apply these escapes.
-
-```
-"  →  \"
-\  →  \\
-newline → \n
-```
-These rules must be applied consistently to every output row.
-````
-
 # .
 
 ## pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v02
 
 ````
-## pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v03
+## pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v04
 
 Wrapper prompt: Generate a tightly bounded **Stage 2 scoring prompt** for **dimension evaluation and boundary rule execution**.
 
@@ -144,7 +128,7 @@ These rules define how **indicator evidence maps to dimensions and performance l
 
 The generated scoring prompt must be **self-contained**.
 
-All rubric logic extracted from:
+All rubric logic extracted from
 
 ```
 CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_RubricSpec_v01
@@ -176,13 +160,13 @@ The generated scoring prompt will later receive **only one runtime dataset**:
 RUN_<ASSESSMENT_ID>_<COMPONENT_ID>_IndicatorEvidence_v01
 ```
 
-Each row represents:
+Each row represents
 
 ```
 submission_id × component_id × indicator_id
 ```
 
-Required fields include:
+Required fields include
 
 ```
 submission_id
@@ -194,7 +178,7 @@ confidence
 flags
 ```
 
-The runtime dataset contains indicator evidence for:
+The runtime dataset contains indicator evidence for
 
 ```
 I1–In
@@ -209,21 +193,56 @@ The generated prompt must compute dimension satisfaction and boundary rules **en
 
 ## Output Requirements
 
-Allowed output fields include:
+The generated Stage 2 scoring prompt must produce **tabular output** consisting of:
+
+1. one header row  
+2. one result row per scoring unit
+
+Header row must appear **exactly once at the beginning of the output**.
+
+Required header structure
 
 ```
-dimension_summary
-cross_dimension_summary
-performance_level_label
-triggered_boundary_rule
-evaluation_notes
-confidence
-flags
+submission_id,component_id,dimension_summary,cross_dimension_summary,performance_level_label,triggered_boundary_rule,evaluation_notes,confidence,flags
 ```
 
-### Field formatting rules (mandatory)
+All subsequent rows must correspond to one evaluated scoring unit.
 
-The generated Stage 2 scoring prompt **must enforce the following output formatting rules**.
+Each row must follow the same field order as the header.
+
+---
+
+## Output Record Termination Rules
+
+The generated Stage 2 scoring prompt must enforce the following output behaviour.
+
+Each result row must end with a newline character.
+
+Output must therefore follow the pattern
+
+```
+<header_row>
+<newline>
+<record_row_1>
+<newline>
+<record_row_2>
+<newline>
+...
+<record_row_n>
+<newline>
+```
+
+Requirements:
+
+- every record must appear on its own line  
+- the final record must also terminate with a newline  
+- no two records may appear on the same line
+
+This newline rule is **mandatory**.
+
+---
+
+## Field Formatting Rules
 
 Quoted text fields
 
@@ -238,30 +257,14 @@ triggered_boundary_rule
 
 Formatting requirements
 
-- All quoted fields must be enclosed in double quotes (`"` ... `"`).
-- If a field is empty, the output must contain an empty quoted string:
+- quoted fields must appear as `" ... "`
+- if a field is empty, the output must contain
 
 ```
 ""
 ```
 
-Escaping rules
-
-If quoted field content contains special characters, the following escaping rules must be applied:
-
-```
-"  →  \"
-\  →  \\
-newline → \n
-```
-
-These quoting and escaping rules must be applied **consistently for every output row without exception**.
-
-The output produced by the Stage 2 scoring prompt must therefore be **machine-parseable under these rules**.
-
 Non-quoted fields
-
-The following fields must **not** be quoted.
 
 ```
 performance_level_label
@@ -269,7 +272,12 @@ confidence
 flags
 ```
 
-No external knowledge or interpretation is permitted.
+These fields must not be quoted.
+
+No escaping rules are required.  
+Quoted text fields may contain any characters.
+
+The generated prompt must assume that input text does not contain characters that break parsing.
 
 ---
 
@@ -293,7 +301,7 @@ When the user sends `BEGIN GENERATION`, the model generates the Stage 2 scoring 
 
 ## Output Artefact
 
-The model must generate exactly one artefact:
+The model must generate exactly one artefact
 
 ```
 RUN_<ASSESSMENT_ID>_<COMPONENT_ID>_Stage2_boundary_evaluation_prompt_v02
@@ -303,7 +311,7 @@ RUN_<ASSESSMENT_ID>_<COMPONENT_ID>_Stage2_boundary_evaluation_prompt_v02
 
 ## Generated Scoring Prompt Structure
 
-The generated scoring prompt must:
+The generated scoring prompt must
 
 - appear in a single fenced Markdown block
 - use headings no deeper than level 2
@@ -326,7 +334,7 @@ Sections must appear in this order:
 
 ## Required Stage 2 Scoring Semantics
 
-The generated scoring prompt must enforce:
+The generated scoring prompt must enforce
 
 - one evaluation per `(submission_id × component_id)`
 - dimension satisfaction determined using rubric **indicator–dimension mappings**
@@ -336,7 +344,7 @@ The generated scoring prompt must enforce:
 
 Dimension satisfaction must be computed from Stage 1 indicator evidence.
 
-Example pattern:
+Example pattern
 
 ```
 Dimension D1 satisfied if indicators I1 AND I2 are present
@@ -350,7 +358,7 @@ These mappings must be taken **exactly from the rubric specification** and embed
 
 ## Required Stage 2 Evaluation Procedure
 
-The generated scoring prompt must enforce the following evaluation sequence:
+The generated scoring prompt must enforce the following evaluation sequence.
 
 1. Retrieve all Stage 1 indicator evidence for the `(submission_id × component_id)` unit.
 
@@ -364,13 +372,13 @@ The generated scoring prompt must enforce the following evaluation sequence:
 
 6. Assign the corresponding performance level.
 
-Boundary rule evaluation must be **deterministic**.
+Boundary rule evaluation must be deterministic.
 
 ---
 
 ## Ambiguity Handling
 
-If rule application is ambiguous:
+If rule application is ambiguous
 
 - assign the lowest valid performance level
 - include flag `needs_review`
@@ -379,7 +387,7 @@ If rule application is ambiguous:
 
 ## Failure Mode Handling
 
-If any required artefact is missing, inconsistent, or contradictory:
+If any required artefact is missing, inconsistent, or contradictory
 
 - produce no output
 - wait silently for corrected inputs
