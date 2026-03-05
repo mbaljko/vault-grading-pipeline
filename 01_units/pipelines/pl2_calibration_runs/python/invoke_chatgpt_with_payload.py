@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import io
 import json
 import os
 import re
@@ -274,10 +275,31 @@ def write_output_files(
         encoding="utf-8",
     )
 
-    with csv_output_path.open("w", encoding="utf-8", newline="") as csv_file:
+    parsed_rows: list[list[str]] = []
+    try:
+        parsed_rows = list(csv.reader(io.StringIO(text or "")))
+    except csv.Error:
+        parsed_rows = []
+
+    looks_like_csv_table = bool(parsed_rows) and len(parsed_rows[0]) > 1
+
+    # Write CSV as UTF-8 with BOM for better Excel compatibility.
+    with csv_output_path.open("w", encoding="utf-8-sig", newline="") as csv_file:
         writer = csv.writer(csv_file)
-        # writer.writerow(["output_text"])
-        writer.writerow([text or ""])
+
+        if looks_like_csv_table:
+            header = parsed_rows[0]
+            if "evaluation_notes" in header:
+                note_index = header.index("evaluation_notes")
+                for row in parsed_rows[1:]:
+                    if note_index < len(row):
+                        note = row[note_index]
+                        if len(note) >= 2 and note.startswith('"') and note.endswith('"'):
+                            row[note_index] = note[1:-1]
+            writer.writerows(parsed_rows)
+        else:
+            writer.writerow(["output_text"])
+            writer.writerow([text or ""])
 
 
 def extract_output_text(response_obj: dict[str, Any]) -> str:
