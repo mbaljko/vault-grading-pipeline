@@ -9,9 +9,16 @@ inputs:
 BEGIN GENERATION
 ```
 
+
+TO DO: 
+read the full response_text once, and the  evaluate all rubric indicators at once
+e.g.,
+- Read response_text exactly once. Then, in a single evaluation step, determine evidence status for **all** indicators (I1–I6, Q1–Q2) before writing any output. Do not re-read or re-scan the text separately per indicator.
+- revise Strict quoting and escaping rules, I just want to ensure that the evaluation_notes appears in quotes. 
+- also, drop the requirement of the evidence_excerpt
 # .
 ````
-## pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v03
+## pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v02
 
 Wrapper prompt: Generate a tightly bounded **Stage 1 scoring prompt** for **indicator evidence detection**.
 
@@ -31,13 +38,14 @@ All artefacts must use the authoritative grading ontology:
 - `component_id`
 - `dimension_id`
 - `indicator_id`
+- boundary rules
 
 All artefacts must be supplied in full and delimited using `===`.
 
 Required artefacts:
 
 - `<ASSESSMENT_ID>_AssignmentPayloadSpec_v01`
-- `CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_RubricSpec_v*`
+- `CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_RubricSpec_v01`
 
 If any artefact is missing or inconsistent, the wrapper prompt must produce no output.
 
@@ -49,24 +57,23 @@ Generate one reusable **Stage 1 scoring prompt** that performs **indicator evide
 
 The generated prompt must:
 
-- evaluate indicator evidence using the rubric indicator definitions and assessment guidance
-- assign an **evidence status** for each indicator
+- detect indicator presence
+- extract supporting textual evidence
 - record indicator-level diagnostic information
 
-The generated prompt must **not**:
+The generated prompt **must not**:
 
-- determine dimension evidence levels
 - determine dimension satisfaction
 - evaluate boundary rules
-- assign submission performance levels
+- assign performance levels
 
-Stage 1 functions strictly as an **indicator evidence determination stage**.
+Stage 1 functions strictly as an **evidence extraction stage**.
 
 Outputs produced by the Stage 1 prompt will be consumed by Stage 2 for:
 
-- dimension evidence evaluation
+- dimension satisfaction evaluation
 - boundary rule evaluation
-- final performance level assignment
+- final performance level assignment.
 
 ---
 
@@ -80,7 +87,7 @@ This wrapper prompt performs:
 
 This wrapper prompt does **not** perform:
 
-- grading or submission scoring
+- grading or scoring
 - dimension evaluation
 - boundary rule evaluation
 - rubric modification
@@ -96,7 +103,7 @@ The model may rely only on the following inputs supplied verbatim and delimited 
 
 ===
 
-### Input Artefact  
+Input Artefact  
 `<ASSESSMENT_ID>_AssignmentPayloadSpec_v01`
 
 This artefact defines the canonical payload structure for the assessment.
@@ -129,63 +136,68 @@ Canonical scoring unit:
 submission_id × component_id
 ```
 
-===
+Stage 1 evaluation unit:
+
+```
+submission_id × component_id × indicator_id
+```
 
 ===
 
-### Input Artefact  
-`CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_RubricSpec_v*`
+===
+
+Input Artefact  
+`CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_RubricSpec_v01`
 
 This artefact defines the authoritative rubric specification for the component.
 
-The model must extract the full **indicator registry**, including:
+The model must extract:
 
-- `indicator_id`
-- `indicator_definition`
-- `assessment guidance`
+- `component_id`
+- dimension registry
+- indicator definitions
+- indicator–dimension mappings
+- cross-dimension response-quality indicators
 
-This includes both:
-
-- component indicators (e.g., `I1–In`)
-- cross-dimension response-quality indicators (e.g., `Q1–Qn`)
+Indicators must be interpreted strictly as **observable presence checks referencing explicit textual evidence**.
 
 Indicator detection must rely only on:
 
 - the response text
-- the indicator definition
-- the indicator assessment guidance
+- the indicator definitions
 
-Indicators must be interpreted strictly as **observable textual evidence checks** referencing explicit textual evidence.
-
-Dimension evidence levels, dimension satisfaction rules, and boundary rules **must not be executed during Stage 1**.
+Dimension satisfaction rules and boundary rules **must not be executed during Stage 1**.
 
 ===
 
----
+===
 
-## Output Requirements
+Output Requirements
 
 Allowed output fields include:
 
-- `submission_id`
-- `component_id`
 - `indicator_id`
-- `evidence_status`
+- `indicator_present`
+- `evidence_excerpt`
 - `evaluation_notes`
 - `confidence`
 - `flags`
 
 The user must specify the confidence scale and allowed flags.
 
-### Field formatting rules (mandatory)
+Field formatting rules (mandatory)
 
-The generated Stage 1 scoring prompt must require that:
+- The generated Stage 1 scoring prompt must require that:
+  - `evidence_excerpt` is always enclosed in double quotes (`"` ... `"`).
+  - `evaluation_notes` is always enclosed in double quotes (`"` ... `"`).
+- If a field is empty, the output must contain an empty quoted string: `""`.
+- If the content contains a double quote character, it must be escaped as `\"`.
+- Newlines inside quoted fields must be escaped as `\n`.
+- Backslashes inside quoted fields must be escaped as `\\`.
+- The output must be machine-parseable with these quoting rules for every row, without exceptions.
 
-- `evaluation_notes` is always enclosed in double quotes (`"` ... `"`).
-- If `evaluation_notes` is empty, the output must contain an empty quoted string: `""`.
-- No other escaping rules are required.
 
-The output produced by the Stage 1 scoring prompt must be machine-parseable under these minimal quoting rules.
+===
 
 No external knowledge or interpretation is permitted.
 
@@ -221,7 +233,7 @@ The artefact must:
 
 - reference the correct `component_id`
 - assume the canonical payload structure defined in `<ASSESSMENT_ID>_AssignmentPayloadSpec_v01`
-- evaluate **all indicators defined in the rubric**, including cross-dimension indicators
+- evaluate **all indicators defined in the rubric**
 - be reusable across scoring runs
 
 ---
@@ -241,7 +253,7 @@ Sections must appear in this order:
 - Authoritative scoring materials
 - Input format
 - Stage 1 evaluation procedure
-- Evidence interpretation rules
+- Evidence extraction rules
 - Output schema
 - Constraints
 - Content rules
@@ -255,25 +267,19 @@ The generated scoring prompt must enforce:
 
 - one evaluation per `(submission_id × component_id × indicator_id)`
 - explicit evaluation of **all rubric indicators**
-- assignment of an **evidence status** for each indicator, using the rubric’s indicator evidence status vocabulary
-- deterministic results based on explicit text
-
-The generated scoring prompt must also enforce this evaluation discipline:
-
-- Read `response_text` exactly once.
-- Then, in a single evaluation step, determine evidence status for **all** indicators (`I1–In`, `Q1–Qn`) before writing any output.
-- Do not re-read or re-scan the text separately per indicator.
+- explicit determination of **indicator presence or absence**
+- extraction of supporting textual evidence
 
 Stage 1 must **not**:
 
-- determine dimension evidence levels
+- determine dimension satisfaction
 - interpret indicator combinations
 - apply boundary rules
 - assign performance levels
 
-If indicator evidence detection is uncertain:
+If indicator detection is uncertain:
 
-- assign the indicator the lowest evidence status
+- record the indicator as absent
 - include flag `needs_review`
 
 ---

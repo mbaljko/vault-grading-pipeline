@@ -72,29 +72,13 @@
             }
           },
           {
-            "id": "458a194843a7de0e",
-            "type": "leaf",
-            "pinned": true,
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v01.md",
-                "mode": "source",
-                "source": false
-              },
-              "pinned": true,
-              "icon": "lucide-file",
-              "title": "pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v01"
-            }
-          },
-          {
             "id": "d0eb947edf422914",
             "type": "leaf",
             "pinned": true,
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v01.md",
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v01.md",
                 "mode": "source",
                 "source": false
               },
@@ -109,30 +93,16 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "05_docs/01_design/pl1A_canonical_population_prep/FORMATTING ASSUMPTION.md",
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v01.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "FORMATTING ASSUMPTION"
-            }
-          },
-          {
-            "id": "754458cb7c9e3545",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v01.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v01"
+              "title": "pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v01"
             }
           }
         ],
-        "currentTab": 7
+        "currentTab": 5
       }
     ],
     "direction": "vertical"
@@ -278,13 +248,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v01.md",
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v01.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v01"
+              "title": "Outline of pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v01"
             }
           }
         ],
@@ -307,11 +277,14 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "754458cb7c9e3545",
+  "active": "bb02de274e442c4e",
   "lastOpenFiles": [
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v01.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v01.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v01.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v01.md",
     "05_docs/01_design/pl1A_canonical_population_prep/FORMATTING ASSUMPTION.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v01.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v01 1.md",
     "README.md",
     "secrets/openai_api_key.txt",
     "env/bin/activate",
@@ -340,10 +313,6 @@
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A (Excel,MCode) — Implementation Mapping to Specification.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
     "05_docs/01_design/pl1A_canonical_population_prep/prev_ver/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
-    "05_docs/01_design/pl1B_rubric_devt/prev_versions/Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification.md",
-    "01_units/pipelines/pl1B_rubric_devt/Component Rubric Input Schema (CRIS).md",
-    "01_units/pipelines/pl1B_rubric_devt/Prompt for Step00 - Generate CalibrationPayloadFormat.md",
-    "05_docs/00_overview/Nomenclature Standard — Grading Ontology and Calibration Alignment.md",
-    "05_docs/00_overview/Four Pipeline Model.md"
+    "05_docs/01_design/pl1B_rubric_devt/prev_versions/Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification.md"
   ]
 }
