@@ -119,3 +119,4 @@ htmlcov/
 ###############################################################################
 # rewrite tooling
 .git-rewrite-replacements.txt
+.git-rewrite-replacements.txt
