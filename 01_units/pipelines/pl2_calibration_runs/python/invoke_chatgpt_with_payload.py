@@ -12,15 +12,15 @@ Prompt can be provided via:
 If neither prompt option is provided, a built-in default prompt is used.
 If neither payload option is provided, a built-in sample payload is used.
 
-Required env var:
-- OPENAI_API_KEY
-
 Optional env vars:
 - OPENAI_ORG_ID
 - OPENAI_PROJECT_ID
 - OPENAI_MODEL
 - OPENAI_API_BASE_URL
 - OPENAI_SYSTEM_PROMPT
+
+API key source (exclusive):
+- repository-root `secrets/openai_api_key.txt`
 
 Example:
     python invoke_chatgpt_with_payload.py \
@@ -40,10 +40,36 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
+def _find_repo_root(start: Path) -> Path | None:
+    current = start.resolve()
+    for candidate in [current, *current.parents]:
+        if (candidate / ".git").exists():
+            return candidate
+    return None
+
+
+def load_api_key_from_secrets() -> str:
+    """Load API key exclusively from repo-root secrets file."""
+    # This script intentionally does NOT read OPENAI_API_KEY from env.
+    # Credential source is standardized to the repo secrets directory.
+    # Expected location: <repo-root>/secrets/openai_api_key.txt
+
+    script_dir = Path(__file__).resolve().parent
+    repo_root = _find_repo_root(script_dir)
+    if repo_root is None:
+        return ""
+
+    key_file = repo_root / "secrets" / "openai_api_key.txt"
+    if not key_file.exists():
+        return ""
+
+    return key_file.read_text(encoding="utf-8").strip()
+
+
 # ==============================
 # Account / API configuration
 # ==============================
-API_KEY = os.getenv("OPENAI_API_KEY", "")
+API_KEY = load_api_key_from_secrets()
 ORGANIZATION_ID = os.getenv("OPENAI_ORG_ID", "")
 PROJECT_ID = os.getenv("OPENAI_PROJECT_ID", "")
 MODEL = os.getenv("OPENAI_MODEL", "gpt-5.1")
@@ -188,7 +214,7 @@ def extract_output_text(response_obj: dict[str, Any]) -> str:
 
 def invoke_chatgpt(body: dict[str, Any]) -> dict[str, Any]:
     if not API_KEY:
-        raise ValueError("OPENAI_API_KEY is not set.")
+        raise ValueError("API key file is missing/empty: secrets/openai_api_key.txt")
 
     url = f"{API_BASE_URL}/responses"
     headers = {
