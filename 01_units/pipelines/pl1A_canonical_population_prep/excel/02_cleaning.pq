@@ -47,13 +47,13 @@ let
         in
             cleaned,
 
+    // Converts HTML-ish input to plain text, keeping line breaks from <br>, </p>
     StripHtmlFastPlain = (raw as nullable any) as nullable text =>
         let
             t0 = if raw = null then null else Text.From(raw),
             q0 = NormaliseHtmlQuotes(t0),
             s0 = SanitiseMojibake(q0),
 
-            // Normalise common line break tags to actual line breaks BEFORE tag stripping
             br0 =
                 if s0 = null then
                     null
@@ -78,13 +78,11 @@ let
             s1,
 
     // ------------------------------------------------------------------------
-    // ROBUST "EFFECTIVELY BLANK" TEST
-    // Removes common whitespace + zero-width characters before testing length.
+    // ROBUST "EFFECTIVELY BLANK" TEST (WHITESPACE + ZERO-WIDTH)
     // ------------------------------------------------------------------------
     RemoveWhitespaceAndZeroWidth = (t as nullable text) as nullable text =>
         let
             s0 = if t = null then null else t,
-            // remove typical whitespace
             s1 =
                 if s0 = null then
                     null
@@ -94,10 +92,10 @@ let
                         {
                             " ", "#(tab)", "#(lf)", "#(cr)",
                             Character.FromNumber(160),     // NBSP
-                            Character.FromNumber(65279),   // BOM / zero-width no-break space
-                            Character.FromNumber(8203),    // zero-width space
-                            Character.FromNumber(8204),    // zero-width non-joiner
-                            Character.FromNumber(8205)     // zero-width joiner
+                            Character.FromNumber(65279),   // BOM / ZWNBSP
+                            Character.FromNumber(8203),    // ZWSP
+                            Character.FromNumber(8204),    // ZWNJ
+                            Character.FromNumber(8205)     // ZWJ
                         }
                     )
         in
@@ -113,19 +111,18 @@ let
 
     // ------------------------------------------------------------------------
     // PRESENCE CLASSIFIER
-    // - NULL: raw cell is null (missing)
-    // - EMPTY: raw cell is exactly ""
-    // - BLANKS: raw cell contains only whitespace/zero-width (pre-clean)
-    // - EMPTY_AFTER_CLEANING: raw had content, but cleaning stripped it to blank (e.g., HTML scaffolding only)
-    // - NONEMPTY: cleaned text contains evidence-bearing characters
     // ------------------------------------------------------------------------
-    ClassifyPresence = (raw as nullable any, cleaned as nullable text) as text =>
+    ClassifyPresence = (raw as nullable any) as record =>
         let
             rawTxt = if raw = null then null else Text.From(raw),
+
             rawIsNull = (raw = null),
             rawIsEmpty = (rawTxt <> null and rawTxt = ""),
             rawIsBlanksOnly = (rawTxt <> null and (rawTxt <> "") and IsEffectivelyBlank(rawTxt)),
-            cleanedIsBlank = IsEffectivelyBlank(cleaned),
+
+            cleanedPlain = StripHtmlFastPlain(raw),
+            cleanedIsBlank = IsEffectivelyBlank(cleanedPlain),
+
             status =
                 if rawIsNull then "NULL"
                 else if rawIsEmpty then "EMPTY"
@@ -133,16 +130,27 @@ let
                 else if cleanedIsBlank then "EMPTY_AFTER_CLEANING"
                 else "NONEMPTY"
         in
-            status,
+            [
+                response_text_clean = cleanedPlain,
+                response_presence = status
+            ],
 
-    WordCount = (t as nullable text) as nullable number =>
+    // Word count is computed on the PAYLOAD ONLY (not on wrappers)
+    WordCountPayload = (t as nullable text) as number =>
         let
-            s1 = if t = null then null else Text.Replace(Text.Replace(Text.Replace(t, "+++", " "), "#(lf)", " "), "#(cr)", " "),
-            s2 = if s1 = null then null else Text.Trim(Text.Clean(s1)),
-            parts = if s2 = null or s2 = "" then {} else List.Select(Text.Split(s2, " "), each _ <> ""),
-            n = List.Count(parts)
+            out =
+                if t = null or Text.Trim(t) = "" then
+                    0
+                else
+                    let
+                        s1 = Text.Replace(Text.Replace(t, "#(lf)", " "), "#(cr)", " "),
+                        s2 = Text.Trim(Text.Clean(s1)),
+                        parts = if s2 = "" then {} else List.Select(Text.Split(s2, " "), each _ <> ""),
+                        n = List.Count(parts)
+                    in
+                        n
         in
-            n,
+            out,
 
     // ------------------------------------------------------------------------
     // VALIDATION PREPARATION (ELIGIBILITY GATE)
@@ -182,77 +190,109 @@ let
         Table.ExpandTableColumn(Joined, "__v", {"submission_id"}, {"submission_id"}),
 
     // ------------------------------------------------------------------------
-    // UNPIVOT → LONG FORMAT (submission_id × component_id)
-    // Keep BOTH raw and cleaned, so presence classification can distinguish cases.
+    // ENFORCED LONG BUILD (GUARANTEES ONE ROW PER submission_id × component_id)
     // ------------------------------------------------------------------------
-    Unpivoted =
-        Table.Unpivot(
+    WithPairs =
+        Table.AddColumn(
             Expanded,
-            ResponseColumns,
-            "component_id",
-            "response_text_raw"
+            "__pairs",
+            each
+                List.Transform(
+                    ResponseColumns,
+                    (c) =>
+                        [
+                            component_id = c,
+                            response_text_raw = Record.FieldOrDefault(_, c, null)
+                        ]
+                ),
+            type list
+        ),
+
+    ExpandedPairs =
+        Table.ExpandListColumn(WithPairs, "__pairs"),
+
+    ExpandedPairRecord =
+        Table.ExpandRecordColumn(
+            ExpandedPairs,
+            "__pairs",
+            {"component_id", "response_text_raw"},
+            {"component_id", "response_text_raw"}
         ),
 
     // ------------------------------------------------------------------------
-    // CLEAN RESPONSE TEXT
+    // CLEAN + PRESENCE (FROM RAW)
     // ------------------------------------------------------------------------
-    WithClean =
+    WithPresenceRecord =
         Table.AddColumn(
-            Unpivoted,
-            "response_text_clean",
-            each StripHtmlFastPlain([response_text_raw]),
+            ExpandedPairRecord,
+            "__presence",
+            each ClassifyPresence([response_text_raw]),
+            type record
+        ),
+
+    ExpandedPresence =
+        Table.ExpandRecordColumn(
+            WithPresenceRecord,
+            "__presence",
+            {"response_text_clean", "response_presence"},
+            {"response_text_clean", "response_presence"}
+        ),
+
+    // ------------------------------------------------------------------------
+    // PAYLOAD POLICY (PRESERVE NULL/EMPTY/BLANKS EXPLICITLY)
+    // ------------------------------------------------------------------------
+    WithPayload =
+        Table.AddColumn(
+            ExpandedPresence,
+            "response_payload",
+            each
+                if [response_presence] = "NULL" then
+                    ""          // payload must be empty string for NULL
+                else if [response_presence] = "EMPTY" then
+                    "<<EMPTY>>"
+                else if [response_presence] = "BLANKS" then
+                    "<<BLANKS>>"
+                else if [response_presence] = "EMPTY_AFTER_CLEANING" then
+                    "<<EMPTY_AFTER_CLEANING>>"
+                else
+                    Text.From([response_text_clean]),
             type text
         ),
 
     // ------------------------------------------------------------------------
-    // CLASSIFY PRESENCE USING RAW + CLEANED
-    // ------------------------------------------------------------------------
-    WithPresence =
-        Table.AddColumn(
-            WithClean,
-            "response_presence",
-            each ClassifyPresence([response_text_raw], [response_text_clean]),
-            type text
-        ),
-
-    // ------------------------------------------------------------------------
-    // PREFIX WITH submission_id AND PRESERVE NULL/EMPTY/BLANKS/EMPTY_AFTER_CLEANING
-    // Desired:
+    // WRAP WITH submission_id (ALWAYS, INCLUDING NULL)
+    //
+    // Exact desired wrapper:
     // +++submission_id=7835077
     // +++
-    // Currently, ...
+    // <payload>   (may be "")
     // +++
+    // (ensure line break after submission_id line AND after closing +++)
     // ------------------------------------------------------------------------
-    AddSubmissionPrefix = (cleaned as nullable text, sid as nullable text, presence as text) as nullable text =>
-        let
-            payload =
-                if presence = "NULL" then "<<NULL>>"
-                else if presence = "EMPTY" then "<<EMPTY>>"
-                else if presence = "BLANKS" then "<<BLANKS>>"
-                else if presence = "EMPTY_AFTER_CLEANING" then "<<EMPTY_AFTER_CLEANING>>"
-                else cleaned
-        in
-            "+++submission_id=" & Text.From(sid) & "#(lf)"
-            & "+++" & "#(lf)"
-            & payload & "#(lf)"
-            & "+++",
+    Wrap = (payload as text, sid as nullable text) as text =>
+        "+++submission_id=" & Text.From(sid) & "#(lf)"
+        & "+++" & "#(lf)"
+        & payload & "#(lf)"
+        & "+++" & "#(lf)",
 
-    Prefixed =
+    WithResponseText =
         Table.AddColumn(
-            WithPresence,
-            "response_text_prefixed",
-            each AddSubmissionPrefix([response_text_clean], [submission_id], [response_presence]),
+            WithPayload,
+            "response_text",
+            each Wrap([response_payload], [submission_id]),
             type text
         ),
 
     // ------------------------------------------------------------------------
-    // WORD COUNT
+    // WORDCOUNT POLICY
+    // - Wordcount is computed on the payload only.
+    // - For NULL (payload="") => 0
     // ------------------------------------------------------------------------
     WithWC =
         Table.AddColumn(
-            Prefixed,
+            WithResponseText,
             "response_wc",
-            each WordCount([response_text_prefixed]),
+            each WordCountPayload([response_payload]),
             Int64.Type
         ),
 
@@ -266,15 +306,9 @@ let
                 "submission_id",
                 "component_id",
                 "response_presence",
-                "response_text_prefixed",
+                "response_text",
                 "response_wc"
             }
-        ),
-
-    FinalRenamed =
-        Table.RenameColumns(
-            Final,
-            {{"response_text_prefixed", "response_text"}}
         )
 in
-    FinalRenamed
+    Final
