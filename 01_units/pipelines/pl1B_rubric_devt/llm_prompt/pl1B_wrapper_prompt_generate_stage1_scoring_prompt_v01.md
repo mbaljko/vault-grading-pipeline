@@ -27,7 +27,7 @@ These artefacts correspond to the upstream rubric construction pipeline outputs 
 
 All artefacts must use the authoritative grading ontology:
 
-- `participant_id`
+- `submission_id`
 - `component_id`
 - `dimension_id`
 - `indicator_id`
@@ -104,7 +104,7 @@ This artefact defines the canonical payload structure for the assessment.
 The model must extract and rely on the following information:
 
 - `assessment_id`
-- canonical identifier field `participant_id`
+- canonical identifier field `submission_id`
 - canonical evidence field `response_text`
 - canonical dataset structure
 - wrapper-handling rules
@@ -126,13 +126,13 @@ explicit-text only; no inference
 Canonical scoring unit:
 
 ```
-participant_id × component_id
+submission_id × component_id
 ```
 
 Stage 1 evaluation unit:
 
 ```
-participant_id × component_id × indicator_id
+submission_id × component_id × indicator_id
 ```
 
 ===
@@ -246,7 +246,7 @@ Sections must appear in this order:
 
 The generated scoring prompt must enforce:
 
-- one evaluation per `(participant_id × component_id × indicator_id)`
+- one evaluation per `(submission_id × component_id × indicator_id)`
 - explicit evaluation of **all rubric indicators**
 - explicit determination of **indicator presence or absence**
 - extraction of supporting textual evidence

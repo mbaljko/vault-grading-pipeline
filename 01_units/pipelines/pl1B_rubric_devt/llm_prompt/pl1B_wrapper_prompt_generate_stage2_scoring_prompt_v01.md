@@ -25,7 +25,7 @@ Before this wrapper prompt can execute, the following input artefacts must be pr
 
 All artefacts must use the authoritative grading ontology:
 
-- `participant_id`
+- `submission_id`
 - `component_id`
 - `dimension_id`
 - `indicator_id`
@@ -88,7 +88,7 @@ Defines the canonical dataset structure.
 Canonical scoring unit:
 
 ```
-participant_id × component_id
+submission_id × component_id
 ```
 
 Wrapper artefacts must be ignored during evaluation.
@@ -125,7 +125,7 @@ RUN_<ASSESSMENT_ID>_<COMPONENT_ID>_IndicatorEvidence_v01
 Each row represents:
 
 ```
-participant_id × component_id × indicator_id
+submission_id × component_id × indicator_id
 ```
 
 Required fields include:
@@ -228,7 +228,7 @@ Sections must appear in this order:
 
 The generated scoring prompt must enforce:
 
-- one evaluation per `(participant_id × component_id)`
+- one evaluation per `(submission_id × component_id)`
 - dimension satisfaction determined using rubric **indicator–dimension mappings**
 - deterministic boundary rule execution
 - explicit evaluation of the hardest boundary rule
@@ -252,7 +252,7 @@ These mappings must be taken **exactly from the rubric specification**.
 
 The generated scoring prompt must enforce the following evaluation sequence:
 
-1. Retrieve all Stage 1 indicator evidence for the `(participant_id × component_id)` unit.
+1. Retrieve all Stage 1 indicator evidence for the `(submission_id × component_id)` unit.
 
 2. Determine dimension satisfaction using rubric indicator–dimension mappings.
 
@@ -284,5 +284,5 @@ If any required artefact is missing, inconsistent, or contradictory:
 - produce no output
 - wait silently for corrected inputs
 ===
-  
+
 ````
