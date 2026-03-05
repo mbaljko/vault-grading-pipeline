@@ -27,6 +27,9 @@ Example:
     python invoke_chatgpt_with_payload.py \
       --prompt "Summarize this calibration payload" \
       --payload-file payload.json
+
+On successful API calls, output is written to a file and only the file path is
+printed to stdout.
 """
 
 from __future__ import annotations
@@ -238,6 +241,32 @@ def build_request_body(
     }
 
 
+def resolve_output_file_path(args: argparse.Namespace) -> Path:
+    """Resolve output file path.
+
+    If a prompt file/path is provided, place output beside it using
+    <prompt_stem>_output.md. Otherwise, write in script directory.
+    """
+    prompt_source = args.prompt_path or args.prompt_file
+    if prompt_source:
+        return prompt_source.resolve().with_name(f"{prompt_source.stem}_output.md")
+
+    return Path(__file__).resolve().with_name("invoke_chatgpt_with_payload_output.md")
+
+
+def write_output_file(output_path: Path, text: str, response_obj: dict[str, Any]) -> None:
+    """Write model output and raw JSON response to file."""
+    content = (
+        "# ChatGPT Output\n\n"
+        f"{(text or '<no text output>')}\n\n"
+        "# Raw Response JSON\n\n"
+        "```json\n"
+        f"{json.dumps(response_obj, indent=2, ensure_ascii=False)}\n"
+        "```\n"
+    )
+    output_path.write_text(content, encoding="utf-8")
+
+
 def extract_output_text(response_obj: dict[str, Any]) -> str:
     output_text = response_obj.get("output_text")
     if isinstance(output_text, str) and output_text.strip():
@@ -305,10 +334,9 @@ def main() -> int:
         response_obj = invoke_chatgpt(body)
         text = extract_output_text(response_obj)
 
-        print("=== MODEL OUTPUT ===")
-        print(text or "<no text output>")
-        print("\n=== RAW RESPONSE (JSON) ===")
-        print(json.dumps(response_obj, indent=2, ensure_ascii=False))
+        output_path = resolve_output_file_path(args)
+        write_output_file(output_path, text, response_obj)
+        print(f"Output written to: {output_path}")
         return 0
     except Exception as exc:  # noqa: BLE001
         print(f"Error: {exc}", file=sys.stderr)
