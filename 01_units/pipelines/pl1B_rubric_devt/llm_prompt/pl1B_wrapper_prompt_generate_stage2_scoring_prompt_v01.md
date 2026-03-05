@@ -15,7 +15,7 @@ resuming work
 ## pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v02
 
 ````
-## pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v05
+## pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v06
 
 Wrapper prompt: Generate a tightly bounded **Stage 2 scoring prompt** for **dimension evidence evaluation and scoring rule execution**.
 
@@ -112,17 +112,55 @@ This document contains the **complete rubric specification** for the component.
 The model must extract from this document:
 
 - `component_id`
-- dimension registry
-- indicator registry
-- cross-dimension response indicators (e.g., `Q1–Qn`)
-- indicator evidence status scale
-- dimension evidence levels
-- evidence coherence rule
-- indicator → dimension evidence mapping tables
-- dimension evidence → submission score mapping table
+- the **dimension registry** (`dimension_id` values in order)
+- the **indicator registry**
+- the **cross-dimension response indicators** (`Q1–Qn`)
+- the indicator evidence status scale
+- the dimension evidence levels
+- the evidence coherence rule
+- the indicator → dimension evidence mapping tables
+- the dimension evidence → submission score mapping table
 - performance level labels
 
 These rules define how **indicator evidence maps to dimension evidence and final score labels**.
+
+---
+
+### Required extraction for output schema
+
+From the rubric specification the model must extract:
+
+- the full ordered set of `dimension_id` values defined in the dimension registry
+- the full ordered set of cross-dimension response indicators (`Q1–Qn`)
+
+These identifiers must be used to construct the CSV output schema.
+
+For each dimension:
+
+```
+dimension_summary_<dimension_id>
+```
+
+For each cross-dimension indicator:
+
+```
+cross_dimension_summary_<indicator_id>
+```
+
+Example (illustrative only):
+
+```
+dimension_summary_D1
+dimension_summary_D2
+dimension_summary_D3
+
+cross_dimension_summary_Q1
+cross_dimension_summary_Q2
+```
+
+The wrapper must dynamically generate these fields based on the rubric specification rather than assuming a fixed number of dimensions or indicators.
+
+The column order must follow the order of the dimension registry and indicator registry.
 
 ---
 
@@ -230,19 +268,39 @@ The output must:
 
 - begin with a **header row**
 - output one row per `(submission_id × component_id)`
+- contain no blank lines
 - end each row with a newline character
 
-Header fields:
+### Header fields
+
+The header must be constructed dynamically.
+
+It must contain:
+
+- `submission_id`
+- `component_id`
+
+- one field per dimension:
 
 ```
-submission_id,
-component_id,
-dimension_summary,
-cross_dimension_summary,
-performance_level_label,
-evaluation_notes,
-confidence,
-flags
+dimension_summary_<dimension_id>
+```
+
+- one field per cross-dimension response indicator:
+
+```
+cross_dimension_summary_<indicator_id>
+```
+
+- `performance_level_label`
+- `evaluation_notes`
+- `confidence`
+- `flags`
+
+Example header (illustrative only):
+
+```
+submission_id,component_id,dimension_summary_D1,dimension_summary_D2,dimension_summary_D3,cross_dimension_summary_Q1,cross_dimension_summary_Q2,performance_level_label,evaluation_notes,confidence,flags
 ```
 
 ---
@@ -269,15 +327,23 @@ If the field is empty:
 
 The following fields must not be quoted:
 
+- `submission_id`
+- `component_id`
+- all fields matching:
+
 ```
-submission_id
-component_id
-dimension_summary
-cross_dimension_summary
-performance_level_label
-confidence
-flags
+dimension_summary_<dimension_id>
 ```
+
+- all fields matching:
+
+```
+cross_dimension_summary_<indicator_id>
+```
+
+- `performance_level_label`
+- `confidence`
+- `flags`
 
 No escaping validation or special character checking is required.
 
@@ -306,7 +372,7 @@ When the user sends `BEGIN GENERATION`, the model generates the Stage 2 scoring 
 The model must generate exactly one artefact:
 
 ```
-RUN_<ASSESSMENT_ID>_<COMPONENT_ID>_Stage2_dimension_evidence_scoring_prompt_v04
+RUN_<ASSESSMENT_ID>_<COMPONENT_ID>_Stage2_dimension_evidence_scoring_prompt_v05
 ```
 
 ---
@@ -330,6 +396,55 @@ Sections must appear in this order:
 - Constraints
 - Content rules
 - Failure mode handling
+
+---
+
+## Content Rules
+
+Each dimension must be written to its own field.
+
+For every dimension extracted from the rubric registry:
+
+```
+dimension_summary_<dimension_id>
+```
+
+The field must contain the computed dimension evidence level:
+
+```
+Level 1
+Level 2
+```
+
+Each cross-dimension response indicator must also be written to its own field.
+
+For every cross-dimension indicator:
+
+```
+cross_dimension_summary_<indicator_id>
+```
+
+The field must contain the indicator evidence status:
+
+```
+evidence
+partial_evidence
+not_in_evidence
+```
+
+`confidence` must represent evaluator confidence on a scale between:
+
+```
+0.0
+1.0
+```
+
+`flags` may include:
+
+```
+needs_review
+none
+```
 
 ---
 
