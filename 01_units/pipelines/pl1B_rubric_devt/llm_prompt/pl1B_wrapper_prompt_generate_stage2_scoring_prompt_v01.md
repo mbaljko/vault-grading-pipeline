@@ -14,7 +14,7 @@ BEGIN GENERATION
 ## pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v02
 
 ````
-## pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v04
+## pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v05
 
 Wrapper prompt: Generate a tightly bounded **Stage 2 scoring prompt** for **dimension evidence evaluation and scoring rule execution**.
 
@@ -40,7 +40,7 @@ All artefacts must be supplied in full and delimited using `===`.
 Required artefacts:
 
 - `<ASSESSMENT_ID>_AssignmentPayloadSpec_v01`
-- `CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_RubricSpec_v01`
+- `CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_RubricSpec_v*`
 
 If any artefact is missing or inconsistent, the wrapper prompt must produce no output.
 
@@ -51,7 +51,7 @@ If any artefact is missing or inconsistent, the wrapper prompt must produce no o
 Generate one reusable **Stage 2 scoring prompt** that performs:
 
 - dimension evidence evaluation
-- cross-dimension indicator interpretation
+- use of cross-dimension response indicators within the scoring rule table
 - scoring rule table execution
 - final performance level assignment
 
@@ -104,7 +104,7 @@ Wrapper artefacts must be ignored during evaluation.
 ---
 
 ### Input Artefact  
-`CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_RubricSpec_v01`
+`CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_RubricSpec_v*`
 
 This document contains the **complete rubric specification** for the component.
 
@@ -113,7 +113,7 @@ The model must extract from this document:
 - `component_id`
 - dimension registry
 - indicator registry
-- cross-dimension indicators
+- cross-dimension response indicators (e.g., `Q1–Qn`)
 - indicator evidence status scale
 - dimension evidence levels
 - evidence coherence rule
@@ -132,7 +132,7 @@ The generated scoring prompt must be **self-contained**.
 All rubric logic extracted from:
 
 ```
-CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_RubricSpec_v01
+CAL_<ASSESSMENT_ID>_<COMPONENT_ID>_Step02_RubricSpec_v*
 ```
 
 must be **embedded directly into the generated prompt**.
@@ -186,7 +186,7 @@ I1–In
 Q1–Qn
 ```
 
-including cross-dimension response-quality indicators.
+including cross-dimension response indicators.
 
 The generated prompt must compute **dimension evidence levels and final scores entirely from these indicator evidence rows**.
 
@@ -198,30 +198,26 @@ The generated scoring prompt must enforce the following evaluation sequence:
 
 1. Retrieve all Stage 1 indicator evidence for the `(submission_id × component_id)` unit.
 
-2. Determine **dimension evidence levels** using the embedded **indicator → dimension mapping tables**.
+2. Partition indicator evidence into:
+   - dimension indicators (e.g., `I1–In`)
+   - cross-dimension response indicators (e.g., `Q1–Qn`).
 
-3. Apply the **evidence coherence rule**:
-   - `evidence` satisfies `partial_evidence`
-   - `Level 1` satisfies `Level 2`.
+3. Determine **dimension evidence levels** using the embedded **indicator → dimension mapping tables**.
 
-4. Evaluate the **dimension evidence → submission score mapping table**.
+4. Apply the **evidence coherence rule**:
 
-5. Evaluate rows **top to bottom**.
+```
+evidence satisfies partial_evidence
+Level 1 satisfies Level 2
+```
 
-6. The **first satisfied row determines the score_label**.
+5. Evaluate the **dimension evidence → submission score mapping table**.
+
+6. Evaluate rows **top to bottom**.
+
+7. The **first satisfied row determines the `score_label`**.
 
 Evaluation must be deterministic.
-
----
-
-## Single-Pass Indicator Evaluation Requirement
-
-The generated scoring prompt must enforce the following constraint:
-
-- Read `response_text` exactly once.
-- In a **single evaluation step**, determine the evidence status for **all indicators simultaneously** (`I1–I6`, `Q1–Q2`).
-- Do not re-read or re-scan the response separately per indicator.
-- After indicator evidence statuses are determined, proceed to dimension evidence evaluation.
 
 ---
 
@@ -309,7 +305,7 @@ When the user sends `BEGIN GENERATION`, the model generates the Stage 2 scoring 
 The model must generate exactly one artefact:
 
 ```
-RUN_<ASSESSMENT_ID>_<COMPONENT_ID>_Stage2_dimension_evidence_scoring_prompt_v03
+RUN_<ASSESSMENT_ID>_<COMPONENT_ID>_Stage2_dimension_evidence_scoring_prompt_v04
 ```
 
 ---
@@ -327,7 +323,6 @@ Sections must appear in this order:
 
 - Prompt title and restrictions
 - Indicator evidence input format
-- Indicator evaluation procedure
 - Dimension evidence evaluation procedure
 - Scoring rule table execution
 - Output schema
@@ -352,7 +347,6 @@ If any required artefact is missing, inconsistent, or contradictory:
 
 - produce no output
 - wait silently for corrected inputs
-
 ===
 
 ````
