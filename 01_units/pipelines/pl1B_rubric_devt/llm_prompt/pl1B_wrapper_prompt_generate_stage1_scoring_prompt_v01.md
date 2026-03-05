@@ -178,6 +178,18 @@ Allowed output fields include:
 
 The user must specify the confidence scale and allowed flags.
 
+Field formatting rules (mandatory)
+
+- The generated Stage 1 scoring prompt must require that:
+  - `evidence_excerpt` is always enclosed in double quotes (`"` ... `"`).
+  - `evaluation_notes` is always enclosed in double quotes (`"` ... `"`).
+- If a field is empty, the output must contain an empty quoted string: `""`.
+- If the content contains a double quote character, it must be escaped as `\"`.
+- Newlines inside quoted fields must be escaped as `\n`.
+- Backslashes inside quoted fields must be escaped as `\\`.
+- The output must be machine-parseable with these quoting rules for every row, without exceptions.
+
+
 ===
 
 No external knowledge or interpretation is permitted.

@@ -168,6 +168,54 @@ Allowed output fields include:
 - `confidence`
 - `flags`
 
+### Field formatting rules (mandatory)
+
+The generated Stage 2 scoring prompt **must enforce the following output formatting rules**.
+
+Quoted text fields
+
+The following fields must always be enclosed in double quotes:
+
+```
+dimension_summary
+cross_dimension_summary
+evaluation_notes
+triggered_boundary_rule
+```
+
+Formatting requirements
+
+- All quoted fields must be enclosed in double quotes (`"` ... `"`).
+- If a field is empty, the output must contain an empty quoted string:
+
+```
+""
+```
+
+Escaping rules
+
+If quoted field content contains special characters, the following escaping rules must be applied:
+
+```
+"  →  \"
+\  →  \\
+newline → \n
+```
+
+These quoting and escaping rules must be applied **consistently for every output row without exception**.
+
+The output produced by the Stage 2 scoring prompt must therefore be **machine-parseable under these rules**.
+
+Non-quoted fields
+
+The following fields must **not** be quoted:
+
+```
+performance_level_label
+confidence
+flags
+```
+
 No external knowledge or interpretation is permitted.
 
 ---
