@@ -91,6 +91,7 @@ PROJECT_ID = os.getenv("OPENAI_PROJECT_ID", "")
 MODEL = os.getenv("OPENAI_MODEL", "gpt-5.1")
 API_BASE_URL = os.getenv("OPENAI_API_BASE_URL", "https://api.openai.com/v1")
 SYSTEM_PROMPT = os.getenv("OPENAI_SYSTEM_PROMPT", "You are a helpful assistant.")
+REQUEST_TIMEOUT_SECONDS = 600
 DEFAULT_USER_PROMPT = (
     "Analyze the provided text segments. Return concise themes, key claims, "
     "and any notable inconsistencies."
@@ -264,9 +265,12 @@ def write_output_files(
     text: str,
     response_obj: dict[str, Any],
 ) -> None:
-    """Write raw response JSON and companion CSV with extracted text output."""
+    """Write response JSON + extracted text and companion CSV."""
+    json_payload = dict(response_obj)
+    json_payload["extracted_output_text"] = text or ""
+
     json_output_path.write_text(
-        json.dumps(response_obj, indent=2, ensure_ascii=False),
+        json.dumps(json_payload, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
 
@@ -334,7 +338,7 @@ def invoke_chatgpt(body: dict[str, Any]) -> dict[str, Any]:
     req = Request(url, data=data, headers=headers, method="POST")
 
     try:
-        with urlopen(req, timeout=120) as resp:
+        with urlopen(req, timeout=REQUEST_TIMEOUT_SECONDS) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except HTTPError as exc:
         error_body = exc.read().decode("utf-8", errors="replace")
@@ -346,6 +350,7 @@ def invoke_chatgpt(body: dict[str, Any]) -> dict[str, Any]:
 def main() -> int:
     start_ts = time.perf_counter()
     args = parse_args()
+    print(f"Request timeout set to: {REQUEST_TIMEOUT_SECONDS} seconds")
 
     try:
         prompt = load_prompt(args)
