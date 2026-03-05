@@ -247,7 +247,12 @@
   },
   "active": "e5174a9fca7b05c1",
   "lastOpenFiles": [
-    "01_units/pipelines/pl1B_rubric_devt/excel",
+    "01_units/pipelines/pl2_calibration_runs/excel/05_sample_component.pq",
+    "01_units/pipelines/pl2_calibration_runs/excel/05_component_specific_sample.pq",
+    "01_units/pipelines/pl2_calibration_runs/excel/04_build_component_samples copy.pq",
+    "01_units/pipelines/pl2_calibration_runs/excel/04_build_component_samples.pq",
+    "01_units/pipelines/pl2_calibration_runs/excel/03_sampling 1.pq",
+    "01_units/pipelines/pl2_calibration_runs/excel",
     "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning - TO DO.md",
     "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning.pq POTENTIAL OPTIMIZATIONS.md",
     "05_docs/01_design/pl1A_canonical_population_prep/01_validation.pq - TO DO.md",
@@ -270,7 +275,6 @@
     "05_docs/00_overview/prev_versions/Nomenclature Standard — Grading Ontology and Calibration Alignment 1.md",
     "01_units/pipelines/pl2_calibration_runs/prev versions/pl2_wrapper_prompt_generate_calibration_scoring_prompt 1.md",
     "01_units/pipelines/pl2_calibration_runs/prev versions/PROMPT - create tightly bounded script - prev v1.md",
-    "01_units/pipelines/pl2_calibration_runs/prev versions",
     "05_docs/01_design/pl2_calibration/Pipeline2 - Calibration Runs  Specification.md",
     "05_docs/01_design/pl1B_rubric_devt/template for dimenion header.md",
     "05_docs/01_design/pl1B_rubric_devt/rubric_definition.md",
@@ -278,10 +282,6 @@
     "05_docs/01_design/prior-docs-from-migration/Stage 0 — Prepare Canonical Inputs.md",
     "05_docs/01_design/prior-docs-from-migration/STEPS - DESIGN.md",
     "05_docs/01_design/prior-docs-from-migration/STEP 2 - EXECUTION.md",
-    "05_docs/01_design/prior-docs-from-migration/STEP 1 - CALIBRATION.md",
-    "05_docs/01_design/prior-docs-from-migration",
-    "05_docs/01_design/pl3_grading_core",
-    "05_docs/01_design/pl2_calibration",
-    "05_docs/01_design/pl1B_rubric_devt"
+    "05_docs/01_design/prior-docs-from-migration/STEP 1 - CALIBRATION.md"
   ]
 }
