@@ -18,7 +18,7 @@ let
     Output =
         Table.RemoveColumns(
             FilteredSampled,
-            {"sample_flag"}
+            {"sample_flag", "response_presence"}
         )
 
 in

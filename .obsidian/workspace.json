@@ -30,13 +30,13 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl2_calibration_runs/pl2_wrapper_prompt_generate_calibration_scoring_prompt.md",
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_calibration_scoring_prompt.md",
                 "mode": "source",
                 "source": false
               },
               "pinned": true,
               "icon": "lucide-file",
-              "title": "pl2_wrapper_prompt_generate_calibration_scoring_prompt"
+              "title": "pl1B_wrapper_prompt_generate_calibration_scoring_prompt"
             }
           },
           {
@@ -46,27 +46,27 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl2_calibration_runs/pl2_wrapper_prompt_generate_calibration_scoring_prompt.md",
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_calibration_scoring_prompt.md",
                 "mode": "source",
                 "source": false
               },
               "pinned": true,
               "icon": "lucide-file",
-              "title": "pl2_wrapper_prompt_generate_calibration_scoring_prompt"
+              "title": "pl1B_wrapper_prompt_generate_calibration_scoring_prompt"
             }
           },
           {
-            "id": "ca848a3e488a4d05",
+            "id": "452f6fd8cb165136",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning.pq POTENTIAL OPTIMIZATIONS.md",
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_calibration_scoring_prompt 1.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "02_cleaning.pq POTENTIAL OPTIMIZATIONS"
+              "title": "pl1B_wrapper_prompt_generate_calibration_scoring_prompt 1"
             }
           }
         ],
@@ -216,13 +216,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning.pq POTENTIAL OPTIMIZATIONS.md",
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_calibration_scoring_prompt 1.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of 02_cleaning.pq POTENTIAL OPTIMIZATIONS"
+              "title": "Outline of pl1B_wrapper_prompt_generate_calibration_scoring_prompt 1"
             }
           }
         ],
@@ -245,8 +245,15 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "e5174a9fca7b05c1",
+  "active": "452f6fd8cb165136",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/tmp.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_calibration_scoring_prompt 1.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_calibration_scoring_prompt.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver",
+    "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning.pq POTENTIAL OPTIMIZATIONS.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt",
+    "01_units/pipelines/pl2_calibration_runs/llm_prompts",
     "01_units/pipelines/pl2_calibration_runs/excel/05_sample_component.pq",
     "01_units/pipelines/pl2_calibration_runs/excel/05_component_specific_sample.pq",
     "01_units/pipelines/pl2_calibration_runs/excel/04_build_component_samples copy.pq",
@@ -254,7 +261,6 @@
     "01_units/pipelines/pl2_calibration_runs/excel/03_sampling 1.pq",
     "01_units/pipelines/pl2_calibration_runs/excel",
     "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning - TO DO.md",
-    "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning.pq POTENTIAL OPTIMIZATIONS.md",
     "05_docs/01_design/pl1A_canonical_population_prep/01_validation.pq - TO DO.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A (Excel,MCode) — Implementation Mapping to Specification.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
@@ -263,15 +269,10 @@
     "05_docs/01_design/pl1A_canonical_population_prep/prev_ver/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
     "05_docs/01_design/pl1A_canonical_population_prep/prev_ver",
     "05_docs/01_design/pl1B_rubric_devt/prev_versions/Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification.md",
-    "05_docs/01_design/pl1B_rubric_devt/prev_versions",
     "01_units/pipelines/pl1B_rubric_devt/Component Rubric Input Schema (CRIS).md",
-    "01_units/pipelines/pl2_calibration_runs/pl2_wrapper_prompt_generate_calibration_scoring_prompt.md",
     "01_units/pipelines/pl1B_rubric_devt/Prompt for Step00 - Generate CalibrationPayloadFormat.md",
-    "05_docs/01_design/pl2B_recalibration_optional",
-    "01_units/pipelines/pl2B_recalibration (optional)",
     "05_docs/00_overview/Nomenclature Standard — Grading Ontology and Calibration Alignment.md",
     "05_docs/00_overview/Four Pipeline Model.md",
-    "05_docs/00_overview/prev_versions",
     "05_docs/00_overview/prev_versions/Nomenclature Standard — Grading Ontology and Calibration Alignment 1.md",
     "01_units/pipelines/pl2_calibration_runs/prev versions/pl2_wrapper_prompt_generate_calibration_scoring_prompt 1.md",
     "01_units/pipelines/pl2_calibration_runs/prev versions/PROMPT - create tightly bounded script - prev v1.md",
@@ -281,7 +282,6 @@
     "Design Note - Extensible Architecture for `vault-grading-pipeline`.md",
     "05_docs/01_design/prior-docs-from-migration/Stage 0 — Prepare Canonical Inputs.md",
     "05_docs/01_design/prior-docs-from-migration/STEPS - DESIGN.md",
-    "05_docs/01_design/prior-docs-from-migration/STEP 2 - EXECUTION.md",
-    "05_docs/01_design/prior-docs-from-migration/STEP 1 - CALIBRATION.md"
+    "05_docs/01_design/prior-docs-from-migration/STEP 2 - EXECUTION.md"
   ]
 }
