@@ -190,6 +190,32 @@ The output produced by the Stage 1 scoring prompt must be machine-parseable unde
 No external knowledge or interpretation is permitted.
 
 ---
+### CSV header row requirement (mandatory)
+
+The generated Stage 1 scoring prompt must require that the CSV output always begins with a header row.
+
+The header row must appear **exactly once**, before any indicator evaluation rows.
+
+The header row must contain the following fields in this exact order:
+
+```
+submission_id,component_id,indicator_id,evidence_status,evaluation_notes,confidence,flags
+```
+
+The generated prompt must explicitly instruct the model to:
+
+- emit the header row first
+- then emit one CSV data row per evaluation unit
+
+The evaluation unit is:
+
+```
+submission_id × component_id × indicator_id
+```
+
+No additional columns may appear.
+
+---
 
 ## Stage Discipline (Mandatory)
 
