@@ -24,7 +24,6 @@ let
     TailCols = {"Tags", "User", "Username", "Email address", "Time added", "Time modified"},
     AllCols = Table.ColumnNames(Source),
 
-    // Find the first tail column that appears (prefer the earliest occurrence)
     TailPositions =
         List.RemoveNulls(
             List.Transform(
@@ -46,7 +45,7 @@ let
         else List.FirstN(AllCols, TailStart),
 
     // ------------------------------------------------------------------------
-    // TEXT CLEANING HELPERS (AS PROVIDED)
+    // TEXT CLEANING HELPERS
     // ------------------------------------------------------------------------
     NormaliseHtml = (t as nullable text) as nullable text =>
         let
@@ -127,12 +126,11 @@ let
         ),
 
     // ------------------------------------------------------------------------
-    // VALIDATION PREPARATION (GATE ELIGIBILITY)
+    // VALIDATION PREPARATION
     // ------------------------------------------------------------------------
     ValidationFiltered =
         Table.SelectRows(Validation, each [__join_status] = "matched_unique"),
 
-    // Require submission_id from validation (single authoritative source)
     ValidationMap =
         if not Table.HasColumns(ValidationFiltered, {"User", "submission_id"}) then
             error "02_cleaning: validation table must include columns User and submission_id."
@@ -145,7 +143,7 @@ let
             ),
 
     // ------------------------------------------------------------------------
-    // JOIN CLEANED DATA WITH ROSTER MAP
+    // JOIN CLEANED DATA WITH ROSTER
     // ------------------------------------------------------------------------
     Joined =
         Table.NestedJoin(Cleaned, {"User"}, ValidationMap, {"User"}, "__v", JoinKind.Inner),
@@ -154,17 +152,16 @@ let
         Table.ExpandTableColumn(Joined, "__v", {"submission_id"}),
 
     // ------------------------------------------------------------------------
-    // OPTIONAL DEBUG ROW ID (NON-AUTHORITATIVE)
+    // OPTIONAL DEBUG ROW ID
     // ------------------------------------------------------------------------
     WithRowId = Table.AddIndexColumn(Expanded, "__row_id", 1, 1, Int64.Type),
 
-    // Prefix responses with stable submission_id (preferred) and optional __row_id
-    AddPrefix = (txt as nullable text, sid as nullable text, rid as number) as nullable text =>
+    AddPrefix = (txt as nullable text, sid as nullable text) as nullable text =>
         if txt = null then null
         else
-            "+++submission_id=" & Text.From(sid) & "#(lf)"
-            & "+++row_id=" & Text.From(rid) & "#(lf)"
-            & txt,
+            "+++submission_id=" & Text.From(sid) & "#(lf)" &
+            "+++" & "#(lf)" &
+            txt,
 
     Prefixed =
         Table.TransformRows(
@@ -172,10 +169,9 @@ let
             (r) =>
                 let
                     sid = r[submission_id],
-                    rid = r[__row_id],
                     fields = List.Transform(
                         ResponseCols,
-                        (c) => {c, (x) => AddPrefix(x, sid, rid)}
+                        (c) => {c, (x) => AddPrefix(x, sid)}
                     )
                 in
                     Record.TransformFields(r, fields)
@@ -184,7 +180,7 @@ let
     PrefixedTable = Table.FromRecords(Prefixed),
 
     // ------------------------------------------------------------------------
-    // UNPIVOT → LONG FORMAT (DYNAMIC COMPONENTS)
+    // UNPIVOT → LONG FORMAT
     // ------------------------------------------------------------------------
     Unpivoted =
         Table.Unpivot(
@@ -200,7 +196,7 @@ let
     WithWC = Table.AddColumn(Unpivoted, "response_wc", each WordCount([response_text]), Int64.Type),
 
     // ------------------------------------------------------------------------
-    // FINAL CANONICAL STRUCTURE (PIPELINE 1A)
+    // FINAL CANONICAL STRUCTURE
     // ------------------------------------------------------------------------
     Final =
         Table.SelectColumns(
