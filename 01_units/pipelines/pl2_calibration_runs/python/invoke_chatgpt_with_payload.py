@@ -1,9 +1,26 @@
 #!/usr/bin/env python3
 """Invoke ChatGPT API with a prompt and JSON payload.
 
-Fill in the account constants below, then run this script with either:
+Set environment variables, then run this script with either:
 - --payload-file path/to/payload.json, or
 - --payload-json '{"key": "value"}'
+
+Prompt can be provided via:
+- --prompt-file path/to/prompt.txt
+- --prompt "..."
+
+If neither prompt option is provided, a built-in default prompt is used.
+If neither payload option is provided, a built-in sample payload is used.
+
+Required env var:
+- OPENAI_API_KEY
+
+Optional env vars:
+- OPENAI_ORG_ID
+- OPENAI_PROJECT_ID
+- OPENAI_MODEL
+- OPENAI_API_BASE_URL
+- OPENAI_SYSTEM_PROMPT
 
 Example:
     python invoke_chatgpt_with_payload.py \
@@ -15,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -25,17 +43,32 @@ from urllib.request import Request, urlopen
 # ==============================
 # Account / API configuration
 # ==============================
-API_KEY = "REDACTED_KEY"
-ORGANIZATION_ID = "" #YOUR_OPENAI_ORG_ID"  # optional: ""
-PROJECT_ID = "" #YOUR_OPENAI_PROJECT_ID"  # optional: ""
-MODEL = "gpt-5.3-codex"
-API_BASE_URL = "https://api.openai.com/v1"
-SYSTEM_PROMPT = "You are a helpful assistant."
+API_KEY = os.getenv("OPENAI_API_KEY", "")
+ORGANIZATION_ID = os.getenv("OPENAI_ORG_ID", "")
+PROJECT_ID = os.getenv("OPENAI_PROJECT_ID", "")
+MODEL = os.getenv("OPENAI_MODEL", "gpt-5.1")
+API_BASE_URL = os.getenv("OPENAI_API_BASE_URL", "https://api.openai.com/v1")
+SYSTEM_PROMPT = os.getenv("OPENAI_SYSTEM_PROMPT", "You are a helpful assistant.")
+DEFAULT_USER_PROMPT = (
+    "Analyze the provided text segments. Return concise themes, key claims, "
+    "and any notable inconsistencies."
+)
+DEFAULT_PAYLOAD: dict[str, Any] = {
+    "segments": [
+        "Example segment A.",
+        "Example segment B.",
+    ]
+}
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Send prompt + payload to ChatGPT API.")
-    parser.add_argument("--prompt", required=True, help="User prompt text.")
+    parser.add_argument("--prompt", help="User prompt text.")
+    parser.add_argument(
+        "--prompt-file",
+        type=Path,
+        help="Path to a text file containing prompt text.",
+    )
     parser.add_argument(
         "--payload-file",
         type=Path,
@@ -57,12 +90,25 @@ def parse_args() -> argparse.Namespace:
         default=1200,
         help="Maximum output tokens.",
     )
+    parser.add_argument(
+        "--model",
+        default=MODEL,
+        help="Model name override (default: configured MODEL constant).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print resolved prompt/payload/request body and exit without calling API.",
+    )
     return parser.parse_args()
 
 
 def load_payload(args: argparse.Namespace) -> dict[str, Any]:
-    if bool(args.payload_file) == bool(args.payload_json):
-        raise ValueError("Provide exactly one of --payload-file or --payload-json.")
+    if args.payload_file and args.payload_json:
+        raise ValueError("Provide at most one of --payload-file or --payload-json.")
+
+    if not args.payload_file and not args.payload_json:
+        return DEFAULT_PAYLOAD
 
     if args.payload_file:
         try:
@@ -78,7 +124,27 @@ def load_payload(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError(f"--payload-json is not valid JSON: {exc}") from exc
 
 
+def load_prompt(args: argparse.Namespace) -> str:
+    if args.prompt and args.prompt_file:
+        raise ValueError("Provide at most one of --prompt or --prompt-file.")
+
+    if args.prompt_file:
+        try:
+            text = args.prompt_file.read_text(encoding="utf-8").strip()
+        except FileNotFoundError as exc:
+            raise ValueError(f"Prompt file not found: {args.prompt_file}") from exc
+        if not text:
+            raise ValueError(f"Prompt file is empty: {args.prompt_file}")
+        return text
+
+    if args.prompt and args.prompt.strip():
+        return args.prompt.strip()
+
+    return DEFAULT_USER_PROMPT
+
+
 def build_request_body(
+    model: str,
     prompt: str,
     payload: dict[str, Any],
     temperature: float,
@@ -90,7 +156,7 @@ def build_request_body(
     )
 
     return {
-        "model": MODEL,
+        "model": model,
         "temperature": temperature,
         "max_output_tokens": max_output_tokens,
         "input": [
@@ -121,8 +187,8 @@ def extract_output_text(response_obj: dict[str, Any]) -> str:
 
 
 def invoke_chatgpt(body: dict[str, Any]) -> dict[str, Any]:
-    if API_KEY.startswith("YOUR_"):
-        raise ValueError("Please set API_KEY constant before running.")
+    if not API_KEY:
+        raise ValueError("OPENAI_API_KEY is not set.")
 
     url = f"{API_BASE_URL}/responses"
     headers = {
@@ -151,13 +217,25 @@ def main() -> int:
     args = parse_args()
 
     try:
+        prompt = load_prompt(args)
         payload = load_payload(args)
         body = build_request_body(
-            prompt=args.prompt,
+            model=args.model,
+            prompt=prompt,
             payload=payload,
             temperature=args.temperature,
             max_output_tokens=args.max_output_tokens,
         )
+
+        if args.dry_run:
+            print("=== DRY RUN: RESOLVED PROMPT ===")
+            print(prompt)
+            print("\n=== DRY RUN: RESOLVED PAYLOAD ===")
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+            print("\n=== DRY RUN: REQUEST BODY ===")
+            print(json.dumps(body, indent=2, ensure_ascii=False))
+            return 0
+
         response_obj = invoke_chatgpt(body)
         text = extract_output_text(response_obj)
 

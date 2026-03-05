@@ -42,8 +42,12 @@ venv/
 
 secrets/
 *.env
+*.env.*
 *.secret
 *.key
+
+# Keep env templates tracked
+!.env.example
 
 ###############################################################################
 # 3. Pipeline run artefacts (always ephemeral)
