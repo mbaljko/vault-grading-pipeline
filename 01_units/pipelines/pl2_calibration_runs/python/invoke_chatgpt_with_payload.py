@@ -6,6 +6,7 @@ Set environment variables, then run this script with either:
 - --payload-json '{"key": "value"}'
 
 Prompt can be provided via:
+- --prompt-path /full/path/to/prompt.md
 - --prompt-file path/to/prompt.txt
 - --prompt "..."
 
@@ -33,11 +34,21 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+
+def _extract_first_fenced_block(markdown_text: str) -> str | None:
+    """Return content of first fenced block (``` or ````), else None."""
+    pattern = re.compile(r"(?ms)^\s*(`{3,4})[^\n`]*\n(.*?)\n\s*\1\s*$")
+    match = pattern.search(markdown_text)
+    if not match:
+        return None
+    return match.group(2).strip()
 
 
 def _find_repo_root(start: Path) -> Path | None:
@@ -91,14 +102,25 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Send prompt + payload to ChatGPT API.")
     parser.add_argument("--prompt", help="User prompt text.")
     parser.add_argument(
+        "--prompt-path",
+        type=Path,
+        help=(
+            "Full path to a Markdown file containing the prompt in a fenced block "
+            "(``` or ````)."
+        ),
+    )
+    parser.add_argument(
         "--prompt-file",
         type=Path,
-        help="Path to a text file containing prompt text.",
+        help=(
+            "Path to a text/Markdown file containing prompt text. If fenced Markdown "
+            "blocks are present, the first fenced block is used."
+        ),
     )
     parser.add_argument(
         "--payload-file",
         type=Path,
-        help="Path to a JSON file payload.",
+        help="Path to text/Markdown payload file (handled as text).",
     )
     parser.add_argument(
         "--payload-json",
@@ -138,11 +160,16 @@ def load_payload(args: argparse.Namespace) -> dict[str, Any]:
 
     if args.payload_file:
         try:
-            return json.loads(args.payload_file.read_text(encoding="utf-8"))
+            raw = args.payload_file.read_text(encoding="utf-8")
         except FileNotFoundError as exc:
             raise ValueError(f"Payload file not found: {args.payload_file}") from exc
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"Payload file is not valid JSON: {exc}") from exc
+
+        payload_text = _extract_first_fenced_block(raw) or raw.strip()
+        if not payload_text:
+            raise ValueError(f"Payload file is empty: {args.payload_file}")
+
+        # --payload-file handler: always treat input as text content
+        return {"segments": [payload_text.strip()]}
 
     try:
         return json.loads(args.payload_json)
@@ -151,16 +178,29 @@ def load_payload(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def load_prompt(args: argparse.Namespace) -> str:
-    if args.prompt and args.prompt_file:
-        raise ValueError("Provide at most one of --prompt or --prompt-file.")
+    provided_count = sum(
+        bool(x)
+        for x in [
+            args.prompt,
+            args.prompt_file,
+            args.prompt_path,
+        ]
+    )
+    if provided_count > 1:
+        raise ValueError("Provide at most one of --prompt, --prompt-file, or --prompt-path.")
 
-    if args.prompt_file:
+    prompt_source = args.prompt_path or args.prompt_file
+
+    if prompt_source:
         try:
-            text = args.prompt_file.read_text(encoding="utf-8").strip()
+            raw = prompt_source.read_text(encoding="utf-8")
         except FileNotFoundError as exc:
-            raise ValueError(f"Prompt file not found: {args.prompt_file}") from exc
+            raise ValueError(f"Prompt file not found: {prompt_source}") from exc
+
+        fenced = _extract_first_fenced_block(raw)
+        text = fenced if fenced is not None else raw.strip()
         if not text:
-            raise ValueError(f"Prompt file is empty: {args.prompt_file}")
+            raise ValueError(f"Prompt file is empty or contains an empty fenced block: {prompt_source}")
         return text
 
     if args.prompt and args.prompt.strip():
