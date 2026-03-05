@@ -35,10 +35,12 @@ printed to stdout.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -138,8 +140,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-output-tokens",
         type=int,
-        default=1200,
-        help="Maximum output tokens.",
+        default=None,
+        help="Optional output token cap. If omitted, request does not force a cap.",
     )
     parser.add_argument(
         "--model",
@@ -217,17 +219,16 @@ def build_request_body(
     prompt: str,
     payload: dict[str, Any],
     temperature: float,
-    max_output_tokens: int,
+    max_output_tokens: int | None,
 ) -> dict[str, Any]:
     user_text = (
         f"Prompt:\n{prompt}\n\n"
         f"Payload (JSON):\n{json.dumps(payload, indent=2, ensure_ascii=False)}"
     )
 
-    return {
+    body: dict[str, Any] = {
         "model": model,
         "temperature": temperature,
-        "max_output_tokens": max_output_tokens,
         "input": [
             {
                 "role": "system",
@@ -240,31 +241,39 @@ def build_request_body(
         ],
     }
 
+    if max_output_tokens is not None:
+        body["max_output_tokens"] = max_output_tokens
 
-def resolve_output_file_path(args: argparse.Namespace) -> Path:
-    """Resolve output file path.
+    return body
 
-    If a prompt file/path is provided, place output beside it using
-    <prompt_stem>_output.md. Otherwise, write in script directory.
-    """
+
+def resolve_output_file_paths(args: argparse.Namespace) -> tuple[Path, Path]:
+    """Resolve output file paths for raw JSON and companion CSV."""
     prompt_source = args.prompt_path or args.prompt_file
     if prompt_source:
-        return prompt_source.resolve().with_name(f"{prompt_source.stem}_output.md")
+        base = prompt_source.resolve().with_name(f"{prompt_source.stem}_output")
+        return base.with_suffix(".json"), base.with_suffix(".csv")
 
-    return Path(__file__).resolve().with_name("invoke_chatgpt_with_payload_output.md")
+    base = Path(__file__).resolve().with_name("invoke_chatgpt_with_payload_output")
+    return base.with_suffix(".json"), base.with_suffix(".csv")
 
 
-def write_output_file(output_path: Path, text: str, response_obj: dict[str, Any]) -> None:
-    """Write model output and raw JSON response to file."""
-    content = (
-        "# ChatGPT Output\n\n"
-        f"{(text or '<no text output>')}\n\n"
-        "# Raw Response JSON\n\n"
-        "```json\n"
-        f"{json.dumps(response_obj, indent=2, ensure_ascii=False)}\n"
-        "```\n"
+def write_output_files(
+    json_output_path: Path,
+    csv_output_path: Path,
+    text: str,
+    response_obj: dict[str, Any],
+) -> None:
+    """Write raw response JSON and companion CSV with extracted text output."""
+    json_output_path.write_text(
+        json.dumps(response_obj, indent=2, ensure_ascii=False),
+        encoding="utf-8",
     )
-    output_path.write_text(content, encoding="utf-8")
+
+    with csv_output_path.open("w", encoding="utf-8", newline="") as csv_file:
+        writer = csv.writer(csv_file)
+        writer.writerow(["output_text"])
+        writer.writerow([text or ""])
 
 
 def extract_output_text(response_obj: dict[str, Any]) -> str:
@@ -279,6 +288,32 @@ def extract_output_text(response_obj: dict[str, Any]) -> str:
             if isinstance(text, str) and text:
                 chunks.append(text)
     return "\n".join(chunks).strip()
+
+
+def get_incomplete_reason(response_obj: dict[str, Any]) -> str | None:
+    """Return incomplete reason from Responses API payload, if present."""
+    details = response_obj.get("incomplete_details")
+    if isinstance(details, dict):
+        reason = details.get("reason")
+        if isinstance(reason, str) and reason.strip():
+            return reason.strip()
+    return None
+
+
+def is_platform_limit_reason(reason: str | None) -> bool:
+    """Best-effort check for token/platform limit style truncation reasons."""
+    if not reason:
+        return False
+    normalized = reason.lower()
+    return any(
+        token in normalized
+        for token in [
+            "max_output_tokens",
+            "max_tokens",
+            "context_length",
+            "length",
+        ]
+    )
 
 
 def invoke_chatgpt(body: dict[str, Any]) -> dict[str, Any]:
@@ -309,6 +344,7 @@ def invoke_chatgpt(body: dict[str, Any]) -> dict[str, Any]:
 
 
 def main() -> int:
+    start_ts = time.perf_counter()
     args = parse_args()
 
     try:
@@ -329,14 +365,25 @@ def main() -> int:
             print(json.dumps(payload, indent=2, ensure_ascii=False))
             print("\n=== DRY RUN: REQUEST BODY ===")
             print(json.dumps(body, indent=2, ensure_ascii=False))
+            elapsed_s = time.perf_counter() - start_ts
+            print(f"Total running time: {elapsed_s:.2f} seconds")
             return 0
 
         response_obj = invoke_chatgpt(body)
         text = extract_output_text(response_obj)
+        incomplete_reason = get_incomplete_reason(response_obj)
 
-        output_path = resolve_output_file_path(args)
-        write_output_file(output_path, text, response_obj)
-        print(f"Output written to: {output_path}")
+        json_output_path, csv_output_path = resolve_output_file_paths(args)
+        write_output_files(json_output_path, csv_output_path, text, response_obj)
+        print(f"JSON output written to: {json_output_path}")
+        print(f"CSV output written to: {csv_output_path}")
+        if is_platform_limit_reason(incomplete_reason):
+            print(
+                "Notice: response is incomplete due to a platform/model token limit "
+                f"(reason: {incomplete_reason})."
+            )
+        elapsed_s = time.perf_counter() - start_ts
+        print(f"Total running time: {elapsed_s:.2f} seconds")
         return 0
     except Exception as exc:  # noqa: BLE001
         print(f"Error: {exc}", file=sys.stderr)
