@@ -93,12 +93,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Template.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Rubric Specification Template"
+              "title": "RUBRIC_SID_X_vX TEMPLATE"
             }
           }
         ],
@@ -248,13 +248,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Template.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Rubric Specification Template"
+              "title": "Outline of RUBRIC_SID_X_vX TEMPLATE"
             }
           }
         ],
@@ -279,8 +279,10 @@
   },
   "active": "b3c921b738c9de70",
   "lastOpenFiles": [
-    "05_docs/01_design/pl1B_rubric_devt/rubric_definition - prev v1.md",
-    "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Template.md",
+    "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Design Document.md",
+    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
+    "05_docs/01_design/pl1B_rubric_devt/PROMPT - template for dimenion header.md",
+    "05_docs/01_design/pl1B_rubric_devt/prev_versions/rubric_definition - prev v1.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification 1.md",
     "05_docs/00_overview/Nomenclature Standard for 4-Layer Grading Ontology.md",
     "05_docs/00_overview/prev_versions/Nomenclature Standard — Grading Ontology v2.md",
@@ -312,8 +314,6 @@
     "05_docs/01_design/prior-docs-from-migration/STEP 1 - CALIBRATION.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/PROMPT - create tightly bounded script - prev v1.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/PROMPT - create tightly bounded script.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/tmp.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_calibration_scoring_prompt.md",
-    "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning.pq POTENTIAL OPTIMIZATIONS.md"
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/tmp.md"
   ]
 }
