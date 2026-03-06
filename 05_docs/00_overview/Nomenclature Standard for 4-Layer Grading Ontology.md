@@ -3,46 +3,57 @@ version: v.4
 ### Purpose
 This document establishes the authoritative terminology used throughout the `vault-grading-pipeline`.
 
+### Nomenclature
+
+**Assessment Artefact (AA)**: the portion of a student's submission from which evidence is examined during a scoring pass.
+
+**Score-Bearing Object (SBO)**: an analytic entity that receives a score derived from evidence found in a particular AA.
+
+I am deliberatively not using the term **grading unit**, since it often can mean either "A grading unit is the specific entity that receives a score" or "the thing being graded"
+
 ### Conceptual Framework
 
-|         | Name for the conceptual concept that receives a score (a score-bearing entity, grading targets) | name for the score | Way we refer to each  individual score-bearing entity                                                                                                             | Example         | scale type  | Name of the scale that defined the scores that can be assigned to this entity | Values of the scale                                                                                                | Applies to (grading unit, the row)      |
-| ------- | ----------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ----------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
-| Layer 1 | `indicator`                                                                                     | `indicator_score`  | `I_sid_cid_iid` where `iid` is the unique identifier (two character alpha-numeric), `sid` and `cid` are determined by this entity's place in the grading pipeline | `I_PPP_SecA_I1` | evidence    | `indicator_evidence_scale`                                                    | `evidence`, `partial_evidence`, `little_to_no_evidence`                                                            | a component of the student's submission |
-| Layer 2 | `dimension`                                                                                     | `dimension_score`  | `D_sid_cid_did` where `did` is the identifier (two character alpha-numeric),  `sid` and `cid` are determined by this entity's place in the grading pipeline       | `D_PPP_SecA_D1` | evidence    | `dimension_evidence_scale`                                                    | `demonstrated`, `partially_demonstrated`, `little_to_no_demonstration`                                             | a component of the student's submission |
-| Layer 3 | `component`                                                                                     | `component_score`  | `C_sid_cid` where `cid` is the identifier (short string), `sid` is determined by this entity's place in the grading pipeline<br>                                  | `C_PPP_SecA`    | performance | `component_performance_scale`                                                 | `exceeds_expectations`, `meets_expectations`, `approaching_expectations`, `below_expectations`, `not_demonstrated` | a component of the student's submission |
-| Layer 4 | `submission`                                                                                    | `submission_score` | `S_sid` where `sid` is the identifier (short string), determined by course's assessment architecture document                                                     | `S_PPP`         | performance | `submission_performance_scale`                                                | `exceeds_expectations`, `meets_expectations`, `approaching_expectations`, `below_expectations`, `not_demonstrated` | the student's entire submission         |
+|         | SBO          | name for the score given to the SBO | Way we refer to each SBO                                                                                                                                          | Example SBO     | scale type for the SBO | Name of the scale for this SBO | Values of the SBO scale                                                                                            | AA to which the SBO Applies             |
+| ------- | ------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
+| Layer 1 | `indicator`  | `indicator_score`                   | `I_sid_cid_iid` where `iid` is the unique identifier (two character alpha-numeric), `sid` and `cid` are determined by this entity's place in the grading pipeline | `I_PPP_SecA_I1` | evidence               | `indicator_evidence_scale`     | `evidence`, `partial_evidence`, `little_to_no_evidence`                                                            | a component of the student's submission |
+| Layer 2 | `dimension`  | `dimension_score`                   | `D_sid_cid_did` where `did` is the identifier (two character alpha-numeric),  `sid` and `cid` are determined by this entity's place in the grading pipeline       | `D_PPP_SecA_D1` | evidence               | `dimension_evidence_scale`     | `demonstrated`, `partially_demonstrated`, `little_to_no_demonstration`                                             | a component of the student's submission |
+| Layer 3 | `component`  | `component_score`                   | `C_sid_cid` where `cid` is the identifier (short string), `sid` is determined by this entity's place in the grading pipeline<br>                                  | `C_PPP_SecA`    | performance            | `component_performance_scale`  | `exceeds_expectations`, `meets_expectations`, `approaching_expectations`, `below_expectations`, `not_demonstrated` | a component of the student's submission |
+| Layer 4 | `submission` | `submission_score`                  | `S_sid` where `sid` is the identifier (short string), determined by course's assessment architecture document                                                     | `S_PPP`         | performance            | `submission_performance_scale` | `exceeds_expectations`, `meets_expectations`, `approaching_expectations`, `below_expectations`, `not_demonstrated` | the student's entire submission         |
 There are 4 layers to the grading pipeline:
 - Layer 1: scoring of a set of multiple `indicator` 
 - Layer 2: scoring of a set of multiple `dimension` (there are different 'kinds', explained below)
 - Layer 3: scoring of a set of multiple `componenent`
 - Layer 4: scoring of a set of multiple `submissions` (one `submission` for every student) 
+
 ## Layering
 ### Layer 1
-- Entity being scored: each `submission_id × component_id` combination
-- One score derived for each `I_sid_cid_iid`, for each layer 1 grading unit.
-- Grading unit: represented by a row in a csv
+- AA: each `submission_id × component_id` from the canonical population
+- One score derived for each `I_sid_cid_iid`, for each entity being scored.
+- EGrading unit: represented by a row in a csv
 - Result: each student will have many, many `I_sid_cid_iid` scores.
 - Layer 1 grading unit: 
 #### Layer 1 scoring logic: 
 - the score for each `I_sid_cid_iid` is determined by evidence found in the layer 1 grading unit. 
 - some `I_sid_cid_iid` may be "dimension-tailored" (meaning they are attuned to a specific aspect of the component, which we will later call a `dimension`)
 - some `I_sid_cid_iid` may be "holistic" (meaning that they look at the component as a whole, e.g., grammar, clarity, the presence of a concrete example)
-- we don't need to formally signal their category, it will be determined by the mapping relationship expressed in the next level
+- we don't need to formally signal their category, it will be implicitly encoded by the mapping relationship expressed in the next level
 ### Layer 2
-- One score for each `D_sid_cid_did`, for each layer 2 grading unit
+- Entity being scored: each `submission_id × component_id` from the canonical population
+- One score for each `D_sid_cid_did`, for each entity being scored
+- Grading unit: represented by a row in a csv
 - Result: each student will have many `D_sid_cid_did` scores, fewer than `I_sid_cid_iid` scores.
-- Layer 2 grading unit: each `submission_id × component_id` combination
 #### Layer 2 scoring logic:  
 - in general, the score for each `D_sid_cid_did` is determined from the pool of evidence represented in the set of `I_sid_cid_iid` scores
 - specifically, the score for each `D_sid_cid_did` is determined by a mapping table that expresses the combination of `indicator_score` values for certain `I_sid_cid_iid` that determine that particular `dimension_score`
 	- "tailored" dimensions: most `D_sid_cid_did` will combine two or more "dimension-tailored"  `I_sid_cid_iid` 
-	- "pan-component" dimensions: some `D_sid_cid_did` are "pass-through" dimensions because they will stand in a 1-to-1 mapping from a single "holistic" `I_sid_cid_iid`
+	- "pan-component" dimensions: some `D_sid_cid_did` derived from a single "holistic" indicator `I_sid_cid_iid`
 		- in the past I have refered to these as "cross-dimensional", even though they are dimensions themselves. The cross-dimensionality happens at the indicator level. So, strictly speaking, this is inconsistent nomenclature
 		- better to refer to these dimensions as "pan-component dimensions" (rather than "cross-dimensional" dimensions)
 ### Layer 3
-- One score for each `C_sid_cid`, for each layer 3 grading unit.
+- Entity being scored: each `submission_id × component_id` from the canonical population
+- combination One score for each `C_sid_cid`, for each layer 3 grading unit.
 - Result: each student will have several `C_sid_cid` scores, fewer than `D_sid_cid_did` scores
-- Layer 3 grading unit: one unit for each `submission_id × component_id` combination
+- Layer 3 grading unit: one unit for each 
 #### Layer 3 scoring logic:
 - in general, the score for each `C_sid_cid` is determined from the pool of evidence represented in the set of `D_sid_cid_did` scores
 - specifically, the score for each `C_sid_cid` is determined by a mapping table that expresses the combination of `dimension_score` values that determine the `component_score`
