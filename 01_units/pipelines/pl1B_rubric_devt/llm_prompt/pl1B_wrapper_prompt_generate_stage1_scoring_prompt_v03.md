@@ -277,7 +277,7 @@ The artefact must:
 
 The generated scoring prompt must:
 
-- appear in a single fenced Markdown block
+- appear in a single fenced Markdown block, outer fence ````
 - use headings no deeper than level 2
 - avoid nested lists
 - use bullet lists only
