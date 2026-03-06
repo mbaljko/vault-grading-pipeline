@@ -77,12 +77,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v03.md",
+                "file": "05_docs/00_overview/Nomenclature Standard for 4-Layer Grading Ontology.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v03"
+              "title": "Nomenclature Standard for 4-Layer Grading Ontology"
             }
           }
         ],
@@ -232,13 +232,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v03.md",
+                "file": "05_docs/00_overview/Nomenclature Standard for 4-Layer Grading Ontology.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v03"
+              "title": "Outline of Nomenclature Standard for 4-Layer Grading Ontology"
             }
           }
         ],
@@ -263,8 +263,14 @@
   },
   "active": "bb02de274e442c4e",
   "lastOpenFiles": [
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v02.md",
+    "05_docs/00_overview/prev_versions/Nomenclature Standard — Grading Ontology v2.md",
+    "05_docs/00_overview/prev_versions/Nomenclature Standard — Grading Ontology and Calibration Alignment v1.md",
+    "05_docs/00_overview/Nomenclature Standard for 4-Layer Grading Ontology.md",
+    "05_docs/00_overview/Generalised Dimension-First Grading Process.md",
+    "05_docs/00_overview/prev",
+    "05_docs/00_overview/Four Pipeline Model.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v03.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v02.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v01.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v01.md",
     "05_docs/01_design/pl1A_canonical_population_prep/FORMATTING ASSUMPTION.md",
@@ -279,7 +285,6 @@
     "env/bin/pip3",
     "env/bin/pip",
     "env/lib/python3.13/site-packages/pip/_internal/vcs/__pycache__/versioncontrol.cpython-313.pyc",
-    "env/lib/python3.13/site-packages/pip/_internal/vcs/__pycache__/subversion.cpython-313.pyc",
     "05_docs/01_design/pl3_production_scoring/Pipeline PL3 — Production Scoring Pipeline (Two-Stage Model) v2.md",
     "05_docs/01_design/pl3_production_scoring/Pipeline PL3 — Production Scoring Pipeline (Two-Stage Model) v1.md",
     "05_docs/01_design/pl2_calibration/STEP - build calibration set using interior sampling.md",
@@ -293,10 +298,6 @@
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_calibration_scoring_prompt.md",
     "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning.pq POTENTIAL OPTIMIZATIONS.md",
     "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning - TO DO.md",
-    "05_docs/01_design/pl1A_canonical_population_prep/01_validation.pq - TO DO.md",
-    "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A (Excel,MCode) — Implementation Mapping to Specification.md",
-    "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
-    "05_docs/01_design/pl1A_canonical_population_prep/prev_ver/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
-    "05_docs/01_design/pl1B_rubric_devt/prev_versions/Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification.md"
+    "05_docs/01_design/pl1A_canonical_population_prep/01_validation.pq - TO DO.md"
   ]
 }
