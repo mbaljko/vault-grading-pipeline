@@ -59,11 +59,38 @@ Each row specifies an SBO type, its identifier structure, and the scale used to 
 
 | layer | sbo_type   | score_name       | sbo_identifier_pattern | scale_type  | scale_name                    | sbo indentifier |
 | ----- | ---------- | ---------------- | ---------------------- | ----------- | ----------------------------- | --------------- |
-| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`    |                 |
-| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`    |                 |
-| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale` |                 |
-| 4     | submission | submission_score | `S_sid`                | performance | submission_performance_scale  |                 |
-### 2. Registries
+| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`    | `<PLACEHOLDER>` |
+| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`    | `<PLACEHOLDER>` |
+| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`    | `<PLACEHOLDER>` |
+| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`    | `<PLACEHOLDER>` |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`    | `<PLACEHOLDER>` |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`    | `<PLACEHOLDER>` |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`    | `<PLACEHOLDER>` |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`    | `<PLACEHOLDER>` |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`    | `<PLACEHOLDER>` |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
+| 4     | submission | submission_score | `S_sid`                | performance | submission_performance_scale  | `<PLACEHOLDER>` |
+### 2. Scale Registry
+
+
+| indicator_evidence_status |     |
+| ------------------------- | --- |
+| evidence                  |     |
+| partial_evidence          |     |
+| little_to_no_evidence     |     |
+
+| score_label |
+|---|
+| exceeds_expectations |
+| meets_expectations |
+| approaching_expectations |
+| below_expectations |
+| not_demonstrated |
+
 #### 2.1 The Layer 4 registry — submission SBO
 Defines the **Layer 4 Score-Bearing Object (SBO)** representing the full student submission.
 ```text
@@ -129,6 +156,7 @@ Constraints:
 | evidence |
 | partial_evidence |
 | little_to_no_evidence |
+
 Hierarchy:
 ```text
 evidence > partial_evidence > little_to_no_evidence
