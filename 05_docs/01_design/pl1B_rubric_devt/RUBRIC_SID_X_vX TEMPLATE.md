@@ -72,21 +72,10 @@ Each row specifies an SBO type, its identifier structure, and the scale used to 
 | layer | sbo_type   | score_name       | sbo_identifier_pattern | scale_type  | scale_name                     | sbo indentifier |
 | ----- | ---------- | ---------------- | ---------------------- | ----------- | ------------------------------ | --------------- |
 | 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
-| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
-| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
-| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
 | 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
-| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
-| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
-| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
-| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
-| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
-| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
-| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
-| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
 | 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
 | 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` | `<PLACEHOLDER>` |
-### 2. Scale registry
+### 3. Scale registry
 
 | scale_name                     | ordered | description                                   |
 | ------------------------------ | ------- | --------------------------------------------- |
@@ -144,8 +133,8 @@ Hierarchy:
 exceeds_expectations > meets_expectations > approaching_expectations > below_expectations > not_demonstrated
 ```
 
-### 3. Registry of Specific Score-Bearing Objects (SBOs)
-#### 3.1 submission SBO
+### 4. Registry of Specific Score-Bearing Objects (SBOs)
+#### 4.1 Layer 4 SBO
 
 Defines the **Layer 4 Score-Bearing Object (SBO)** representing the full student submission.
 
@@ -158,7 +147,7 @@ Defines the **Layer 4 Score-Bearing Object (SBO)** representing the full student
 | ----- | ---------- | ---------------- | ---------------------- | ----------- | ------------------------------ | --------------- |
 | 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` | `S_PPP`         |
 
-#### OLDER
+##### OLDER
 ```text
 submission_id: <ASSESSMENT_ID>
 ```
@@ -168,7 +157,7 @@ submission_id: PPP
 ```
 This is the  Layer 4 SBO.
 It represents the **entire submission** and receives the final submission score.
-#### 3.2 The Layer 3 registry — component SBOs
+#### 4.2 Layer 3 SBO
 Defines the **Layer 3 SBOs** representing components of the submission.
 
 | layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type  | scale_name                    | sbo indentifier |
@@ -181,6 +170,8 @@ Defines the **Layer 3 SBOs** representing components of the submission.
 ##### Constraints:
 - component identifiers must match the canonical population structure used in the grading dataset
 - each `(submission_id × component_id)` pair defines a Layer 3 Assessment Artefact
+
+
 
 ##### Example
 
@@ -199,8 +190,7 @@ Defines the **Layer 3 SBOs** representing components of the submission.
 | SectionBResponse | |
 | SectionCResponse | |
 
-#### 2.3 The Layer 2 registry
-#### 2.3.1 Layer 2 SBOs
+#### 4.3 Layer 2 SBO
 Defines the **Layer 2 SBOs** representing rubric dimensions applied to components.
 
 | layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type | scale_name                 | sbo indentifier |
@@ -211,15 +201,23 @@ Defines the **Layer 2 SBOs** representing rubric dimensions applied to component
 | 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
 | 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
 
+Constraints:
+- `(component_id, dimension_id)` pairs must be unique
+- dimension identifiers must remain stable across rubric versions
+##### EXAMPLE
 
 | layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type | scale_name                 | sbo indentifier |
 | ----- | --------- | --------------- | ---------------------- | ---------- | -------------------------- | --------------- |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
-
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D1` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D2` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D3` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D4` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D5` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D6` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D7` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D8` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_Q1` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_Q1` |
 
 ##### OLDER
 
@@ -228,84 +226,55 @@ Defines the **Layer 2 SBOs** representing rubric dimensions applied to component
 | SectionAResponse | D1 | |
 | SectionAResponse | D2 | |
 | SectionAResponse | D3 | |
-Constraints:
-- `(component_id, dimension_id)` pairs must be unique
-- dimension identifiers must remain stable across rubric versions
-#### 2.3.2 The Layer 2 dimension evidence scale
 
-| dimension_evidence_level |
-|---|
-| Level 1 |
-| Level 2 |
-| Level 3 |
-Hierarchy:
-```text
-Level 1 > Level 2 > Level 3
-```
-#### 2.4. The Layer 1 registry
-#### 2.4.1 Layer 1 SBOs
+#### 4.4 Layer 1 SBO
 Defines the **Layer 1 SBOs** used to detect observable evidence within the Assessment Artefact.
 
-| layer | sbo_type   | score_name       | sbo_identifier_pattern | scale_type  | scale_name                     | sbo indentifier |
-| ----- | ---------- | ---------------- | ---------------------- | ----------- | ------------------------------ | --------------- |
-| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
-| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
-| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
-| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
-| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
-| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
-| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
-| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
-| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
-| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
-| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
-| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
-| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
-| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
-| 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` | `<PLACEHOLDER>` |
-
-
-| indicator_id | component_id | dimension_id | indicator_definition |
-|---|---|---|---|
-| I1 | SectionAResponse | D1 | |
-| I2 | SectionAResponse | D1 | |
-| I3 | SectionAResponse | D2 | |
+| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type | scale_name                 | sbo indentifier |
+| ----- | --------- | --------------- | ---------------------- | ---------- | -------------------------- | --------------- |
+| 1     | indicator | indicator_score | `[IP]_sid_cid_iid`     | evidence   | `indicator_evidence_scale` | `<PLACEHOLDER>` |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `<PLACEHOLDER>` |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `<PLACEHOLDER>` |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `<PLACEHOLDER>` |
 Constraints:
 - indicators must reference a valid `(component_id, dimension_id)`
 - indicator identifiers must remain stable within a rubric version
-#### 2.4.1 Layer 1 indicator evidence scale for SBOs
 
-| indicator_evidence_status |
-|---|
-| evidence |
-| partial_evidence |
-| little_to_no_evidence |
-Hierarchy:
-```text
-evidence > partial_evidence > little_to_no_evidence
-```
-### 6. Indicator evidence scale
+##### EXAMPLE
 
-| indicator_evidence_status |
-|---|
-| evidence |
-| partial_evidence |
-| little_to_no_evidence |
-Hierarchy:
-```text
-evidence > partial_evidence > little_to_no_evidence
-```
-### 7. Dimension evidence scale
 
-| dimension_evidence_level |
-|---|
-| Level 1 |
-| Level 2 |
-| Level 3 |
-Hierarchy:
-```text
-Level 1 > Level 2 > Level 3
-```
+| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type | scale_name                 | sbo indentifier |
+| ----- | --------- | --------------- | ---------------------- | ---------- | -------------------------- | --------------- |
+| 1     | indicator | indicator_score | `[IP]_sid_cid_iid`     | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I1` |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I2` |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I3` |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I4` |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I5` |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I6` |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I7` |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I8` |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_P1` |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_P2` |
+
+
+### 5. SBO Instructions
+
+#### 5.1 Layer 1 SBO Value Derivation
+
+| sbo identifier  | Nickname | indicator_definition                                              | assessment guidance                                                                                                                           |
+| --------------- | -------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `I_PPP_SECA_I1` |          | Accountability framing is explicitly stated                       | Determine whether the response **explicitly identifies where accountability resides** in the sociotechnical situation.                        |
+| `I_PPP_SECA_I2` |          | Accountability framing is minimally supported                     | Determine whether the response provides **at least one supporting reason or explanation** justifying the accountability framing.              |
+| `I_PPP_SECA_I3` |          | Inside-the-role content is specified                              | Determine whether the response identifies **at least one responsibility or activity that falls within the role of a computing professional**. |
+| `I_PPP_SECA_I4` |          | Outside-the-role content is specified                             | Determine whether the response identifies **at least one responsibility outside the professional role**.                                      |
+| `I_PPP_SECA_I5` |          | Hand-off boundary is articulated                                  | Determine whether the response **explicitly describes the boundary where responsibility transitions to another actor**.                       |
+| `I_PPP_SECA_I6` |          | Professional obligations in a non-licensure field are articulated | Determine whether the response identifies **at least one obligation or responsibility applying to computing professionals**.                  |
+| `I_PPP_SECA_P1` |          | Coherence                                                         | Determine whether the response is **readable, internally consistent, and logically structured**.                                              |
+| `I_PPP_SECA_P2` |          | Specificity                                                       | Determine whether the response includes **at least one concrete, checkable claim** rather than purely generic statements.                     |
+
+#### 5.2 Layer 2 SBO Value Derivation
+
+
 ### 8. Indicator → Dimension mapping
 This section defines how **indicator evidence statuses determine dimension evidence levels**.
 Mapping rules must satisfy:
