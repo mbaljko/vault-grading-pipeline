@@ -147,7 +147,16 @@ Defines the **Layer 4 Score-Bearing Object (SBO)** representing the full student
 | ----- | ---------- | ---------------- | ---------------------- | ----------- | ------------------------------ | --------------- | ----------------------------------------- |
 | 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` | `S_PPP`         | Pre-Practice Positioning (PPP) Assignment |
 
-
+##### OLDER
+```text
+submission_id: <ASSESSMENT_ID>
+```
+Example:
+```text
+submission_id: PPP
+```
+This is the  Layer 4 SBO.
+It represents the **entire submission** and receives the final submission score.
 #### 5.2 Layer 3 SBO
 Defines the **Layer 3 SBOs** representing components of the submission.
 
@@ -174,6 +183,13 @@ Defines the **Layer 3 SBOs** representing components of the submission.
 | 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECD`    | SectionDResponse      |
 | 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECE`    | SectionEResponse      |
 
+##### OLDER
+
+| component_id | component_label |
+|---|---|
+| SectionAResponse | |
+| SectionBResponse | |
+| SectionCResponse | |
 
 #### 5.3 Layer 2 SBO
 Defines the **Layer 2 SBOs** representing rubric dimensions applied to components.
@@ -198,6 +214,14 @@ Constraints:
 | 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D3` | Professional obligations   |
 | 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_Q1` | Component Coherence        |
 | 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_Q1` | Component Specificity      |
+
+##### OLDER
+
+| component_id | dimension_id | dimension_label |
+|---|---|---|
+| SectionAResponse | D1 | |
+| SectionAResponse | D2 | |
+| SectionAResponse | D3 | |
 
 #### 5.4 Layer 1 SBO
 Defines the **Layer 1 SBOs** used to detect observable evidence within the Assessment Artefact.
@@ -464,6 +488,23 @@ Interpretive intent:
 - **`exceeds_expectations` requires strong articulation across all dimensions** and reasonable specificity.
 - **`below_expectations` requires broad weakness across dimensions.**
 
+##### OLDER
+##### Minimum Threshold Table: `D_PPP_SECA_D3`
+
+Defines how **dimension evidence levels determine component scores**.
+Placeholder structure:
+```text
+<Dimension → Component Mapping Table Placeholder>
+```
+Input:
+```text
+dimension evidence levels
+(optional) response indicators
+```
+Output:
+```text
+component_score
+```
 #### 6.5. Layer 4 SBO Value Derivation, `component_score`  →  `submission_score` mapping
 
 ##### Registry Summary (All Require Threshold Tables)
