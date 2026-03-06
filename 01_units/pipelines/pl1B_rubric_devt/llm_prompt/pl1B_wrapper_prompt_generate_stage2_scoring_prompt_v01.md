@@ -10,6 +10,7 @@ BEGIN GENERATION
 ```
 
 resuming work
+revise to include response_text
 # .
 
 ## pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v02
