@@ -8,12 +8,12 @@ There are several layers.
 What exists at each layer
 
 
-|         | Name for the thing that receives a score (a score-bearing entity, grading targets) | Way we refer to each  individual one of these things         | Example         | Levels for the scoring are defined by this | scale values                                                                                                       | Applies to (grading unit, the row)      |
-| ------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
-| Layer 1 | `indicator`                                                                        | `Ix` where `x` is the unique identifier (numeric)            | `I_PPP_SecA_1`  | `indicator_evidence_scale`                 | `evidence`, `partial_evidence`, `little_to_no_evidence`                                                            | a component of the student's submission |
-| Layer 2 | `dimension`                                                                        | `D_did` where `x` is the identifier (numeric)                | `D_PPP_SecA_D1` | `dimension_evidence_scale`                 | `demonstrated`, `partially_demonstrated`, `little_to_no_demonstration`                                             | a component of the student's submission |
-| Layer 3 | `component`                                                                        | `C_sid_cid` where `id` is the identifier (short string) <br> | `C_PPP_SecA`    | `component_scoring_scale`                  | `exceeds_expectations`, `meets_expectations`, `approaching_expectations`, `below_expectations`, `not_demonstrated` | a component of the student's submission |
-| Layer 4 | `submission`                                                                       | `S_sid` where `sid` is the identifier (short string)         | `S_PPP`         | `submission_scoring_scale`                 | `exceeds_expectations`, `meets_expectations`, `approaching_expectations`, `below_expectations`, `not_demonstrated` | the student's entire submission         |
+|         | Name for the thing that receives a score (a score-bearing entity, grading targets) | name for the score | Way we refer to each  individual score-bearing entity        | Example         | Levels for the scoring are defined by this | scale values                                                                                                       | Applies to (grading unit, the row)      |
+| ------- | ---------------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------ | --------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
+| Layer 1 | `indicator`                                                                        | `indicator_score`  | `I_sid_cid_iid` where `x` is the unique identifier (numeric) | `I_PPP_SecA_I1` | `indicator_evidence_scale`                 | `evidence`, `partial_evidence`, `little_to_no_evidence`                                                            | a component of the student's submission |
+| Layer 2 | `dimension`                                                                        | `dimension_score`  | `D_sid_cid_did` where `x` is the identifier (numeric)        | `D_PPP_SecA_D1` | `dimension_evidence_scale`                 | `demonstrated`, `partially_demonstrated`, `little_to_no_demonstration`                                             | a component of the student's submission |
+| Layer 3 | `component`                                                                        | `component_score`  | `C_sid_cid` where `id` is the identifier (short string) <br> | `C_PPP_SecA`    | `component_scoring_scale`                  | `exceeds_expectations`, `meets_expectations`, `approaching_expectations`, `below_expectations`, `not_demonstrated` | a component of the student's submission |
+| Layer 4 | `submission`                                                                       | `submission_score` | `S_sid` where `sid` is the identifier (short string)         | `S_PPP`         | `submission_scoring_scale`                 | `exceeds_expectations`, `meets_expectations`, `approaching_expectations`, `below_expectations`, `not_demonstrated` | the student's entire submission         |
 
 
 There are 4 layers to the grading pipeline:
@@ -26,9 +26,22 @@ There are 4 layers to the grading pipeline:
 
 ## Layering
 
-- All Layer 1 scores (one for each `I_PPP_SecA_1`) are determined by evidence found in the student's submission (but looking at one component)
-- All Layer 2 scores (one for each `D_PPP_SecA_1`) are determined by mapping tables that stipulate how the combination of indicators determine the `dimension_score`
-- All Layer 3 scores (one for each )
+### Layer 1
+All Layer 1 scores (one for each `I_sid_cid_iid`, applied to each layer 1 grading unit) are determined by evidence found in the student's submission (but looking at one component)
+- some `I_sid_cid_iid` will be "dimension-tailored" (meaning they are attuned to a specific dimension of the component), whereas others will be more "holistic" (meaning that they look at the component as a whole, e.g., grammar, clarity, the presence of a concrete example)
+- we don't need to formally signal their category, it will be determined by their relationship to the next level
+### Layer 2
+All Layer 2 scores (one for each `D_sid_cid_did`, applied to each layer 2 grading unit) are determined by mapping tables that stipulate the combination of indicators that determine the `dimension_score`
+- "tailored" dimensions: most `D_sid_cid_did` will combine "dimension-tailored"  `I_sid_cid_iid` 
+- "pan-component" dimensions: some `D_sid_cid_did` are "pass-through" dimensions because they will stand in a 1-to-1 mapping from a single "holistic" `I_sid_cid_iid`
+	- in the past I have refered to these as "cross-dimensional", even though they are dimensions themselves. The cross-dimensionality happens at the indicator level. So, strictly speaking, this is inconsistent nomenclature
+
+### Layer 3
+All Layer 3 scores (one for each `C_sid_cid`, applied to each layer 3 grading unit) are determined by mapping tables that stipulate the combination of dimensions that determine the `component_score`
+- the "tailored" and "pan-component" dimensions combine to produce a derived `component_score`
+
+### Layer 4
+All Layer 4 scores (one for each )
 
 
 Its purpose is to:
