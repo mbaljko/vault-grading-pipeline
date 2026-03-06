@@ -88,22 +88,6 @@
             }
           },
           {
-            "id": "b3c921b738c9de70",
-            "type": "leaf",
-            "pinned": true,
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
-                "mode": "source",
-                "source": false
-              },
-              "pinned": true,
-              "icon": "lucide-file",
-              "title": "RUBRIC_SID_X_vX TEMPLATE"
-            }
-          },
-          {
             "id": "f4a535cc6ecedb71",
             "type": "leaf",
             "pinned": true,
@@ -117,6 +101,22 @@
               "pinned": true,
               "icon": "lucide-file",
               "title": "Generalised Dimension-First Grading Process"
+            }
+          },
+          {
+            "id": "b3c921b738c9de70",
+            "type": "leaf",
+            "pinned": true,
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
+                "mode": "source",
+                "source": false
+              },
+              "pinned": true,
+              "icon": "lucide-file",
+              "title": "RUBRIC_SID_X_vX TEMPLATE"
             }
           },
           {
@@ -134,7 +134,7 @@
             }
           }
         ],
-        "currentTab": 5
+        "currentTab": 6
       }
     ],
     "direction": "vertical"
@@ -288,9 +288,19 @@
               "icon": "lucide-list",
               "title": "Outline of RUBRIC_SID_X_vX TEMPLATE"
             }
+          },
+          {
+            "id": "15843676ad754c87",
+            "type": "leaf",
+            "state": {
+              "type": "advanced-tables-toolbar",
+              "state": {},
+              "icon": "spreadsheet",
+              "title": "Advanced Tables"
+            }
           }
         ],
-        "currentTab": 4
+        "currentTab": 5
       }
     ],
     "direction": "horizontal",
@@ -298,6 +308,7 @@
   },
   "left-ribbon": {
     "hiddenItems": {
+      "table-editor-obsidian:Advanced Tables Toolbar": false,
       "switcher:Open quick switcher": false,
       "graph:Open graph view": false,
       "canvas:Create new canvas": false,
@@ -312,8 +323,8 @@
   "active": "b3c921b738c9de70",
   "lastOpenFiles": [
     "05_docs/00_overview/Nomenclature Standard for 4-Layer Grading Ontology.md",
-    "05_docs/00_overview/Generalised Dimension-First Grading Process.md",
     "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
+    "05_docs/00_overview/Generalised Dimension-First Grading Process.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Design Document.md",
     "05_docs/01_design/pl1B_rubric_devt/PROMPT - template for dimenion header.md",
     "05_docs/01_design/pl1B_rubric_devt/prev_versions/rubric_definition - prev v1.md",

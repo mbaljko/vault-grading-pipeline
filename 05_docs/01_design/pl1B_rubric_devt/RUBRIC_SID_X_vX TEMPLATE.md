@@ -1,6 +1,18 @@
 ## RUBRIC_SID_X_vX TEMPLATE.md
 ### Rubric Payload Specification
+### 0. Rubric Identifier
 `RUBRIC_<sid>_<status>_payload_v<version>.md`
+
+```text
+submission_id: <ASSESSMENT_ID>
+rubric_version: <RUBRIC_VERSION>
+```
+Example:
+```text
+submission_id: PPP
+rubric_version: PPP_v1_2026W
+```
+
 ### 0. Purpose
 This document defines the **rubric payload** for an assignment.  
 It is intended to be **self-contained** and provides all information required for automated evaluation.
@@ -57,31 +69,68 @@ A scoring process may evaluate and assign scores at **one or more layers**, depe
 This table defines the Score-Bearing Objects used in the rubric payload.
 Each row specifies an SBO type, its identifier structure, and the scale used to evaluate that SBO.
 
-| layer | sbo_type   | score_name       | sbo_identifier_pattern | scale_type  | scale_name                    | sbo indentifier |
-| ----- | ---------- | ---------------- | ---------------------- | ----------- | ----------------------------- | --------------- |
-| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`    | `<PLACEHOLDER>` |
-| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`    | `<PLACEHOLDER>` |
-| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`    | `<PLACEHOLDER>` |
-| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`    | `<PLACEHOLDER>` |
-| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`    | `<PLACEHOLDER>` |
-| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`    | `<PLACEHOLDER>` |
-| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`    | `<PLACEHOLDER>` |
-| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`    | `<PLACEHOLDER>` |
-| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`    | `<PLACEHOLDER>` |
-| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
-| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
-| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
-| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
-| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
-| 4     | submission | submission_score | `S_sid`                | performance | submission_performance_scale  | `<PLACEHOLDER>` |
-### 2. Scale Registry
+| layer | sbo_type   | score_name       | sbo_identifier_pattern | scale_type  | scale_name                     | sbo indentifier |
+| ----- | ---------- | ---------------- | ---------------------- | ----------- | ------------------------------ | --------------- |
+| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
+| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
+| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
+| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
+| 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` | `<PLACEHOLDER>` |
+### 2. Scale registry
 
+| scale_name                     | ordered | description                                   |
+| ------------------------------ | ------- | --------------------------------------------- |
+| `indicator_evidence_scale`     | true    | Evidence strength for indicator evaluation    |
+| `dimension_evidence_scale`     | true    | Evidence strength for dimension evaluation    |
+| `component_performance_scale`  | true    | Performance evaluation scale for a component  |
+| `submission_performance_scale` | true    | Performance evaluation scale for a submission |
+#### indicator_evidence_scale
 
-| indicator_evidence_status |     |
-| ------------------------- | --- |
-| evidence                  |     |
-| partial_evidence          |     |
-| little_to_no_evidence     |     |
+| scale_value           |
+| --------------------- |
+| evidence              |
+| partial_evidence      |
+| little_to_no_evidence |
+Hierarchy:
+```
+evidence > partial_evidence > little_to_no_evidence
+```
+#### dimension_evidence_scale
+
+| scale_value                |
+| -------------------------- |
+| demonstrated               |
+| partially_demonstrated     |
+| little_to_no_demonstration |
+Hierarchy:
+```
+demonstrated > partially_demonstrated > little_to_no_demonstration
+```
+#### component_performance_scale
+
+| scale_value              |
+| ------------------------ |
+| exceeds_expectations     |
+| meets_expectations       |
+| approaching_expectations |
+| below_expectations       |
+| not_demonstrated         |
+Hierarchy:
+```
+exceeds_expectations > meets_expectations > approaching_expectations > below_expectations > not_demonstrated
+```
+
+#### submission_performance_scale
 
 | score_label |
 |---|
@@ -90,33 +139,89 @@ Each row specifies an SBO type, its identifier structure, and the scale used to 
 | approaching_expectations |
 | below_expectations |
 | not_demonstrated |
+Hierarchy:
+```
+exceeds_expectations > meets_expectations > approaching_expectations > below_expectations > not_demonstrated
+```
 
-#### 2.1 The Layer 4 registry — submission SBO
+### 3. Registry of Specific Score-Bearing Objects (SBOs)
+#### 3.1 submission SBO
+
 Defines the **Layer 4 Score-Bearing Object (SBO)** representing the full student submission.
+
+| layer | sbo_type   | score_name       | sbo_identifier_pattern | scale_type  | scale_name                     | sbo indentifier   |
+| ----- | ---------- | ---------------- | ---------------------- | ----------- | ------------------------------ | ----------------- |
+| 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` | `<ASSESSMENT_ID>` |
+##### Example
+
+| layer | sbo_type   | score_name       | sbo_identifier_pattern | scale_type  | scale_name                     | sbo indentifier |
+| ----- | ---------- | ---------------- | ---------------------- | ----------- | ------------------------------ | --------------- |
+| 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` | `S_PPP`         |
+
+#### OLDER
 ```text
 submission_id: <ASSESSMENT_ID>
-rubric_version: <RUBRIC_VERSION>
 ```
 Example:
 ```text
 submission_id: PPP
-rubric_version: PPP_v1_2026W
 ```
-The Layer 4 SBO represents the **entire submission** and receives the final submission score.
-#### 2.2 The Layer 3 registry — component SBOs
+This is the  Layer 4 SBO.
+It represents the **entire submission** and receives the final submission score.
+#### 3.2 The Layer 3 registry — component SBOs
 Defines the **Layer 3 SBOs** representing components of the submission.
+
+| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type  | scale_name                    | sbo indentifier |
+| ----- | --------- | --------------- | ---------------------- | ----------- | ----------------------------- | --------------- |
+| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
+| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
+| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
+| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
+| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
+##### Constraints:
+- component identifiers must match the canonical population structure used in the grading dataset
+- each `(submission_id × component_id)` pair defines a Layer 3 Assessment Artefact
+
+##### Example
+
+| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type  | scale_name                    | sbo indentifier |
+| ----- | --------- | --------------- | ---------------------- | ----------- | ----------------------------- | --------------- |
+| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECA`    |
+| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECB`    |
+| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECC`    |
+| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECD`    |
+| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECE`    |
+##### OLDER
 
 | component_id | component_label |
 |---|---|
 | SectionAResponse | |
 | SectionBResponse | |
 | SectionCResponse | |
-Constraints:
-- component identifiers must match the canonical population structure used in the grading dataset
-- each `(submission_id × component_id)` pair defines a Layer 3 Assessment Artefact
+
 #### 2.3 The Layer 2 registry
 #### 2.3.1 Layer 2 SBOs
 Defines the **Layer 2 SBOs** representing rubric dimensions applied to components.
+
+| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type | scale_name                 | sbo indentifier |
+| ----- | --------- | --------------- | ---------------------- | ---------- | -------------------------- | --------------- |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
+
+
+| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type | scale_name                 | sbo indentifier |
+| ----- | --------- | --------------- | ---------------------- | ---------- | -------------------------- | --------------- |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
+
+
+##### OLDER
 
 | component_id | dimension_id | dimension_label |
 |---|---|---|
@@ -141,6 +246,25 @@ Level 1 > Level 2 > Level 3
 #### 2.4.1 Layer 1 SBOs
 Defines the **Layer 1 SBOs** used to detect observable evidence within the Assessment Artefact.
 
+| layer | sbo_type   | score_name       | sbo_identifier_pattern | scale_type  | scale_name                     | sbo indentifier |
+| ----- | ---------- | ---------------- | ---------------------- | ----------- | ------------------------------ | --------------- |
+| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
+| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
+| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
+| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
+| 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` | `<PLACEHOLDER>` |
+
+
 | indicator_id | component_id | dimension_id | indicator_definition |
 |---|---|---|---|
 | I1 | SectionAResponse | D1 | |
@@ -156,7 +280,6 @@ Constraints:
 | evidence |
 | partial_evidence |
 | little_to_no_evidence |
-
 Hierarchy:
 ```text
 evidence > partial_evidence > little_to_no_evidence
