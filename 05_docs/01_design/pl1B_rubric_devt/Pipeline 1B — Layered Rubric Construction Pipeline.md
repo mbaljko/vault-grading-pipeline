@@ -1,8 +1,7 @@
 ### Pipeline 1B — Layered Rubric Construction Pipeline
-This document defines the process for constructing and stabilising a **rubric for an assessment component** under the **four-layer scoring ontology**.
-A rubric is no longer a single conceptual object.  
-Instead, it is a **layered scoring specification** whose elements are stabilised iteratively using empirical evidence from real student responses.
-The rubric ultimately defines how evidence observed in responses is transformed into scores across four scoring layers.
+This document defines the process for constructing and stabilising a **rubric for an assessment submission** under the **four-layer scoring ontology**.  
+A rubric is a **layered scoring specification** whose elements are stabilised iteratively using empirical evidence from real student responses.  
+The rubric ultimately defines how evidence observed in responses is transformed into scores across four scoring layers.  
 The scoring layers are:
 ```
 Layer 1 → indicator SBOs
@@ -31,26 +30,41 @@ PPP_SectionAResponse_CalibrationPayloadFormat_v01
 ```
 Rubric construction must remain **compatible with the payload contract defined for the component**.
 ### 2. Rubric Scope
-Each rubric applies to exactly **one component**.
+The rubric applies to the **entire submission**.
+The final score produced by the rubric corresponds to the **Layer 4 submission Score-Bearing Object (SBO)**:
 ```
-component_id
+submission_score
 ```
-Example:
+However, the submission is typically composed of multiple **components**, each corresponding to a student-authored portion of the assignment.
+Examples of components:
 ```
 SectionAResponse
+SectionBResponse
+SectionCResponse
+SectionDResponse
+SectionEResponse
 ```
-The rubric defines how evidence in that component response is evaluated across the scoring layers.
-Conceptually the rubric defines:
+Most rubric design and tuning work occurs at **Layer 3**, where **dimension evidence is translated into component performance levels**.
+Layer 4 then derives the final submission score by applying a relatively straightforward mapping over the component scores.
+Conceptually, the rubric structure is:
 ```
-component
-    dimensions
-    indicators
-    mapping tables
-    boundary rules
+submission
+    components
+        dimensions
+        indicators
+        mapping tables
 ```
-The rubric structure is stabilised through the layered process described below.
+Layer responsibilities are therefore:
+```
+Layer 1 → detect indicator evidence within each component response
+Layer 2 → derive conceptual dimension evidence from indicator evidence
+Layer 3 → translate dimension evidence into component performance levels
+Layer 4 → combine component scores into a submission score
+```
+Because the Layer 3 mappings determine the interpretation of dimension evidence within each component, **most empirical tuning during rubric construction occurs at Layer 3**.
+Layer 4 mappings typically remain simple and stable once component evaluation is established.
 ### 3. Stage 0 — Component Analytic Specification
-Before constructing indicators, the analytic goals of the component must be clarified.
+Before constructing indicators, the analytic goals of each component must be clarified.
 Inputs:
 ```
 AssignmentPayloadSpec
@@ -177,6 +191,7 @@ Layer 3 SBO:
 ```
 component_score
 ```
+This stage is where **most rubric tuning occurs**, because it determines how conceptual evidence levels translate into performance classifications.
 #### 6.1 Define Performance Scale
 Typical performance scale:
 ```
@@ -219,6 +234,7 @@ Layer 4 SBO:
 ```
 submission_score
 ```
+Layer 4 mappings are typically simpler than Layer 3 mappings because the conceptual evaluation work has already been completed at the component level.
 Possible strategies include:
 ```
 averaging component performance

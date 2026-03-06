@@ -136,6 +136,7 @@
           {
             "id": "f301f2cf718a0aeb",
             "type": "leaf",
+            "pinned": true,
             "state": {
               "type": "markdown",
               "state": {
@@ -143,6 +144,7 @@
                 "mode": "source",
                 "source": false
               },
+              "pinned": true,
               "icon": "lucide-file",
               "title": "RUBRIC_SID_X_vX TEMPLATE"
             }
@@ -150,15 +152,17 @@
           {
             "id": "a98999cdb9bdec6c",
             "type": "leaf",
+            "pinned": true,
             "state": {
               "type": "markdown",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/Rubric Creation Pipeline.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
                 "mode": "source",
                 "source": false
               },
+              "pinned": true,
               "icon": "lucide-file",
-              "title": "Rubric Creation Pipeline"
+              "title": "Pipeline 1B — Layered Rubric Construction Pipeline"
             }
           }
         ],
@@ -308,13 +312,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/Rubric Creation Pipeline.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Rubric Creation Pipeline"
+              "title": "Outline of Pipeline 1B — Layered Rubric Construction Pipeline"
             }
           },
           {
@@ -350,13 +354,13 @@
   },
   "active": "a98999cdb9bdec6c",
   "lastOpenFiles": [
-    "05_docs/01_design/pl1B_rubric_devt/Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification 1.md",
-    "05_docs/01_design/pl1B_rubric_devt/Rubric Creation Pipeline.md",
     "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
-    "05_docs/00_overview/Nomenclature Standard for 4-Layer Grading Ontology.md",
-    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE WITH CONTENT.md",
-    "05_docs/00_overview/Generalised Dimension-First Grading Process.md",
+    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Design Document.md",
+    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE WITH CONTENT.md",
+    "05_docs/01_design/pl1B_rubric_devt/prev_versions/OLD Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification 1.md",
+    "05_docs/00_overview/Nomenclature Standard for 4-Layer Grading Ontology.md",
+    "05_docs/00_overview/Generalised Dimension-First Grading Process.md",
     "05_docs/01_design/pl1B_rubric_devt/PROMPT - template for dimenion header.md",
     "05_docs/01_design/pl1B_rubric_devt/prev_versions/rubric_definition - prev v1.md",
     "05_docs/00_overview/prev_versions/Nomenclature Standard — Grading Ontology v2.md",
