@@ -418,7 +418,7 @@ RUN_<ASSESSMENT_ID>_<COMPONENT_ID>_Stage2_dimension_evidence_scoring_prompt_v06
 
 The generated scoring prompt must:
 
-- appear in a single fenced Markdown block
+- appear in a single fenced Markdown block, outer fence with ````
 - use headings no deeper than level 2
 - avoid nested lists
 - use bullet lists only
