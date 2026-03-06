@@ -148,7 +148,7 @@
             }
           }
         ],
-        "currentTab": 8
+        "currentTab": 6
       }
     ],
     "direction": "vertical"
@@ -334,11 +334,11 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "15843676ad754c87",
+  "active": "b3c921b738c9de70",
   "lastOpenFiles": [
-    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE WITH CONTENT.md",
-    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
     "05_docs/00_overview/Nomenclature Standard for 4-Layer Grading Ontology.md",
+    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
+    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE WITH CONTENT.md",
     "05_docs/00_overview/Generalised Dimension-First Grading Process.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Design Document.md",
     "05_docs/01_design/pl1B_rubric_devt/PROMPT - template for dimenion header.md",

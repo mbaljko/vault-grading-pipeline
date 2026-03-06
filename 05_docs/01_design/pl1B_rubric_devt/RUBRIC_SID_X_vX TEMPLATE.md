@@ -1,18 +1,9 @@
 ## RUBRIC_SID_X_vX TEMPLATE.md
 ### Rubric Payload Specification
 ### 0. Rubric Identifier
-`RUBRIC_<sid>_<status>_payload_v<version>.md`
+`RUBRIC_<submission_id>_<status>_payload_v<version>.md`
 
-```text
-submission_id: <ASSESSMENT_ID>
-rubric_version: <RUBRIC_VERSION>
-```
-Example:
-```text
-submission_id: PPP
-rubric_version: PPP_v1_2026W
-```
-
+`<status>` is one of `CAL` for calibration or `PROD` for production
 ### 1. Purpose
 This document defines the **rubric payload** for an assignment.  
 It is intended to be **self-contained** and provides all information required for automated evaluation.
@@ -66,7 +57,8 @@ Higher-layer SBO scores may be derived from lower-layer SBO scores through mappi
 Not all scoring processes operate across all layers.
 A scoring process may evaluate and assign scores at **one or more layers**, depending on the evaluation task and the structures consumed by that scoring stage.
 ### 3. Score-Bearing Object (SBO) type registry
-This table defines the Score-Bearing Objects used in the rubric payload.
+
+This table defines the Score-Bearing Object types used in the rubric payload.
 Each row specifies an SBO type, its identifier structure, and the scale used to evaluate that SBO.
 
 | layer | sbo_type   | score_name       | sbo_identifier_pattern | scale_type  | scale_name                     |
@@ -75,6 +67,7 @@ Each row specifies an SBO type, its identifier structure, and the scale used to 
 | 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     |
 | 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  |
 | 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` |
+|       |            |                  |                        |             |                                |
 ### 4. Scale registry
 
 | scale_name                     | ordered | description                                   |
@@ -133,93 +126,97 @@ Hierarchy:
 exceeds_expectations > meets_expectations > approaching_expectations > below_expectations > not_demonstrated
 ```
 
-### 5. Registry of Specific Score-Bearing Objects (SBOs)
+### 5. Registry of specific Score-Bearing Object (SBO) instances 
+###### `sbo_identifier_shortid`: a local short token used inside mapping tables for column headers or compact references
 #### 5.1 Layer 4 SBO Instances
 
 Defines the **Layer 4 Score-Bearing Object (SBO)** representing the full student submission.
 
-| `sbo_identifier`  | `sbo_short_description` |
-| ----------------- | ----------------------- |
-| `<ASSESSMENT_ID>` | `<PLACEHOLDER>`         |
+| `sbo_identifier` | `sbo_identifier_shortid` | `submission_id` | `sbo_short_description` |
+| ---------------- | ------------------------ | --------------- | ----------------------- |
+|                  |                          |                 |                         |
 
 
 #### 5.2 Layer 3 SBO Instances
 Defines the **Layer 3 SBOs** representing components of the submission.
 
-| `sbo_identifier` |     | `sbo_short_description` |
-| ---------------- | --- | ----------------------- |
-| `<PLACEHOLDER>`  |     |                         |
-| `<PLACEHOLDER>`  |     |                         |
-| `<PLACEHOLDER>`  |     |                         |
-| `<PLACEHOLDER>`  |     |                         |
-| `<PLACEHOLDER>`  |     |                         |
+| `sbo_identifier` | `sbo_identifier_shortid` | `submission_id` | `component_id` | `sbo_short_description` |
+| ---------------- | ------------------------ | --------------- | -------------- | ----------------------- |
+|                  |                          |                 |                |                         |
+|                  |                          |                 |                |                         |
+|                  |                          |                 |                |                         |
+|                  |                          |                 |                |                         |
+|                  |                          |                 |                |                         |
 ##### Constraints:
 - component identifiers must match the canonical population structure used in the grading dataset
 - each `(submission_id × component_id)` pair defines a Layer 3 Assessment Artefact
 
 
-#### 5.3 Layer 2 SBO
+#### 5.3 Layer 2 SBO Instances
 Defines the **Layer 2 SBOs** representing rubric dimensions applied to components.
 
-| `sbo_identifier` | `sbo_identifier_shortid` | `sbo_short_description` |
-| ---------------- | ------------------------ | ----------------------- |
-| `<PLACEHOLDER>`  |                          |                         |
-| `<PLACEHOLDER>`  |                          |                         |
-| `<PLACEHOLDER>`  |                          |                         |
-| `<PLACEHOLDER>`  |                          |                         |
-| `<PLACEHOLDER>`  |                          |                         |
+| `sbo_identifier` | `sbo_identifier_shortid` | `submission_id` | `component_id` | `dimension_id` | `sbo_short_description` |
+| ---------------- | ------------------------ | --------------- | -------------- | -------------- | ----------------------- |
+|                  |                          |                 |                |                |                         |
+|                  |                          |                 |                |                |                         |
+|                  |                          |                 |                |                |                         |
+|                  |                          |                 |                |                |                         |
+|                  |                          |                 |                |                |                         |
 
 ##### Constraints:
 - `(component_id, dimension_id)` pairs must be unique
 - dimension identifiers must remain stable across rubric versions
-#### 5.4 Layer 1 SBO
+#### 5.4 Layer 1 SBO Instances
 Defines the **Layer 1 SBOs** used to detect observable evidence within the Assessment Artefact.
 
-| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type | scale_name                 | `sbo_identifier_shortid` | `sbo_short_description` | `sbo_identifier` |
-| ----- | --------- | --------------- | ---------------------- | ---------- | -------------------------- | ------------------------- | ----------------------- | ---------------- |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` |                           |                         | `<PLACEHOLDER>`  |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` |                           |                         | `<PLACEHOLDER>`  |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` |                           |                         | `<PLACEHOLDER>`  |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` |                           |                         | `<PLACEHOLDER>`  |
+| `sbo_identifier` | `sbo_identifier_shortid` | `submission_id` | `component_id` | `indicator_id` | `sbo_short_description` |
+| ---------------- | ------------------------ | --------------- | -------------- | -------------- | ----------------------- |
+|                  |                          |                 |                |                |                         |
+|                  |                          |                 |                |                |                         |
+|                  |                          |                 |                |                |                         |
+|                  |                          |                 |                |                |                         |
 ##### Constraints:
-- indicators must reference a valid `(component_id, dimension_id)`
+- indicator SBO instances are defined independently of dimensions.
+- an indicator may contribute evidence to one or more dimensions through the Layer 2 mapping rules.
 - indicator identifiers must remain stable within a rubric version
 
 ### 6. SBO Instructions
 
 #### 6.1 Layer 1 SBO Value Derivation, AA → `indicator_score` 
 
-##### 1\. Target SBO class
-##### 2\. Input SBO class
-##### 3\. Registry summary
-##### 4\. Mapping tables
-##### 5\. Fallback rule
-##### 6\. Optional interpretation notes
+##### Layer 1 Target SBO class
+##### Layer 1 Input SBO class
+##### Layer 1 Registry summary
+##### Layer 1 Mapping tables
+##### Layer 1 Fallback rule
+##### Layer 1 Optional interpretation notes
 
 #### 6.2 Layer 2 SBO Value Derivation, `indicator_score` → `dimension_score` mapping
 
-##### 1\. Target SBO class
-##### 2\. Input SBO class
-##### 3\. Registry summary
-##### 4\. Mapping tables
-##### 5\. Fallback rule
-##### 6\. Optional interpretation notes
+##### Layer 2 Target SBO class
+##### Layer 2 Input SBO class
+##### Layer 2 Registry summary
+##### Layer 2 Mapping tables
+##### Layer 2 Fallback rule
+##### Layer 2 Optional interpretation notes
 
 #### 6.3 Layer 3 SBO Value Derivation, `dimension_score` → `component_score` mapping
-##### 1\. Target SBO class
-##### 2\. Input SBO class
-##### 3\. Registry summary
-##### 4\. Mapping tables
-##### 5\. Fallback rule
-##### 6\. Optional interpretation notes
+
+##### Layer 3 Target SBO class
+##### Layer 3 Input SBO class
+##### Layer 3 Registry summary
+##### Layer 3 Mapping tables
+##### Layer 3 Fallback rule
+##### Layer 3 Optional interpretation notes
 
 #### 6.4 Layer 4 SBO Value Derivation, `component_score`  →  `submission_score` mapping
-##### 1\. Target SBO class
-##### 2\. Input SBO class
-##### 3\. Registry summary
-##### 4\. Mapping tables
-##### 5\. Fallback rule
-##### 6\. Optional interpretation notes
+
+##### Layer 4 Target SBO class
+##### Layer 4 Input SBO class
+##### Layer 4 Registry summary
+##### Layer 4 Mapping tables
+##### Layer 4 Fallback rule
+##### Layer 4 Optional interpretation notes
 
 ### 7. Hard boundary rules (optional)
 Hard boundary rules may constrain score eligibility.
@@ -238,6 +235,7 @@ two dimensions at `partially_demonstrated` or higher
 
 ### 8. Structural invariants
 The following invariants must hold:
+1. All mapping tables must use input values drawn from the scale associated with the input SBOs and output values drawn from the scale associated with the target SBO.
 2. Every component must define its dimensions.
 3. Every `(component_id, dimension_id)` pair must be unique.
 4. Every `(component_id, indicator_id)` must reference a valid dimension.
