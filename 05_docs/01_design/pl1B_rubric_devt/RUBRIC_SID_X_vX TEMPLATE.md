@@ -143,9 +143,9 @@ Defines the **Layer 4 Score-Bearing Object (SBO)** representing the full student
 | 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` | `<ASSESSMENT_ID>` |
 ##### Example
 
-| layer | sbo_type   | score_name       | sbo_identifier_pattern | scale_type  | scale_name                     | sbo indentifier |
-| ----- | ---------- | ---------------- | ---------------------- | ----------- | ------------------------------ | --------------- |
-| 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` | `S_PPP`         |
+| layer | sbo_type   | score_name       | sbo_identifier_pattern | scale_type  | scale_name                     | sbo indentifier | sbo_short_description                     |
+| ----- | ---------- | ---------------- | ---------------------- | ----------- | ------------------------------ | --------------- | ----------------------------------------- |
+| 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` | `S_PPP`         | Pre-Practice Positioning (PPP) Assignment |
 
 ##### OLDER
 ```text
@@ -175,13 +175,14 @@ Defines the **Layer 3 SBOs** representing components of the submission.
 
 ##### Example
 
-| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type  | scale_name                    | sbo indentifier |
-| ----- | --------- | --------------- | ---------------------- | ----------- | ----------------------------- | --------------- |
-| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECA`    |
-| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECB`    |
-| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECC`    |
-| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECD`    |
-| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECE`    |
+| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type  | scale_name                    | sbo indentifier | sbo_short_description |
+| ----- | --------- | --------------- | ---------------------- | ----------- | ----------------------------- | --------------- | --------------------- |
+| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECA`    | SectionAResponse      |
+| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECB`    | SectionBResponse      |
+| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECC`    | SectionCResponse      |
+| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECD`    | SectionDResponse      |
+| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECE`    | SectionEResponse      |
+
 ##### OLDER
 
 | component_id | component_label |
@@ -267,49 +268,90 @@ Constraints:
 
 #### 5.2 Layer 2 SBO Value Derivation, `indicator_score` → `dimension_score` mapping
 
-| sbo indentifier | sbo_short_description      | Anchor | Descriptive                                                            |
-| --------------- | -------------------------- | ------ | ---------------------------------------------------------------------- |
-| `D_PPP_SECA_D1` | Accountability framing     | `I1`   | `I2` is a **supporting or strengthening indicator**.                   |
-| `D_PPP_SECA_D2` | Role boundary and hand-off | `I3`   | `I4` and `I5` primarily distinguish **strong boundary articulation**.  |
-| `D_PPP_SECA_D3` | Professional obligations   | `I6`   |                                                                        |
-| `D_PPP_SECA_Q1` | Component Coherence        | `Q1`   | functions primarily as a **minimum interpretability safeguard**.       |
-| `D_PPP_SECA_Q1` | Component Specificity      | `Q2`   | functions primarily as a **specificity and sophistication indicator**. |
+##### Registry Summary (All Require Threshold Tables)
 
-##### Minimum Thresholds
-`D_PPP_SECA_D1`
+| sbo indentifier | sbo_short_description      |
+| --------------- | -------------------------- |
+| `D_PPP_SECA_D1` | Accountability framing     |
+| `D_PPP_SECA_D2` | Role boundary and hand-off |
+| `D_PPP_SECA_D3` | Professional obligations   |
+| `D_PPP_SECA_Q1` | Component Coherence        |
+| `D_PPP_SECA_Q1` | Component Specificity      |
 
-| dimension_level | `I1`                  | `I2`                  |
-| --------------- | --------------------- | --------------------- |
-| Level 1         | evidence              | evidence              |
-| Level 1         | evidence              | partial_evidence      |
-| Level 2         | evidence              | little_to_no_evidence |
-| Level 2         | partial_evidence      | –                     |
-| Level 3         | little_to_no_evidence | –                     |
-Interpretation:
+##### Minimum Threshold Table:  `D_PPP_SECA_D1`
+
+| sbo indentifier | sbo_short_description  |
+| --------------- | ---------------------- |
+| `D_PPP_SECA_D1` | Accountability framing |
+
+| resultant scale value    | `I1`                  | `I2`                  |
+| ------------------------ | --------------------- | --------------------- |
+| `demonstrated`           | evidence              | evidence              |
+| `demonstrated`           | evidence              | partial_evidence      |
+| `partially_demonstrated` | evidence              | little_to_no_evidence |
+| `partially_demonstrated` | partial_evidence      | –                     |
+| `little_to_no_evidence`  | little_to_no_evidence | –                     |
+###### Interpretation:
 - `I1` anchors the dimension.
-- Presence of `I1` typically establishes at least **Level 2**.
-- `I2` primarily distinguishes **Level 1 sophistication**.
-#### 6.6 Dimension `D2` — Role boundary and hand-off
+- Presence of `I1` typically establishes at least `partially_demonstrated`
+- `I2` primarily distinguishes `demonstrated` sophistication
 
-| dimension_level | I3 | I4 | I5 |
-|---|---|---|---|
-| Level 1 | evidence | evidence | evidence |
-| Level 1 | evidence | evidence | partial_evidence |
-| Level 2 | evidence | partial_evidence | – |
-| Level 2 | evidence | – | partial_evidence |
-| Level 2 | evidence | little_to_no_evidence | little_to_no_evidence |
-| Level 3 | little_to_no_evidence | – | – |
-Interpretation:
+##### Minimum Threshold Table: `D_PPP_SECA_D2`
+
+| sbo indentifier | sbo_short_description      |
+| --------------- | -------------------------- |
+| `D_PPP_SECA_D2` | Role boundary and hand-off |
+
+| resultant scale value    | I3                    | I4                    | I5                    |
+| ------------------------ | --------------------- | --------------------- | --------------------- |
+| `demonstrated`           | evidence              | evidence              | evidence              |
+| `demonstrated`           | evidence              | evidence              | partial_evidence      |
+| `partially_demonstrated` | evidence              | partial_evidence      | –                     |
+| `partially_demonstrated` | evidence              | –                     | partial_evidence      |
+| `partially_demonstrated` | evidence              | little_to_no_evidence | little_to_no_evidence |
+| `little_to_no_evidence`  | little_to_no_evidence | –                     | –                     |
+###### Interpretation:
 - `I3` anchors the dimension.
 - Presence of `I3 evidence` establishes at least **Level 2**.
 - `I4` and `I5` distinguish strong articulation of the boundary.
-#### 6.7 Dimension `D3` — Professional obligations
 
-| dimension_level | I6 |
-|---|---|
-| Level 1 | evidence |
-| Level 2 | partial_evidence |
-| Level 3 | little_to_no_evidence |
+##### Minimum Threshold Table: `D_PPP_SECA_D3`
+
+| sbo indentifier | sbo_short_description    |
+| --------------- | ------------------------ |
+| `D_PPP_SECA_D3` | Professional obligations |
+
+| dimension_level          | I6                    |
+| ------------------------ | --------------------- |
+| `demonstrated`           | evidence              |
+| `partially_demonstrated` | partial_evidence      |
+| `little_to_no_evidence`  | little_to_no_evidence |
+###### Interpretation:
+`I6` functions as the **anchor indicator** for this dimension.
+
+##### Minimum Threshold Table: `D_PPP_SECA_Q1`
+
+| sbo indentifier | sbo_short_description |
+| --------------- | --------------------- |
+| `D_PPP_SECA_Q1` | Component Coherence   |
+
+| dimension_level          | P1                    |
+| ------------------------ | --------------------- |
+| `demonstrated`           | evidence              |
+| `partially_demonstrated` | partial_evidence      |
+| `little_to_no_evidence`  | little_to_no_evidence |
+
+##### Minimum Threshold Table: `D_PPP_SECA_Q2`
+
+| sbo indentifier | sbo_short_description |
+| --------------- | --------------------- |
+| `D_PPP_SECA_Q1` | Component Specificity |
+
+| dimension_level          | P2                    |
+| ------------------------ | --------------------- |
+| `demonstrated`           | evidence              |
+| `partially_demonstrated` | partial_evidence      |
+| `little_to_no_evidence`  | little_to_no_evidence |
 
 ##### Rules
 This section defines how **indicator evidence statuses determine dimension evidence levels**.
@@ -332,6 +374,29 @@ Fallback rule:
 if no condition is satisfied → dimension = Level 3
 ```
 #### 5.3. Layer 3 SBO Value Derivation, `dimension_score` → `component_score` mapping
+
+##### Registry Summary (All Require Threshold Tables)
+
+| sbo indentifier | sbo_short_description |
+| --------------- | --------------------- |
+| `C_PPP_SECA`    | SectionAResponse      |
+| `C_PPP_SECB`    | SectionBResponse      |
+| `C_PPP_SECC`    | SectionCResponse      |
+| `C_PPP_SECD`    | SectionDResponse      |
+| `C_PPP_SECE`    | SectionEResponse      |
+
+##### Minimum Threshold Table: `C_PPP_SECA`
+
+| sbo indentifier | sbo_short_description |
+| --------------- | --------------------- |
+| `C_PPP_SECA`    | SectionAResponse      |
+
+
+
+
+##### OLDER
+##### Minimum Threshold Table: `D_PPP_SECA_D3`
+
 Defines how **dimension evidence levels determine component scores**.
 Placeholder structure:
 ```text
