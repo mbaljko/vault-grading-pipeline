@@ -1,8 +1,7 @@
 ### Pipeline 1B — Layered Rubric Construction Pipeline
-This document defines the process for constructing and stabilising a **rubric for an assessment submission** under the **four-layer scoring ontology**.  
-A rubric is a **layered scoring specification** whose elements are stabilised iteratively using empirical evidence from real student responses.  
-The rubric ultimately defines how evidence observed in responses is transformed into scores across four scoring layers.  
-The scoring layers are:
+This document defines the process for constructing and stabilising a **rubric for an assessment submission** under the **four-layer scoring ontology**.
+A rubric is a **layered scoring specification** whose elements are stabilised iteratively using empirical evidence from real student responses.
+The rubric defines how evidence observed in responses is transformed into scores across four scoring layers.
 ```
 Layer 1 → indicator SBOs
 Layer 2 → dimension SBOs
@@ -10,10 +9,15 @@ Layer 3 → component SBOs
 Layer 4 → submission SBO
 ```
 Rubric construction therefore proceeds **layer by layer**, beginning with observable indicators and progressing upward through dimension construction and performance mapping.
-Calibration pipelines operate **after the rubric structure is stabilised**.
+Calibration pipelines operate **after the rubric structure is stabilised and frozen**.
+Throughout this pipeline, work occurs directly within the **Rubric Template document**.  
+Deliverables therefore correspond to **specific sections of the Rubric Template**, which move through states such as:
+```
+Draft → Under Evaluation → Stabilised → Frozen
+```
 ### 1. Upstream Inputs
 Rubric construction operates on top of the **assignment payload specification architecture** produced by Pipeline 1A.
-The following artefacts are required.
+Required artefacts:
 ```
 <ASSESSMENT_ID>_AssignmentPayloadSpec_v01
 <ASSESSMENT_ID>_<COMPONENT_ID>_CalibrationPayloadFormat_v01
@@ -35,8 +39,8 @@ The final score produced by the rubric corresponds to the **Layer 4 submission S
 ```
 submission_score
 ```
-However, the submission is typically composed of multiple **components**, each corresponding to a student-authored portion of the assignment.
-Examples of components:
+A submission typically contains multiple **components**, each representing a structured part of the assignment.
+Example components:
 ```
 SectionAResponse
 SectionBResponse
@@ -45,8 +49,8 @@ SectionDResponse
 SectionEResponse
 ```
 Most rubric design and tuning work occurs at **Layer 3**, where **dimension evidence is translated into component performance levels**.
-Layer 4 then derives the final submission score by applying a relatively straightforward mapping over the component scores.
-Conceptually, the rubric structure is:
+Layer 4 typically performs a relatively straightforward mapping of component scores to the final submission score.
+Conceptually the rubric structure is:
 ```
 submission
     components
@@ -54,40 +58,71 @@ submission
         indicators
         mapping tables
 ```
-Layer responsibilities are therefore:
+Layer responsibilities:
 ```
 Layer 1 → detect indicator evidence within each component response
 Layer 2 → derive conceptual dimension evidence from indicator evidence
 Layer 3 → translate dimension evidence into component performance levels
 Layer 4 → combine component scores into a submission score
 ```
-Because the Layer 3 mappings determine the interpretation of dimension evidence within each component, **most empirical tuning during rubric construction occurs at Layer 3**.
-Layer 4 mappings typically remain simple and stable once component evaluation is established.
-### 3. Stage 0 — Component Analytic Specification
-Before constructing indicators, the analytic goals of each component must be clarified.
+Because Layer 3 determines how conceptual evidence translates into performance levels, **most empirical tuning during rubric construction occurs at Layer 3**.
+### 3. Stage 0 — Submission Analytic Specification
+Before constructing indicators and dimensions, the analytic goals of the **entire submission** must be clarified.
 Inputs:
 ```
-AssignmentPayloadSpec
-ComponentPayloadContract
+<ASSESSMENT_ID>_AssignmentPayloadSpec_v01
 ```
-From these inputs, produce a **component analytic brief** describing:
-- the analytic goals of the component
+From this input produce a **submission analytic brief**.
+The analytic brief describes:
+- the analytic goals of the assignment as a whole
 - the conceptual claims students are expected to make
-- the boundaries of the response task
-Deliverable:
+- the intellectual structure of the submission
+- the role played by each component of the submission
+The brief contains **subsections for each component**, describing the analytic purpose of that component.
+Example structure:
 ```
-<ASSESSMENT_ID>_<COMPONENT_ID>_AnalyticBrief_v01
+Submission Analytic Brief
+Overview
+    analytic goals of the assignment
+    conceptual claims students must articulate
+Component: SectionAResponse
+    analytic purpose
+    conceptual focus
+    expected forms of reasoning
+Component: SectionBResponse
+    analytic purpose
+    conceptual focus
+    expected forms of reasoning
+Component: SectionCResponse
+    analytic purpose
+    conceptual focus
+    expected forms of reasoning
 ```
-The analytic brief guides the creation of indicators and dimensions.
-### 4. Stage 1 — Indicator Discovery (Layer 1 Design)
+The analytic brief serves as the conceptual foundation for indicator drafting and dimension formation.
+#### Deliverables
+```
+<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
+```
+### 4. Stage 1 — Indicator Discovery and Evaluation Design (Layer 1)
+Layer 1 defines how **observable textual evidence is detected within component responses**.
+Layer 1 consists of two coupled structures in the Rubric Template:
+```
+5.4 Layer 1 SBO Instances
+6.1 Layer 1 SBO Value Derivation
+```
+These sections define:
+```
+indicator registry
+indicator evaluation specification
+```
 Indicators correspond to **Layer 1 Score-Bearing Objects (SBOs)**.
-Indicators detect **observable textual evidence** within responses.
-Indicators are evaluated within the **Layer 1 Assessment Artefact**:
+Indicators operate on the **Layer 1 Assessment Artefact**:
 ```
 AA = submission_id × component_id
 ```
-#### 4.1 Indicator Drafting
-Indicators are derived from the component analytic brief.
+Indicator design and evaluation specification are developed **in parallel**, because the evaluation procedure determines whether the indicator definitions are operationally usable.
+#### Stage 1.1 Indicator and Evaluation Co-Design
+Indicators are initially derived from the relevant component subsection of the **Submission Analytic Brief**.
 Indicators should be phrased as observable checks.
 Example forms:
 ```
@@ -101,20 +136,47 @@ Indicators must:
 - avoid embedding scoring thresholds
 - avoid referencing performance levels
 - avoid directly encoding dimension satisfaction
-Indicators should typically number **4–8 per component**.
-Deliverable:
+Typical indicator count:
 ```
-Draft Indicator Registry
+4–8 indicators per component
 ```
-#### 4.2 Indicator Pilot Evaluation
-Indicators are tested using a **small calibration sample**.
-Procedure:
+At the same time, the **evaluation procedure for each indicator** is specified in the Rubric Template.
+This specification defines:
 ```
-sample 20–40 student submissions
-evaluate indicator evidence
-produce indicator_score outputs
+indicator_definition
+assessment_guidance
+evaluation_notes
 ```
-Example dataset structure:
+These fields populate:
+```
+Rubric Template: 6.1 Layer 1 SBO Value Derivation
+```
+The indicator registry itself is defined in:
+```
+Rubric Template: 5.4 Layer 1 SBO Instances
+```
+During this phase both sections remain **Draft**.
+#### Deliverables
+```
+Rubric Template: 5.4 Layer 1 SBO Instances (Draft)
+Rubric Template: 6.1 Layer 1 SBO Value Derivation (Draft)
+```
+#### Stage 1.2 Indicator Evaluation Testing
+Indicator behaviour is tested using a **small calibration sample** of real student submissions.
+Evaluation is performed using **LLM-generated scoring prompts**.
+The operational workflow is:
+```
+1. wrapper prompt generates an indicator-scoring prompt
+2. scoring prompt evaluates indicators for a calibration dataset
+3. indicator_score values are produced
+```
+The wrapper prompt receives as inputs:
+```
+Rubric Template: 5.4 Layer 1 SBO Instances
+Rubric Template: 6.1 Layer 1 SBO Value Derivation
+```
+This ensures the generated scoring prompt remains aligned with the rubric specification.
+Example evaluation dataset structure:
 ```
 submission_id
 component_id
@@ -128,16 +190,18 @@ Evaluation questions:
 - Do indicators detect the intended signals?
 - Are there false positives or false negatives?
 - Are indicators ambiguous or overlapping?
-Indicators are revised until they reliably capture observable evidence.
-Output:
+- Are the evaluation instructions operationally clear for the scoring prompt?
+Indicators and their evaluation specifications are revised iteratively until indicator detection behaves reliably on the calibration sample.
+#### Deliverables
 ```
-Layer 1 Indicator Registry (stabilised)
+Rubric Template: 5.4 Layer 1 SBO Instances (Stabilised)
+Rubric Template: 6.1 Layer 1 SBO Value Derivation (Stabilised)
 ```
+Both sections are stabilised together because indicator definitions and their evaluation logic are interdependent.
 ### 5. Stage 2 — Dimension Formation (Layer 2 Design)
 Dimensions correspond to **Layer 2 Score-Bearing Objects (SBOs)**.
-Dimensions represent **conceptual properties of the response** that the rubric evaluates.
-Dimension scores are derived from indicator evidence.
-#### 5.1 Dimension Proposal
+Dimensions represent conceptual properties of responses.
+#### 5.1 Dimension Drafting
 Indicators are grouped conceptually to form candidate dimensions.
 Example:
 ```
@@ -152,48 +216,44 @@ D3 Professional obligations
     I6
 ```
 Indicators may contribute to **multiple dimensions**.
-Deliverable:
+#### Deliverables
 ```
-Dimension Registry
+Rubric Template: 5.3 Layer 2 SBO Instances (Draft)
 ```
-#### 5.2 Indicator–Dimension Mapping
-Dimension scores are derived using **Layer 2 mapping tables**.
-Mapping tables define:
+#### 5.2 Indicator → Dimension Mapping
+Dimension scores are derived using mapping tables.
 ```
 indicator_score → dimension_score
 ```
-These tables specify the threshold relationships between indicator evidence and dimension evidence levels.
-Example:
+#### Deliverables
 ```
-dimension_score(D1)
-    derived from indicators I1 and I2
+Rubric Template: 6.2 Layer 2 Mapping Tables (Draft)
 ```
 #### 5.3 Empirical Dimension Testing
-Dimension mappings are tested using the calibration dataset.
+Dimension mappings are evaluated using the calibration dataset.
 Procedure:
-1. compute dimension scores for the sample dataset
-2. inspect resulting distributions
-3. compare results with qualitative evaluation of responses
-Questions to evaluate:
-- Do dimension levels correspond to meaningful differences between responses?
-- Are dimensions conceptually distinct?
-- Do indicators cluster as expected?
-Adjustments may include:
-- revising indicator–dimension membership
-- adjusting threshold values in mapping tables
-Output:
 ```
-Layer 2 dimension mappings stabilised
+compute dimension scores
+examine distribution
+compare with qualitative judgement
+```
+Adjust:
+- indicator–dimension membership
+- threshold values in mapping tables
+#### Deliverables
+```
+Rubric Template: 5.3 Layer 2 SBO Instances (Stabilised)
+Rubric Template: 6.2 Layer 2 Mapping Tables (Stabilised)
 ```
 ### 6. Stage 3 — Component Performance Model (Layer 3 Design)
-Layer 3 defines how **dimension evidence translates into component performance levels**.
+Layer 3 translates **dimension evidence into component performance levels**.
 Layer 3 SBO:
 ```
 component_score
 ```
-This stage is where **most rubric tuning occurs**, because it determines how conceptual evidence levels translate into performance classifications.
+Most rubric tuning occurs at this stage.
 #### 6.1 Define Performance Scale
-Typical performance scale:
+Typical scale:
 ```
 exceeds_expectations
 meets_expectations
@@ -201,43 +261,40 @@ approaching_expectations
 below_expectations
 not_demonstrated
 ```
+#### Deliverables
+```
+Rubric Template: 5.2 Layer 3 SBO Instances (Draft)
+```
 #### 6.2 Construct Dimension → Performance Mapping
 Mapping tables define:
 ```
 dimension_score → component_score
 ```
-Example conceptual logic:
+#### Deliverables
 ```
-strong evidence across all dimensions → exceeds_expectations
-adequate evidence across most dimensions → meets_expectations
-partial evidence → approaching_expectations
-minimal evidence → below_expectations
+Rubric Template: 6.3 Layer 3 Mapping Tables (Draft)
 ```
-These relationships are encoded using Layer 3 mapping tables.
-#### 6.3 Empirical Testing
-Apply the component mapping tables to the calibration dataset.
-Inspect the resulting performance classifications.
-Evaluation questions:
-- Do most competent responses land in `meets_expectations`?
-- Are high-quality responses rewarded with `exceeds_expectations`?
-- Are weak responses clearly separated?
-Adjustments may include:
-- modifying threshold conditions
-- adjusting dimension combinations
-Output:
+#### 6.3 Empirical Performance Testing
+Apply mappings to the calibration dataset.
+Evaluate:
+- expected majority in `meets_expectations`
+- strong responses in `exceeds_expectations`
+- weak responses clearly separated
+Adjust mapping thresholds as needed.
+#### Deliverables
 ```
-Layer 3 mapping stabilised
+Rubric Template: 5.2 Layer 3 SBO Instances (Stabilised)
+Rubric Template: 6.3 Layer 3 Mapping Tables (Stabilised)
 ```
 ### 7. Stage 4 — Submission Score Derivation (Layer 4 Design)
-Layer 4 defines how **component scores combine into a final submission score**.
+Layer 4 combines component scores into the final submission score.
 Layer 4 SBO:
 ```
 submission_score
 ```
-Layer 4 mappings are typically simpler than Layer 3 mappings because the conceptual evaluation work has already been completed at the component level.
-Possible strategies include:
+Possible strategies:
 ```
-averaging component performance
+average component scores
 weighted component aggregation
 minimum threshold rules
 ```
@@ -245,24 +302,25 @@ Mapping tables define:
 ```
 component_score → submission_score
 ```
-Empirical checks should confirm:
-- the overall score distribution is reasonable
-- strong submissions remain strong
-- weak submissions remain clearly identified
-Output:
+#### Deliverables
 ```
-Layer 4 mapping stabilised
+Rubric Template: 5.1 Layer 4 SBO Instances (Draft → Stabilised)
+Rubric Template: 6.4 Layer 4 Mapping Tables (Draft → Stabilised)
 ```
 ### 8. Stage 5 — Rubric Freeze
-The rubric is considered **construction-complete** when all scoring layers are stabilised.
-The following artefacts must then be frozen:
+The rubric is considered **construction-complete** when all sections of the Rubric Template have been stabilised.
+Sections frozen:
 ```
-indicator registry
-dimension registry
-mapping tables
-scales
+5.4 Layer 1 SBO Instances
+6.1 Layer 1 SBO Value Derivation
+5.3 Layer 2 SBO Instances
+6.2 Layer 2 Mapping Tables
+5.2 Layer 3 SBO Instances
+6.3 Layer 3 Mapping Tables
+5.1 Layer 4 SBO Instances
+6.4 Layer 4 Mapping Tables
 ```
-Two final artefacts are produced.
+#### Deliverables
 Human-readable specification:
 ```
 Rubric Design Document
@@ -271,7 +329,7 @@ Machine-readable payload:
 ```
 RUBRIC_<ASSESSMENT_ID>_PROD_payload_v01
 ```
-This payload becomes the **authoritative rubric specification** used by scoring pipelines.
+This payload becomes the **authoritative rubric specification** used by calibration and scoring pipelines.
 ### 9. Relationship to the Canonical Grading Dataset
 Pipeline 1A produces the canonical grading dataset organised as:
 ```
