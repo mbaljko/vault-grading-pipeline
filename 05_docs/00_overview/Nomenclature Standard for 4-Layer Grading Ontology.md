@@ -4,6 +4,24 @@ version: v.4
 ### Purpose
 This document establishes the authoritative terminology used throughout the `vault-grading-pipeline`.
 
+There are several layers. 
+What exists at each layer
+
+
+|         | Name for the thing that receives a score | Way we refer to each  individual one of these things | Levels for the scoring are defined by this | scale values                                            |
+| ------- | ---------------------------------------- | ---------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------- |
+| Layer 1 | `indicator`                              | `Ix` where `x` is the unique identifier (numeric)    | `indicator_evidence_scale`                 | `evidence`, `partial_evidence`, `little_to_no_evidence` |
+| Layer 2 | `dimension`                              | `Dx` where `x` is the identifier (numeric)           | `dimension_evidence_scale`                 | ``                                                      |
+
+
+
+
+There are 4 layers to the grading pipeline:
+- Layer 1: scoring of a set consisting of `indicator`
+- Layer 2: scoring of a set of `sc_dimension`s 
+- Layer 3: `componenent` scoring
+- `f`
+
 Its purpose is to:
 - eliminate ambiguity between **submission**, **component**, **dimension**, **facet**, and **indicator**
 - align Stage 0A, Stage 0B, calibration, and production scoring
@@ -12,15 +30,19 @@ Its purpose is to:
 This nomenclature is normative. All future artefacts must conform to it.
 ## 1. Structural Ontology (Authoritative)
 The grading ontology has three structural levels.
-### 1.1 Submission
-A single student’s full assignment submission.
+### 1.1 Full Submission
+The `f_submission` is a single student’s full assignment submission.
 Symbolically:
 ```
-submission_id
+f_submission = submission_id
 ```
-A submission contains one or more components.
-### 1.2 Component
-A component is a structurally defined grading surface within a submission.
+A submission typically contains one or more components.
+
+This is a scoring unit.  The score is derived from a mapping from subordinate components. 
+
+This is the canonical scoring unit at Layer 4.
+### 1.2 Submission Component
+The `c_submission` is a component with a structurally defined grading surface within a submission.
 Examples:
 - `SectionAResponse`
 - `SectionBResponse`
@@ -36,8 +58,16 @@ c_submission = submission_id × component_id
 A component may correspond to:
 - a student-authored section, or
 - a synthetic grading surface defined by the rubric (see Section 3).
-### 1.3 Dimension (Atomic Grading Unit)
+
+This is a scoring unit.
+### 1.3 Dimension
+The `dimension` is a component with that has structurally defined grading surface:
+- there can be cross-component `cc_dimension`, within  a `f_submission`
+- there can be a single component `sc_dimension`, within a `c_submission`
+
 A dimension is the smallest independently scorable rubric criterion applied to a component.
+
+
 Symbolically:
 ```
 dimension_id
@@ -46,8 +76,12 @@ Stage 0B canonical grading unit:
 ```
 submission_id × component_id × dimension_id
 ```
-This is the atomic scoring unit.
+This is a scoring unit.
+
+
 All calibration and scoring must operate at this level.
+
+
 ### 1.4 Prior Practice: Correction
 Previously, calibration materials used “dimension” to refer to what was structurally a component.
 Under this standard:

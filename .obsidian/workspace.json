@@ -74,6 +74,7 @@
           {
             "id": "bb02de274e442c4e",
             "type": "leaf",
+            "pinned": true,
             "state": {
               "type": "markdown",
               "state": {
@@ -81,6 +82,7 @@
                 "mode": "source",
                 "source": false
               },
+              "pinned": true,
               "icon": "lucide-file",
               "title": "Nomenclature Standard for 4-Layer Grading Ontology"
             }
