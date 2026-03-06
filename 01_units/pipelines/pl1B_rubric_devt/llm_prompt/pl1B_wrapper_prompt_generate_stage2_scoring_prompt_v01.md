@@ -10,7 +10,8 @@ BEGIN GENERATION
 ```
 
 resuming work
-revise to include response_text
+revise to include response_text - CAN"T DO IT, IS NOT IN INPUT
+
 # .
 
 ## pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v02
@@ -469,12 +470,7 @@ partial_evidence
 little_to_no_evidence
 ```
 
-`confidence` must represent evaluator confidence on a scale between:
-
-```
-0.0
-1.0
-```
+`confidence` must be one of: 0.25, 0.5, 0.75, 1.0
 
 `flags` may include:
 
