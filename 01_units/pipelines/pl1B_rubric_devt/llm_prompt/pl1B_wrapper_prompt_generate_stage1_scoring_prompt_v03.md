@@ -195,8 +195,7 @@ flags must be one of: none, needs_review
 The field `evidence_status` must contain exactly one of the values defined in the rubric evidence scale:
 `evidence`, `partial_evidence`, or `little_to_no_evidence`.
 
-
-`evaluation_notes` should begin with an indicator vector in this exact format: `V=[I1,I2,I3,I4,I5,I6,Q1,Q2]`, where each value is a numeric encoding of the Stage 1 `evidence_status` for that indicator: `0` = `little_to_no_evidence`, `1` = `partial_evidence`, `2` = `evidence`; if any indicator is missing from the evidence map, use `0` and include flag `needs_review`.
+evaluation_notes should report on the evaluation of the indicator
 
 ### Field formatting rules (mandatory)
 
