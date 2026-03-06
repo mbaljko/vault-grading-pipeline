@@ -67,6 +67,7 @@ Layer 4 → combine component scores into a submission score
 ```
 Because Layer 3 determines how conceptual evidence translates into performance levels, **most empirical tuning during rubric construction occurs at Layer 3**.
 ### 3. Stage 0 — Submission Analytic Specification
+#### Stage 0.1
 Before constructing indicators and dimensions, the analytic goals of the **entire submission** must be clarified.
 Inputs:
 ```
@@ -103,7 +104,26 @@ The analytic brief serves as the conceptual foundation for indicator drafting an
 ```
 <ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
 ```
+#### Stage 0.2  - Pattern Discovery Pass
+
+Purpose:
+derive candidate dimensions and indicators for each component
+
+
+Candidate dimensions and indicators produced in Stage 0 are **analytic hypotheses**.
+
+They do not become rubric structures until they are instantiated as SBO instances and stabilised through empirical testing in Stages 1 and 2.
+
+trick: using the calibration sample itself to generate **contrastive response patterns** before you even design indicators. That tends to produce much better indicators than designing them purely from the assignment description.
+#### Deliverables
+
+Submission Analytic Brief
+    └ component analytic sketches
+
 ### 4. Stage 1 — Indicator Discovery and Evaluation Design (Layer 1)
+
+**pattern discovery pass**
+
 #### Stage 1.1 Layer 1 SBO Instance Definition
 Layer 1 indicators are represented in the rubric as **Layer 1 Score-Bearing Object (SBO) instances**.
 Each indicator instance corresponds to one row in:
@@ -144,13 +164,31 @@ The indicator registry defined in Section **5.4** establishes **which Layer 1 SB
 ```
 Rubric Template: 5.4 Layer 1 SBO Instances (Draft)
 ```
-#### Stage 1.2 Layer 1 SBO Evaluation Specification
-Once indicator SBO instances are defined, the rubric must specify **how the value of each indicator SBO is derived from the Assessment Artefact**.
-This logic is defined in:
+#### Stage 1.2 Layer 1 SBO Iterative Development
+Layer 1 SBO development establishes how **indicator scores are derived from the Assessment Artefact (AA)**.
+Layer 1 behaviour is defined by two sections of the Rubric Template:
 ```
+Rubric Template: 5.4 Layer 1 SBO Instances
 Rubric Template: 6.1 Layer 1 SBO Value Derivation
 ```
-This section specifies how the scoring system derives the value of:
+These sections jointly define:
+```
+indicator SBO registry
+indicator evaluation specification
+```
+Layer 1 SBO development proceeds through an **iterative testing process using a calibration sample of student submissions**.
+##### Initial condition
+The iterative process begins once:
+```
+Rubric Template: 5.4 Layer 1 SBO Instances (Draft)
+```
+has defined the initial set of indicator SBO instances.  
+At this stage the rubric must also contain a **draft evaluation specification** describing how each indicator score will be derived from the Assessment Artefact.
+This specification is recorded in:
+```
+Rubric Template: 6.1 Layer 1 SBO Value Derivation (Draft)
+```
+Section 6.1 defines how the scoring system derives:
 ```
 indicator_score
 ```
@@ -165,96 +203,17 @@ indicator_definition
 assessment_guidance
 evaluation_notes
 ```
-These fields are used by the **wrapper prompt that generates the indicator-scoring prompt**.
-Indicator evaluation specifications are typically **iteratively refined** during testing on calibration samples, while the **indicator SBO instance registry (Section 5.4)** usually remains stable.
-#### Deliverables
-```
-Rubric Template: 6.1 Layer 1 SBO Value Derivation (Draft)
-```
-### 4. Stage 1 — Indicator Discovery and Evaluation Design (Layer 1)
-Layer 1 defines how **observable textual evidence is detected within component responses**.
-Layer 1 consists of two coupled structures in the Rubric Template:
-```
-5.4 Layer 1 SBO Instances
-6.1 Layer 1 SBO Value Derivation
-```
-These sections define:
-```
-indicator registry
-indicator evaluation specification
-```
-Indicators correspond to **Layer 1 Score-Bearing Objects (SBOs)**.
-Indicators operate on the **Layer 1 Assessment Artefact**:
-```
-AA = submission_id × component_id
-```
-Indicator design and evaluation specification are developed **in parallel**, because the evaluation procedure determines whether the indicator definitions are operationally usable.
-#### Stage 1.1 Indicator Initial Definition
-Indicators represent **observable analytic signals** that may appear in a response.
-Indicators are initially derived from the relevant component subsection of the **Submission Analytic Brief**.
-An indicator defines **what conceptual feature of the response should be detectable**, but does not define how the feature is evaluated.
-Indicators should be phrased as observable checks.
-Example forms:
-```
-Does the response explicitly identify where accountability resides?
-Does the response identify at least one responsibility outside the professional role?
-Does the response describe a responsibility hand-off?
-```
-Indicator design rules:
-Indicators must:
-- detect observable textual signals
-- avoid embedding scoring thresholds
-- avoid referencing performance levels
-- avoid directly encoding dimension satisfaction
-Typical indicator count:
-```
-4–8 indicators per component
-```
-Indicators are registered in:
-```
-Rubric Template: 5.4 Layer 1 SBO Instances
-```
-At this stage the indicator registry establishes:
-```
-indicator identifiers
-indicator short descriptions
-component association
-```
-#### Deliverables
-```
-Rubric Template: 5.4 Layer 1 SBO Instances (Draft)
-```
-#### Stage 1.2 Indicator Evaluation Testing (Iterative Testing)
-Once indicators are defined, the **procedure used to evaluate indicator evidence** must be specified.
-We begin with a basic technique
-This specification defines **how the scoring system determines the indicator_score** for each indicator.
-Indicator evaluation behaviour is defined in:
-```
-Rubric Template: 6.1 Layer 1 SBO Value Derivation
-```
-The evaluation specification typically includes:
-```
-indicator_definition
-assessment_guidance
-evaluation_notes
-```
-These fields provide operational instructions used by the **wrapper prompt that generates the indicator-scoring prompt**.
-The evaluation specification may be revised multiple times as indicator behaviour is tested on calibration data.
-The **indicator registry (Section 5.4)** usually remains stable while the **evaluation specification (Section 6.1)** is iteratively refined.
-#### Deliverables
-```
-Rubric Template: 6.1 Layer 1 SBO Value Derivation (Draft)
-```
-#### Stage 1.2 Indicator Evaluation Testing
-Indicator behaviour is tested using a **small calibration sample** of real student submissions.
+These fields are consumed by the **wrapper prompt that generates the indicator-scoring prompt**.
+##### Iterative testing process
+Indicator behaviour is tested using a **calibration sample** of student submissions.
 Evaluation is performed using **LLM-generated scoring prompts**.
-The operational workflow is:
+Operational workflow:
 ```
 1. wrapper prompt generates an indicator-scoring prompt
 2. scoring prompt evaluates indicators for a calibration dataset
 3. indicator_score values are produced
 ```
-The wrapper prompt receives as inputs:
+The wrapper prompt receives the following rubric sections as inputs:
 ```
 Rubric Template: 5.4 Layer 1 SBO Instances
 Rubric Template: 6.1 Layer 1 SBO Value Derivation
@@ -275,108 +234,129 @@ Evaluation questions:
 - Are there false positives or false negatives?
 - Are indicators ambiguous or overlapping?
 - Are the evaluation instructions operationally clear for the scoring prompt?
-Indicators and their evaluation specifications are revised iteratively until indicator detection behaves reliably on the calibration sample.
-#### Deliverables
+During this process:
+- the **evaluation specification (Section 6.1)** is typically revised multiple times
+- the **indicator SBO registry (Section 5.4)** may occasionally be adjusted if indicators prove redundant or ineffective
+This testing loop is repeated until indicator scoring behaviour appears stable on the calibration sample.
+##### Exit condition
+Layer 1 SBO development is considered complete when:
+- the set of **indicator SBO instances** is stable
+- the **evaluation specification** consistently produces reliable `indicator_score` values on the calibration sample
+- the scoring prompt generated from the rubric sections behaves predictably
+At this point the following rubric sections are marked as stabilised:
 ```
 Rubric Template: 5.4 Layer 1 SBO Instances (Stabilised)
 Rubric Template: 6.1 Layer 1 SBO Value Derivation (Stabilised)
 ```
-Both sections are stabilised together because indicator definitions and their evaluation logic are interdependent.
 ### 5. Stage 2 — Dimension Formation and Evidence Mapping (Layer 2)
-Dimensions correspond to **Layer 2 Score-Bearing Objects (SBOs)**.
-Dimensions represent conceptual properties of responses that are inferred from patterns of **indicator evidence**.
-Layer 2 consists of two coupled structures in the Rubric Template:
+Layer 2 establishes how **dimension scores are derived from indicator evidence**.
+Layer 2 behaviour is defined by two sections of the Rubric Template:
 ```
-5.3 Layer 2 SBO Instances
-6.2 Layer 2 SBO Value Derivation
+Rubric Template: 5.3 Layer 2 SBO Instances
+Rubric Template: 6.2 Layer 2 SBO Value Derivation
 ```
-These sections define:
+These sections jointly define:
 ```
-dimension registry
+dimension SBO registry
 indicator → dimension mapping rules
 ```
-Dimension construction and mapping design are developed **iteratively**, because indicator evidence patterns often reveal whether a proposed dimension structure is conceptually meaningful and operationally stable.
-#### Stage 2.1 Dimension Drafting
-Candidate dimensions are derived from the **Submission Analytic Brief** and from patterns observed in indicator evidence.
-Indicators are grouped conceptually to form candidate dimensions.
-Example:
-```
-D1 Accountability framing
-    I1
-    I2
-D2 Role boundary and hand-off
-    I3
-    I4
-    I5
-D3 Professional obligations
-    I6
-```
-Indicators may contribute to **multiple dimensions**.
-Dimension design rules:
-Dimensions must:
-- represent conceptually distinct response properties
-- correspond to the analytic goals of the assignment component
-- remain interpretable based on observable indicator evidence
-- avoid embedding performance thresholds directly
-#### Deliverables
+Dimension formation proceeds through an **iterative development process using the indicator scoring dataset produced during Stage 1**.
+#### Stage 2.1 Layer 2 SBO Iterative Development
+##### Initial condition
+The process begins once **Layer 1 indicator scoring behaviour has stabilised**.
+At this stage:
 ```
 Rubric Template: 5.3 Layer 2 SBO Instances (Draft)
 ```
-#### Stage 2.2 Indicator → Dimension Mapping Design
-Dimension scores are derived using **mapping tables** that translate indicator evidence into dimension evidence levels.
-Mapping form:
+defines the initial set of dimension SBO instances.
+Each dimension instance specifies:
 ```
-indicator_score → dimension_score
+submission_id
+component_id
+dimension_id
+sbo_identifier
+sbo_identifier_shortid
+sbo_short_description
 ```
-These mapping tables define the operational logic by which patterns of indicator evidence determine dimension evidence levels.
-Mapping rules must follow the **mapping table specification defined in the Rubric Template**.
-Mapping tables are defined in:
+Candidate dimensions are derived from:
 ```
-Rubric Template: 6.2 Layer 2 SBO Value Derivation
+Submission Analytic Brief
+observed indicator evidence patterns
 ```
-#### Deliverables
+Indicators may contribute evidence to **multiple dimensions**.
+The rubric must also contain a **draft specification for how dimension scores are derived from indicator evidence**, recorded in:
 ```
 Rubric Template: 6.2 Layer 2 SBO Value Derivation (Draft)
 ```
-#### Stage 2.3 Empirical Dimension Testing
-Candidate dimension structures and mapping rules are evaluated using the **indicator scoring dataset** produced during Stage 1.
-Procedure:
+##### Iterative testing process
+Dimension behaviour is evaluated using the **indicator scoring dataset produced during Stage 1**.
+Operational workflow:
 ```
-apply indicator → dimension mappings
-compute dimension_score values
-examine score distributions
-compare with qualitative judgement of responses
+1. apply indicator → dimension mapping tables
+2. compute dimension_score values
+3. examine score distributions
+4. compare dimension behaviour with qualitative judgement
+```
+Example dataset structure:
+```
+submission_id
+component_id
+I1
+I2
+I3
+I4
+I5
+D1
+D2
+D3
 ```
 Evaluation questions:
 - Do dimension scores correspond to meaningful conceptual distinctions?
 - Are dimensions redundant or overlapping?
 - Do mapping thresholds produce stable behaviour across responses?
-Possible revisions:
-- adjust indicator–dimension membership
-- revise mapping table threshold conditions
-- merge or split dimensions if necessary
-Iteration continues until dimension behaviour appears **conceptually coherent and empirically stable**.
-#### Deliverables
+- Do dimension scores reflect the intended analytic properties?
+Possible revisions include:
+```
+adjust indicator–dimension membership
+revise mapping table threshold conditions
+merge or split dimensions
+```
+During this process:
+- the **dimension SBO registry (Section 5.3)** may be adjusted
+- the **mapping rules (Section 6.2)** are typically revised repeatedly
+The loop continues until dimension behaviour appears **conceptually coherent and empirically stable**.
+##### Exit condition
+Layer 2 development is complete when:
+- the set of **dimension SBO instances** is stable
+- mapping tables consistently produce reliable `dimension_score` values
+- dimension scores correspond to meaningful analytic distinctions
+At this point the following sections are stabilised:
 ```
 Rubric Template: 5.3 Layer 2 SBO Instances (Stabilised)
 Rubric Template: 6.2 Layer 2 SBO Value Derivation (Stabilised)
 ```
-### 6. Stage 3 — Component Performance Model (Layer 3 Design)
-Layer 3 translates **dimension evidence levels into component performance levels**.
-Layer 3 consists of two structures in the Rubric Template:
+### 6. Stage 3 — Component Performance Model (Layer 3)
+Layer 3 establishes how **dimension evidence is translated into component performance levels**.
+Layer 3 behaviour is defined by:
 ```
-5.2 Layer 3 SBO Instances
-6.3 Layer 3 SBO Value Derivation
+Rubric Template: 5.2 Layer 3 SBO Instances
+Rubric Template: 6.3 Layer 3 SBO Value Derivation
 ```
 These sections define:
 ```
-component registry
+component SBO registry
 dimension → component performance mapping rules
 ```
-Most rubric tuning typically occurs at this stage because component scores must align with **human judgement of response quality**.
-#### Stage 3.1 Component Performance Scale Definition
-The component performance scale defines the set of possible **Layer 3 performance outcomes**.
-Typical scale:
+Most rubric tuning occurs at this stage because component scores must align with **human judgement of response quality**.
+#### Stage 3.1 Layer 3 SBO Iterative Development
+##### Initial condition
+The process begins once **dimension scoring behaviour has stabilised**.
+At this stage:
+```
+Rubric Template: 5.2 Layer 3 SBO Instances (Draft)
+```
+defines the component SBO instances representing assignment components.
+Component scores are evaluated using the **component performance scale**:
 ```
 exceeds_expectations
 meets_expectations
@@ -384,89 +364,108 @@ approaching_expectations
 below_expectations
 not_demonstrated
 ```
-These values correspond to the **component_performance_scale** defined in the Rubric Template.
-#### Deliverables
-```
-Rubric Template: 5.2 Layer 3 SBO Instances (Draft)
-```
-#### Stage 3.2 Dimension → Component Mapping Design
-Component scores are derived using mapping tables that translate **dimension evidence levels** into **component performance levels**.
-Mapping form:
-```
-dimension_score → component_score
-```
-Mapping tables define the performance model for the component.
-These tables are defined in:
-```
-Rubric Template: 6.3 Layer 3 SBO Value Derivation
-```
-#### Deliverables
+The rubric must also contain a **draft specification for how component scores are derived from dimension evidence**, defined in:
 ```
 Rubric Template: 6.3 Layer 3 SBO Value Derivation (Draft)
 ```
-#### Stage 3.3 Empirical Performance Testing
-The component performance model is evaluated using the **calibration dataset**.
-Procedure:
+##### Iterative testing process
+The component performance model is evaluated using the **dimension scoring dataset produced during Stage 2**.
+Operational workflow:
 ```
-apply dimension → component mappings
-compute component_score values
-examine score distribution
-compare outcomes with qualitative judgement
+1. apply dimension → component mapping tables
+2. compute component_score values
+3. examine distribution of component scores
+4. compare results with qualitative judgement of responses
+```
+Example dataset structure:
+```
+submission_id
+component_id
+D1
+D2
+D3
+component_score
 ```
 Evaluation questions:
 - Do strong responses reliably receive `exceeds_expectations`?
 - Does the majority of competent responses fall within `meets_expectations`?
 - Are weaker responses clearly separated into lower performance categories?
-Mapping thresholds are revised iteratively until the performance model behaves as expected.
-#### Deliverables
+- Do component scores correspond to holistic judgement of response quality?
+Possible revisions include:
+```
+adjust dimension thresholds
+modify mapping table rows
+introduce or revise boundary rules
+```
+During this process the **Layer 3 mapping rules (Section 6.3)** are typically revised repeatedly.
+##### Exit condition
+Layer 3 development is complete when:
+- component scores behave consistently across the calibration sample
+- performance categories correspond to qualitative judgement
+- score distributions appear reasonable for the assignment context
+At this point the following sections are stabilised:
 ```
 Rubric Template: 5.2 Layer 3 SBO Instances (Stabilised)
 Rubric Template: 6.3 Layer 3 SBO Value Derivation (Stabilised)
 ```
-### 7. Stage 4 — Submission Score Derivation (Layer 4 Design)
+### 7. Stage 4 — Submission Score Derivation (Layer 4)
 Layer 4 derives the **overall submission score** from the set of component scores.
-Layer 4 consists of two structures in the Rubric Template:
+Layer 4 behaviour is defined by:
 ```
-5.1 Layer 4 SBO Instances
-6.4 Layer 4 SBO Value Derivation
+Rubric Template: 5.1 Layer 4 SBO Instances
+Rubric Template: 6.4 Layer 4 SBO Value Derivation
 ```
 These sections define:
 ```
-submission registry
+submission SBO registry
 component → submission mapping rules
 ```
-Because the rubric applies to the **entire submission**, Layer 4 typically involves **straightforward aggregation rules** applied to component scores.
-#### Stage 4.1 Submission Aggregation Design
-Submission scores are derived using mapping tables that translate **component scores** into a **submission performance level**.
-Mapping form:
+Because the rubric applies to the **entire submission**, Layer 4 typically involves relatively simple aggregation rules.
+#### Stage 4.1 Layer 4 SBO Iterative Development
+##### Initial condition
+The process begins once **component performance behaviour has stabilised**.
+At this stage:
+```
+Rubric Template: 5.1 Layer 4 SBO Instances (Draft)
+Rubric Template: 6.4 Layer 4 SBO Value Derivation (Draft)
+```
+define the submission-level scoring structure.
+Submission scores are derived from component scores using mapping rules of the form:
 ```
 component_score → submission_score
 ```
 Possible strategies include:
 ```
-average component scores
+simple aggregation
 weighted component aggregation
-minimum threshold conditions
+minimum threshold rules
 ```
-Mapping rules are defined in:
+##### Iterative testing process
+Submission scoring behaviour is evaluated using the **component scoring dataset produced during Stage 3**.
+Operational workflow:
 ```
-Rubric Template: 6.4 Layer 4 SBO Value Derivation
+1. apply component → submission mapping rules
+2. compute submission_score values
+3. examine score distributions
 ```
-#### Deliverables
+Example dataset structure:
 ```
-Rubric Template: 5.1 Layer 4 SBO Instances (Draft)
-Rubric Template: 6.4 Layer 4 SBO Value Derivation (Draft)
+submission_id
+component_score_A
+component_score_B
+component_score_C
+submission_score
 ```
-#### Stage 4.2 Submission Model Confirmation
-Submission aggregation rules are tested using the calibration dataset.
-Procedure:
-```
-apply component → submission mappings
-compute submission_score values
-verify overall distribution and alignment with judgement
-```
-Because submission scoring is derived from component scores, relatively little tuning is usually required at this stage.
-#### Deliverables
+Evaluation questions:
+- Do submission scores align with overall judgement of submission quality?
+- Do component-level differences meaningfully influence the final score?
+- Are aggregation rules producing predictable outcomes?
+Layer 4 typically requires **minimal iteration**, since most rubric tuning occurs at Layer 3.
+##### Exit condition
+Layer 4 development is complete when:
+- submission scores behave consistently across the calibration dataset
+- aggregation rules produce predictable outcomes
+At this point the following sections are stabilised:
 ```
 Rubric Template: 5.1 Layer 4 SBO Instances (Stabilised)
 Rubric Template: 6.4 Layer 4 SBO Value Derivation (Stabilised)

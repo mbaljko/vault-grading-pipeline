@@ -164,9 +164,23 @@
               "icon": "lucide-file",
               "title": "Pipeline 1B — Layered Rubric Construction Pipeline"
             }
+          },
+          {
+            "id": "6c48ddaf5215a69c",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "05_docs/01_design/pl1B_rubric_devt/TRY Contrastive indicator extraction.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "TRY Contrastive indicator extraction"
+            }
           }
         ],
-        "currentTab": 9
+        "currentTab": 10
       }
     ],
     "direction": "vertical"
@@ -312,13 +326,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/TRY Contrastive indicator extraction.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Pipeline 1B — Layered Rubric Construction Pipeline"
+              "title": "Outline of TRY Contrastive indicator extraction"
             }
           },
           {
@@ -352,10 +366,12 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "a98999cdb9bdec6c",
+  "active": "6c48ddaf5215a69c",
   "lastOpenFiles": [
-    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
+    "05_docs/01_design/pl1B_rubric_devt/TRY Pattern Discovery Pass.md",
+    "05_docs/01_design/pl1B_rubric_devt/TRY Contrastive indicator extraction.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
+    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
     "05_docs/00_overview/Nomenclature Standard for 4-Layer Grading Ontology.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Design Document.md",
     "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE WITH CONTENT.md",
@@ -387,8 +403,6 @@
     "05_docs/01_design/pl3_production_scoring/Pipeline PL3 — Production Scoring Pipeline (Two-Stage Model) v1.md",
     "05_docs/01_design/pl2_calibration/STEP - build calibration set using interior sampling.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_calibration_scoring_prompt v04.md",
-    "05_docs/01_design/pl2_calibration/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
-    "05_docs/01_design/prior-docs-from-migration/STEP 1 - CALIBRATION.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/PROMPT - create tightly bounded script - prev v1.md"
+    "05_docs/01_design/pl2_calibration/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md"
   ]
 }
