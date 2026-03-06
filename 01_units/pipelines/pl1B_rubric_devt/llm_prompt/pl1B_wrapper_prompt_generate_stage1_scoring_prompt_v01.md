@@ -158,6 +158,8 @@ Indicator evidence detection must rely only on:
 
 Indicators must be interpreted strictly as **observable textual evidence checks** referencing explicit textual evidence.
 
+The generated Stage 1 scoring prompt must embed the full indicator evidence status scale from Section 5.2 of the rubric specification (the set of allowed `evidence_status` values and their interpretations) so that the Stage 1 prompt is fully executable without requiring the rubric document at runtime.
+
 The following rubric sections must **not** be used during Stage 1:
 
 - dimension evidence levels (Section 3.2)
@@ -185,6 +187,9 @@ Allowed output fields include:
 - `flags`
 
 The user must specify the confidence scale and allowed flags.
+
+The field `evidence_status` must contain exactly one of the values defined in the rubric evidence scale:
+`evidence`, `partial_evidence`, or `little_to_no_evidence`.
 
 ### Field formatting rules (mandatory)
 
@@ -249,7 +254,7 @@ When the user sends `BEGIN GENERATION`, the model generates the Stage 1 scoring 
 The model must generate exactly one artefact:
 
 ```
-RUN_<ASSESSMENT_ID>_<COMPONENT_ID>_Stage1_indicator_detection_prompt_v01
+RUN_<ASSESSMENT_ID>_<COMPONENT_ID>_Stage1_indicator_detection_prompt_v03
 ```
 
 The artefact must:
@@ -290,14 +295,20 @@ The generated scoring prompt must enforce:
 
 - one evaluation per `(submission_id × component_id × indicator_id)`
 - explicit evaluation of **all rubric indicators**
+  
+Before evaluating any indicator, the evaluator must first construct the complete ordered list of indicator_id values defined in the rubric indicator registry. Evidence status must then be assigned for **every indicator in that list**, and no indicator may be omitted or invented.
+  
 - assignment of an **indicator evidence status** for each indicator, using the evidence status scale defined in Section 5.2 of the rubric
 - deterministic results based on explicit text
 
 The generated scoring prompt must also enforce this evaluation discipline:
 
-- Read `response_text` exactly once.
+- Construct a single internal representation of the full `response_text` and use that representation when evaluating all indicators.
 - Then, in a single evaluation step, determine evidence status for **all** indicators (`I1–In`, `Q1–Qn`) before writing any output.
 - Do not re-read or re-scan the text separately per indicator.
+  
+
+After determining the evidence status for **all indicators**, the prompt must then emit one output row for each (submission_id × component_id × indicator_id) combination.
   
 Stage 1 evaluates indicators independently.
 

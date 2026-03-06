@@ -145,7 +145,7 @@ For each cross-dimension indicator:
 cross_dimension_summary_<indicator_id>
 ```
 
-Here, `<indicator_id>` refers only to cross-dimension response indicators (Q1–Qn), not to dimension indicators (I1–In).
+Here, `<indicator_id>` refers only to cross-dimension response indicators (Q1–Qn), not to dimension indicators (`I1–In`).
 
 
 Example (illustrative only):
@@ -244,7 +244,8 @@ Indicator evidence from one submission must never be used when evaluating anothe
 The generated scoring prompt must enforce the following evaluation sequence:
 
 1. Retrieve all Stage 1 indicator evidence rows for the (submission_id × component_id) unit.
-	- Indicator aggregation rule: All indicator evidence rows for the unit must be collected before any dimension evaluation begins.
+Indicator aggregation rule:
+	- All indicator evidence rows for the unit must be collected before any dimension evaluation begins.
 	- Indicator rows may appear in any order in the runtime dataset.
 
 2. Construct an indicator evidence map covering all indicators defined in the rubric.
@@ -253,10 +254,10 @@ indicator_id → evidence_status
 
 This map must include both:
 
-- dimension indicators (I1–In)
-- cross-dimension response indicators (Q1–Qn)
+- dimension indicators (`I1–In`)
+- cross-dimension response indicators (`Q1–Qn`)
 
-All mapping tables must reference indicator evidence exclusively through this map. The dimension evidence → submission score mapping table must also be evaluated using only: the computed dimension evidence levels and the Q1–Qn values retrieved from the same indicator evidence map.
+All mapping tables must reference indicator evidence exclusively through this map. The dimension evidence → submission score mapping table must also be evaluated using only: the computed dimension evidence levels and the `Q1–Qn` values retrieved from the same indicator evidence map.
 
 3. Evaluate dimension evidence levels using the indicator → dimension mapping tables.
 
