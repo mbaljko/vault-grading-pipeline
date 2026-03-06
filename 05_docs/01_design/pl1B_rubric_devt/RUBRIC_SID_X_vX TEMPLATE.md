@@ -222,110 +222,89 @@ The following invariants must hold:
 ### 9. Normative status
 This document constitutes the **authoritative rubric payload** for the assignment.
 All calibration artefacts, scoring prompts, and automated evaluation systems must reference these definitions exactly.
-
 ### 10. Mapping table specification
+
 Mapping tables define how scores for one class of **Score-Bearing Object (SBO)** are derived from the scores of other SBOs.
 A mapping table must be **deterministic**: for any combination of input values there must be exactly one resulting output value.
 Mapping tables are interpreted using the rules defined in this section.
-#### 1. General structure of mapping tables
-Each mapping table consists of:
+#### 10.1 General structure of mapping tables
+Each mapping table has the following structure:
 
 | resultant scale value | <input_sbo_shortid_1> | <input_sbo_shortid_2> | ... |
 |----------------------|----------------------|----------------------|-----|
 Columns represent **input SBOs** whose scores determine the output score.
-Rows represent **logical conditions** under which the output score is assigned.
-The column `resultant scale value` contains the output value assigned to the **target SBO**.
-All other columns contain the required values for the input SBOs.
-#### 2. Column requirements
-Mapping tables must contain the following columns:
-1. `resultant scale value`  
+Rows represent **threshold conditions** under which the output score is assigned.
+The column `resultant scale value` specifies the score assigned to the **target SBO**.
+All other columns specify **minimum threshold values** for the corresponding input SBOs.
+#### 10.2 Column requirements
+Each mapping table must contain:
+1. **`resultant scale value`**
    - The score assigned to the **target SBO**.
    - Must be a value from the scale associated with the target SBO.
-2. One column for each **input SBO shortid**.  
+2. **One column for each input SBO**
    - Column names must match `sbo_identifier_shortid` values defined in the SBO registry.
 Example:
 
 | resultant scale value | I1 | I2 |
 |----------------------|----|----|
 | demonstrated | evidence | evidence |
-| demonstrated | evidence | partial_evidence |
 | partially_demonstrated | evidence | little_to_no_evidence |
-#### 3. Allowed cell values
-Cells in the input columns may contain one of the following:
-1. **Exact scale value**  
-   Must be a value from the scale associated with the input SBO.
+| little_to_no_demonstration | little_to_no_evidence | little_to_no_evidence |
+#### 10.3 Cell value semantics
+Cells in the input columns represent **minimum threshold values**.
+A row condition is satisfied when the actual input value is **greater than or equal to** the threshold value specified in the table.
 Example:
+If the scale ordering is:
 ```
-evidence
+evidence > partial_evidence > little_to_no_evidence
+```
+and the table cell contains:
+```
 partial_evidence
-little_to_no_evidence
 ```
-2. **Wildcard (`–`)**
-A dash indicates that the value of that input does not affect the rule.
+then the row condition is satisfied when the input value is:
+```
+partial_evidence
+or
+evidence
+```
+#### 10.4 Wildcard value
+The symbol `*` may be used as a **wildcard**.
+A wildcard indicates that the value of that input does not affect the rule.
 Example:
 
-| resultant scale value | I1 | I2 |
-|----------------------|----|----|
-| partially_demonstrated | evidence | – |
-This rule applies to any value of `I2` when `I1 = evidence`.
-#### 4. Row interpretation
-Each row represents a **conjunction of conditions**.
-Conditions in a row are interpreted as:
-```
-I1 = value AND I2 = value AND ...
-```
-A wildcard (`–`) means the condition for that column is ignored.
-Example row:
-
-| resultant scale value | I1 | I2 |
-|----------------------|----|----|
-| partially_demonstrated | evidence | – |
+| resultant scale value  | I1       | I2  |
+| ---------------------- | -------- | --- |
+| partially_demonstrated | evidence | `*` |
 Interpretation:
 ```
-IF I1 = evidence
+IF I1 ≥ evidence
 THEN dimension_score = partially_demonstrated
 ```
-#### 5. Row precedence
+#### 10.5 Row precedence
 Rows are evaluated **from top to bottom**.
-The **first row whose conditions match the input values determines the result**.
-Later rows are ignored once a match is found.
-#### 6. Coverage requirement
+Rows must be ordered from **strongest threshold condition** at the top to **weakest threshold condition** at the bottom.
+For each row:
+A row is satisfied when **all input SBO values meet or exceed the threshold values specified in that row**.
+The **first row whose threshold condition is satisfied determines the result**.
+Once a row is satisfied, later rows are ignored.
+#### 10.6 Coverage requirement
 Mapping tables must guarantee that every possible combination of input values yields a result.
-Coverage may be achieved by either:
+Coverage may be achieved by:
 1. explicitly enumerating all combinations, or  
-2. using wildcard rows to capture remaining combinations.
-#### 7. Fallback rule
-If no row matches the input values, the following fallback rule applies:
+2. ensuring that the **bottom row defines the weakest possible threshold condition**.
+In practice, the bottom row typically uses the **lowest values of the input scales**, ensuring that all input combinations satisfy at least that row.
+#### 10.7 Validity constraints
+A valid mapping table must satisfy the following conditions:
+1. `resultant scale value` must contain only values from the scale associated with the **target SBO**.
+2. Input columns must contain only values from the scale associated with the corresponding **input SBO**, or the wildcard `–`.
+3. Rows must be ordered from **strongest threshold condition to weakest threshold condition**.
+4. The table must guarantee that evaluation produces **exactly one output value** for every possible combination of input values.
+#### 10.8 Evaluation procedure
+Evaluation of a mapping table follows this procedure:
 ```
-result = lowest value of the target SBO scale
+for each row in the table (top to bottom):
+    if all input values meet or exceed the row thresholds:
+        return resultant_scale_value
 ```
-This rule guarantees that the mapping is total even if the table is incomplete.
-#### 8. Validity constraints
-A valid mapping table must satisfy the following constraints:
-1. `resultant scale value` must contain only values from the target SBO scale.
-2. Input columns must contain only values from the corresponding input SBO scales or the wildcard `–`.
-3. Rows must not create ambiguous matches that produce conflicting results.
-4. The evaluation rules must produce exactly one output value for every possible input combination.
-#### 9. Example interpretation
-Example table:
-
-| resultant scale value | I1 | I2 |
-|----------------------|----|----|
-| demonstrated | evidence | evidence |
-| demonstrated | evidence | partial_evidence |
-| partially_demonstrated | evidence | – |
-| little_to_no_evidence | little_to_no_evidence | – |
-Evaluation example:
-Input:
-```
-I1 = evidence
-I2 = little_to_no_evidence
-```
-Evaluation:
-1. Row 1 → not satisfied  
-2. Row 2 → not satisfied  
-3. Row 3 → satisfied  
-Result:
-```
-dimension_score = partially_demonstrated
-```
+Because rows are ordered from strongest to weakest, the returned value corresponds to the **strongest satisfied threshold condition**.
