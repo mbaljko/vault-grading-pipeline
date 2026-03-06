@@ -27,21 +27,51 @@ There are 4 layers to the grading pipeline:
 ## Layering
 
 ### Layer 1
-All Layer 1 scores (one for each `I_sid_cid_iid`, applied to each layer 1 grading unit) are determined by evidence found in the student's submission (but looking at one component)
-- some `I_sid_cid_iid` will be "dimension-tailored" (meaning they are attuned to a specific dimension of the component), whereas others will be more "holistic" (meaning that they look at the component as a whole, e.g., grammar, clarity, the presence of a concrete example)
-- we don't need to formally signal their category, it will be determined by their relationship to the next level
+One score derived for each `I_sid_cid_iid`, for each layer 1 grading unit.
+Result: each student will have many, many `I_sid_cid_iid` scores.
+
+Layer 1 grading unit: each `submission_id × component_id`
+
+Layer 1 scoring logic:  the score for each `I_sid_cid_iid` is determined by evidence found in the layer 1 grading unit. 
+
+- some `I_sid_cid_iid` may be "dimension-tailored" (meaning they are attuned to a specific aspect of the component, which we will later call a `dimension`)
+- some `I_sid_cid_iid` may be "holistic" (meaning that they look at the component as a whole, e.g., grammar, clarity, the presence of a concrete example)
+- we don't need to formally signal their category, it will be determined by the mapping relationship expressed in the next level
+
+
 ### Layer 2
-All Layer 2 scores (one for each `D_sid_cid_did`, applied to each layer 2 grading unit) are determined by mapping tables that stipulate the combination of indicators that determine the `dimension_score`
-- "tailored" dimensions: most `D_sid_cid_did` will combine "dimension-tailored"  `I_sid_cid_iid` 
-- "pan-component" dimensions: some `D_sid_cid_did` are "pass-through" dimensions because they will stand in a 1-to-1 mapping from a single "holistic" `I_sid_cid_iid`
-	- in the past I have refered to these as "cross-dimensional", even though they are dimensions themselves. The cross-dimensionality happens at the indicator level. So, strictly speaking, this is inconsistent nomenclature
+One score for each `D_sid_cid_did`, for each layer 2 grading unit
+Result: each student will have many `I_sid_cid_iid` scores.
+
+Layer 2 grading unit: each `submission_id × component_id`
+
+Layer 2 scoring logic:  
+- in general, the score for each `D_sid_cid_did` is determined from the pool of evidence represented in the set of `I_sid_cid_iid`
+- specifically, the score for each `D_sid_cid_did` is determined by a mapping table that expresses the combination of `indicator_score` values for certain `I_sid_cid_iid` that determine that particular `dimension_score`
+	- "tailored" dimensions: most `D_sid_cid_did` will combine two or more "dimension-tailored"  `I_sid_cid_iid` 
+	- "pan-component" dimensions: some `D_sid_cid_did` are "pass-through" dimensions because they will stand in a 1-to-1 mapping from a single "holistic" `I_sid_cid_iid`
+		- in the past I have refered to these as "cross-dimensional", even though they are dimensions themselves. The cross-dimensionality happens at the indicator level. So, strictly speaking, this is inconsistent nomenclature
+		- better to refer to these dimensions as "pan-component dimensions" (rather than "cross-dimensional" dimensions)
+
 
 ### Layer 3
-All Layer 3 scores (one for each `C_sid_cid`, applied to each layer 3 grading unit) are determined by mapping tables that stipulate the combination of dimensions that determine the `component_score`
+One score for each `C_sid_cid`, for each layer 3 grading unit.
+Result: each student will have many `C_sid_cid` scores.
+
+Layer 3 grading unit: one unit for each `submission_id × component_id
+
+Layer 3 scoring logic:
+- in general, the score for each `C_cid_did` is determined from the pool of evidence represented in the set of `D_sid_cid_did`
+- specifically, the score for each `C_cid_did` is determined by a mapping table that expresses the combination of `dimension`s that determine the `component_score`
 - the "tailored" and "pan-component" dimensions combine to produce a derived `component_score`
 
+`
+
 ### Layer 4
-All Layer 4 scores (one for each )
+All Layer 4 scores (one for each `S_sid`, applied to each layer 4 grading unit) are determined by mapping tables that stipulate the combination of `component_score` that determine the `submission_score`
+
+
+Layer 4 grading unit: one unit for each `submission_id`
 
 
 Its purpose is to:
