@@ -53,6 +53,16 @@ Higher-layer SBO scores may be derived from lower-layer SBO scores through mappi
 #### 1.6 Layer execution note
 Not all scoring processes operate across all layers.
 A scoring process may evaluate and assign scores at **one or more layers**, depending on the evaluation task and the structures consumed by that scoring stage.
+### 2. Score-Bearing Object (SBO) registry
+This table defines the Score-Bearing Objects used in the rubric payload.
+Each row specifies an SBO type, its identifier structure, and the scale used to evaluate that SBO.
+
+| layer | sbo_type   | score_name       | sbo_identifier_pattern | scale_type  | scale_name                    | sbo indentifier |
+| ----- | ---------- | ---------------- | ---------------------- | ----------- | ----------------------------- | --------------- |
+| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`    |                 |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`    |                 |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale` |                 |
+| 4     | submission | submission_score | `S_sid`                | performance | submission_performance_scale  |                 |
 ### 2. Registries
 #### 2.1 The Layer 4 registry — submission SBO
 Defines the **Layer 4 Score-Bearing Object (SBO)** representing the full student submission.
@@ -77,7 +87,8 @@ Defines the **Layer 3 SBOs** representing components of the submission.
 Constraints:
 - component identifiers must match the canonical population structure used in the grading dataset
 - each `(submission_id × component_id)` pair defines a Layer 3 Assessment Artefact
-#### 4. Layer 2 registry — dimension SBOs
+#### 2.3 The Layer 2 registry
+#### 2.3.1 Layer 2 SBOs
 Defines the **Layer 2 SBOs** representing rubric dimensions applied to components.
 
 | component_id | dimension_id | dimension_label |
@@ -88,7 +99,7 @@ Defines the **Layer 2 SBOs** representing rubric dimensions applied to component
 Constraints:
 - `(component_id, dimension_id)` pairs must be unique
 - dimension identifiers must remain stable across rubric versions
-#### 4.1 Layer 2 dimension evidence scale
+#### 2.3.2 The Layer 2 dimension evidence scale
 
 | dimension_evidence_level |
 |---|
@@ -99,7 +110,8 @@ Hierarchy:
 ```text
 Level 1 > Level 2 > Level 3
 ```
-#### 5. Layer 1 registry — indicator SBOs
+#### 2.4. The Layer 1 registry
+#### 2.4.1 Layer 1 SBOs
 Defines the **Layer 1 SBOs** used to detect observable evidence within the Assessment Artefact.
 
 | indicator_id | component_id | dimension_id | indicator_definition |
@@ -110,7 +122,7 @@ Defines the **Layer 1 SBOs** used to detect observable evidence within the Asses
 Constraints:
 - indicators must reference a valid `(component_id, dimension_id)`
 - indicator identifiers must remain stable within a rubric version
-#### 5.1 Layer 1 indicator evidence scale
+#### 2.4.1 Layer 1 indicator evidence scale for SBOs
 
 | indicator_evidence_status |
 |---|
