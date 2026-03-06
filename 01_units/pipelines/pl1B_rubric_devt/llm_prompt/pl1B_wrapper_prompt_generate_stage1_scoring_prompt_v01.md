@@ -186,7 +186,9 @@ Allowed output fields include:
 - `confidence`
 - `flags`
 
-The user must specify the confidence scale and allowed flags.
+confidence must be one of: 0.25, 0.5, 0.75, 1.0
+
+flags must be one of: none, needs_review
 
 The field `evidence_status` must contain exactly one of the values defined in the rubric evidence scale:
 `evidence`, `partial_evidence`, or `little_to_no_evidence`.
