@@ -296,9 +296,15 @@ The generated scoring prompt must enforce:
 - one evaluation per `(submission_id × component_id × indicator_id)`
 - explicit evaluation of **all rubric indicators**
   
-Before evaluating any indicator, the evaluator must first construct the complete ordered list of indicator_id values defined in the rubric indicator registry. Evidence status must then be assigned for **every indicator in that list**, and no indicator may be omitted or invented.
+Before evaluating any indicator, the evaluator must first construct the complete ordered list of `indicator_id` values defined in the rubric indicator registry. 
+Evidence status must then be assigned exactly once for **every `indicator_id` in that list**, and the number of emitted evaluation rows must equal the number of indicators in the registry. 
   
 - assignment of an **indicator evidence status** for each indicator, using the evidence status scale defined in Section 5.2 of the rubric
+  
+- If the response contains **any clearly relevant interpretable textual fragment that partially satisfies an indicator definition but lacks the full conditions required for `evidence`, the status must be assigned `partial_evidence` rather than `little_to_no_evidence`.
+  
+- If the response contains explicit textual material that **clearly satisfies all conditions stated in the indicator definition**, the status may be assigned `evidence`; otherwise the status must not exceed `partial_evidence`.
+  
 - deterministic results based on explicit text
 
 The generated scoring prompt must also enforce this evaluation discipline:
@@ -308,7 +314,7 @@ The generated scoring prompt must also enforce this evaluation discipline:
 - Do not re-read or re-scan the text separately per indicator.
   
 
-After determining the evidence status for **all indicators**, the prompt must then emit one output row for each (submission_id × component_id × indicator_id) combination.
+After determining the evidence status for **all indicators**, the prompt must then emit one output row for each `(submission_id × component_id × indicator_id)` combination.
   
 Stage 1 evaluates indicators independently.
 
