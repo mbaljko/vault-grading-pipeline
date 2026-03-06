@@ -8,19 +8,28 @@ There are several layers.
 What exists at each layer
 
 
-|         | Name for the thing that receives a score | Way we refer to each  individual one of these things | Levels for the scoring are defined by this | scale values                                            |
-| ------- | ---------------------------------------- | ---------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------- |
-| Layer 1 | `indicator`                              | `Ix` where `x` is the unique identifier (numeric)    | `indicator_evidence_scale`                 | `evidence`, `partial_evidence`, `little_to_no_evidence` |
-| Layer 2 | `dimension`                              | `Dx` where `x` is the identifier (numeric)           | `dimension_evidence_scale`                 | ``                                                      |
-
-
+|         | Name for the thing that receives a score (a score-bearing entity, grading targets) | Way we refer to each  individual one of these things         | Example         | Levels for the scoring are defined by this | scale values                                                                                                       | Applies to (grading unit, the row)      |
+| ------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
+| Layer 1 | `indicator`                                                                        | `Ix` where `x` is the unique identifier (numeric)            | `I_PPP_SecA_1`  | `indicator_evidence_scale`                 | `evidence`, `partial_evidence`, `little_to_no_evidence`                                                            | a component of the student's submission |
+| Layer 2 | `dimension`                                                                        | `D_did` where `x` is the identifier (numeric)                | `D_PPP_SecA_D1` | `dimension_evidence_scale`                 | `demonstrated`, `partially_demonstrated`, `little_to_no_demonstration`                                             | a component of the student's submission |
+| Layer 3 | `component`                                                                        | `C_sid_cid` where `id` is the identifier (short string) <br> | `C_PPP_SecA`    | `component_scoring_scale`                  | `exceeds_expectations`, `meets_expectations`, `approaching_expectations`, `below_expectations`, `not_demonstrated` | a component of the student's submission |
+| Layer 4 | `submission`                                                                       | `S_sid` where `sid` is the identifier (short string)         | `S_PPP`         | `submission_scoring_scale`                 | `exceeds_expectations`, `meets_expectations`, `approaching_expectations`, `below_expectations`, `not_demonstrated` | the student's entire submission         |
 
 
 There are 4 layers to the grading pipeline:
-- Layer 1: scoring of a set consisting of `indicator`
-- Layer 2: scoring of a set of `sc_dimension`s 
-- Layer 3: `componenent` scoring
-- `f`
+- Layer 1: scoring of a set consisting of `indicator` (multiple)
+- Layer 2: scoring of a set of `sc_dimension` (multiple for one `component`) 
+- Layer 3: scoring of a set of `componenent` (multiple for one `submission`)
+- Layer 3: scoring of a set of `submissions` (one `submission` for every student) 
+
+
+
+## Layering
+
+- All Layer 1 scores (one for each `I_PPP_SecA_1`) are determined by evidence found in the student's submission (but looking at one component)
+- All Layer 2 scores (one for each `D_PPP_SecA_1`) are determined by mapping tables that stipulate how the combination of indicators determine the `dimension_score`
+- All Layer 3 scores (one for each )
+
 
 Its purpose is to:
 - eliminate ambiguity between **submission**, **component**, **dimension**, **facet**, and **indicator**
