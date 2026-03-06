@@ -13,7 +13,7 @@ submission_id: PPP
 rubric_version: PPP_v1_2026W
 ```
 
-### 2. Purpose
+### 1. Purpose
 This document defines the **rubric payload** for an assignment.  
 It is intended to be **self-contained** and provides all information required for automated evaluation.
 The document specifies the scoring structures used by the grading pipeline, including:
@@ -65,16 +65,16 @@ Higher-layer SBO scores may be derived from lower-layer SBO scores through mappi
 #### 2.6 Layer execution note
 Not all scoring processes operate across all layers.
 A scoring process may evaluate and assign scores at **one or more layers**, depending on the evaluation task and the structures consumed by that scoring stage.
-### 3. Score-Bearing Object (SBO) registry
+### 3. Score-Bearing Object (SBO) type registry
 This table defines the Score-Bearing Objects used in the rubric payload.
 Each row specifies an SBO type, its identifier structure, and the scale used to evaluate that SBO.
 
-| layer | sbo_type   | score_name       | sbo_identifier_pattern | scale_type  | scale_name                     | `sbo indentifier` |
-| ----- | ---------- | ---------------- | ---------------------- | ----------- | ------------------------------ | --------------- |
-| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     | `<PLACEHOLDER>` |
-| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     | `<PLACEHOLDER>` |
-| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  | `<PLACEHOLDER>` |
-| 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` | `<PLACEHOLDER>` |
+| layer | sbo_type   | score_name       | sbo_identifier_pattern | scale_type  | scale_name                     |
+| ----- | ---------- | ---------------- | ---------------------- | ----------- | ------------------------------ |
+| 1     | indicator  | indicator_score  | `[I\|P]_sid_cid_iid`   | evidence    | `indicator_evidence_scale`     |
+| 2     | dimension  | dimension_score  | `[D\|Q]_sid_cid_did`   | evidence    | `dimension_evidence_scale`     |
+| 3     | component  | component_score  | `C_sid_cid`            | performance | `component_performance_scale`  |
+| 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` |
 ### 4. Scale registry
 
 | scale_name                     | ordered | description                                   |
@@ -121,378 +121,110 @@ exceeds_expectations > meets_expectations > approaching_expectations > below_exp
 
 #### submission_performance_scale
 
-| score_label |
-|---|
-| exceeds_expectations |
-| meets_expectations |
+| scale_value              |
+| ------------------------ |
+| exceeds_expectations     |
+| meets_expectations       |
 | approaching_expectations |
-| below_expectations |
-| not_demonstrated |
+| below_expectations       |
+| not_demonstrated         |
 Hierarchy:
 ```
 exceeds_expectations > meets_expectations > approaching_expectations > below_expectations > not_demonstrated
 ```
 
 ### 5. Registry of Specific Score-Bearing Objects (SBOs)
-#### 5.1 Layer 4 SBO
+#### 5.1 Layer 4 SBO Instances
 
 Defines the **Layer 4 Score-Bearing Object (SBO)** representing the full student submission.
 
-| layer | sbo_type   | score_name       | sbo_identifier_pattern | scale_type  | scale_name                     | `sbo indentifier`   |
-| ----- | ---------- | ---------------- | ---------------------- | ----------- | ------------------------------ | ----------------- |
-| 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` | `<ASSESSMENT_ID>` |
-##### Example
-
-| layer | sbo_type   | score_name       | sbo_identifier_pattern | scale_type  | scale_name                     | `sbo indentifier` | sbo_short_description                     |
-| ----- | ---------- | ---------------- | ---------------------- | ----------- | ------------------------------ | --------------- | ----------------------------------------- |
-| 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` | `S_PPP`         | Pre-Practice Positioning (PPP) Assignment |
+| `sbo_identifier`  | `sbo_short_description` |
+| ----------------- | ----------------------- |
+| `<ASSESSMENT_ID>` | `<PLACEHOLDER>`         |
 
 
-#### 5.2 Layer 3 SBO
+#### 5.2 Layer 3 SBO Instances
 Defines the **Layer 3 SBOs** representing components of the submission.
 
-| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type  | scale_name                    | `sbo indentifier` |
-| ----- | --------- | --------------- | ---------------------- | ----------- | ----------------------------- | --------------- |
-| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
-| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
-| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
-| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
-| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `<PLACEHOLDER>` |
+| `sbo_identifier` |     | `sbo_short_description` |
+| ---------------- | --- | ----------------------- |
+| `<PLACEHOLDER>`  |     |                         |
+| `<PLACEHOLDER>`  |     |                         |
+| `<PLACEHOLDER>`  |     |                         |
+| `<PLACEHOLDER>`  |     |                         |
+| `<PLACEHOLDER>`  |     |                         |
 ##### Constraints:
 - component identifiers must match the canonical population structure used in the grading dataset
 - each `(submission_id × component_id)` pair defines a Layer 3 Assessment Artefact
 
 
-
-##### Example
-
-| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type  | scale_name                    | `sbo indentifier` | sbo_short_description |
-| ----- | --------- | --------------- | ---------------------- | ----------- | ----------------------------- | --------------- | --------------------- |
-| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECA`    | SectionAResponse      |
-| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECB`    | SectionBResponse      |
-| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECC`    | SectionCResponse      |
-| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECD`    | SectionDResponse      |
-| 3     | component | component_score | `C_sid_cid`            | performance | `component_performance_scale` | `C_PPP_SECE`    | SectionEResponse      |
-
-
 #### 5.3 Layer 2 SBO
 Defines the **Layer 2 SBOs** representing rubric dimensions applied to components.
 
-| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type | scale_name                 | `sbo indentifier` |
-| ----- | --------- | --------------- | ---------------------- | ---------- | -------------------------- | --------------- |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `<PLACEHOLDER>` |
+| `sbo_identifier` | `sbo_identifier_shortid` | `sbo_short_description` |
+| ---------------- | ------------------------ | ----------------------- |
+| `<PLACEHOLDER>`  |                          |                         |
+| `<PLACEHOLDER>`  |                          |                         |
+| `<PLACEHOLDER>`  |                          |                         |
+| `<PLACEHOLDER>`  |                          |                         |
+| `<PLACEHOLDER>`  |                          |                         |
 
-Constraints:
+##### Constraints:
 - `(component_id, dimension_id)` pairs must be unique
 - dimension identifiers must remain stable across rubric versions
-##### EXAMPLE
-
-| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type | scale_name                 | `sbo indentifier` | sbo_short_description      |
-| ----- | --------- | --------------- | ---------------------- | ---------- | -------------------------- | --------------- | -------------------------- |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D1` | Accountability framing     |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D2` | Role boundary and hand-off |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D3` | Professional obligations   |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_Q1` | Component Coherence        |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_Q1` | Component Specificity      |
-
 #### 5.4 Layer 1 SBO
 Defines the **Layer 1 SBOs** used to detect observable evidence within the Assessment Artefact.
 
-| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type | scale_name                 | `sbo indentifier` |
-| ----- | --------- | --------------- | ---------------------- | ---------- | -------------------------- | --------------- |
-| 1     | indicator | indicator_score | `[IP]_sid_cid_iid`     | evidence   | `indicator_evidence_scale` | `<PLACEHOLDER>` |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `<PLACEHOLDER>` |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `<PLACEHOLDER>` |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `<PLACEHOLDER>` |
-Constraints:
+| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type | scale_name                 | `sbo_identifier_shortid` | `sbo_short_description` | `sbo_identifier` |
+| ----- | --------- | --------------- | ---------------------- | ---------- | -------------------------- | ------------------------- | ----------------------- | ---------------- |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` |                           |                         | `<PLACEHOLDER>`  |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` |                           |                         | `<PLACEHOLDER>`  |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` |                           |                         | `<PLACEHOLDER>`  |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` |                           |                         | `<PLACEHOLDER>`  |
+##### Constraints:
 - indicators must reference a valid `(component_id, dimension_id)`
 - indicator identifiers must remain stable within a rubric version
-
-##### EXAMPLE
-
-
-| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type | scale_name                 | `sbo indentifier` | sbo_short_description                                             |
-| ----- | --------- | --------------- | ---------------------- | ---------- | -------------------------- | --------------- | ----------------------------------------------------------------- |
-| 1     | indicator | indicator_score | `[IP]_sid_cid_iid`     | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I1` | Accountability framing is explicitly stated                       |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I2` | Accountability framing is minimally supported                     |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I3` | Inside-the-role content is specified                              |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I4` | Outside-the-role content is specified                             |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I5` | Hand-off boundary is articulated                                  |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I6` | Professional obligations in a non-licensure field are articulated |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_P1` | Coherence                                                         |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_P2` | Specificity                                                       |
-
 
 ### 6. SBO Instructions
 
 #### 6.1 Layer 1 SBO Value Derivation, AA → `indicator_score` 
 
-| sbo identifier  | Nickname | indicator_definition                                              | assessment guidance                                                                                                                           |
-| --------------- | -------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `I_PPP_SECA_I1` | `I1`     | Accountability framing is explicitly stated                       | Determine whether the response **explicitly identifies where accountability resides** in the sociotechnical situation.                        |
-| `I_PPP_SECA_I2` | `I2`     | Accountability framing is minimally supported                     | Determine whether the response provides **at least one supporting reason or explanation** justifying the accountability framing.              |
-| `I_PPP_SECA_I3` | `I3`     | Inside-the-role content is specified                              | Determine whether the response identifies **at least one responsibility or activity that falls within the role of a computing professional**. |
-| `I_PPP_SECA_I4` | `I4`     | Outside-the-role content is specified                             | Determine whether the response identifies **at least one responsibility outside the professional role**.                                      |
-| `I_PPP_SECA_I5` | `I5`     | Hand-off boundary is articulated                                  | Determine whether the response **explicitly describes the boundary where responsibility transitions to another actor**.                       |
-| `I_PPP_SECA_I6` | `I6`     | Professional obligations in a non-licensure field are articulated | Determine whether the response identifies **at least one obligation or responsibility applying to computing professionals**.                  |
-| `I_PPP_SECA_P1` | `P1`     | Coherence                                                         | Determine whether the response is **readable, internally consistent, and logically structured**.                                              |
-| `I_PPP_SECA_P2` | `P2`     | Specificity                                                       | Determine whether the response includes **at least one concrete, checkable claim** rather than purely generic statements.                     |
+##### 1\. Target SBO class
+##### 2\. Input SBO class
+##### 3\. Registry summary
+##### 4\. Mapping tables
+##### 5\. Fallback rule
+##### 6\. Optional interpretation notes
 
 #### 6.2 Layer 2 SBO Value Derivation, `indicator_score` → `dimension_score` mapping
 
-##### Registry Summary (All Require Threshold Tables)
+##### 1\. Target SBO class
+##### 2\. Input SBO class
+##### 3\. Registry summary
+##### 4\. Mapping tables
+##### 5\. Fallback rule
+##### 6\. Optional interpretation notes
 
-| `sbo indentifier` | sbo_short_description      |
-| --------------- | -------------------------- |
-| `D_PPP_SECA_D1` | Accountability framing     |
-| `D_PPP_SECA_D2` | Role boundary and hand-off |
-| `D_PPP_SECA_D3` | Professional obligations   |
-| `D_PPP_SECA_Q1` | Component Coherence        |
-| `D_PPP_SECA_Q1` | Component Specificity      |
+#### 6.3 Layer 3 SBO Value Derivation, `dimension_score` → `component_score` mapping
+##### 1\. Target SBO class
+##### 2\. Input SBO class
+##### 3\. Registry summary
+##### 4\. Mapping tables
+##### 5\. Fallback rule
+##### 6\. Optional interpretation notes
 
-##### Minimum Threshold Table:  `D_PPP_SECA_D1`
-
-| `sbo indentifier` | sbo_short_description  |
-| --------------- | ---------------------- |
-| `D_PPP_SECA_D1` | Accountability framing |
-
-| resultant scale value    | `I1`                  | `I2`                  |
-| ------------------------ | --------------------- | --------------------- |
-| `demonstrated`           | evidence              | evidence              |
-| `demonstrated`           | evidence              | partial_evidence      |
-| `partially_demonstrated` | evidence              | little_to_no_evidence |
-| `partially_demonstrated` | partial_evidence      | –                     |
-| `little_to_no_evidence`  | little_to_no_evidence | –                     |
-###### Interpretation:
-- `I1` anchors the dimension.
-- Presence of `I1` typically establishes at least `partially_demonstrated`
-- `I2` primarily distinguishes `demonstrated` sophistication
-
-##### Minimum Threshold Table: `D_PPP_SECA_D2`
-
-| `sbo indentifier` | sbo_short_description      |
-| --------------- | -------------------------- |
-| `D_PPP_SECA_D2` | Role boundary and hand-off |
-
-| resultant scale value    | I3                    | I4                    | I5                    |
-| ------------------------ | --------------------- | --------------------- | --------------------- |
-| `demonstrated`           | evidence              | evidence              | evidence              |
-| `demonstrated`           | evidence              | evidence              | partial_evidence      |
-| `partially_demonstrated` | evidence              | partial_evidence      | –                     |
-| `partially_demonstrated` | evidence              | –                     | partial_evidence      |
-| `partially_demonstrated` | evidence              | little_to_no_evidence | little_to_no_evidence |
-| `little_to_no_evidence`  | little_to_no_evidence | –                     | –                     |
-###### Interpretation:
-- `I3` anchors the dimension.
-- Presence of `I3 evidence` establishes at least **`partially_demonstrated`**.
-- `I4` and `I5` distinguish strong articulation of the boundary.
-
-##### Minimum Threshold Table: `D_PPP_SECA_D3`
-
-| `sbo indentifier` | sbo_short_description    |
-| --------------- | ------------------------ |
-| `D_PPP_SECA_D3` | Professional obligations |
-
-| resultant scale value    | I6                    |
-| ------------------------ | --------------------- |
-| `demonstrated`           | evidence              |
-| `partially_demonstrated` | partial_evidence      |
-| `little_to_no_evidence`  | little_to_no_evidence |
-###### Interpretation:
-`I6` functions as the **anchor indicator** for this dimension.
-
-##### Minimum Threshold Table: `D_PPP_SECA_Q1`
-
-| `sbo indentifier` | sbo_short_description |
-| --------------- | --------------------- |
-| `D_PPP_SECA_Q1` | Component Coherence   |
-
-| resultant scale value    | P1                    |
-| ------------------------ | --------------------- |
-| `demonstrated`           | evidence              |
-| `partially_demonstrated` | partial_evidence      |
-| `little_to_no_evidence`  | little_to_no_evidence |
-
-##### Minimum Threshold Table: `D_PPP_SECA_Q2`
-
-| `sbo indentifier` | sbo_short_description |
-| --------------- | --------------------- |
-| `D_PPP_SECA_Q1` | Component Specificity |
-
-| resultant scale value    | P2                    |
-| ------------------------ | --------------------- |
-| `demonstrated`           | evidence              |
-| `partially_demonstrated` | partial_evidence      |
-| `little_to_no_evidence`  | little_to_no_evidence |
-
-##### Rules
-This section defines how **indicator evidence statuses determine dimension evidence levels**.
-Mapping rules must satisfy:
-- deterministic evaluation
-- monotonic evidence hierarchy
-- explicit logical conditions
-Placeholder structure:
-```text
-<Indicator → Dimension Mapping Table Placeholder>
-```
-Interpretation rules:
-```text
-indicator conditions within a row are combined using AND
-rows are evaluated top-to-bottom
-the first satisfied row determines the dimension level
-```
-Fallback rule:
-```text
-if no condition is satisfied → dimension = `little_to_no_evidence`
-```
-#### 6.4. Layer 3 SBO Value Derivation, `dimension_score` → `component_score` mapping
-
-##### Registry Summary (All Require Threshold Tables)
-
-| `sbo indentifier` | sbo_short_description |
-| --------------- | --------------------- |
-| `C_PPP_SECA`    | SectionAResponse      |
-| `C_PPP_SECB`    | SectionBResponse      |
-| `C_PPP_SECC`    | SectionCResponse      |
-| `C_PPP_SECD`    | SectionDResponse      |
-| `C_PPP_SECE`    | SectionEResponse      |
-
-##### Minimum Threshold Table: `C_PPP_SECA`
-
-| `sbo indentifier` | sbo_short_description |
-| --------------- | --------------------- |
-| `C_PPP_SECA`    | SectionAResponse      |
-
-| resultant scale value      | D1                       | D2                       | D3                       | Q1               | Q2               |
-| -------------------------- | ------------------------ | ------------------------ | ------------------------ | ---------------- | ---------------- |
-| `exceeds_expectations`     | `demonstrated`           | `demonstrated`           | `demonstrated`           | evidence         | evidence         |
-| `exceeds_expectations`     | `demonstrated`           | `demonstrated`           | `demonstrated`           | evidence         | partial_evidence |
-| `meets_expectations`       | `demonstrated`           | `partially_demonstrated` | `demonstrated`           | partial_evidence | partial_evidence |
-| `meets_expectations`       | `partially_demonstrated` | `demonstrated`           | `demonstrated`           | partial_evidence | partial_evidence |
-| `meets_expectations`       | `demonstrated`           | `demonstrated`           | `partially_demonstrated` | partial_evidence | partial_evidence |
-| `meets_expectations`       | `partially_demonstrated` | `partially_demonstrated` | `demonstrated`           | –                | –                |
-| `meets_expectations`       | `demonstrated`           | `partially_demonstrated` | `partially_demonstrated` | –                | –                |
-| `approaching_expectations` | `partially_demonstrated` | `partially_demonstrated` | `partially_demonstrated` | –                | –                |
-| `approaching_expectations` | `little_to_no_evidence`  | `partially_demonstrated` | `partially_demonstrated` | –                | –                |
-| `approaching_expectations` | `partially_demonstrated` | `little_to_no_evidence`  | `partially_demonstrated` | –                | –                |
-| `approaching_expectations` | `partially_demonstrated` | `partially_demonstrated` | `little_to_no_evidence`  | –                | –                |
-| `below_expectations`       | `little_to_no_evidence`  | `little_to_no_evidence`  | `partially_demonstrated` | –                | –                |
-| `below_expectations`       | `little_to_no_evidence`  | `partially_demonstrated` | `little_to_no_evidence`  | –                | –                |
-| `below_expectations`       | `partially_demonstrated` | `little_to_no_evidence`  | `little_to_no_evidence`  | –                | –                |
-| `not_demonstrated`         | `little_to_no_evidence`  | `little_to_no_evidence`  | `little_to_no_evidence`  | –                | –                |
-Interpretive intent:
-- **`meets_expectations` is the default outcome** when at least two dimensions are adequately articulated.
-- **`exceeds_expectations` requires strong articulation across all dimensions** and reasonable specificity.
-- **`below_expectations` requires broad weakness across dimensions.**
-
-
-
-##### Minimum Threshold Table: `C_PPP_SECB`
-
-| `sbo indentifier` | sbo_short_description |
-| --------------- | --------------------- |
-| `C_PPP_SECB`    | SectionBResponse      |
-
-| resultant scale value    | D1                      | D2                      | D3                      | Q1  | Q2  |
-| ------------------------ | ----------------------- | ----------------------- | ----------------------- | --- | --- |
-| `exceeds_expectations`     |                         |                         |                         |     |     |
-| `meets_expectations`       |                         |                         |                         |     |     |
-| `approaching_expectations` |                         |                         |                         |     |     |
-| `below_expectations`       |                         |                         |                         |     |     |
-| `not_demonstrated`         | `little_to_no_evidence` | `little_to_no_evidence` | `little_to_no_evidence` | –   | –   |
-Interpretive intent:
-- **`meets_expectations` is the default outcome** when at least two dimensions are adequately articulated.
-- **`exceeds_expectations` requires strong articulation across all dimensions** and reasonable specificity.
-- **`below_expectations` requires broad weakness across dimensions.**
-
-##### Minimum Threshold Table: `C_PPP_SECC`
-
-| `sbo indentifier` | sbo_short_description |
-| --------------- | --------------------- |
-| `C_PPP_SECC`    | SectionCResponse      |
-
-| resultant scale value      | D1                         | D2                         | D3                         | Q1                         | Q2                         |
-| -------------------------- | -------------------------- | -------------------------- | -------------------------- | -------------------------- | -------------------------- |
-| `exceeds_expectations`     | `exceeds_expectations`     | `exceeds_expectations`     | `exceeds_expectations`     | `exceeds_expectations`     | `exceeds_expectations`     |
-| `meets_expectations`       | `meets_expectations`       | `meets_expectations`       | `meets_expectations`       | `meets_expectations`       | `meets_expectations`       |
-| `approaching_expectations` | `approaching_expectations` | `approaching_expectations` | `approaching_expectations` | `approaching_expectations` | `approaching_expectations` |
-| `below_expectations`       | `little_to_no_evidence`    | `little_to_no_evidence`    | `little_to_no_evidence`    | `little_to_no_evidence`    | `little_to_no_evidence`    |
-| `not_demonstrated`         | `not_demonstrated`         | `not_demonstrated`         | `not_demonstrated`         | `not_demonstrated`         | `not_demonstrated`         |
-Interpretive intent:
-- **`meets_expectations` is the default outcome** when at least two dimensions are adequately articulated.
-- **`exceeds_expectations` requires strong articulation across all dimensions** and reasonable specificity.
-- **`below_expectations` requires broad weakness across dimensions.**
-
-##### Minimum Threshold Table: `C_PPP_SECD`
-
-| `sbo indentifier` | sbo_short_description |
-| --------------- | --------------------- |
-| `C_PPP_SECD`    | SectionDResponse      |
-
-| resultant scale value    | D1                      | D2                      | D3                      | Q1  | Q2  |
-| ------------------------ | ----------------------- | ----------------------- | ----------------------- | --- | --- |
-| `exceeds_expectations`     |                         |                         |                         |     |     |
-| `meets_expectations`       |                         |                         |                         |     |     |
-| `approaching_expectations` |                         |                         |                         |     |     |
-| `below_expectations`       |                         |                         |                         |     |     |
-| `not_demonstrated`         | `little_to_no_evidence` | `little_to_no_evidence` | `little_to_no_evidence` | –   | –   |
-Interpretive intent:
-- **`meets_expectations` is the default outcome** when at least two dimensions are adequately articulated.
-- **`exceeds_expectations` requires strong articulation across all dimensions** and reasonable specificity.
-- **`below_expectations` requires broad weakness across dimensions.**
-
-##### Minimum Threshold Table: `C_PPP_SECE`
-
-| `sbo indentifier` | sbo_short_description |
-| --------------- | --------------------- |
-| `C_PPP_SECE`    | SectionBResponse      |
-
-| resultant scale value    | D1                      | D2                      | D3                      | Q1  | Q2  |
-| ------------------------ | ----------------------- | ----------------------- | ----------------------- | --- | --- |
-| `exceeds_expectations`     |                         |                         |                         |     |     |
-| `meets_expectations`       |                         |                         |                         |     |     |
-| `approaching_expectations` |                         |                         |                         |     |     |
-| `below_expectations`       |                         |                         |                         |     |     |
-| `not_demonstrated`         | `little_to_no_evidence` | `little_to_no_evidence` | `little_to_no_evidence` | –   | –   |
-
-Interpretive intent:
-- **`meets_expectations` is the default outcome** when at least two dimensions are adequately articulated.
-- **`exceeds_expectations` requires strong articulation across all dimensions** and reasonable specificity.
-- **`below_expectations` requires broad weakness across dimensions.**
-
-#### 6.5. Layer 4 SBO Value Derivation, `component_score`  →  `submission_score` mapping
-
-##### Registry Summary (All Require Threshold Tables)
-
-| `sbo indentifier` | sbo_short_description                     |
-| --------------- | ----------------------------------------- |
-| `S_PPP`         | Pre-Practice Positioning (PPP) Assignment |
-
-| resultant scale value    | SECA                    | SECB                    | SECC                    | SECD | SECE |
-| ------------------------ | ----------------------- | ----------------------- | ----------------------- | ---- | ---- |
-| `exceeds_expectations`     |                         |                         |                         |      |      |
-| `meets_expectations`       |                         |                         |                         |      |      |
-| `approaching_expectations` |                         |                         |                         |      |      |
-| `below_expectations`       |                         |                         |                         |      |      |
-| `not_demonstrated`         | `little_to_no_evidence` | `little_to_no_evidence` | `little_to_no_evidence` | –    | –    |
-
-
-Defines how **component scores determine the final submission score**.
-Placeholder structure:
-```text
-<Component → Submission Mapping Table Placeholder>
-```
-Output:
-```text
-submission_score
-```
+#### 6.4 Layer 4 SBO Value Derivation, `component_score`  →  `submission_score` mapping
+##### 1\. Target SBO class
+##### 2\. Input SBO class
+##### 3\. Registry summary
+##### 4\. Mapping tables
+##### 5\. Fallback rule
+##### 6\. Optional interpretation notes
 
 ### 7. Hard boundary rules (optional)
 Hard boundary rules may constrain score eligibility.
+Boundary rules must operate only on **dimension or component scores**.
+
 Example structure:
 ```text
 <Hard Boundary Rule Placeholder>
@@ -502,7 +234,8 @@ Example logic:
 Eligibility for `meets_expectations` requires
 two dimensions at `partially_demonstrated` or higher
 ```
-Boundary rules must operate only on **dimension or component scores**.
+
+
 ### 8. Structural invariants
 The following invariants must hold:
 2. Every component must define its dimensions.

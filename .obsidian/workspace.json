@@ -314,7 +314,7 @@
             }
           }
         ],
-        "currentTab": 4
+        "currentTab": 5
       }
     ],
     "direction": "horizontal",
@@ -334,7 +334,7 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "f301f2cf718a0aeb",
+  "active": "15843676ad754c87",
   "lastOpenFiles": [
     "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE WITH CONTENT.md",
     "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
