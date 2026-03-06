@@ -55,6 +55,8 @@ Higher-layer SBO scores may be derived from lower-layer SBO scores through mappi
 #### 2.6 Layer execution note
 Not all scoring processes operate across all layers.
 A scoring process may evaluate and assign scores at **one or more layers**, depending on the evaluation task and the structures consumed by that scoring stage.
+Higher-layer scoring may depend on lower-layer SBO scores.
+Therefore, when multiple layers are executed, they must be evaluated in ascending layer order unless the scoring specification explicitly defines an alternative derivation process.
 ### 3. Score-Bearing Object (SBO) type registry
 This table defines the Score-Bearing Object (SBO) types used in the rubric payload.
 Each row specifies an SBO type, its identifier structure, and the scale used to evaluate that SBO.
@@ -67,13 +69,15 @@ Each row specifies an SBO type, its identifier structure, and the scale used to 
 | 4     | submission | submission_score | `S_sid`                | performance | `submission_performance_scale` |
 ### 4. Scale registry
 
+#### 4.1 Registered Scales
+
 | scale_name                     | ordered | description                                   |
 | ------------------------------ | ------- | --------------------------------------------- |
 | `indicator_evidence_scale`     | true    | Evidence strength for indicator evaluation    |
 | `dimension_evidence_scale`     | true    | Evidence strength for dimension evaluation    |
 | `component_performance_scale`  | true    | Performance evaluation scale for a component  |
 | `submission_performance_scale` | true    | Performance evaluation scale for a submission |
-#### indicator_evidence_scale
+##### indicator_evidence_scale
 
 | scale_value           |
 | --------------------- |
@@ -84,7 +88,7 @@ Hierarchy:
 ```
 evidence > partial_evidence > little_to_no_evidence
 ```
-#### dimension_evidence_scale
+##### dimension_evidence_scale
 
 | scale_value                |
 | -------------------------- |
@@ -95,7 +99,7 @@ Hierarchy:
 ```
 demonstrated > partially_demonstrated > little_to_no_demonstration
 ```
-#### component_performance_scale
+##### component_performance_scale
 
 | scale_value              |
 | ------------------------ |
@@ -108,7 +112,7 @@ Hierarchy:
 ```
 exceeds_expectations > meets_expectations > approaching_expectations > below_expectations > not_demonstrated
 ```
-#### submission_performance_scale
+##### submission_performance_scale
 
 | scale_value              |
 | ------------------------ |
@@ -121,8 +125,30 @@ Hierarchy:
 ```
 exceeds_expectations > meets_expectations > approaching_expectations > below_expectations > not_demonstrated
 ```
+
+#### 4.2 Scale ordering
+
+For ordered scales, the order of rows in the scale definition table determines the ranking of scale values from strongest to weakest.
+The first row represents the strongest value.
+Subsequent rows represent progressively weaker values.
+Mapping table comparisons rely on this ordering.
+
 ### 5. Registry of specific Score-Bearing Object (SBO) instances 
 `sbo_identifier_shortid`: a short token used within mapping tables as a compact reference to the corresponding SBO.
+#### 5.0 Short identifier convention
+`sbo_identifier_shortid` is a compact token used to reference a specific
+Score-Bearing Object instance within mapping tables.
+Short identifiers must satisfy the following constraints:
+- unique within the rubric payload
+- stable across rubric revisions unless the SBO is removed
+- suitable for use as a column header in mapping tables
+- composed only of alphanumeric characters and underscores
+Typical forms:
+I1
+I2
+D1
+D2
+C1
 #### 5.1 Layer 4 SBO Instances
 Defines the **Layer 4 Score-Bearing Object (SBO)** representing the full student submission.
 
@@ -174,6 +200,7 @@ Defines the **Layer 1 SBOs** used to detect observable evidence within the Asses
 ##### Layer 1 Input SBO class
 ##### Layer 1 Registry summary
 ##### Layer 1 Mapping tables
+Layer 1 scoring may be implemented using procedural evaluation rather than mapping tables. In such cases the mapping table subsection may be omitted.
 ##### Layer 1 Fallback rule
 ##### Layer 1 Optional interpretation notes
 #### 6.2 Layer 2 SBO Value Derivation, `indicator_score` → `dimension_score` mapping
@@ -223,7 +250,6 @@ The following invariants must hold:
 This document constitutes the **authoritative rubric payload** for the assignment.
 All calibration artefacts, scoring prompts, and automated evaluation systems must reference these definitions exactly.
 ### 10. Mapping table specification
-
 Mapping tables define how scores for one class of **Score-Bearing Object (SBO)** are derived from the scores of other SBOs.
 A mapping table must be **deterministic**: for any combination of input values there must be exactly one resulting output value.
 Mapping tables are interpreted using the rules defined in this section.
@@ -288,6 +314,8 @@ For each row:
 A row is satisfied when **all input SBO values meet or exceed the threshold values specified in that row**.
 The **first row whose threshold condition is satisfied determines the result**.
 Once a row is satisfied, later rows are ignored.
+
+No two rows may define identical threshold conditions for the same set of input SBOs.
 #### 10.6 Coverage requirement
 Mapping tables must guarantee that every possible combination of input values yields a result.
 Coverage may be achieved by:
@@ -297,7 +325,7 @@ In practice, the bottom row typically uses the **lowest values of the input scal
 #### 10.7 Validity constraints
 A valid mapping table must satisfy the following conditions:
 1. `resultant scale value` must contain only values from the scale associated with the **target SBO**.
-2. Input columns must contain only values from the scale associated with the corresponding **input SBO**, or the wildcard `–`.
+2. Input columns must contain only values from the scale associated with the corresponding **input SBO**, or the wildcard `*`.
 3. Rows must be ordered from **strongest threshold condition to weakest threshold condition**.
 4. The table must guarantee that evaluation produces **exactly one output value** for every possible combination of input values.
 #### 10.8 Evaluation procedure

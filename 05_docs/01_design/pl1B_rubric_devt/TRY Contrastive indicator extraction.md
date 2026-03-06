@@ -7,14 +7,32 @@ That produces indicators that are **far more discriminative and operational**, w
 Every indicator should ideally correspond to a **contrastive boundary** in the response space.
 Example contrast:
 
-|**Response A**|**Response B**|
+| **Response A** | **Response B** |
 |---|---|
-|explicitly assigns accountability|describes workflow without assigning responsibility|
+| explicitly assigns accountability | describes workflow without assigning responsibility |
 The signal that distinguishes them becomes an indicator.
 This makes the indicator:
-- empirically grounded
-- operationally detectable
-- strongly tied to analytic intent
+- empirically grounded  
+- operationally detectable  
+- strongly tied to analytic intent  
+### Components with multiple analytic sub-spaces
+Some assignment components ask students to perform **multiple distinct analytic moves**. These moves correspond to **analytic sub-spaces** within the response.
+For example, a component might require students to address:
+```
+accountability locus
+role boundary and responsibility hand-off
+professional obligations
+```
+In such cases, contrastive extraction should be **anchored to each analytic sub-space separately**, rather than performed across the entire response.
+If contrastive extraction is applied globally, the model may surface differences that reflect **general writing quality or style**, rather than signals tied to the analytic tasks of the component.
+Instead, perform contrastive extraction **within each analytic sub-space**.
+Example structure:
+```
+Sub-space A — Accountability framing
+Sub-space B — Role boundary and responsibility hand-off
+Sub-space C — Professional obligations
+```
+Contrastive pairs are then identified **within each sub-space**, ensuring that the resulting indicators correspond directly to the analytic expectations of the component.
 ### Step-by-step workflow
 #### Step 1 — Select a calibration sample
 Same as before:
@@ -27,11 +45,25 @@ submission_id
 component_id
 cleaned_response_text
 ```
-### Step 2 — Ask the model to find contrastive pairs
+### Step 2 — Identify analytic sub-spaces
+Before running contrastive extraction, identify the **analytic sub-spaces implied by the component instructions**.
+Example:
+```
+Sub-space A: accountability locus
+Sub-space B: role boundary / responsibility hand-off
+Sub-space C: professional obligations
+```
+These sub-spaces usually correspond to:
+- bullet points in the prompt  
+- explicit analytic questions  
+- distinct conceptual dimensions the student must address  
+Contrastive analysis is then performed **separately within each sub-space**.
+### Step 3 — Ask the model to find contrastive pairs
 Prompt concept:
 ```
-Examine the responses.
-Identify pairs of responses that approach the task in
+Examine the responses with respect to the following analytic focus:
+<analytic sub-space description>
+Identify pairs of responses that approach this aspect of the task in
 clearly different ways.
 For each pair:
 - briefly describe how the approaches differ
@@ -57,7 +89,7 @@ Response B limits responsibility to the professional:
 Distinguishing signal:
 recognition of distributed responsibility
 ```
-### Step 3 — Extract contrastive signals
+### Step 4 — Extract contrastive signals
 From the contrasts you derive signals like:
 ```
 explicit assignment of accountability
@@ -66,7 +98,14 @@ description of responsibility hand-off
 explicit mention of regulatory oversight
 ```
 These signals become **candidate indicators**.
-### Step 4 — Convert signals into indicator SBO instances
+When sub-spaces are used, signals are first grouped by sub-space:
+```
+Accountability signals
+Role-boundary signals
+Professional-obligation signals
+```
+These groups often later inform **dimension formation in Stage 2**.
+### Step 5 — Convert signals into indicator SBO instances
 Example:
 ```
 I1 response explicitly assigns accountability to a specific actor
@@ -78,8 +117,8 @@ Populate:
 ```
 Rubric Template: 5.4 Layer 1 SBO Instances (Draft)
 ```
-### Step 5 — Build evaluation guidance using contrastive evidence
-The contrastive pairs give you **exact textual evidence** to guide the evaluation prompt.
+### Step 6 — Build evaluation guidance using contrastive evidence
+The contrastive pairs provide **real textual evidence** for designing evaluation guidance.
 Example entry for Section 6.1:
 ```
 indicator_definition
@@ -113,13 +152,23 @@ The calibration sample becomes a **signal discovery engine**.
 ```
 calibration responses
         ↓
-contrastive analysis
+anchored contrastive analysis
         ↓
 candidate indicators
         ↓
 Stage 1 indicator SBO instances
 ```
-And the contrasts often naturally reveal **candidate dimensions**, feeding Stage 2.
+When analytic sub-spaces are present, the process becomes:
+```
+calibration responses
+        ↓
+sub-space anchored contrasts
+        ↓
+sub-space signal sets
+        ↓
+candidate indicators
+```
+These signals often naturally cluster into **candidate dimensions**, feeding Stage 2.
 Example cluster:
 ```
 I1 explicit accountability
@@ -136,12 +185,10 @@ LLMs perform best when detection instructions are based on:
 clear textual contrasts
 explicit examples
 ```
-Contrastive extraction gives you exactly that.
-Instead of abstract instructions, you end up with **operational signals grounded in real responses**.
+Contrastive extraction produces indicators grounded in **real response language**, which improves reliability during automated scoring.
 ### The most powerful version (optional)
-There is an even more advanced version called **contrastive boundary discovery**, where the model identifies:
+An advanced variant is **contrastive boundary discovery**, where the model identifies:
 ```
 minimal textual differences that change analytic interpretation
 ```
-This is extremely effective for building **robust indicator evaluation prompts**, because it reveals the smallest cues the model should pay attention to.
-If you’d like, I can show you how to integrate contrastive extraction directly into **Stage 0 of your rubric construction pipeline**, which would make the pipeline even more systematic.
+This reveals the smallest textual cues that determine how a response should be interpreted, making it particularly effective for building **robust indicator evaluation prompts**.

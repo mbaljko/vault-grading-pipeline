@@ -4,8 +4,8 @@ This document explains the **conceptual design of the assignment rubric**.
 It is intended for instructors, course designers, and calibration reviewers.
 Its purpose is to:
 - explain **what the rubric evaluates**
-- document **how the dimensions were derived**
-- describe **how indicators support the evaluation of dimensions**
+- document **how the analytic structure of the assignment was interpreted**
+- describe **how indicators and dimensions were derived**
 - explain the **interpretive logic behind the scoring rules**
 This document is **human-readable and explanatory**.
 It is **not used directly by the scoring pipeline**.
@@ -58,13 +58,28 @@ Examples:
 | SectionBResponse | evaluation of governance mechanisms |
 | SectionCResponse | discussion of residual uncertainty |
 Each component is evaluated using its own set of rubric dimensions.
+### Analytic sub-spaces
+Before constructing the rubric, the analytic structure of each component is interpreted in terms of **analytic sub-spaces**.
+An analytic sub-space represents a **conceptual task the component asks the student to perform**.
+Analytic sub-spaces are derived directly from the **assignment instructions** and guide the discovery of indicators and dimensions during rubric development.
+They are **not part of the scoring ontology** and do not appear in the rubric payload document.
+Instead, they serve as a **design scaffold** for rubric construction.
+Example structure:
+
+| subspace_id | analytic focus | description | prompt anchor |
+|---|---|---|---|
+| A1 | accountability locus | how responsibility is located (individual vs distributed) | bullet 1 |
+| A2 | role boundary | where the professional role stops or responsibility is handed off | bullet 2 |
+| A3 | professional obligations | whether obligations exist in a non-licensure field | bullet 3 |
+Analytic sub-spaces are used to guide **contrastive indicator discovery** during rubric development.
+Indicators discovered within the same analytic sub-space often later cluster into **dimensions**.
 ### Dimensions
 A **dimension** represents a conceptual evaluation criterion applied to a component.
-Dimensions are designed to capture distinct aspects of the student's analysis.
+Dimensions are designed to capture **distinct properties of the student's analysis** that can be evaluated from the response.
 Examples of dimensions include:
-- accountability framing
-- role boundary and hand-off
-- professional obligations
+- accountability framing  
+- role boundary and responsibility hand-off  
+- professional obligations  
 Each dimension has a **scoring claim**.
 A scoring claim specifies the conceptual judgement being evaluated.
 Example structure:
@@ -72,9 +87,10 @@ Example structure:
 Evaluate whether—and how clearly—the response identifies where accountability resides in the sociotechnical situation.
 ```
 Dimensions should satisfy the following principles:
-- conceptual independence
-- interpretability
-- observable evidence support
+- conceptual independence  
+- interpretability  
+- observable evidence support  
+Dimensions are instantiated in the scoring system as **Layer 2 Score-Bearing Objects (dimension SBOs)**.
 ### Indicators
 Indicators are **observable evidence checks**.
 They detect whether particular conceptual elements appear in the response.
@@ -89,6 +105,7 @@ Indicators serve several roles:
 | response safeguards | ensure the response is interpretable |
 Indicators do not directly determine the final score.  
 Instead they contribute evidence used to evaluate dimensions.
+Indicators are instantiated in the scoring system as **Layer 1 Score-Bearing Objects (indicator SBOs)**.
 ### Evidence scales
 Two evidence scales are used in the rubric.
 #### Indicator evidence scale
@@ -107,12 +124,12 @@ This scale measures the **strength of observable textual evidence** for an indic
 
 | dimension_evidence_level |
 |---|
-| Level 1 |
-| Level 2 |
-| Level 3 |
+| demonstrated |
+| partially_demonstrated |
+| little_to_no_demonstration |
 Hierarchy:
 ```
-Level 1 > Level 2 > Level 3
+demonstrated > partially_demonstrated > little_to_no_demonstration
 ```
 This scale measures the **strength of conceptual articulation for the dimension**.
 ### Indicator–dimension relationship
@@ -148,7 +165,7 @@ Strong responses typically:
 The mapping from dimension evidence levels to component scores is defined in the **rubric payload document**.
 ### Submission scoring
 The final submission score aggregates the component scores across the assignment.
-Submission scoring therefore reflects the student's overall professional positioning across the assignment.
+Submission scoring therefore reflects the student's **overall professional positioning across the assignment**.
 ### Role of the rubric payload document
 The **rubric payload document** is the deterministic specification used by the scoring pipeline.
 It contains:
@@ -165,12 +182,12 @@ Its purpose is to function as a **structured scoring specification used by autom
 Rubric development typically follows an incremental process:
 ```
 1 identify assignment components
-2 derive dimensions for each component
-3 discover indicators that detect dimension evidence
-4 classify indicator roles
+2 interpret analytic sub-spaces in each component
+3 discover indicators using contrastive analysis of calibration responses
+4 derive dimensions supported by indicator evidence
 5 define evidence scales
-6 construct mapping tables
-7 finalise scoring rules
+6 construct mapping tables across scoring layers
+7 stabilise the rubric payload specification
 ```
 The rubric payload document is generated once these elements have been stabilised.
 ### Normative status
