@@ -206,18 +206,13 @@ Constraints:
 - dimension identifiers must remain stable across rubric versions
 ##### EXAMPLE
 
-| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type | scale_name                 | sbo indentifier |
-| ----- | --------- | --------------- | ---------------------- | ---------- | -------------------------- | --------------- |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D1` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D2` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D3` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D4` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D5` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D6` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D7` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D8` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_Q1` |
-| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_Q1` |
+| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type | scale_name                 | sbo indentifier | sbo_short_description      |
+| ----- | --------- | --------------- | ---------------------- | ---------- | -------------------------- | --------------- | -------------------------- |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D1` | Accountability framing     |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D2` | Role boundary and hand-off |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_D3` | Professional obligations   |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_Q1` | Component Coherence        |
+| 2     | dimension | dimension_score | `[D\|Q]_sid_cid_did`   | evidence   | `dimension_evidence_scale` | `D_PPP_SECA_Q1` | Component Specificity      |
 
 ##### OLDER
 
@@ -243,39 +238,80 @@ Constraints:
 ##### EXAMPLE
 
 
-| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type | scale_name                 | sbo indentifier |
-| ----- | --------- | --------------- | ---------------------- | ---------- | -------------------------- | --------------- |
-| 1     | indicator | indicator_score | `[IP]_sid_cid_iid`     | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I1` |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I2` |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I3` |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I4` |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I5` |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I6` |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I7` |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I8` |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_P1` |
-| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_P2` |
+| layer | sbo_type  | score_name      | sbo_identifier_pattern | scale_type | scale_name                 | sbo indentifier | sbo_short_description                                             |
+| ----- | --------- | --------------- | ---------------------- | ---------- | -------------------------- | --------------- | ----------------------------------------------------------------- |
+| 1     | indicator | indicator_score | `[IP]_sid_cid_iid`     | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I1` | Accountability framing is explicitly stated                       |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I2` | Accountability framing is minimally supported                     |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I3` | Inside-the-role content is specified                              |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I4` | Outside-the-role content is specified                             |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I5` | Hand-off boundary is articulated                                  |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_I6` | Professional obligations in a non-licensure field are articulated |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_P1` | Coherence                                                         |
+| 1     | indicator | indicator_score | `[I\|P]_sid_cid_iid`   | evidence   | `indicator_evidence_scale` | `I_PPP_SECA_P2` | Specificity                                                       |
 
 
 ### 5. SBO Instructions
 
-#### 5.1 Layer 1 SBO Value Derivation
+#### 5.1 Layer 1 SBO Value Derivation, AA → `indicator_score` 
 
 | sbo identifier  | Nickname | indicator_definition                                              | assessment guidance                                                                                                                           |
 | --------------- | -------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `I_PPP_SECA_I1` |          | Accountability framing is explicitly stated                       | Determine whether the response **explicitly identifies where accountability resides** in the sociotechnical situation.                        |
-| `I_PPP_SECA_I2` |          | Accountability framing is minimally supported                     | Determine whether the response provides **at least one supporting reason or explanation** justifying the accountability framing.              |
-| `I_PPP_SECA_I3` |          | Inside-the-role content is specified                              | Determine whether the response identifies **at least one responsibility or activity that falls within the role of a computing professional**. |
-| `I_PPP_SECA_I4` |          | Outside-the-role content is specified                             | Determine whether the response identifies **at least one responsibility outside the professional role**.                                      |
-| `I_PPP_SECA_I5` |          | Hand-off boundary is articulated                                  | Determine whether the response **explicitly describes the boundary where responsibility transitions to another actor**.                       |
-| `I_PPP_SECA_I6` |          | Professional obligations in a non-licensure field are articulated | Determine whether the response identifies **at least one obligation or responsibility applying to computing professionals**.                  |
-| `I_PPP_SECA_P1` |          | Coherence                                                         | Determine whether the response is **readable, internally consistent, and logically structured**.                                              |
-| `I_PPP_SECA_P2` |          | Specificity                                                       | Determine whether the response includes **at least one concrete, checkable claim** rather than purely generic statements.                     |
+| `I_PPP_SECA_I1` | `I1`     | Accountability framing is explicitly stated                       | Determine whether the response **explicitly identifies where accountability resides** in the sociotechnical situation.                        |
+| `I_PPP_SECA_I2` | `I2`     | Accountability framing is minimally supported                     | Determine whether the response provides **at least one supporting reason or explanation** justifying the accountability framing.              |
+| `I_PPP_SECA_I3` | `I3`     | Inside-the-role content is specified                              | Determine whether the response identifies **at least one responsibility or activity that falls within the role of a computing professional**. |
+| `I_PPP_SECA_I4` | `I4`     | Outside-the-role content is specified                             | Determine whether the response identifies **at least one responsibility outside the professional role**.                                      |
+| `I_PPP_SECA_I5` | `I5`     | Hand-off boundary is articulated                                  | Determine whether the response **explicitly describes the boundary where responsibility transitions to another actor**.                       |
+| `I_PPP_SECA_I6` | `I6`     | Professional obligations in a non-licensure field are articulated | Determine whether the response identifies **at least one obligation or responsibility applying to computing professionals**.                  |
+| `I_PPP_SECA_P1` | `P1`     | Coherence                                                         | Determine whether the response is **readable, internally consistent, and logically structured**.                                              |
+| `I_PPP_SECA_P2` | `P2`     | Specificity                                                       | Determine whether the response includes **at least one concrete, checkable claim** rather than purely generic statements.                     |
 
-#### 5.2 Layer 2 SBO Value Derivation
+#### 5.2 Layer 2 SBO Value Derivation, `indicator_score` → `dimension_score` mapping
 
+| sbo indentifier | sbo_short_description      | Anchor | Descriptive                                                            |
+| --------------- | -------------------------- | ------ | ---------------------------------------------------------------------- |
+| `D_PPP_SECA_D1` | Accountability framing     | `I1`   | `I2` is a **supporting or strengthening indicator**.                   |
+| `D_PPP_SECA_D2` | Role boundary and hand-off | `I3`   | `I4` and `I5` primarily distinguish **strong boundary articulation**.  |
+| `D_PPP_SECA_D3` | Professional obligations   | `I6`   |                                                                        |
+| `D_PPP_SECA_Q1` | Component Coherence        | `Q1`   | functions primarily as a **minimum interpretability safeguard**.       |
+| `D_PPP_SECA_Q1` | Component Specificity      | `Q2`   | functions primarily as a **specificity and sophistication indicator**. |
 
-### 8. Indicator → Dimension mapping
+##### Minimum Thresholds
+`D_PPP_SECA_D1`
+
+| dimension_level | `I1`                  | `I2`                  |
+| --------------- | --------------------- | --------------------- |
+| Level 1         | evidence              | evidence              |
+| Level 1         | evidence              | partial_evidence      |
+| Level 2         | evidence              | little_to_no_evidence |
+| Level 2         | partial_evidence      | –                     |
+| Level 3         | little_to_no_evidence | –                     |
+Interpretation:
+- `I1` anchors the dimension.
+- Presence of `I1` typically establishes at least **Level 2**.
+- `I2` primarily distinguishes **Level 1 sophistication**.
+#### 6.6 Dimension `D2` — Role boundary and hand-off
+
+| dimension_level | I3 | I4 | I5 |
+|---|---|---|---|
+| Level 1 | evidence | evidence | evidence |
+| Level 1 | evidence | evidence | partial_evidence |
+| Level 2 | evidence | partial_evidence | – |
+| Level 2 | evidence | – | partial_evidence |
+| Level 2 | evidence | little_to_no_evidence | little_to_no_evidence |
+| Level 3 | little_to_no_evidence | – | – |
+Interpretation:
+- `I3` anchors the dimension.
+- Presence of `I3 evidence` establishes at least **Level 2**.
+- `I4` and `I5` distinguish strong articulation of the boundary.
+#### 6.7 Dimension `D3` — Professional obligations
+
+| dimension_level | I6 |
+|---|---|
+| Level 1 | evidence |
+| Level 2 | partial_evidence |
+| Level 3 | little_to_no_evidence |
+
+##### Rules
 This section defines how **indicator evidence statuses determine dimension evidence levels**.
 Mapping rules must satisfy:
 - deterministic evaluation
@@ -295,7 +331,7 @@ Fallback rule:
 ```text
 if no condition is satisfied → dimension = Level 3
 ```
-### 9. Dimension → Component score mapping
+#### 5.3. Layer 3 SBO Value Derivation, `dimension_score` → `component_score` mapping
 Defines how **dimension evidence levels determine component scores**.
 Placeholder structure:
 ```text
@@ -310,7 +346,7 @@ Output:
 ```text
 component_score
 ```
-### 10. Component → Submission score mapping
+#### 5.4. Layer 4 SBO Value Derivation, `component_score`  →  `submission_score` mapping
 Defines how **component scores determine the final submission score**.
 Placeholder structure:
 ```text
@@ -320,17 +356,8 @@ Output:
 ```text
 submission_score
 ```
-### 11. Score labels
 
-| score_label |
-|---|
-| exceeds_expectations |
-| meets_expectations |
-| approaching_expectations |
-| below_expectations |
-| not_demonstrated |
-These labels define the **Layer 3 and Layer 4 scoring outputs**.
-### 12. Hard boundary rules (optional)
+### 6. Hard boundary rules (optional)
 Hard boundary rules may constrain score eligibility.
 Example structure:
 ```text
@@ -342,7 +369,7 @@ Eligibility for Meets expectations requires
 two dimensions at Level 2 or higher
 ```
 Boundary rules must operate only on **dimension or component scores**.
-### 13. Structural invariants
+### 7. Structural invariants
 The following invariants must hold:
 1. Every component must define its dimensions.
 2. Every `(component_id, dimension_id)` pair must be unique.
