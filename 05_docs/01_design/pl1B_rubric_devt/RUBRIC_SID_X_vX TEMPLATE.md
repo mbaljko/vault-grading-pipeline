@@ -312,7 +312,7 @@ Constraints:
 | `little_to_no_evidence`  | little_to_no_evidence | –                     | –                     |
 ###### Interpretation:
 - `I3` anchors the dimension.
-- Presence of `I3 evidence` establishes at least **Level 2**.
+- Presence of `I3 evidence` establishes at least **`partially_demonstrated`**.
 - `I4` and `I5` distinguish strong articulation of the boundary.
 
 ##### Minimum Threshold Table: `D_PPP_SECA_D3`
@@ -321,7 +321,7 @@ Constraints:
 | --------------- | ------------------------ |
 | `D_PPP_SECA_D3` | Professional obligations |
 
-| dimension_level          | I6                    |
+| resultant scale value    | I6                    |
 | ------------------------ | --------------------- |
 | `demonstrated`           | evidence              |
 | `partially_demonstrated` | partial_evidence      |
@@ -335,7 +335,7 @@ Constraints:
 | --------------- | --------------------- |
 | `D_PPP_SECA_Q1` | Component Coherence   |
 
-| dimension_level          | P1                    |
+| resultant scale value    | P1                    |
 | ------------------------ | --------------------- |
 | `demonstrated`           | evidence              |
 | `partially_demonstrated` | partial_evidence      |
@@ -347,7 +347,7 @@ Constraints:
 | --------------- | --------------------- |
 | `D_PPP_SECA_Q1` | Component Specificity |
 
-| dimension_level          | P2                    |
+| resultant scale value    | P2                    |
 | ------------------------ | --------------------- |
 | `demonstrated`           | evidence              |
 | `partially_demonstrated` | partial_evidence      |
@@ -371,7 +371,7 @@ the first satisfied row determines the dimension level
 ```
 Fallback rule:
 ```text
-if no condition is satisfied → dimension = Level 3
+if no condition is satisfied → dimension = `little_to_no_evidence`
 ```
 #### 5.3. Layer 3 SBO Value Derivation, `dimension_score` → `component_score` mapping
 
@@ -391,8 +391,102 @@ if no condition is satisfied → dimension = Level 3
 | --------------- | --------------------- |
 | `C_PPP_SECA`    | SectionAResponse      |
 
+| resultant scale value      | D1                       | D2                       | D3                       | Q1               | Q2               |
+| -------------------------- | ------------------------ | ------------------------ | ------------------------ | ---------------- | ---------------- |
+| `exceeds_expectations`     | `demonstrated`           | `demonstrated`           | `demonstrated`           | evidence         | evidence         |
+| `exceeds_expectations`     | `demonstrated`           | `demonstrated`           | `demonstrated`           | evidence         | partial_evidence |
+| `meets_expectations`       | `demonstrated`           | `partially_demonstrated` | `demonstrated`           | partial_evidence | partial_evidence |
+| `meets_expectations`       | `partially_demonstrated` | `demonstrated`           | `demonstrated`           | partial_evidence | partial_evidence |
+| `meets_expectations`       | `demonstrated`           | `demonstrated`           | `partially_demonstrated` | partial_evidence | partial_evidence |
+| `meets_expectations`       | `partially_demonstrated` | `partially_demonstrated` | `demonstrated`           | –                | –                |
+| `meets_expectations`       | `demonstrated`           | `partially_demonstrated` | `partially_demonstrated` | –                | –                |
+| `approaching_expectations` | `partially_demonstrated` | `partially_demonstrated` | `partially_demonstrated` | –                | –                |
+| `approaching_expectations` | `little_to_no_evidence`  | `partially_demonstrated` | `partially_demonstrated` | –                | –                |
+| `approaching_expectations` | `partially_demonstrated` | `little_to_no_evidence`  | `partially_demonstrated` | –                | –                |
+| `approaching_expectations` | `partially_demonstrated` | `partially_demonstrated` | `little_to_no_evidence`  | –                | –                |
+| `below_expectations`       | `little_to_no_evidence`  | `little_to_no_evidence`  | `partially_demonstrated` | –                | –                |
+| `below_expectations`       | `little_to_no_evidence`  | `partially_demonstrated` | `little_to_no_evidence`  | –                | –                |
+| `below_expectations`       | `partially_demonstrated` | `little_to_no_evidence`  | `little_to_no_evidence`  | –                | –                |
+| `not_demonstrated`         | `little_to_no_evidence`  | `little_to_no_evidence`  | `little_to_no_evidence`  | –                | –                |
+Interpretive intent:
+- **`meets_expectations` is the default outcome** when at least two dimensions are adequately articulated.
+- **`exceeds_expectations` requires strong articulation across all dimensions** and reasonable specificity.
+- **`below_expectations` requires broad weakness across dimensions.**
 
 
+
+##### Minimum Threshold Table: `C_PPP_SECB`
+
+| sbo indentifier | sbo_short_description |
+| --------------- | --------------------- |
+| `C_PPP_SECB`    | SectionBResponse      |
+
+| resultant scale value    | D1                      | D2                      | D3                      | Q1  | Q2  |
+| ------------------------ | ----------------------- | ----------------------- | ----------------------- | --- | --- |
+| `exceeds_expectations`     |                         |                         |                         |     |     |
+| `meets_expectations`       |                         |                         |                         |     |     |
+| `approaching_expectations` |                         |                         |                         |     |     |
+| `below_expectations`       |                         |                         |                         |     |     |
+| `not_demonstrated`         | `little_to_no_evidence` | `little_to_no_evidence` | `little_to_no_evidence` | –   | –   |
+Interpretive intent:
+- **`meets_expectations` is the default outcome** when at least two dimensions are adequately articulated.
+- **`exceeds_expectations` requires strong articulation across all dimensions** and reasonable specificity.
+- **`below_expectations` requires broad weakness across dimensions.**
+
+##### Minimum Threshold Table: `C_PPP_SECC`
+
+| sbo indentifier | sbo_short_description |
+| --------------- | --------------------- |
+| `C_PPP_SECC`    | SectionCResponse      |
+
+| resultant scale value      | D1                         | D2                         | D3                         | Q1                         | Q2                         |
+| -------------------------- | -------------------------- | -------------------------- | -------------------------- | -------------------------- | -------------------------- |
+| `exceeds_expectations`     | `exceeds_expectations`     | `exceeds_expectations`     | `exceeds_expectations`     | `exceeds_expectations`     | `exceeds_expectations`     |
+| `meets_expectations`       | `meets_expectations`       | `meets_expectations`       | `meets_expectations`       | `meets_expectations`       | `meets_expectations`       |
+| `approaching_expectations` | `approaching_expectations` | `approaching_expectations` | `approaching_expectations` | `approaching_expectations` | `approaching_expectations` |
+| `below_expectations`       | `little_to_no_evidence`    | `little_to_no_evidence`    | `little_to_no_evidence`    | `little_to_no_evidence`    | `little_to_no_evidence`    |
+| `not_demonstrated`         | `not_demonstrated`         | `not_demonstrated`         | `not_demonstrated`         | `not_demonstrated`         | `not_demonstrated`         |
+Interpretive intent:
+- **`meets_expectations` is the default outcome** when at least two dimensions are adequately articulated.
+- **`exceeds_expectations` requires strong articulation across all dimensions** and reasonable specificity.
+- **`below_expectations` requires broad weakness across dimensions.**
+
+##### Minimum Threshold Table: `C_PPP_SECD`
+
+| sbo indentifier | sbo_short_description |
+| --------------- | --------------------- |
+| `C_PPP_SECD`    | SectionDResponse      |
+
+| resultant scale value    | D1                      | D2                      | D3                      | Q1  | Q2  |
+| ------------------------ | ----------------------- | ----------------------- | ----------------------- | --- | --- |
+| `exceeds_expectations`     |                         |                         |                         |     |     |
+| `meets_expectations`       |                         |                         |                         |     |     |
+| `approaching_expectations` |                         |                         |                         |     |     |
+| `below_expectations`       |                         |                         |                         |     |     |
+| `not_demonstrated`         | `little_to_no_evidence` | `little_to_no_evidence` | `little_to_no_evidence` | –   | –   |
+Interpretive intent:
+- **`meets_expectations` is the default outcome** when at least two dimensions are adequately articulated.
+- **`exceeds_expectations` requires strong articulation across all dimensions** and reasonable specificity.
+- **`below_expectations` requires broad weakness across dimensions.**
+
+##### Minimum Threshold Table: `C_PPP_SECE`
+
+| sbo indentifier | sbo_short_description |
+| --------------- | --------------------- |
+| `C_PPP_SECE`    | SectionBResponse      |
+
+| resultant scale value    | D1                      | D2                      | D3                      | Q1  | Q2  |
+| ------------------------ | ----------------------- | ----------------------- | ----------------------- | --- | --- |
+| `exceeds_expectations`     |                         |                         |                         |     |     |
+| `meets_expectations`       |                         |                         |                         |     |     |
+| `approaching_expectations` |                         |                         |                         |     |     |
+| `below_expectations`       |                         |                         |                         |     |     |
+| `not_demonstrated`         | `little_to_no_evidence` | `little_to_no_evidence` | `little_to_no_evidence` | –   | –   |
+
+Interpretive intent:
+- **`meets_expectations` is the default outcome** when at least two dimensions are adequately articulated.
+- **`exceeds_expectations` requires strong articulation across all dimensions** and reasonable specificity.
+- **`below_expectations` requires broad weakness across dimensions.**
 
 ##### OLDER
 ##### Minimum Threshold Table: `D_PPP_SECA_D3`
@@ -412,6 +506,22 @@ Output:
 component_score
 ```
 #### 5.4. Layer 4 SBO Value Derivation, `component_score`  →  `submission_score` mapping
+
+##### Registry Summary (All Require Threshold Tables)
+
+| sbo indentifier | sbo_short_description                     |
+| --------------- | ----------------------------------------- |
+| `S_PPP`         | Pre-Practice Positioning (PPP) Assignment |
+
+| resultant scale value    | SECA                    | SECB                    | SECC                    | SECD | SECE |
+| ------------------------ | ----------------------- | ----------------------- | ----------------------- | ---- | ---- |
+| `exceeds_expectations`     |                         |                         |                         |      |      |
+| `meets_expectations`       |                         |                         |                         |      |      |
+| `approaching_expectations` |                         |                         |                         |      |      |
+| `below_expectations`       |                         |                         |                         |      |      |
+| `not_demonstrated`         | `little_to_no_evidence` | `little_to_no_evidence` | `little_to_no_evidence` | –    | –    |
+
+
 Defines how **component scores determine the final submission score**.
 Placeholder structure:
 ```text
@@ -430,8 +540,8 @@ Example structure:
 ```
 Example logic:
 ```text
-Eligibility for Meets expectations requires
-two dimensions at Level 2 or higher
+Eligibility for `meets_expectations` requires
+two dimensions at `partially_demonstrated` or higher
 ```
 Boundary rules must operate only on **dimension or component scores**.
 ### 7. Structural invariants
