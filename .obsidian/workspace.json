@@ -73,44 +73,16 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE  - SAVED.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "RUBRIC_SID_X_vX TEMPLATE  - SAVED"
-            }
-          },
-          {
-            "id": "79d317a941d9ddb4",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE  - SAVED.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "RUBRIC_SID_X_vX TEMPLATE  - SAVED"
-            }
-          },
-          {
-            "id": "ff582aca37af975a",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE  - SAVED.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "RUBRIC_SID_X_vX TEMPLATE  - SAVED"
+              "title": "RUBRIC_SID_X_vX TEMPLATE"
             }
           }
         ],
-        "currentTab": 6
+        "currentTab": 4
       }
     ],
     "direction": "vertical"
@@ -256,13 +228,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE  - SAVED.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of RUBRIC_SID_X_vX TEMPLATE  - SAVED"
+              "title": "Outline of RUBRIC_SID_X_vX TEMPLATE"
             }
           },
           {
@@ -296,13 +268,13 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "ff582aca37af975a",
+  "active": "e0236a3d3e07de35",
   "lastOpenFiles": [
-    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline - PRIOR TO THE BIG CHANGE.md",
-    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
-    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE  - SAVED.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric Template — Fictional Example.md",
     "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
+    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE  - SAVED.md",
+    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline - PRIOR TO THE BIG CHANGE.md",
+    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE WITH CONTENT.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
     "05_docs/01_design/pl1A_canonical_population_prep/Untitled.md",
