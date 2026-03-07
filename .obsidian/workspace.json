@@ -196,7 +196,7 @@
             }
           }
         ],
-        "currentTab": 8
+        "currentTab": 9
       }
     ],
     "direction": "vertical"
@@ -342,13 +342,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of RUBRIC_SID_X_vX TEMPLATE"
+              "title": "Outline of Pipeline 1B — Layered Rubric Construction Pipeline"
             }
           },
           {
@@ -382,8 +382,9 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "f301f2cf718a0aeb",
+  "active": "a98999cdb9bdec6c",
   "lastOpenFiles": [
+    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A (Excel,MCode) — Implementation Mapping to Specification.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline1A_manifest_schema.md",
@@ -391,7 +392,6 @@
     "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning.pq POTENTIAL OPTIMIZATIONS.md",
     "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning - TO DO.md",
     "05_docs/01_design/pl1A_canonical_population_prep/01_validation.pq - TO DO.md",
-    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Design Document.md",
     "05_docs/01_design/pl1B_rubric_devt/TRY Contrastive indicator extraction.md",
     "05_docs/01_design/pl1B_rubric_devt/TRY Pattern Discovery Pass.md",
