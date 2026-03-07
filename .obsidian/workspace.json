@@ -82,7 +82,7 @@
             }
           }
         ],
-        "currentTab": 4
+        "currentTab": 2
       }
     ],
     "direction": "vertical"
@@ -228,13 +228,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of RUBRIC_SID_X_vX TEMPLATE"
+              "title": "Outline of Pipeline 1B — Layered Rubric Construction Pipeline"
             }
           },
           {
@@ -268,13 +268,14 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "e0236a3d3e07de35",
+  "active": "95fc75ccf9858ba1",
   "lastOpenFiles": [
-    "05_docs/01_design/pl1B_rubric_devt/Rubric Template — Fictional Example.md",
-    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
-    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE  - SAVED.md",
-    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline - PRIOR TO THE BIG CHANGE.md",
+    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline only sec 1-4.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
+    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline - RADICAL CHANGE.md",
+    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
+    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE  - RADICAL CHANGE.md",
+    "05_docs/01_design/pl1B_rubric_devt/Rubric Template — Fictional Example.md",
     "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE WITH CONTENT.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
     "05_docs/01_design/pl1A_canonical_population_prep/Untitled.md",
@@ -295,7 +296,6 @@
     "05_docs/01_design/pl1B_rubric_devt/PROMPT - template for dimenion header.md",
     "05_docs/01_design/pl1B_rubric_devt/prev_versions/rubric_definition - prev v1.md",
     "05_docs/00_overview/prev_versions/Nomenclature Standard — Grading Ontology v2.md",
-    "05_docs/00_overview/prev_versions/Nomenclature Standard — Grading Ontology and Calibration Alignment v1.md",
     "05_docs/00_overview/prev",
     "secrets/openai_api_key.txt",
     "env/bin/activate",
