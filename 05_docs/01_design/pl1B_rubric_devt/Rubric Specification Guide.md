@@ -103,23 +103,10 @@ Two distinct identifier systems operate in the rubric payload.
    These include identifiers such as `sid`, `cid`, `iid`, and `did`.
 Rubric primitive identifiers provide the **building blocks** of the identifier system.  
 SBO identifiers combine those primitives into **fully qualified identifiers** that correspond to concrete scoring entities in the rubric payload.
-
-
-These prefixes (`I`, `D`, `C`, `S`) represent **SBO classes**, not analytic subtypes.
-Examples:
-
-| SBO identifier   | expansion                                                  |
-| ---------------- | ---------------------------------------------------------- |
-| `S_PPP`          | submission SBO for assessment `PPP`                        |
-| `C_PPP_SecA`     | component SBO for component `SecA`                         |
-| `D_PPP_SecA_D01` | dimension SBO `D01` evaluating component `SecA`            |
-| `I_PPP_SecA_I01` | indicator SBO `I01` detecting evidence in component `SecA` |
-the values of `<sid>`, `<cid>` and `<iid>` are described below under "Rubric Primitive (RP) identifiers"
-
-#### 3.1 Score-Bearing Object (SBO) identifiers
+#### 3.3 Score-Bearing Object (SBO) identifiers
+##### 3.3.1 SBO identifier structure
 Score-Bearing Object (SBO) identifiers are **structured identifiers constructed from Rubric Primitive (RP) identifiers**.
 They uniquely identify scoring entities across the four scoring layers.
-
 The **prefix of the SBO identifier indicates the SBO class**, which corresponds directly to the scoring layer.
 
 | layer   | SBO class  | identifier pattern    |
@@ -128,9 +115,7 @@ The **prefix of the SBO identifier indicates the SBO class**, which corresponds 
 | Layer 2 | dimension  | `D_<sid>_<cid>_<did>` |
 | Layer 3 | component  | `C_<sid>_<cid>`       |
 | Layer 4 | submission | `S_<sid>`             |
-
 These prefixes (`I`, `D`, `C`, `S`) represent **SBO classes**, not analytic subtypes.
-
 Examples:
 
 | SBO identifier   | expansion                                                  |
@@ -139,26 +124,19 @@ Examples:
 | `C_PPP_SecA`     | component SBO for component `SecA`                         |
 | `D_PPP_SecA_D01` | dimension SBO `D01` evaluating component `SecA`            |
 | `I_PPP_SecA_I01` | indicator SBO `I01` detecting evidence in component `SecA` |
-
 The values of `<sid>`, `<cid>`, `<iid>`, and `<did>` are described below under **Rubric Primitive (RP) identifiers**.
-
-##### SBO short identifiers (`sbo_identifier_shortid`)
+##### 3.3.1 SBO short identifiers (`sbo_identifier_shortid`)
 In addition to the full `sbo_identifier`, each SBO instance may define a compact identifier named `sbo_identifier_shortid`.
-
 This value provides a **short reference token** used in mapping tables and rule descriptions.
-
 For indicator and dimension SBO instances, the `sbo_identifier_shortid` is normally set equal to the RP identifier:
 
 | SBO class | RP identifier | typical shortid |
 |-----------|---------------|----------------|
 | indicator | `iid` | `I01`, `P01` |
 | dimension | `did` | `D01`, `Q01` |
-
 Because the RP identifier conventions ensure that `iid` and `did` values are **unique within the rubric payload**, these short identifiers remain **unambiguous even when used without the component identifier (`cid`)**.
-
 This allows mapping tables and evaluation logic to refer to indicators and dimensions compactly while preserving unambiguous references to the underlying SBO instances.
-
-#### 3.2 Rubric Primitive (RP) identifiers
+#### 3.4 Rubric Primitive (RP) identifiers
 The rubric payload uses four **Rubric Primitive (RP) identifiers**.
 
 | primitive | meaning |
@@ -169,7 +147,7 @@ The rubric payload uses four **Rubric Primitive (RP) identifiers**.
 | `did` | dimension identifier |
 These primitives form the **building blocks used to construct SBO identifiers**.
 The values of `sid` and `cid` originate from the **Assignment Payload Specification**, while `iid` and `did` are defined within the rubric payload.
-##### 3.2.1 General construction rules
+##### 3.4.1 General construction rules
 All RP identifiers should follow the following conventions.
 
 | rule | description |
@@ -178,7 +156,7 @@ All RP identifiers should follow the following conventions.
 | recognisable | clearly reference the entity being identified |
 | stable | must remain constant across rubric revisions |
 | alphanumeric | avoid spaces and punctuation |
-##### 3.2.2 RP identifier registry
+##### 3.4.2 RP identifier registry
 
 | RP identifier | associated SBO class | value source                          | example | notes                                                           |
 | ------------- | -------------------- | ------------------------------------- | ------- | --------------------------------------------------------------- |
@@ -186,19 +164,20 @@ All RP identifiers should follow the following conventions.
 | `cid`         | component            | derived from canonical `component_id` | `SecA`  | compact identifier used inside SBO identifiers                  |
 | `iid`         | indicator            | rubric-defined                        | `I01`   | may use subtype prefixes `I` or `P`                             |
 | `did`         | dimension            | rubric-defined                        | `D01`   | may use subtype prefixes `D` or `Q`                             |
-##### 3.2.3 Indicator RP identifier (iid) format
+##### 3.4.3 Indicator RP identifier (iid) format
 Indicator identifiers follow a fixed two-digit numbering scheme.
 Format:
 ```
 I00 – I99
 ```
 
-| rule | description |
-|---|---|
-| prefix | must begin with `I` or `P` |
-| numbering | two-digit numeric suffix |
-| padding | single-digit numbers must be zero-padded |
-| range | `00–99` |
+| rule       | description                                               |
+| ---------- | --------------------------------------------------------- |
+| prefix     | must begin with `I` or `P`                                |
+| numbering  | two-digit numeric suffix                                  |
+| padding    | single-digit numbers must be zero-padded                  |
+| range      | `00–99`                                                   |
+| uniqueness | each `iid` value must be unique within the rubric payload |
 Examples:
 
 | iid |
@@ -206,19 +185,20 @@ Examples:
 | `I01` |
 | `I02` |
 | `P01` |
-##### 3.2.4 Dimension RP identifier (did) format
+##### 3.4.4 Dimension RP identifier (did) format
 Dimension identifiers follow the same two-digit numbering scheme.
 Format:
 ```
 D00 – D99
 ```
 
-| rule | description |
-|---|---|
-| prefix | must begin with `D` or `Q` |
-| numbering | two-digit numeric suffix |
-| padding | single-digit numbers must be zero-padded |
-| range | `00–99` |
+| rule       | description                                               |
+| ---------- | --------------------------------------------------------- |
+| prefix     | must begin with `D` or `Q`                                |
+| numbering  | two-digit numeric suffix                                  |
+| padding    | single-digit numbers must be zero-padded                  |
+| range      | `00–99`                                                   |
+| uniqueness | each `did` value must be unique within the rubric payload |
 Examples:
 
 | did |
@@ -226,7 +206,7 @@ Examples:
 | `D01` |
 | `D02` |
 | `Q01` |
-##### 3.2.5 Component RP identifier (cid) derivation
+##### 3.4.5 Component RP identifier (cid) derivation
 The `cid` is a **short identifier representing a component**.
 It is derived from the canonical `component_id` defined in the Assignment Payload Specification.
 Example:
@@ -244,10 +224,10 @@ Typical transformations:
 | `SectionAResponse` | `SecA` |
 | `SectionBResponse` | `SecB` |
 | `SectionCResponse` | `SecC` |
-##### 3.2.6 Identifier stability rule
+##### 3.4.6 Identifier stability rule
 RP identifiers must remain stable across rubric revisions unless the corresponding entity is removed or fundamentally redefined.
 Changes to identifier values should be treated as **rubric-version changes**, not editorial revisions.
-##### 3.2.7 RP identifier subtype prefixes (`iid`, `did`)
+##### 3.4.7 RP identifier subtype prefixes (`iid`, `did`)
 The RP identifiers `iid` and `did` may contain **semantic subtype prefixes** that signal the analytic scope of the indicator or dimension.
 These subtype prefixes are **part of the RP identifier value**, not part of the SBO identifier prefix.
 
@@ -267,6 +247,22 @@ These subtype conventions allow the rubric to represent both:
 - **component-local evaluation**, and  
 - **cross-component analytic structures**
 without changing the structure of the SBO identifier.
+Because `iid` and `did` values are unique within the rubric payload, they can also be used directly as `sbo_identifier_shortid` values without introducing ambiguity.
+##### 3.4.8 RP identifier uniqueness domains
+Within a rubric payload, the RP identifiers `iid` and `did` define two unique identifier domains:
+
+| domain | definition |
+|---|---|
+| `IID` | the set of all indicator RP identifier values used in the rubric payload |
+| `DID` | the set of all dimension RP identifier values used in the rubric payload |
+These domains must satisfy the following rules:
+
+| rule | description |
+|---|---|
+| uniqueness of `IID` | no two indicator SBO instances may share the same `iid` value |
+| uniqueness of `DID` | no two dimension SBO instances may share the same `did` value |
+| disambiguation | each `iid` or `did` value must identify exactly one RP identifier within its domain |
+As a result, `iid` and `did` values may be used directly as `sbo_identifier_shortid` values for indicator and dimension SBO instances without introducing ambiguity.
 ### 4. Scale Conventions
 #### 4.1 Registered scales
 The standard rubric payload defines four scales.
