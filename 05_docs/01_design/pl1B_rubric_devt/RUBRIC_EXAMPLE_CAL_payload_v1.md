@@ -1,4 +1,4 @@
-## Rubric_Template_FictionalExample_PPP
+## RUBRIC_EXAMPLE_CAL_payload_v1
 ### Purpose
 Illustrates how the **Rubric Template** appears once populated with exemplar structures for the assessment `PPP` (Professional Practice Portfolio).
 The example shows rubric structures for the component `SectionAResponse`.

@@ -1,4 +1,4 @@
-## RUBRIC_SID_X_vX TEMPLATE.md
+## TEMPLATE for `RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>.md`
 ### Rubric Payload Specification
 ### 0. Rubric Identifier
 `RUBRIC_<submission_id>_<status>_payload_v<version>.md`
