@@ -164,6 +164,22 @@
               "icon": "lucide-file",
               "title": "Pipeline 1B — Layered Rubric Construction Pipeline"
             }
+          },
+          {
+            "id": "96934384f2f9c15b",
+            "type": "leaf",
+            "pinned": true,
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
+                "mode": "source",
+                "source": false
+              },
+              "pinned": true,
+              "icon": "lucide-file",
+              "title": "Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic)"
+            }
           }
         ],
         "currentTab": 9
@@ -354,8 +370,12 @@
   },
   "active": "a98999cdb9bdec6c",
   "lastOpenFiles": [
-    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
+    "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
+    "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning.pq POTENTIAL OPTIMIZATIONS.md",
+    "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning - TO DO.md",
+    "05_docs/01_design/pl1A_canonical_population_prep/01_validation.pq - TO DO.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
+    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Design Document.md",
     "05_docs/01_design/pl1B_rubric_devt/TRY Contrastive indicator extraction.md",
     "05_docs/01_design/pl1B_rubric_devt/TRY Pattern Discovery Pass.md",
@@ -385,10 +405,6 @@
     "env/bin/pip3",
     "env/bin/pip",
     "env/lib/python3.13/site-packages/pip/_internal/vcs/__pycache__/versioncontrol.cpython-313.pyc",
-    "05_docs/01_design/pl3_production_scoring/Pipeline PL3 — Production Scoring Pipeline (Two-Stage Model) v2.md",
-    "05_docs/01_design/pl3_production_scoring/Pipeline PL3 — Production Scoring Pipeline (Two-Stage Model) v1.md",
-    "05_docs/01_design/pl2_calibration/STEP - build calibration set using interior sampling.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_calibration_scoring_prompt v04.md",
-    "05_docs/01_design/pl2_calibration/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md"
+    "05_docs/01_design/pl3_production_scoring/Pipeline PL3 — Production Scoring Pipeline (Two-Stage Model) v2.md"
   ]
 }
