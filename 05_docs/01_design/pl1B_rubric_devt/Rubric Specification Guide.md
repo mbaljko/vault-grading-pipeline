@@ -86,36 +86,89 @@ Higher-layer SBO scores may be derived from lower-layer SBO scores only through 
 Evidence used during scoring must be drawn **only** from the AA defined for that layer.
 No evidence outside the AA may be used when assigning scores.
 ### 3. Identifier Conventions
-#### 3.1 Canonical abbreviations
-The rubric payload uses the following identifier abbreviations:
+This section defines the **identifier primitives and naming rules** used when constructing Score-Bearing Object (SBO) identifiers across all four scoring layers.
+Identifier conventions exist to ensure that rubric payloads remain:
+- readable
+- structurally predictable
+- stable across rubric revisions
+#### 3.1 Identifier primitives
+The rubric payload uses the following identifier primitives.
 
 | abbreviation | meaning |
 |---|---|
-| `sid` | submission identifier |
-| `cid` | component identifier |
+| `sid` | submission identifier representing the assessment |
+| `cid` | short component identifier |
 | `iid` | indicator identifier |
 | `did` | dimension identifier |
-These abbreviations align with the assignment payload specification.
-#### 3.2 SBO identifier patterns
+These abbreviations align with the identifiers used in the Assignment Payload Specification.
+#### 3.2 General SBO identifier structure
+SBO identifiers follow a predictable layered structure.
 
 | layer | SBO class | identifier pattern |
 |---|---|---|
-| Layer 1 | indicator | `[I\|P]_sid_cid_iid` |
-| Layer 2 | dimension | `[D\|Q]_sid_cid_did` |
-| Layer 3 | component | `C_sid_cid` |
-| Layer 4 | submission | `S_sid` |
-#### 3.3 Meaning of prefix variants
+| Layer 1 | indicator | `[I\|P]_<sid>_<cid>_<iid>` |
+| Layer 2 | dimension | `[D\|Q]_<sid>_<cid>_<did>` |
+| Layer 3 | component | `C_<sid>_<cid>` |
+| Layer 4 | submission | `S_<sid>` |
+Example identifiers:
 
-| prefix | typical use |
+| layer | example |
 |---|---|
-| `I` | standard indicator tied to analytic content |
-| `P` | pan-component or holistic indicator |
-| `D` | standard dimension |
-| `Q` | pan-component or holistic dimension |
-These prefix distinctions are **informative conventions**, not mandatory semantic categories enforced by the payload schema.
-#### 3.4 Identifier stability rule
-Identifiers must remain stable across rubric revisions unless the corresponding SBO is removed or fundamentally redefined.
-Changes to identifier names should be treated as rubric-version changes, not editorial revisions.
+| Layer 1 | `I_PPP_SecA_I1` |
+| Layer 2 | `D_PPP_SecA_D1` |
+| Layer 3 | `C_PPP_SecA` |
+| Layer 4 | `S_PPP` |
+#### 3.3 Prefix semantics
+Layer 1 and Layer 2 identifiers allow two prefix families that signal analytic scope.
+
+| prefix | layer | semantic scope |
+|---|---|---|
+| `I` | Layer 1 | component-local indicator |
+| `P` | Layer 1 | pan-component indicator |
+| `D` | Layer 2 | component-local dimension |
+| `Q` | Layer 2 | pan-component dimension |
+These prefixes signal whether the SBO evaluates:
+- a **single component**, or  
+- **properties of the submission as a whole**.
+They are semantic conventions rather than schema requirements.
+#### 3.4 Component identifier (`cid`)
+The `cid` is a **short identifier representing a component**.
+It is derived from the canonical `component_id` defined in the Assignment Payload Specification.
+Example:
+
+| field | value |
+|---|---|
+| `component_id` | `SectionAResponse` |
+| `cid` | `SecA` |
+The `component_id` remains the canonical dataset identifier.  
+The `cid` exists only to make SBO identifiers compact and readable.
+#### 3.5 `cid` construction rules
+A `cid` should follow these conventions.
+
+| rule | description |
+|---|---|
+| compact | typically 3–6 characters |
+| recognisable | clearly references the component |
+| stable | must remain constant across rubric revisions |
+| alphanumeric | avoid spaces or punctuation |
+Typical transformations:
+
+| component_id | cid |
+|---|---|
+| `SectionAResponse` | `SecA` |
+| `SectionBResponse` | `SecB` |
+| `SectionCResponse` | `SecC` |
+#### 3.6 Component-related identifier examples
+
+| layer | example |
+|---|---|
+| indicator | `I_PPP_SecA_I1` |
+| dimension | `D_PPP_SecA_D1` |
+| component | `C_PPP_SecA` |
+Using the same `cid` across layers ensures that indicators, dimensions, and components can be visually grouped.
+#### 3.7 Identifier stability rule
+SBO identifiers must remain **stable across rubric revisions** unless the SBO itself is removed or fundamentally redefined.
+Changing an identifier should be treated as a **structural rubric revision**, not an editorial change.
 ### 4. Scale Conventions
 #### 4.1 Registered scales
 The standard rubric payload defines four scales.

@@ -45,12 +45,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/RUBRIC_EXAMPLE_CAL_payload_v1.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Guide.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "RUBRIC_EXAMPLE_CAL_payload_v1"
+              "title": "Rubric Specification Guide"
             }
           },
           {
@@ -59,12 +59,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE WITH CONTENT.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>  VERBOSE.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "RUBRIC_SID_X_vX TEMPLATE WITH CONTENT"
+              "title": "TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>  VERBOSE"
             }
           },
           {
@@ -228,13 +228,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/RUBRIC_EXAMPLE_CAL_payload_v1.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Guide.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of RUBRIC_EXAMPLE_CAL_payload_v1"
+              "title": "Outline of Rubric Specification Guide"
             }
           },
           {
@@ -270,15 +270,15 @@
   },
   "active": "95fc75ccf9858ba1",
   "lastOpenFiles": [
-    "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>.md",
     "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>  VERBOSE.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Guide.md",
     "05_docs/01_design/pl1B_rubric_devt/RUBRIC_EXAMPLE_CAL_payload_v1.md",
+    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE WITH CONTENT.md",
+    "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Design Document.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline only sec 1-4.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline - RADICAL CHANGE.md",
-    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE WITH CONTENT.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
     "05_docs/01_design/pl1A_canonical_population_prep/Untitled.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A (Excel,MCode) — Implementation Mapping to Specification.md",
