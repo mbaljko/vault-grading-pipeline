@@ -88,6 +88,150 @@ No evidence outside the AA may be used when assigning scores.
 ### 3. Identifier Conventions
 This section defines the **identifier primitives and naming rules** used when constructing Score-Bearing Object (SBO) identifiers across all four scoring layers.
 Identifier conventions exist to ensure that rubric payloads remain:
+- readable  
+- structurally predictable  
+- stable across rubric revisions  
+Two distinct identifier systems operate in the rubric payload:
+1. **rubric primitive identifiers (RP identifiers)**  
+   compact tokens that identify analytic entities used in rubric construction.  
+   These include identifiers such as `sid`, `cid`, `iid`, and `did`.
+2. **SBO identifiers**  
+   structured identifiers constructed from rubric primitive identifiers that uniquely identify Score-Bearing Objects across the four scoring layers.
+Rubric primitive identifiers provide the **building blocks** of the identifier system.  
+SBO identifiers combine those primitives into **fully qualified identifiers** that correspond to concrete scoring entities in the rubric payload.
+#### 3.1 Rubric Primitive (RP) identifiers
+The rubric payload uses four **Rubric Primitive (RP) identifiers**.
+
+| primitive | meaning |
+|---|---|
+| `sid` | submission identifier representing the assessment |
+| `cid` | short identifier representing a component |
+| `iid` | indicator identifier |
+| `did` | dimension identifier |
+These primitives form the **building blocks used to construct SBO identifiers**.
+The values of `sid` and `cid` originate from the **Assignment Payload Specification**, while `iid` and `did` are defined within the rubric payload.
+##### 3.1.1 General construction rules
+All RP identifiers should follow the following conventions.
+
+| rule | description |
+|---|---|
+| compact | typically 2–6 characters |
+| recognisable | clearly reference the entity being identified |
+| stable | must remain constant across rubric revisions |
+| alphanumeric | avoid spaces and punctuation |
+##### 3.1.2 RP identifier summary
+
+| primitive | SBO class associated | value source | format example |
+|---|---|---|---|
+| `sid` | submission | assessment identifier | `PPP` |
+| `cid` | component | derived from `component_id` | `SecA` |
+| `did` | dimension | rubric-defined identifier | `D01` |
+| `iid` | indicator | rubric-defined identifier | `I01` |
+`sid` and `cid` originate from the **assignment payload architecture**, while `iid` and `did` are defined within the rubric payload.
+##### 3.1.3 Indicator identifier (`iid`) format
+Indicator identifiers follow a fixed two-digit numbering scheme.
+Format:
+```
+I00 – I99
+```
+
+| rule | description |
+|---|---|
+| prefix | must begin with `I` or `P` |
+| numbering | two-digit numeric suffix |
+| padding | single-digit numbers must be zero-padded |
+| range | `00–99` |
+Examples:
+
+| iid |
+|---|
+| `I01` |
+| `I02` |
+| `P01` |
+##### 3.1.4 Dimension identifier (`did`) format
+Dimension identifiers follow the same two-digit numbering scheme.
+Format:
+```
+D00 – D99
+```
+
+| rule | description |
+|---|---|
+| prefix | must begin with `D` or `Q` |
+| numbering | two-digit numeric suffix |
+| padding | single-digit numbers must be zero-padded |
+| range | `00–99` |
+Examples:
+
+| did |
+|---|
+| `D01` |
+| `D02` |
+| `Q01` |
+##### 3.1.5 Component identifier (`cid`)
+The `cid` is a **short identifier representing a component**.
+It is derived from the canonical `component_id` defined in the Assignment Payload Specification.
+Example:
+
+| field | value |
+|---|---|
+| `component_id` | `SectionAResponse` |
+| `cid` | `SecA` |
+The `component_id` remains the **canonical dataset identifier**.  
+The `cid` exists only to make SBO identifiers compact and readable.
+Typical transformations:
+
+| component_id | cid |
+|---|---|
+| `SectionAResponse` | `SecA` |
+| `SectionBResponse` | `SecB` |
+| `SectionCResponse` | `SecC` |
+##### 3.1.6 Identifier stability rule
+RP identifiers must remain stable across rubric revisions unless the corresponding entity is removed or fundamentally redefined.
+Changes to identifier values should be treated as **rubric-version changes**, not editorial revisions.
+#### 3.2 Score-Bearing Object (SBO) identifiers
+Score-Bearing Object (SBO) identifiers are **structured identifiers constructed from Rubric Primitive (RP) identifiers**.
+They uniquely identify scoring entities across the four scoring layers.
+The **prefix of the SBO identifier indicates the SBO class**, which corresponds directly to the scoring layer.
+
+| layer | SBO class | identifier pattern |
+|---|---|---|
+| Layer 1 | indicator | `I_<sid>_<cid>_<iid>` |
+| Layer 2 | dimension | `D_<sid>_<cid>_<did>` |
+| Layer 3 | component | `C_<sid>_<cid>` |
+| Layer 4 | submission | `S_<sid>` |
+These prefixes (`I`, `D`, `C`, `S`) represent **SBO classes**, not analytic subtypes.
+Examples:
+
+| SBO identifier   | expansion                                                  |
+| ---------------- | ---------------------------------------------------------- |
+| `S_PPP`          | submission SBO for assessment `PPP`                        |
+| `C_PPP_SecA`     | component SBO for component `SecA`                         |
+| `D_PPP_SecA_D01` | dimension SBO `D01` evaluating component `SecA`            |
+| `I_PPP_SecA_I01` | indicator SBO `I01` detecting evidence in component `SecA` |
+#### 3.3 RP identifier subtype semantics (`iid` and `did`)
+The RP identifiers `iid` and `did` may contain **semantic subtype prefixes** that signal the analytic scope of the indicator or dimension.
+These subtype prefixes are **part of the RP identifier value**, not part of the SBO identifier prefix.
+
+| RP identifier | subtype prefixes | meaning |
+|---|---|---|
+| `iid` | `I`, `P` | component-local indicator (`I`) or pan-component indicator (`P`) |
+| `did` | `D`, `Q` | component-local dimension (`D`) or pan-component dimension (`Q`) |
+Examples:
+
+| RP identifier value | meaning |
+|---|---|
+| `I01` | component-local indicator |
+| `P01` | pan-component indicator |
+| `D01` | component-local dimension |
+| `Q01` | pan-component dimension |
+These subtype conventions allow the rubric to represent both:
+- **component-local evaluation**, and  
+- **cross-component analytic structures**
+without changing the structure of the SBO identifier.
+### 3. OLD Identifier Conventions
+This section defines the **identifier primitives and naming rules** used when constructing Score-Bearing Object (SBO) identifiers across all four scoring layers.
+Identifier conventions exist to ensure that rubric payloads remain:
 - readable
 - structurally predictable
 - stable across rubric revisions
@@ -113,21 +257,26 @@ Example expansions:
 The primitives therefore serve as the **building blocks from which all SBO identifiers are composed**.
 #### 3.2 General SBO identifier structure
 SBO identifiers follow a predictable layered structure.
+The **prefix of the SBO identifier reflects the SBO class**, not the semantic subtype of the indicator or dimension.
 
 | layer | SBO class | identifier pattern |
 |---|---|---|
-| Layer 1 | indicator | `[I\|P]_<sid>_<cid>_<iid>` |
-| Layer 2 | dimension | `[D\|Q]_<sid>_<cid>_<did>` |
+| Layer 1 | indicator | `I_<sid>_<cid>_<iid>` |
+| Layer 2 | dimension | `D_<sid>_<cid>_<did>` |
 | Layer 3 | component | `C_<sid>_<cid>` |
 | Layer 4 | submission | `S_<sid>` |
-Example identifiers:
+The semantic subtype of an indicator or dimension (for example `I` vs `P`, or `D` vs `Q`) is encoded **inside the identifier primitive** (`iid` or `did`), not in the SBO identifier prefix.
+Layer 4 submission SBO
+Examples:
 
-| layer | example |
-|---|---|
-| Layer 1 | `I_PPP_SecA_I1` |
-| Layer 2 | `D_PPP_SecA_D1` |
-| Layer 3 | `C_PPP_SecA` |
-| Layer 4 | `S_PPP` |
+| layer                               | example          |
+| ----------------------------------- | ---------------- |
+| Layer 1 indicator SBO               | `I_PPP_SecA_I01` |
+| Layer 1 pan-component indicator SBO | `I_PPP_SecA_P01` |
+| Layer 2 dimension SBO               | `D_PPP_SecA_D01` |
+| Layer 2 pan-component dimension SBO | `D_PPP_SecA_Q01` |
+| Layer 3 component SBO               | `C_PPP_SecA`     |
+| Layer 4 submission SBO<br>          | `S_PPP`          |
 #### 3.3 Prefix semantics
 SBO identifiers use prefix characters to indicate the **scoring layer and analytic role** of the object.
 Two types of prefixes exist:
@@ -191,7 +340,6 @@ All identifier primitives should follow these conventions.
 | recognisable | clearly reference the entity being identified |
 | stable | must remain constant across rubric revisions |
 | alphanumeric | avoid spaces and punctuation |
-
 `sid` and `cid` originate from the **assignment payload architecture**, whereas `did` and `iid` are **rubric-defined identifiers**.
 ##### 3.4.2 Indicator identifier (`iid`) format
 Indicator identifiers follow a fixed two-digit numbering scheme.

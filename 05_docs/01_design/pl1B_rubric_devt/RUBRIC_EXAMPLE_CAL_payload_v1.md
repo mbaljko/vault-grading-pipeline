@@ -54,11 +54,21 @@ Assessment artefact for Layer 4: `submission_id`
 | `D_PPP_SectionAResponse_D03` | `D03` | `PPP` | `SectionAResponse` | `D03` | articulation of professional obligations |
 | `Q_PPP_Global_D04` | `Q01` | `PPP` | `Global` | `D04` | cross-component conceptual coherence |
 | `Q_PPP_Global_D05` | `Q02` | `PPP` | `Global` | `D05` | consistency of responsibility reasoning across responses |
+## 5.3 Layer 2 SBO Instances
+
+| sbo_identifier   | sbo_identifier_shortid | submission_id | component_id       | dimension_id | sbo_short_description                                    |
+| ---------------- | ---------------------- | ------------- | ------------------ | ------------ | -------------------------------------------------------- |
+| `D_PPP_SecA_D01` | `D01`                  | `PPP`         | `SectionAResponse` | `D01`        | clarity of responsibility attribution                    |
+| `D_PPP_SecA_D02` | `D02`                  | `PPP`         | `SectionAResponse` | `D02`        | recognition of distributed accountability                |
+| `D_PPP_SecA_D03` | `D03`                  | `PPP`         | `SectionAResponse` | `D03`        | articulation of professional obligations                 |
+| `D_PPP_SecA_Q01` | `Q01`                  | `PPP`         | `SectionAResponse` | `Q01`        | cross-component conceptual coherence                     |
+| `D_PPP_SecA_Q02` | `Q02`                  | `PPP`         | `SectionAResponse` | `Q02`        | consistency of responsibility reasoning across responses |
+
 ## 5.2 Layer 3 SBO Instances
 
-| sbo_identifier | sbo_identifier_shortid | submission_id | component_id | sbo_short_description |
-|---|---|---|---|---|
-| `C_PPP_SecA` | `C01` | `PPP` | `SectionAResponse` | component performance for Section A |
+| sbo_identifier | sbo_identifier_shortid | submission_id | component_id       | sbo_short_description               |
+| -------------- | ---------------------- | ------------- | ------------------ | ----------------------------------- |
+| `C_PPP_SecA`   | `C01`                  | `PPP`         | `SectionAResponse` | component performance for Section A |
 ## 5.1 Layer 4 SBO Instances
 
 | sbo_identifier | sbo_identifier_shortid | submission_id | sbo_short_description          |
