@@ -1,220 +1,181 @@
-### Pipeline 1B — Layered Rubric Construction Pipeline
-This document defines the process for constructing and stabilising a **rubric for an assessment submission** under the **four-layer scoring ontology**.
-A rubric is a **layered scoring specification** whose elements are stabilised iteratively using empirical evidence from real student responses.
-The rubric defines how evidence observed in responses is transformed into scores across four scoring layers.
+# Pipeline 1B — Layered Rubric Construction Pipeline
+### 0. Purpose
+Pipeline 1B defines the process for constructing and stabilising a rubric for an assessment submission under the **four-layer scoring ontology**.
 
 | layer | score-bearing object (SBO) |
 |---|---|
-| Layer 1 | indicator SBOs |
-| Layer 2 | dimension SBOs |
-| Layer 3 | component SBOs |
+| Layer 1 | indicator SBO |
+| Layer 2 | dimension SBO |
+| Layer 3 | component SBO |
 | Layer 4 | submission SBO |
-Rubric construction therefore proceeds **layer by layer**, beginning with analytic interpretation of the assignment, then moving through observable indicators, dimension construction, component performance mapping, and submission aggregation.
-Calibration pipelines operate **after the rubric structure is stabilised and frozen**.
-Throughout this pipeline, work occurs directly within the **Rubric Template document**. Deliverables therefore correspond to **specific sections of the Rubric Template**, which move through states such as:
+Rubric construction proceeds **layer by layer**, using empirical evidence from real student responses.
+The pipeline produces a rubric specification stored in the **Rubric Template**.
+Calibration pipelines operate only **after the rubric is stabilised and frozen**.
+# 1. Upstream Inputs
+### Required Artefact Registry
 
-| state progression |
-|---|
-| Draft → Under Evaluation → Stabilised → Frozen |
-### 1. Upstream Inputs
-Rubric construction operates on top of the **assignment payload specification architecture** produced by **Pipeline 1A**.
-#### Required artefact
-```
-<ASSESSMENT_ID>_AssignmentPayloadSpec_v01
-```
-This document defines the **canonical structural contract** for the assessment payload. Rubric construction must remain fully compatible with this specification.
-#### Canonical Identifier Registry
-
-| field_name | type | description |
-|---|---|---|
-| `submission_id` | integer | de-identified identifier representing one student submission |
-| `component_id` | string | identifier representing one assignment component |
-#### Canonical Evidence Surface Registry
-
-| field_name | type | evidentiary_status | description |
-|---|---|---|---|
-| `response_text` | text | evidence | participant-authored response text used during rubric evaluation |
-#### Canonical Scoring Unit
-
-| scoring_unit | description |
+| artefact | description |
 |---|---|
-| `submission_id × component_id` | canonical unit of evidence evaluated during rubric scoring |
-These definitions determine the **Assessment Artefact (AA)** evaluated during rubric scoring.
+| `<ASSESSMENT_ID>_AssignmentPayloadSpec_v01` | canonical dataset and payload structure |
+Rubric construction must remain fully compatible with this specification.
+### Canonical Identifier Registry
 
-| scoring layer | assessment artefact |
+| field | type |
 |---|---|
-| Layers 1–3 | `submission_id × component_id` |
-| Layer 4 | `submission_id` |
-#### Component-level calibration payloads
-Component-level calibration datasets are **derived directly from the canonical dataset defined in the Assignment Payload Specification**.
-A calibration payload for a specific component is obtained by filtering the canonical dataset:
-```
-component_id = <COMPONENT_ID>
-```
-The resulting dataset retains the canonical schema:
+| `submission_id` | integer |
+| `component_id` | string |
+### Evidence Surface Registry
 
-| field_name | type | evidentiary_status |
-|---|---|---|
-| `submission_id` | integer | identifier |
-| `component_id` | string | identifier |
-| `response_text` | text | evidence |
-Example calibration dataset for Section A:
-```
-component_id = SectionAResponse
-```
-Resulting payload structure:
-
-| field_name |
-|---|
-| `submission_id` |
-| `component_id` |
-| `response_text` |
-Because the Assignment Payload Specification already defines the canonical dataset schema and evidence surfaces, **separate component-level payload specification documents are not required**.
-All calibration and scoring pipelines must therefore treat:
-```
-<ASSESSMENT_ID>_AssignmentPayloadSpec_v01
-```
-as the **authoritative structural specification** for the assessment payload.
-#### Compatibility requirement
-Rubric construction must ensure that:
-- all `component_id` values referenced by rubric SBOs exist in the **Component Registry** defined by the Assignment Payload Specification
-- all evidence used during scoring is drawn exclusively from the defined **evidence surface** (`response_text`)
-- all scoring units correspond to the canonical structural unit
-
-| structural rule |
-|---|
-| `submission_id × component_id` |
-This guarantees that rubric structures remain **fully compatible with the canonical dataset produced by Pipeline 1A**.
-### 2. Rubric Scope
-The rubric applies to the **entire submission**.
-The final score produced by the rubric corresponds to the **Layer 4 submission Score-Bearing Object (SBO)**:
-```
-submission_score
-```
-A submission typically contains multiple **components**, each representing a structured part of the assignment.
-#### Example component identifiers
-
-| component_id |
-|---|
-| `SectionAResponse` |
-| `SectionBResponse` |
-| `SectionCResponse` |
-| `SectionDResponse` |
-| `SectionEResponse` |
-Most rubric design and tuning work occurs at **Layer 3**, where **dimension evidence is translated into component performance levels**.
-Layer 4 typically performs a relatively straightforward mapping of component scores to the final submission score.
-#### Conceptual rubric hierarchy
-
-| level | entity |
+| field | evidentiary_status |
 |---|---|
-| submission | overall assignment |
-| components | structured response sections |
-| dimensions | conceptual evaluation criteria |
-| indicators | observable evidence checks |
-#### Layer responsibilities
+| `response_text` | evidence |
+### Canonical Scoring Unit
+`submission_id × component_id`
+# 2. Layer Construction Pattern
+Each rubric layer is constructed using the same pattern.
+### Layer Construction Structure
 
-| layer | responsibility |
+| block | purpose |
 |---|---|
-| Layer 1 | detect indicator evidence within component responses |
-| Layer 2 | derive conceptual dimension evidence from indicator evidence |
-| Layer 3 | translate dimension evidence into component performance levels |
-| Layer 4 | combine component scores into a submission score |
-Because Layer 3 determines how conceptual evidence translates into performance levels, **most empirical tuning during rubric construction occurs at Layer 3**.
-### 3. Stage 0 — Submission Analytic Specification
-Stage 0 establishes the **analytic interpretation of the assignment** before any rubric structures are instantiated.
-It produces a human-readable analytic scaffold that guides later indicator and dimension construction.
-#### Stage 0.1 Submission Analytic Brief
-Before constructing indicators and dimensions, the analytic goals of the **entire submission** must be clarified.
-Input:
-```
-<ASSESSMENT_ID>_AssignmentPayloadSpec_v01
-```
-From this input produce a **submission analytic brief**.
-The analytic brief describes:
-- the analytic goals of the assignment as a whole
-- the conceptual claims students are expected to make
-- the intellectual structure of the submission
-- the role played by each component of the submission
-Example analytic brief structure:
+| Purpose | define what the layer represents |
+| Inputs | information used to build the layer |
+| Rubric Sections | template sections modified |
+| Process | iterative empirical development |
+| Exit Condition | stability criteria |
+| Deliverables | stabilised rubric sections |
+# 3. Layer 1 — Indicator Construction
+### Purpose
+Detect observable textual signals in student responses.
+### Inputs
+- Submission analytic brief  
+- analytic sub-spaces  
+- calibration dataset
+Assessment artefact:
+`AA = submission_id × component_id`
+### Rubric Sections
 
-| section | content |
-|---|---|
-| Overview | analytic goals and conceptual claims |
-| Component: SectionAResponse | analytic purpose and expected reasoning |
-| Component: SectionBResponse | analytic purpose and expected reasoning |
-| Component: SectionCResponse | analytic purpose and expected reasoning |
-#### Deliverables
-```
-<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
-```
-#### Stage 0.2 Analytic Sub-space Identification
-Some components ask students to perform **multiple distinct analytic moves**.
-These are treated as **analytic sub-spaces**.
-An analytic sub-space is a **task-defined conceptual area within a component response**.
-Analytic sub-spaces are derived from the component instructions and recorded in the **Submission Analytic Brief**.
-They are **not part of the scoring ontology** and do not appear in the Rubric Payload.
-#### Example analytic sub-space registry
-
-| component | sub-space_id | analytic focus |
-|---|---|---|
-| `SectionAResponse` | A1 | accountability locus |
-| `SectionAResponse` | A2 | role boundary and responsibility hand-off |
-| `SectionAResponse` | A3 | professional obligations |
-Analytic sub-spaces serve as a **design scaffold** for indicator discovery and later dimension formation.
-#### Deliverables
-```
-<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
-    └ component analytic sub-spaces
-```
-#### Stage 0.3 Contrastive Pattern Discovery Pass
-Before defining indicator SBO instances, use a **small calibration sample of real student responses** to discover contrastive response patterns.
-This step surfaces **observable signals actually present in student writing** rather than relying only on the assignment description.
-The purpose is to produce **candidate indicators and candidate dimensions**.
-These outputs remain **analytic hypotheses** at this stage.
-They do not become rubric structures until they are instantiated as SBO instances and stabilised through empirical testing.
-##### Calibration sample structure
-
-| field_name |
+| section |
 |---|
-| `submission_id` |
-| `component_id` |
-| `cleaned_response_text` |
-Typical calibration sample size:
-
-| recommended sample |
-|---|
-| 20–40 responses |
-##### Iterative testing process
-Contrastive analysis is performed **within each analytic sub-space**.
+| `5.4 Layer 1 SBO Instances` |
+| `6.1 Layer 1 SBO Value Derivation` |
+### Process
 
 | step | operation |
 |---|---|
-| 1 | identify analytic sub-spaces within the component |
-| 2 | prompt the model to identify contrastive response pairs |
-| 3 | extract textual signals distinguishing the responses |
-| 4 | group signals into candidate indicators |
-| 5 | identify early signal clusters suggesting candidate dimensions |
-Example extracted signals:
+| 1 | instantiate indicator SBOs |
+| 2 | define evaluation guidance |
+| 3 | generate indicator scoring prompts |
+| 4 | test on calibration sample |
+| 5 | revise indicators or evaluation guidance |
+### Exit Condition
+Indicator behaviour is stable and produces consistent `indicator_score`.
+### Deliverables
 
-| candidate signal |
+| artefact |
 |---|
-| explicit assignment of accountability |
-| recognition of distributed responsibility |
-| description of responsibility hand-off |
-| explicit reference to regulatory oversight |
-These signals become **candidate indicators**. Signal clusters may also suggest **candidate dimensions**.
-##### Exit condition
-Stage 0 is complete when the Submission Analytic Brief contains:
-- clearly defined analytic purpose for each component
-- identified analytic sub-spaces
-- candidate indicators grounded in contrastive evidence
-- early candidate dimension groupings
-#### Deliverables
-```
-<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
-    └ component analytic sketches
-        ├ analytic sub-spaces
-        ├ candidate indicators
-        └ candidate dimensions
-```
-*(Stages 4–10 remain structurally identical to the previous version; only presentation style changes were applied above to replace ambiguous blocks with registry tables and schema tables where appropriate.)*
+| stabilised indicator registry |
+| stabilised indicator value derivation rules |
+# 4. Layer 2 — Dimension Construction
+### Purpose
+Translate indicator evidence into conceptual evaluation criteria.
+### Inputs
+- indicator scoring dataset
+- analytic sub-spaces
+- candidate dimensions
+### Rubric Sections
+
+| section |
+|---|
+| `5.3 Layer 2 SBO Instances` |
+| `6.2 Layer 2 SBO Value Derivation` |
+### Process
+
+| step | operation |
+|---|---|
+| 1 | define dimension SBO instances |
+| 2 | define indicator→dimension mappings |
+| 3 | compute dimension scores |
+| 4 | examine score distributions |
+| 5 | revise mappings or dimensions |
+### Exit Condition
+Dimension scores correspond to meaningful conceptual distinctions.
+### Deliverables
+
+| artefact |
+|---|
+| stabilised dimension registry |
+| stabilised dimension mapping rules |
+# 5. Layer 3 — Component Scoring
+### Purpose
+Translate dimension evidence into component performance levels.
+### Inputs
+- dimension scoring dataset
+- component performance model
+### Rubric Sections
+
+| section |
+|---|
+| `5.2 Layer 3 SBO Instances` |
+| `6.3 Layer 3 SBO Value Derivation` |
+### Process
+
+| step | operation |
+|---|---|
+| 1 | apply dimension→component mapping |
+| 2 | compute component scores |
+| 3 | compare with human judgement |
+| 4 | revise mapping rules |
+### Exit Condition
+Component scores correspond to holistic judgement of response quality.
+### Deliverables
+
+| artefact |
+|---|
+| stabilised component SBO registry |
+| stabilised component mapping rules |
+# 6. Layer 4 — Submission Scoring
+### Purpose
+Combine component scores into a final submission score.
+### Inputs
+- component scoring dataset
+### Rubric Sections
+
+| section |
+|---|
+| `5.1 Layer 4 SBO Instances` |
+| `6.4 Layer 4 SBO Value Derivation` |
+### Process
+
+| step | operation |
+|---|---|
+| 1 | apply component aggregation rules |
+| 2 | compute submission scores |
+| 3 | examine distribution |
+### Exit Condition
+Submission scores behave consistently across the dataset.
+### Deliverables
+
+| artefact |
+|---|
+| stabilised submission SBO registry |
+| stabilised submission aggregation rules |
+# 7. Rubric Freeze
+When all layers are stabilised, the rubric becomes production-ready.
+### Frozen Sections
+
+| rubric section |
+|---|
+| `5.4 Layer 1 SBO Instances` |
+| `6.1 Layer 1 SBO Value Derivation` |
+| `5.3 Layer 2 SBO Instances` |
+| `6.2 Layer 2 SBO Value Derivation` |
+| `5.2 Layer 3 SBO Instances` |
+| `6.3 Layer 3 SBO Value Derivation` |
+| `5.1 Layer 4 SBO Instances` |
+| `6.4 Layer 4 SBO Value Derivation` |
+### Output Artefacts
+
+| artefact |
+|---|
+| Rubric Design Document |
+| `RUBRIC_<ASSESSMENT_ID>_PROD_payload_v01` |

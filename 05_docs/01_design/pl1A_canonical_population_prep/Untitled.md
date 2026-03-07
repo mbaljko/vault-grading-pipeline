@@ -1,0 +1,1 @@
+can also show you a **very powerful small addition** that would make this document fully _machine-derivable into JSON schema for the scoring pipelines_. It’s a tiny change but extremely useful later.
