@@ -8,7 +8,7 @@ three inputs
 `<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01.md`
 `<ASSESSMENT_ID>_AssignmentPayloadSpec_v01`
 Calibration Sample
-# .
+# . 
 ````
 ## Prompt — Stage 0.3 Contrastive Signal Extraction
 
