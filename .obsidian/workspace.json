@@ -82,9 +82,23 @@
               "icon": "lucide-file",
               "title": "RUBRIC_EXAMPLE_CAL_payload_v1"
             }
+          },
+          {
+            "id": "a114babbadaca207",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Pipeline 1B — Layered Rubric Construction Pipeline"
+            }
           }
         ],
-        "currentTab": 2
+        "currentTab": 5
       }
     ],
     "direction": "vertical"
@@ -230,13 +244,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Guide.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Rubric Specification Guide"
+              "title": "Outline of Pipeline 1B — Layered Rubric Construction Pipeline"
             }
           },
           {
@@ -270,10 +284,12 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "95fc75ccf9858ba1",
+  "active": "a114babbadaca207",
   "lastOpenFiles": [
-    "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>  VERBOSE.md",
+    "05_docs/01_design/pl2_calibration/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
+    "05_docs/01_design/pl2_calibration/Pipeline2 - Calibration Runs  Specification.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Guide.md",
+    "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>  VERBOSE.md",
     "05_docs/01_design/pl1B_rubric_devt/RUBRIC_EXAMPLE_CAL_payload_v1.md",
     "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE WITH CONTENT.md",
     "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>.md",
@@ -296,8 +312,6 @@
     "05_docs/01_design/pl1B_rubric_devt/TRY Contrastive indicator extraction.md",
     "05_docs/01_design/pl1B_rubric_devt/TRY Pattern Discovery Pass.md",
     "05_docs/01_design/pl1B_rubric_devt/prev_versions/OLD Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification 1.md",
-    "05_docs/01_design/pl1B_rubric_devt/PROMPT - template for dimenion header.md",
-    "05_docs/01_design/pl1B_rubric_devt/prev_versions/rubric_definition - prev v1.md",
     "05_docs/00_overview/prev",
     "secrets/openai_api_key.txt",
     "env/bin/activate",
