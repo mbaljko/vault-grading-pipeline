@@ -48,53 +48,63 @@ This parameter determines which rows from the **Layer1 scoring manifest** will b
 
 ## Required Input Artefacts
 
-All required artefacts must be supplied **verbatim** and delimited using:
+All required inputs must be supplied **verbatim** and separated using the delimiter:
 
 ```
 ===
-<content>
-===
 ```
 
-Required artefacts:
+The wrapper prompt expects the following inputs in sequence:
 
 ```
+PARAM_TARGET_COMPONENT_ID
 <ASSESSMENT_ID>_AssignmentPayloadSpec_v01
 Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION>
 ```
 
-Required parameter:
+The parameter block must appear in the form:
 
 ```
-PARAM_TARGET_COMPONENT_ID
+===
+PARAM_TARGET_COMPONENT_ID = <COMPONENT_ID>
+===
 ```
 
-If any artefact or parameter is missing, malformed, or inconsistent, the wrapper prompt must **produce no output**.
+The remaining artefacts must appear exactly as produced by their upstream pipelines and must not be modified.
+
+If any required artefact or parameter is missing, malformed, or inconsistent, the wrapper prompt must **produce no output**.
 
 ---
 
 ## Input Artefact Order (Mandatory)
 
-Artefacts must appear **exactly in the following order**.
+Artefacts must appear **exactly in the following order**, separated by the delimiter `===`.
+
+No additional delimiters or numbering markers may appear.
 
 ```
-1
 ===
 PARAM_TARGET_COMPONENT_ID = <COMPONENT_ID>
 ===
 
-2
-===
-<ASSESSMENT_ID>_AssignmentPayloadSpec_v01
+<ASSESSMENT_ID>_AssignmentPayloadSpec_v01 contents
 ===
 
-3
-===
-Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION>
+Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION> contents
 ===
 ```
 
-Example invocation:
+After the final delimiter block, the user must provide:
+
+```
+BEGIN GENERATION
+```
+
+If `BEGIN GENERATION` is absent, the wrapper prompt must **produce no output**.
+
+---
+
+## Example Invocation
 
 ```
 ===
@@ -107,7 +117,7 @@ PARAM_TARGET_COMPONENT_ID = SectionBResponse
 BEGIN GENERATION
 ```
 
-If the artefacts appear in a different order, the wrapper prompt must **produce no output**.
+If the artefacts appear in a different order or if the delimiter structure is violated, the wrapper prompt must **produce no output**.
 
 ---
 
@@ -566,4 +576,5 @@ If the filtered manifest contains:
 
 the wrapper prompt must **produce no output**.
 ===
+PARAM_TARGET_COMPONENT_ID = SectionBResponse
 ````
