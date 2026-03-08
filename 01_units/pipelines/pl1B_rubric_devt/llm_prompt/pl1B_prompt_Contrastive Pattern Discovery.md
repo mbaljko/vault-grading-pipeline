@@ -3,52 +3,146 @@
 BEGIN GENERATION
 ```
 
+
+three inputs
+`<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01.md`
+`<ASSESSMENT_ID>_AssignmentPayloadSpec_v01`
+Calibration Sample
 # .
 ````
 ## Prompt — Stage 0.3 Contrastive Signal Extraction
+
 ### Purpose
-This prompt performs **contrastive signal extraction** for Stage 0.3 of the rubric construction pipeline.
+
+This prompt performs **contrastive signal extraction** for **Stage 0.3 of Pipeline 1B** in the rubric construction workflow.
+
 The goal is to identify **observable textual signals in student responses** that distinguish analytically different response types within each **analytic sub-space**.
+
 The output will populate the following section of:
+
 ```
 <ASSESSMENT_ID>_SubmissionAnalyticBrief_v01.md
 ```
+
+specifically the section:
+
 ```
-4. Contrastive Pattern Discovery and Candidate Indicator Sketches
+4. Contrastive Pattern Discovery
 ```
-specifically the subsections:
+
+and its subsections:
+
 ```
+4.1 Calibration sample description
 4.2 Contrastive response observations
 4.3 Candidate indicator signals
 4.4 Candidate indicator set
 4.5 Candidate dimension sketches (optional)
 ```
-This process **does not create rubric structures**.  
-All outputs remain **analytic hypotheses**.
-## Required Input Materials
-The following artefacts must be provided.
-### 1. Analytic Brief
+
+This stage performs **analytic signal discovery only**.
+
+All outputs remain **analytic hypotheses**.  
+No rubric structures are created at this stage.
+
+Indicator SBO instances and evaluation specifications are defined later during **Stage 1**.
+
+---
+
+## Input Artefact Format
+
+All required artefacts must be provided verbatim and delimited using:
+
 ```
-<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01.md
+===
+<ARTEFACT_NAME>
+<content>
+===
 ```
-Required sections:
+
+Artefacts must appear in the following order:
+
 ```
-1. Overview — Analytic Goals and Conceptual Claims
-2. Components
-3. Analytic Sub-space Identification
+===
+<ASSESSMENT_ID>_AssignmentPayloadSpec_v01
+<document contents>
+===
+
+===
+<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
+<document contents>
+===
+
+===
+CALIBRATION_SAMPLE_<COMPONENT_ID>
+<table containing:
+submission_id
+component_id
+cleaned_response_text>
+===
 ```
-The prompt must use:
-- the analytic purpose of the component
-- the analytic sub-space registry
-### 2. Assignment Payload Specification
+
+---
+
+## Artefact Validation Rules
+
+Before performing any analysis:
+
+1. Verify that the calibration dataset contains the fields:
+
+```
+submission_id
+component_id
+cleaned_response_text
+```
+
+2. Determine the **target component** by examining the `component_id` values in the calibration dataset.
+
+3. Verify that the dataset contains **exactly one unique `component_id`**.
+
+If multiple component values are detected, **produce no output**.
+
+4. Using the detected `component_id`, locate the corresponding **analytic sub-spaces** in:
+
+```
+<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
+```
+
+5. Extract the analytic sub-space identifiers and descriptions associated with that component.
+
+Contrastive analysis must be performed **separately for each analytic sub-space**.
+
+---
+
+## Required Inputs
+
+The following materials are required for the analysis.
+
+### Assignment Payload Specification
+
 ```
 <ASSESSMENT_ID>_AssignmentPayloadSpec_v01
 ```
-Used to confirm:
+
+Used to confirm valid `component_id` values.
+
+---
+
+### Submission Analytic Brief
+
 ```
-component_id values
+<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
 ```
-### 3. Calibration Sample
+
+Used to obtain:
+
+- analytic purpose of the component
+- analytic sub-space registry
+
+---
+
+### Calibration Sample
+
 Dataset structure:
 
 | field | description |
@@ -56,118 +150,184 @@ Dataset structure:
 | `submission_id` | de-identified student identifier |
 | `component_id` | assignment component identifier |
 | `cleaned_response_text` | student response text |
-Typical size:
+
+Typical calibration sample size:
+
 ```
 20–40 responses
 ```
-Calibration dataset must be filtered for the **target component**.
-Example:
-```
-component_id = SectionAResponse
-```
-### 4. Target Analytic Sub-space
-The analytic sub-space description drawn from the analytic brief.
-Example:
-```
-A1 — accountability locus (individual vs distributed responsibility)
-```
+
+Calibration samples are produced earlier in **Pipeline PL2** and represent filtered component-level datasets derived from the canonical grading dataset.
+
+---
+
 ## Instructions
-You are analysing a calibration sample of student responses in order to identify **contrastive signals** within the following analytic sub-space.
-```
-<analytic_sub_space_id>
-<analytic_sub_space_description>
-```
-Your task is to discover **observable textual signals that distinguish different analytic approaches to this sub-space**.
-Follow the procedure below.
-### Step 1 — Examine responses
-Review all responses in the calibration sample for the specified component.
-Focus only on the analytic task represented by the analytic sub-space.
+
+You are analysing a calibration sample of student responses to identify **contrastive analytic signals**.
+
+Your task is to discover **observable textual signals** that distinguish different analytic approaches to the task defined by each analytic sub-space.
+
+Focus only on **analytic content**.
+
 Ignore:
+
 - writing style
 - grammar
 - verbosity
 - general writing quality
-Focus only on **analytic content signals**.
-### Step 2 — Identify contrastive response pairs
-Identify **pairs of responses that approach the analytic task in clearly different ways**.
-For each pair:
-- briefly describe the difference in analytic approach
-- quote the language in each response that reveals the difference
-Use the following structure:
+
+Only identify **signals tied to the analytic expectations of the component**.
+
+Contrastive analysis must be conducted **within each analytic sub-space separately**.
+
+---
+
+## Output Structure
+
+Produce output organised under the following headings.
+
+---
+
+### 4.1 Calibration sample description
+
+Insert the following boilerplate text.
+
+The calibration responses analysed in this section were produced during **Pipeline PL2**, which prepares component-level calibration datasets for rubric construction.
+
+Calibration datasets are derived from the canonical grading dataset defined in:
+
 ```
+<ASSESSMENT_ID>_AssignmentPayloadSpec_v01
+```
+
+Each dataset contains a filtered subset of responses for a specific component.
+
+Dataset structure:
+
+| field_name |
+|---|
+| `submission_id` |
+| `component_id` |
+| `cleaned_response_text` |
+
+Calibration samples typically contain **20–40 responses** and are used exclusively for **analytic discovery and rubric development**.
+
+---
+
+### 4.2 Contrastive response observations
+
+For each analytic sub-space:
+
+1. Examine the responses in the calibration sample.
+2. Identify **pairs of responses that approach the analytic task in clearly different ways**.
+
+For each pair:
+
+- briefly describe how the analytic approaches differ
+- quote the response language that reveals the difference
+- identify the **distinguishing signal**
+
+Use the following structure.
+
+```
+Analytic Sub-space: <sub-space_id> — <analytic focus>
+
 Pair <n>
+
 Response A approach
 <description>
+
 Example language
 "<quoted response text>"
+
 Response B approach
 <description>
+
 Example language
 "<quoted response text>"
+
 Distinguishing signal
-<short description of the textual signal>
+<short description of the observable signal>
 ```
-### Step 3 — Extract candidate signals
-From the contrastive pairs, derive **short textual signal descriptions**.
-Signals must correspond to **observable language patterns**, not interpretations.
+
+Identify **multiple contrastive pairs** where possible.
+
+---
+
+### 4.3 Candidate indicator signals
+
+From the contrastive observations, extract **candidate signals**.
+
+Signals must correspond to **observable textual patterns**.
+
 Examples:
+
 ```
 explicit assignment of accountability
 recognition of distributed responsibility
 description of responsibility hand-off
-explicit mention of regulatory oversight
+explicit reference to regulatory oversight
 ```
-Group signals under the analytic sub-space being analysed.
-### Step 4 — Consolidate candidate indicators
-Combine similar signals into a **candidate indicator set**.
-Indicators should be phrased as **detectable textual properties of the response**.
+
+Group signals by analytic sub-space.
+
+---
+
+### 4.4 Candidate indicator set
+
+Consolidate similar signals into a **candidate indicator list**.
+
+Candidate indicators should be phrased as **detectable textual properties of the response**.
+
 Example format:
+
 ```
-I? response explicitly assigns accountability to a specific actor
-I? response identifies responsibility outside the professional role
-I? response describes a responsibility hand-off
+response explicitly assigns accountability to a specific actor
+response identifies responsibility outside the professional role
+response describes a responsibility hand-off
+response references regulatory oversight
 ```
+
 Do not assign final indicator identifiers.
-These remain **candidate indicators**.
-### Step 5 — Identify possible dimension clusters (optional)
-If multiple signals appear to reflect a shared conceptual theme, note possible **candidate dimension clusters**.
-Example:
+
+These remain **candidate indicators** and will later be instantiated as **Layer 1 SBO instances** during Stage 1.
+
+---
+
+### 4.5 Candidate dimension sketches (optional)
+
+If multiple signals appear to reflect a shared conceptual theme, record a **possible dimension sketch**.
+
+Example format:
+
 ```
 Candidate dimension cluster
 Accountability framing
+
 Signals
 explicit assignment of accountability
-distributed responsibility recognition
-responsibility transfer
+recognition of distributed responsibility
+description of responsibility transfer
 ```
-These are only **conceptual hypotheses** and do not define dimensions yet.
-## Output Structure
-Produce output organised under the following headings.
-```
-4.2 Contrastive response observations
-```
-List contrastive response pairs and distinguishing signals.
-```
-4.3 Candidate indicator signals
-```
-List extracted signals grouped by analytic sub-space.
-```
-4.4 Candidate indicator set
-```
-List consolidated candidate indicators.
-```
-4.5 Candidate dimension sketches (optional)
-```
-List any observed clusters of signals that suggest possible conceptual dimensions.
+
+These sketches are **conceptual hypotheses only** and do not define dimension structures.
+
+---
+
 ## Constraints
+
 - Only use evidence present in `cleaned_response_text`.
 - Signals must correspond to **observable textual language**.
 - Do not introduce scoring thresholds.
 - Do not reference rubric performance levels.
 - Do not define dimension scoring rules.
-The goal is **empirical discovery of analytic signals**, not rubric construction.
-Indicator SBO instances will be created later during:
+
+This stage performs **empirical signal discovery**, not rubric construction.
+
+Indicator SBO instances and evaluation specifications will be created later during:
+
 ```
 Stage 1 — Indicator Discovery and Evaluation Design
 ```
+===
 ````

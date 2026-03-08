@@ -150,10 +150,11 @@ Produce the following document:
 ```
 The document must contain the following sections.
 
-| section | required content |
-|---|---|
+| section                                         | required content                                                                                                                       |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | Overview — Analytic Goals and Conceptual Claims | analytic goals of the assignment, conceptual claims students are expected to produce, and the intellectual structure of the submission |
-| Components | analytic interpretation of each assignment component defined in the Component Registry |
+| Components                                      | analytic interpretation of each assignment component defined in the Component Registry                                                 |
+| Conceptual Structure of the Submission          |                                                                                                                                        |
 Within the **Components** section, the document must contain one subsection for **each `component_id` defined in the Component Registry** of:
 ```
 <ASSESSMENT_ID>_AssignmentPayloadSpec_v01
@@ -178,6 +179,7 @@ Example structure:
    2.n Component: <component_id_n>
        Analytic purpose
        Expected reasoning structure
+3. Conceptual Structure of the Submission
 ```
 The set of component subsections must correspond exactly to the component identifiers defined in:
 ```
@@ -185,8 +187,8 @@ The set of component subsections must correspond exactly to the component identi
 ```
 Later stages extend the same document with additional sections:
 ```
-3. Analytic Sub-space Identification (Stage 0.2)
-4. Contrastive Pattern Discovery and Candidate Indicator Sketches (Stage 0.3)
+4. Analytic Sub-space Identification (Stage 0.2)
+5. Contrastive Pattern Discovery and Candidate Indicator Sketches (Stage 0.3)
 ```
 #### Stage 0.2 Analytic Sub-space Identification
 Some components ask students to perform **multiple distinct analytic moves**.
@@ -209,7 +211,7 @@ Stage 0.2 extends the previously created document:
 ```
 by adding the following numbered section:
 ```
-3. Analytic Sub-space Identification
+4. Analytic Sub-space Identification
 ```
 This section must contain a **registry of analytic sub-spaces for each assignment component**.
 The registry must include one row for **each analytic sub-space derived from the component instructions**.
@@ -271,17 +273,17 @@ Stage 0.3 extends the previously created document:
 ```
 by adding the following numbered section:
 ```
-4. Contrastive Pattern Discovery and Candidate Indicator Sketches
+5. Contrastive Pattern Discovery and Candidate Indicator Sketches
 ```
 This section must contain the following subsections.
 
-| subsection | required content |
-|---|---|
-| 4.1 Calibration sample description | description of the calibration dataset used for contrastive analysis |
-| 4.2 Contrastive response observations | examples of contrastive response pairs identified within analytic sub-spaces |
-| 4.3 Candidate indicator signals | list of observable textual signals extracted from contrasts, grouped by analytic sub-space |
-| 4.4 Candidate indicator set | consolidated list of candidate indicators derived from the extracted signals |
-| 4.5 Candidate dimension sketches (optional) | early clusters of related signals suggesting possible conceptual dimensions |
+| subsection                                  | required content                                                                           |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 5.1 Calibration sample description          | description of the calibration dataset used for contrastive analysis                       |
+| 5.2 Contrastive response observations       | examples of contrastive response pairs identified within analytic sub-spaces               |
+| 5.3 Candidate indicator signals             | list of observable textual signals extracted from contrasts, grouped by analytic sub-space |
+| 5.4 Candidate indicator set                 | consolidated list of candidate indicators derived from the extracted signals               |
+| 5.5 Candidate dimension sketches (optional) | early clusters of related signals suggesting possible conceptual dimensions                |
 The **candidate indicator signals** must be grounded in **observable language present in the calibration responses**.
 At this stage:
 - indicators remain **analytic hypotheses**
