@@ -366,7 +366,7 @@ The indicator registry defined in Section **5.4** establishes **which Layer 1 SB
 ```text
 Rubric Template: 5.4 Layer 1 SBO Instances (Draft)
 ```
-#### Stage 1.1.5 — Drafting the Indicator Evaluation Specification
+#### Stage 1.2 — Drafting the Indicator Evaluation Specification
 Once the **Layer 1 SBO instance registry** has been defined, a **draft evaluation specification** must be created describing **how each indicator will be detected in the response text**.
 This specification populates the following section of the Rubric Template:
 ```text
@@ -436,7 +436,7 @@ Together these sections define:
 which indicators exist
 how those indicators are evaluated
 ```
-#### Stage 1.2 — Layer 1 SBO Iterative Development
+#### Stage 1.3 — Layer 1 SBO Iterative Development
 Layer 1 SBO development establishes how **indicator scores are derived from the Assessment Artefact (AA)**.
 Layer 1 behaviour is defined by two sections of the Rubric Template:
 ```text

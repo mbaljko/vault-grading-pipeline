@@ -10,7 +10,7 @@ three inputs
 `Rubric_Template: 5.4 Layer 1 SBO Instances`
 # . 
 ````
-## Wrapper Prompt — Generate Layer 1 Indicator Evaluation Specification (Stage 1.1.5)
+## Wrapper Prompt — Generate Layer 1 Indicator Evaluation Specification (Stage 1.2)
 
 ### Prompt title and purpose
 
