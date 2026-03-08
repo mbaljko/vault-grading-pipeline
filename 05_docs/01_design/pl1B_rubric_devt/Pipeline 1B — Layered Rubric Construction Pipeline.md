@@ -233,7 +233,6 @@ This step surfaces **observable signals actually present in student writing** ra
 The purpose is to produce **candidate indicators and candidate dimensions**.
 These outputs remain **analytic hypotheses** at this stage.
 They do not become rubric structures until they are instantiated as SBO instances and stabilised through empirical testing.
-
 ##### Calibration sample structure
 
 | field_name |
@@ -321,8 +320,8 @@ Indicators operate on the **Layer 1 Assessment Artefact**:
 ```text
 AA = submission_id × component_id
 ```
-Indicator instance design and evaluation specification are developed using the candidate indicators produced in Stage 0.
-#### Stage 1.1 Layer 1 SBO Instance Definition
+Indicator instance design and evaluation specification are developed using the candidate indicators produced in **Stage 0**.
+#### Stage 1.1 — Layer 1 SBO Instance Definition
 Layer 1 indicators are represented in the rubric as **Layer 1 Score-Bearing Object (SBO) instances**.
 Each indicator instance corresponds to one row in:
 ```text
@@ -363,11 +362,81 @@ Typical indicator count:
 4–8 indicator SBO instances per component
 ```
 The indicator registry defined in Section **5.4** establishes **which Layer 1 SBOs exist**.
-#### Deliverables
+##### Deliverable
 ```text
 Rubric Template: 5.4 Layer 1 SBO Instances (Draft)
 ```
-#### Stage 1.2 Layer 1 SBO Iterative Development
+#### Stage 1.1.5 — Drafting the Indicator Evaluation Specification
+Once the **Layer 1 SBO instance registry** has been defined, a **draft evaluation specification** must be created describing **how each indicator will be detected in the response text**.
+This specification populates the following section of the Rubric Template:
+```text
+Rubric Template: 6.1 Layer 1 SBO Value Derivation (Draft)
+```
+This step converts the **indicator registry** into an **operational evaluation specification** that can be used by scoring prompts.
+The goal of this step is to define:
+```text
+how indicator_score values are derived from response_text
+```
+for each indicator SBO instance.
+##### Purpose of Section 6.1
+Section **6.1 Layer 1 SBO Value Derivation** defines the procedure for deriving:
+```text
+indicator_score
+```
+from the Layer 1 Assessment Artefact:
+```text
+AA = submission_id × component_id
+```
+Indicator scores are evaluated using the **indicator evidence scale**:
+```text
+evidence
+partial_evidence
+little_to_no_evidence
+```
+Section 6.1 therefore provides the **evaluation instructions used by the scoring system** when examining a component response.
+##### Drafting the evaluation specification
+For each indicator defined in **Section 5.4**, Section **6.1** must provide an **evaluation specification block**.
+Typical fields include:
+```text
+indicator_definition
+assessment_guidance
+evaluation_notes
+```
+These fields describe **how the evaluator should detect the analytic signal represented by the indicator**.
+###### Field meanings
+
+| field | purpose |
+|---|---|
+| `indicator_definition` | conceptual description of the analytic signal being detected |
+| `assessment_guidance` | operational guidance describing how the signal may appear in response text |
+| `evaluation_notes` | clarifications, edge cases, exclusions, or common misinterpretations |
+###### Example evaluation specification block
+```text
+Indicator: I_PPP_SecA_I01
+sbo_short_description: distributed responsibility attribution
+indicator_definition
+Detects statements describing responsibility as distributed across multiple actors such as individuals, teams, institutions, or tools.
+assessment_guidance
+Look for explicit language indicating that responsibility is shared, layered, or distributed across different actors or organisational levels.
+evaluation_notes
+Do not assign evidence when the response only mentions collaboration without attributing responsibility across actors.
+```
+Each **indicator SBO instance defined in Section 5.4** must have a corresponding **evaluation specification** in Section 6.1.
+##### Deliverable
+```text
+Rubric Template: 6.1 Layer 1 SBO Value Derivation (Draft)
+```
+At this point the rubric contains both:
+```text
+5.4 Layer 1 SBO Instances (Draft)
+6.1 Layer 1 SBO Value Derivation (Draft)
+```
+Together these sections define:
+```text
+which indicators exist
+how those indicators are evaluated
+```
+#### Stage 1.2 — Layer 1 SBO Iterative Development
 Layer 1 SBO development establishes how **indicator scores are derived from the Assessment Artefact (AA)**.
 Layer 1 behaviour is defined by two sections of the Rubric Template:
 ```text
@@ -381,32 +450,12 @@ indicator evaluation specification
 ```
 Layer 1 SBO development proceeds through an **iterative testing process using a calibration sample of student submissions**.
 ##### Initial condition
-The iterative process begins once:
+The iterative process begins once both of the following exist:
 ```text
 Rubric Template: 5.4 Layer 1 SBO Instances (Draft)
-```
-has defined the initial set of indicator SBO instances.
-At this stage the rubric must also contain a **draft evaluation specification** describing how each indicator score will be derived from the Assessment Artefact.
-This specification is recorded in:
-```text
 Rubric Template: 6.1 Layer 1 SBO Value Derivation (Draft)
 ```
-Section 6.1 defines how the scoring system derives:
-```text
-indicator_score
-```
-from the Layer 1 Assessment Artefact:
-```text
-AA = submission_id × component_id
-```
-For each indicator SBO instance, the evaluation specification provides the **evaluation surface and interpretation guidance** used during indicator scoring.
-Typical fields include:
-```text
-indicator_definition
-assessment_guidance
-evaluation_notes
-```
-These fields are consumed by the **wrapper prompt that generates the indicator-scoring prompt**.
+These sections together define the **initial indicator scoring behaviour**.
 ##### Iterative testing process
 Indicator behaviour is tested using a **calibration sample** of student submissions.
 Evaluation is performed using **LLM-generated scoring prompts**.
@@ -432,11 +481,12 @@ I3
 I4
 I5
 ```
-Evaluation questions:
-- Do indicators detect the intended signals?
-- Are there false positives or false negatives?
-- Are indicators ambiguous or overlapping?
-- Are the evaluation instructions operationally clear for the scoring prompt?
+##### Evaluation questions
+During calibration testing, examine whether:
+- indicators detect the intended signals
+- false positives or false negatives occur
+- indicators are ambiguous or overlapping
+- evaluation instructions are operationally clear for the scoring prompt
 During this process:
 - the **evaluation specification (Section 6.1)** is typically revised multiple times
 - the **indicator SBO registry (Section 5.4)** may occasionally be adjusted if indicators prove redundant or ineffective

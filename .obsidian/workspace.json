@@ -40,22 +40,6 @@
             }
           },
           {
-            "id": "ff85c4ff108fb5a7",
-            "type": "leaf",
-            "pinned": true,
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_SBO Instance Registry.md",
-                "mode": "source",
-                "source": false
-              },
-              "pinned": true,
-              "icon": "lucide-file",
-              "title": "pl1B_prompt_stage11_SBO Instance Registry"
-            }
-          },
-          {
             "id": "f4cf9042aff83228",
             "type": "leaf",
             "pinned": true,
@@ -70,8 +54,25 @@
               "icon": "lucide-file",
               "title": "Rubric_SpecificationGuide_v01"
             }
+          },
+          {
+            "id": "00597b7f82bff2ba",
+            "type": "leaf",
+            "pinned": true,
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage115_Generate Layer 1 Indicator Evaluation Specification.md",
+                "mode": "source",
+                "source": false
+              },
+              "pinned": true,
+              "icon": "lucide-file",
+              "title": "pl1B_prompt_stage115_Generate Layer 1 Indicator Evaluation Specification"
+            }
           }
-        ]
+        ],
+        "currentTab": 3
       }
     ],
     "direction": "vertical"
@@ -217,13 +218,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage115_Generate Layer 1 Indicator Evaluation Specification.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Pipeline 1B — Layered Rubric Construction Pipeline"
+              "title": "Outline of pl1B_prompt_stage115_Generate Layer 1 Indicator Evaluation Specification"
             }
           },
           {
@@ -257,11 +258,12 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "50f9e0c568115b6f",
+  "active": "00597b7f82bff2ba",
   "lastOpenFiles": [
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_SBO Instance Registry.md",
-    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v01.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_SBO Instance Registry.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage115_Generate Layer 1 Indicator Evaluation Specification.md",
+    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "05_docs/01_design/pl1B_rubric_devt/TRY Contrastive indicator extraction.md",
     "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>  VERBOSE.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery.md",
@@ -284,7 +286,6 @@
     "05_docs/01_design/pl1B_rubric_devt/prev_versions/Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline1A_manifest_schema.md",
     "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning.pq POTENTIAL OPTIMIZATIONS.md",
-    "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning - TO DO.md",
     "05_docs/00_overview/prev",
     "secrets/openai_api_key.txt",
     "env/bin/activate",
