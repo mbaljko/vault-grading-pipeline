@@ -15,7 +15,7 @@ PARAM_TARGET_COMPONENT_ID = SectionBResponse
 ===
 ```
 
-# . 
+# .  
 ````
 ## Wrapper Prompt — Generate Layer 1 Indicator Detection Scoring Prompt (Stage 1.3)
 
