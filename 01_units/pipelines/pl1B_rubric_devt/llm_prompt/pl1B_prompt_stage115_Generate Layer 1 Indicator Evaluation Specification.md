@@ -18,31 +18,24 @@ This wrapper prompt generates the **Layer 1 Indicator Evaluation Specification**
 
 The generated output corresponds to:
 
-```text
 Rubric Template: 6.1 Layer 1 SBO Value Derivation (Draft)
-```
 
 This stage converts the **Layer 1 indicator registry** into an **operational evaluation specification** describing how each indicator is detected in student responses.
-
-The purpose is to define **how indicator evidence is derived from the Layer 1 Assessment Artefact**.
 
 This prompt does **not modify the indicator registry** and does **not perform scoring**.
 
 ---
 
-### Required input artefacts
+## Required input artefacts
 
-The following artefacts must be supplied verbatim and delimited using:
+All artefacts must be supplied verbatim and delimited using:
 
-```text
 ===
 <content>
 ===
-```
 
 Artefacts must appear in the following order:
 
-```text
 ===
 Rubric_SpecificationGuide_v01
 ===
@@ -50,210 +43,156 @@ Rubric_SpecificationGuide_v01
 ===
 Rubric_Template: 5.4 Layer 1 SBO Instances
 ===
-```
 
 If any artefact is missing, malformed, or inconsistent, the prompt must produce **no output**.
 
 ---
 
-### Objective
+# Output schema (authoritative)
 
-Using the **indicator SBO instances defined in Section 5.4**, generate the **evaluation specification used to detect those indicators in student responses**.
+The evaluation specification must be produced as **structured tabular data**.
 
-Each indicator must receive a corresponding **evaluation specification block** defining how its evidence is identified in response text.
+Each indicator SBO instance corresponds to **exactly one row** in the evaluation specification table.
 
-The specification must be grounded in:
+The table schema is:
 
-- analytic sub-spaces
-- contrastive response observations
-- candidate indicator signals
-- candidate indicator sets
+| sbo_identifier | sbo_short_description | indicator_definition | assessment_guidance | evaluation_notes |
+|---|---|---|---|---|
 
-from the analytic brief.
+Column meanings:
 
-The generator must **not introduce analytic concepts that do not appear in the analytic brief**.
+| column | purpose |
+|---|---|
+| sbo_identifier | canonical identifier of the indicator SBO instance |
+| sbo_short_description | indicator label copied from Section 5.4 |
+| indicator_definition | conceptual definition of the analytic signal |
+| assessment_guidance | operational guidance for detecting the signal |
+| evaluation_notes | clarifications, exclusions, or interpretive boundaries |
 
----
+### Schema invariants
 
-### Layer 1 scoring context
+The generated tables must obey the following rules:
 
-Indicator evaluation operates on the **Layer 1 Assessment Artefact**:
-
-```text
-AA = submission_id × component_id
-```
-
-The evidence surface available to the evaluator is:
-
-```text
-response_text
-```
-
-Indicators are evaluated using the **indicator evidence scale**:
-
-```text
-evidence
-partial_evidence
-little_to_no_evidence
-```
-
-Section 6.1 therefore defines **how evaluators should interpret response text when assigning indicator scores**.
+1. Column names must appear **exactly as specified above**.
+2. Column order must **not change**.
+3. Each row must correspond to **exactly one indicator SBO instance**.
+4. Every indicator from **Section 5.4 must appear exactly once**.
+5. No additional columns may be added.
+6. No columns may be omitted.
 
 ---
 
-### Evaluation specification structure
+# Table generation rules
 
-For each indicator SBO instance, generate an evaluation specification row containing the following fields:
+Evaluation specifications must be emitted as **Markdown tables**.
 
-```text
-sbo_identifier  
-sbo_short_description  
-indicator_definition  
-assessment_guidance  
-evaluation_notes
-```
+Indicators must be grouped by `component_id`.
 
-These fields provide the operational interpretation used during scoring.
+For each component:
+
+1. Emit a section heading:
+
+##### Component: `<component_id>`
+
+2. Immediately after the heading, emit a Markdown table with the schema defined above.
+
+3. Populate one row for each indicator belonging to that component.
+
+Indicators must appear in **increasing `indicator_id` order**.
 
 ---
 
-### Field definitions
+# Indicator specification guidance
 
-#### indicator_definition
+### indicator_definition
 
-A concise conceptual description of the analytic signal being detected.
+A concise conceptual description of the analytic signal.
 
 The definition should:
 
 - restate the meaning of the indicator
 - describe the analytic concept being detected
-- avoid referencing performance levels
 - avoid referencing scoring thresholds
+- avoid referencing performance levels
 
-The definition should be **conceptual**, not procedural.
+The definition must remain **conceptual rather than procedural**.
 
-Example format:
+Example:
 
-```text
 Detects statements that attribute responsibility across multiple actors such as individuals, teams, institutions, or tools.
-```
 
 ---
 
-#### assessment_guidance
+### assessment_guidance
 
 Operational guidance describing **how the signal may appear in response text**.
 
 This section should:
 
 - describe the kinds of language that express the signal
-- reference typical phrasing patterns where appropriate
+- reference typical phrasing patterns where helpful
 - remain general rather than enumerating exhaustive keyword lists
-- help the evaluator recognise the signal in varied wording
 
-Example format:
+Example:
 
-```text
-Look for explicit language indicating that responsibility is shared or distributed across multiple actors, such as individuals, teams, institutions, or technological systems.
-```
+Look for language indicating that responsibility is shared across people, teams, institutions, or systems involved in computing work.
 
 ---
 
-#### evaluation_notes
+### evaluation_notes
 
-Clarifications, exclusions, or edge-case guidance.
+Clarifications or edge-case guidance.
 
-These notes may include:
+These may include:
 
 - distinctions between similar indicators
-- cases where evidence should **not** be assigned
+- cases where evidence should not be assigned
 - reminders about interpretive boundaries
 
-Example format:
+Example:
 
-```text
-Do not assign evidence when the response only mentions collaboration without attributing responsibility across actors.
-```
+Do not assign evidence when the response mentions teamwork without describing shared responsibility.
 
 ---
 
-### Authoring rules
-
-Evaluation specifications must:
-
-- align with the analytic signals defined in the indicator registry
-- remain grounded in the analytic brief
-- avoid embedding scoring thresholds
-- avoid referencing performance levels
-- avoid introducing new analytic categories
-- avoid rewriting or modifying the indicator descriptions from Section 5.4
-
-Descriptions must remain **clear, concise, and operationally interpretable**.
-
----
-
-### Evaluation specification generation procedure
+# Generation procedure
 
 The generator must perform the following steps:
 
-1. Read the **Layer 1 SBO instance registry**.
+1. Read the **Layer 1 SBO instance registry (Section 5.4)**.
 2. Identify each indicator SBO instance.
 3. Locate the corresponding analytic signals in the analytic brief.
-4. Translate those signals into an evaluation specification.
-5. Produce one evaluation block per indicator.
-
-Each evaluation block must correspond exactly to one indicator instance.
-
-No indicators may be omitted.
+4. Translate those signals into evaluation specifications.
+5. Populate one row per indicator in the appropriate component table.
 
 ---
 
-### Output format
+# Output format
 
 The output must be emitted as a **single fenced Markdown block**.
 
-The **outer fence must use four backticks**.
+The outer fence must use **four backticks**.
 
-Inside that fenced block, emit exactly:
+Inside that block, emit exactly:
 
-```text
 #### 6.1 Layer 1 SBO Value Derivation (Draft)
-```
 
-followed by the evaluation specification blocks.
+followed by the component sections and their tables.
 
-Evaluation specifications must be presented as Markdown tables whenever possible.
-
-Indicators must be grouped by `component_id`.
-
-For each component, generate a Markdown table with the following columns:
-
-| sbo_identifier | sbo_short_description | indicator_definition | assessment_guidance | evaluation_notes |
-|---|---|---|---|---|
-
-Each row of the table must correspond to one indicator SBO instance.
-
-Indicators must appear in increasing `indicator_id` order within each component table.
-
-
-Tabular output is mandatory when multiple indicators are present for a component.
-
-Free-form blocks must not be used unless a table is structurally impossible.
+No commentary or text may appear outside the tables except the component headings.
 
 ---
 
-### Output restrictions
+# Output restrictions
 
-The generated output must contain **only a single fenced Markdown block**.
+The generated output must contain **only one fenced block**.
 
 Inside that block it must contain:
 
-```text
-#### 6.1 Layer 1 SBO Value Derivation (Draft)
-```
+- the section heading
+- component headings
+- Markdown tables following the defined schema
 
-followed by the component tables containing the evaluation specifications.
-
-No commentary, explanation, or additional text may appear outside the block.
+Narrative indicator blocks must **not** be used.
 ===
 ````
