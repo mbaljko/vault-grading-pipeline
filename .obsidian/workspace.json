@@ -107,16 +107,15 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Layer1_ScoringManifest_v01 Schema.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt"
+              "title": "Layer1_ScoringManifest_v01 Schema"
             }
           }
-        ],
-        "currentTab": 6
+        ]
       }
     ],
     "direction": "vertical"
@@ -262,13 +261,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt"
+              "title": "Outline of Pipeline 1B — Layered Rubric Construction Pipeline"
             }
           },
           {
@@ -302,12 +301,13 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "0b7a21cab9a207e8",
+  "active": "50f9e0c568115b6f",
   "lastOpenFiles": [
+    "05_docs/01_design/pl1B_rubric_devt/Layer1_ScoringManifest_v01 Schema.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Generate Layer 1 Indicator Evaluation Specification.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_SBO Instance Registry.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v02.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v03.md",
@@ -329,7 +329,6 @@
     "05_docs/00_overview/Generalised Dimension-First Grading Process.md",
     "05_docs/01_design/pl3_production_scoring/Pipeline PL3 — Production Scoring Pipeline (Two-Stage Model) v2.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_calibration_scoring_prompt.md",
-    "05_docs/01_design/pl1B_rubric_devt/prev_versions/Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification.md",
     "05_docs/00_overview/prev",
     "secrets/openai_api_key.txt",
     "env/bin/activate",
