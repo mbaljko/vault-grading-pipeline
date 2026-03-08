@@ -16,7 +16,6 @@ Throughout this pipeline, work occurs directly within the **Rubric Template docu
 | state progression |
 |---|
 | Draft → Under Evaluation → Stabilised → Frozen |
-
 ### 1. Upstream Inputs
 Rubric construction operates on top of the **assignment payload specification architecture** produced by **Pipeline 1A**.
 #### Required artefact
@@ -165,7 +164,7 @@ Analytic sub-spaces serve as a **design scaffold** for indicator discovery and l
 #### Deliverables
 ```
 <ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
-    └ component analytic sub-spaces
+    └ component analytic sub-spaces NAMED: "8. Stage 0.2 — Analytic Sub-space Identification"
 ```
 #### Stage 0.3 Contrastive Pattern Discovery Pass
 Before defining indicator SBO instances, use a **small calibration sample of real student responses** to discover contrastive response patterns.
@@ -204,7 +203,19 @@ Example extracted signals:
 | description of responsibility hand-off |
 | explicit reference to regulatory oversight |
 These signals become **candidate indicators**. Signal clusters may also suggest **candidate dimensions**.
-##### Exit condition
+##### Exit condition (Stage 0.3)
+Stage 0.3 is complete when the calibration analysis has produced a stable set of **contrastively derived candidate signals** for each analytic sub-space.
+Specifically:
+- each analytic sub-space has been examined using a calibration sample of student responses
+- at least several **contrastive response pairs** have been identified for each analytic sub-space
+- the contrasts reveal **observable textual signals** that distinguish analytically different response types
+- the extracted signals have been organised into a **candidate indicator list**, grouped by analytic sub-space
+- the signals are supported by **example response language drawn from the calibration sample**
+At this stage the signals remain **analytic hypotheses** rather than rubric structures.
+Indicator SBO instances and evaluation specifications are defined later during **Stage 1**.
+Optional:
+- early clusters of related signals may be noted as **candidate conceptual dimensions**, but dimension structures are not finalised at this stage.
+##### Exit condition for Stage 0
 Stage 0 is complete when the Submission Analytic Brief contains:
 - clearly defined analytic purpose for each component
 - identified analytic sub-spaces
@@ -213,13 +224,11 @@ Stage 0 is complete when the Submission Analytic Brief contains:
 #### Deliverables
 ```
 <ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
-    └ component analytic sketches
-        ├ analytic sub-spaces
+    └ component analytic sketches NAMED: "8. Stage 0.2 — Analytic Sub-space Identification"
+        ├ analytic sub-spaces 
         ├ candidate indicators
         └ candidate dimensions
 ```
-*(Stages 4–10 remain structurally identical to the previous version; only presentation style changes were applied above to replace ambiguous blocks with registry tables and schema tables where appropriate.)*
-
 ### 4. Stage 1 — Indicator Discovery and Evaluation Design (Layer 1)
 Layer 1 defines how **observable textual evidence is detected within component responses**.
 Layer 1 consists of two coupled structures in the Rubric Template:

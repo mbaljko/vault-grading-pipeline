@@ -8,6 +8,38 @@
         "type": "tabs",
         "children": [
           {
+            "id": "50f9e0c568115b6f",
+            "type": "leaf",
+            "pinned": true,
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
+                "mode": "source",
+                "source": false
+              },
+              "pinned": true,
+              "icon": "lucide-file",
+              "title": "Pipeline 1B — Layered Rubric Construction Pipeline"
+            }
+          },
+          {
+            "id": "b2ffdc9b9f16868b",
+            "type": "leaf",
+            "pinned": true,
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "05_docs/01_design/pl1B_rubric_devt/TRY Contrastive indicator extraction.md",
+                "mode": "source",
+                "source": false
+              },
+              "pinned": true,
+              "icon": "lucide-file",
+              "title": "TRY Contrastive indicator extraction"
+            }
+          },
+          {
             "id": "b3c921b738c9de70",
             "type": "leaf",
             "pinned": true,
@@ -21,6 +53,22 @@
               "pinned": true,
               "icon": "lucide-file",
               "title": "TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>  VERBOSE"
+            }
+          },
+          {
+            "id": "a114babbadaca207",
+            "type": "leaf",
+            "pinned": true,
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_Contrastive Pattern Discovery.md",
+                "mode": "source",
+                "source": false
+              },
+              "pinned": true,
+              "icon": "lucide-file",
+              "title": "pl1B_prompt_Contrastive Pattern Discovery"
             }
           },
           {
@@ -82,37 +130,8 @@
               "icon": "lucide-file",
               "title": "RUBRIC_EXAMPLE_CAL_payload_v1"
             }
-          },
-          {
-            "id": "a114babbadaca207",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "Pipeline 1B — Layered Rubric Construction Pipeline"
-            }
-          },
-          {
-            "id": "b2ffdc9b9f16868b",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "Pipeline 1B — Layered Rubric Construction Pipeline"
-            }
           }
-        ],
-        "currentTab": 6
+        ]
       }
     ],
     "direction": "vertical"
@@ -298,10 +317,13 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "b2ffdc9b9f16868b",
+  "active": "50f9e0c568115b6f",
   "lastOpenFiles": [
-    "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>  VERBOSE.md",
+    "05_docs/01_design/pl1B_rubric_devt/TRY Contrastive indicator extraction.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_Contrastive Pattern Discovery.md",
+    "05_docs/01_design/pl1A_canonical_population_prep/Untitled.md",
+    "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>  VERBOSE.md",
     "05_docs/01_design/pl2_calibration/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
     "05_docs/01_design/pl2_calibration/Pipeline2 - Calibration Runs  Specification.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Guide.md",
@@ -312,7 +334,6 @@
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline only sec 1-4.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline - RADICAL CHANGE.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
-    "05_docs/01_design/pl1A_canonical_population_prep/Untitled.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A (Excel,MCode) — Implementation Mapping to Specification.md",
     "05_docs/00_overview/Nomenclature Standard for 4-Layer Grading Ontology.md",
     "05_docs/00_overview/Generalised Dimension-First Grading Process.md",
@@ -323,9 +344,7 @@
     "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning.pq POTENTIAL OPTIMIZATIONS.md",
     "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning - TO DO.md",
     "05_docs/01_design/pl1A_canonical_population_prep/01_validation.pq - TO DO.md",
-    "05_docs/01_design/pl1B_rubric_devt/TRY Contrastive indicator extraction.md",
     "05_docs/01_design/pl1B_rubric_devt/TRY Pattern Discovery Pass.md",
-    "05_docs/01_design/pl1B_rubric_devt/prev_versions/OLD Pipeline1B - Rubric Construction Pipeline — Dimension-Level Specification 1.md",
     "05_docs/00_overview/prev",
     "secrets/openai_api_key.txt",
     "env/bin/activate",
