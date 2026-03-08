@@ -283,7 +283,7 @@ This section must contain the following subsections.
 | 5.2 Contrastive response observations       | examples of contrastive response pairs identified within analytic sub-spaces               |
 | 5.3 Candidate indicator signals             | list of observable textual signals extracted from contrasts, grouped by analytic sub-space |
 | 5.4 Candidate indicator set                 | consolidated list of candidate indicators derived from the extracted signals               |
-| 5.5 Candidate dimension sketches (optional) | early clusters of related signals suggesting possible conceptual dimensions                |
+| 4.5 Candidate dimension sketches (optional) | early clusters of related signals suggesting possible conceptual dimensions                |
 The **candidate indicator signals** must be grounded in **observable language present in the calibration responses**.
 At this stage:
 - indicators remain **analytic hypotheses**

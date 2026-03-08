@@ -5,6 +5,7 @@ BEGIN GENERATION
 
 
 three inputs
+`Rubric_SpecificationGuide_v01`
 `<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01.md`
 # . 
 ````
@@ -16,7 +17,7 @@ This wrapper prompt generates the **Layer 1 SBO Instance Registry** for an asses
 
 The generated output corresponds to:
 
-```
+```text
 Rubric Template: 5.4 Layer 1 SBO Instances
 ```
 
@@ -26,13 +27,21 @@ This prompt **does not perform scoring** and **does not assign performance level
 
 The purpose is to produce the **indicator registry** used by downstream scoring prompts.
 
+The generated output must conform to the identifier and authoring conventions in:
+
+```text
+Rubric_SpecificationGuide_v01
+```
+
+If the instructions in the analytic brief conflict with the specification guide, the **specification guide takes precedence** for identifier formation, short identifiers, and `sbo_short_description` authoring.
+
 ---
 
 ### Required input artefacts
 
 The following artefacts must be supplied verbatim and delimited using:
 
-```
+```text
 ===
 <content>
 ===
@@ -40,13 +49,15 @@ The following artefacts must be supplied verbatim and delimited using:
 
 Artefacts must appear in the following order:
 
-```
+```text
+===
+Rubric_SpecificationGuide_v01
 ===
 <ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
 ===
 ```
 
-If the artefact is missing, malformed, or inconsistent, the prompt must produce **no output**.
+If any artefact is missing, malformed, or inconsistent, the prompt must produce **no output**.
 
 ---
 
@@ -58,10 +69,10 @@ Each Layer 1 SBO instance corresponds to **one indicator that can be detected in
 
 Indicators must be derived from:
 
-- analytic sub-spaces  
-- contrastive response observations  
-- candidate indicator signals  
-- candidate indicator sets  
+- analytic sub-spaces
+- contrastive response observations
+- candidate indicator signals
+- candidate indicator sets
 
 Indicators represent **detectable textual signals**.
 
@@ -73,13 +84,13 @@ They must **not encode scoring thresholds** and **must not reference performance
 
 A Layer 1 SBO instance represents a **detectable analytic signal in the response text**.
 
-Indicators should correspond to statements such as:
+Indicators should correspond to signals such as:
 
-```
-response identifies where responsibility resides
-response describes a responsibility hand-off
-response attributes responsibility to institutions
-response identifies systemic accessibility barriers
+```text
+distributed responsibility attribution
+responsibility hand-off articulation
+institutional constraint recognition
+systemic accessibility barrier recognition
 ```
 
 Indicators must reflect **observable claims or framings expressed in the response**.
@@ -98,6 +109,8 @@ Indicator SBO instances must:
 - avoid referencing performance levels
 - avoid encoding dimension satisfaction
 - avoid compound indicators that require multiple conditions
+- remain narrow enough to be evaluated directly from the response text
+- remain distinguishable from neighbouring indicators in the same component
 
 Indicators should capture **distinct analytic signals**, not broad conceptual categories.
 
@@ -107,7 +120,7 @@ Indicators should capture **distinct analytic signals**, not broad conceptual ca
 
 Typical indicator counts:
 
-```
+```text
 4–8 indicator SBO instances per component
 ```
 
@@ -121,11 +134,11 @@ Indicators should:
 
 ---
 
-### Identifier conventions
+### Required fields
 
-Each Layer 1 SBO instance must define the following fields.
+Each Layer 1 SBO instance must define the following fields:
 
-```
+```text
 sbo_identifier
 sbo_identifier_shortid
 submission_id
@@ -138,98 +151,220 @@ Field meanings:
 
 | field | description |
 |---|---|
-| `sbo_identifier` | full SBO identifier constructed from rubric identifier primitives |
-| `sbo_identifier_shortid` | short SBO token used internally |
-| `submission_id` | submission identifier for the assessment |
-| `component_id` | component identifier |
-| `indicator_id` | indicator identifier within the component |
-| `sbo_short_description` | concise description of the analytic signal |
+| `sbo_identifier` | canonical Layer 1 SBO identifier |
+| `sbo_identifier_shortid` | compact short reference token |
+| `submission_id` | assessment-level submission identifier primitive used in the rubric payload |
+| `component_id` | canonical component identifier from the analytic brief |
+| `indicator_id` | indicator RP identifier |
+| `sbo_short_description` | concise human-readable label for the analytic signal |
 
 ---
 
-### Identifier construction rules
+### Identifier conventions
 
-The identifier must follow this structure:
+The generated registry must comply with the Layer 1 conventions in `Rubric_SpecificationGuide_v01`.
 
-```
-<submission_id>.<component_id>.<indicator_id>
-```
+#### Submission identifier (`submission_id`)
 
-Example:
-
-```
-PPP.SectionAResponse.I01
-```
-
-Short identifier:
-
-```
-SBO_<component_short>_<indicator_id>
-```
+Use the assessment identifier as the submission-level rubric primitive identifier.
 
 Example:
 
-```
-SBO_A_I01
+```text
+PPP
 ```
 
-Indicator identifiers must follow sequential numbering:
+#### Component identifier (`component_id`)
 
+`component_id` must remain the **canonical dataset component identifier** from the analytic brief.
+
+Examples:
+
+```text
+SectionAResponse
+SectionBResponse
+SectionCResponse
+SectionDResponse
+SectionEResponse
 ```
+
+#### Component short identifier (`cid`) for identifier construction
+
+For identifier construction only, derive a compact `cid` from `component_id` using the specification guide conventions.
+
+Use the following mappings unless the input artefacts explicitly define different canonical `cid` values:
+
+| component_id | cid |
+|---|---|
+| `SectionAResponse` | `SecA` |
+| `SectionBResponse` | `SecB` |
+| `SectionCResponse` | `SecC` |
+| `SectionDResponse` | `SecD` |
+| `SectionEResponse` | `SecE` |
+
+`cid` is **not** an output column in the registry table.  
+It is used only to construct `sbo_identifier`.
+
+#### Indicator identifier (`indicator_id`)
+
+`indicator_id` must follow the rubric primitive identifier format:
+
+```text
+I00 – I99
+```
+
+Rules:
+
+- must begin with `I`
+- must use a two-digit numeric suffix
+- must be zero-padded
+- must be unique within the rubric payload
+- should be assigned sequentially in the order indicators are introduced in the registry
+
+Examples:
+
+```text
 I01
 I02
 I03
-...
 ```
 
-Numbering resets for each component.
+Do **not** reset `indicator_id` numbering by component.  
+`indicator_id` values must remain unique within the rubric payload.
+
+#### Canonical SBO identifier (`sbo_identifier`)
+
+Layer 1 SBO identifiers must follow this structure:
+
+```text
+I_<sid>_<cid>_<iid>
+```
+
+Where:
+
+- `<sid>` = assessment identifier used in `submission_id`
+- `<cid>` = compact component identifier
+- `<iid>` = `indicator_id`
+
+Examples:
+
+```text
+I_PPP_SecA_I01
+I_PPP_SecB_I07
+I_PPP_SecE_I24
+```
+
+Do **not** use dotted identifiers such as:
+
+```text
+PPP.SectionAResponse.I01
+```
+
+#### SBO short identifier (`sbo_identifier_shortid`)
+
+For Layer 1 SBO instances, `sbo_identifier_shortid` should normally be set equal to the `indicator_id`.
+
+Examples:
+
+```text
+I01
+I02
+I03
+```
+
+Do **not** generate short identifiers such as:
+
+```text
+SBO_A_I01
+SBO_SecA_I01
+```
+
+Because `indicator_id` values must be unique within the rubric payload, these short identifiers remain unambiguous.
 
 ---
 
-### Description requirements
+### `sbo_short_description` authoring rules
 
-`sbo_short_description` must:
+`sbo_short_description` must comply with `Rubric_SpecificationGuide_v01`.
 
-- be concise  
-- describe a **detectable textual signal**  
-- begin with the word **"response"**
+It must:
 
-Example formats:
+- be concise
+- be a compact human-readable label
+- distinguish the SBO from neighbouring instances
+- describe the analytic signal without using sentence form
+- avoid embedding scoring thresholds
+- avoid embedding downstream outcomes
+- avoid evaluative language such as `good`, `strong`, `sufficient`, `appropriate`, or `correct`
 
+It should usually be written as a **short noun phrase** or **compact analytic label**, not as a full sentence.
+
+Preferred forms:
+
+```text
+distributed responsibility attribution
+role boundary articulation
+institutional constraint recognition
+systemic harm recognition
+neutral-tool framing
+tension identification
 ```
+
+Do **not** require descriptions to begin with the word `response`.
+
+Do **not** use sentence-style formats such as:
+
+```text
 response identifies where responsibility resides
-response attributes responsibility to institutions
 response describes a responsibility hand-off
-response recognises systemic accessibility barriers
 ```
 
-Descriptions must **not contain evaluation language** such as:
+---
 
-```
-good
-strong
-sufficient
-appropriate
-correct
-```
+### Consolidation rules
+
+When generating the Layer 1 registry:
+
+1. Prefer candidate indicators from the analytic brief that already correspond to **detectable textual signals**.
+2. Consolidate overlapping indicators when they are functionally redundant.
+3. Preserve important analytic contrasts that are likely to matter downstream.
+4. Avoid producing indicators that are merely broad topic labels.
+5. Avoid producing multiple indicators that differ only cosmetically.
+6. Retain enough indicators to cover the main contrastive variation for each component.
+
+Where several candidate indicators overlap, prefer the version that is:
+
+- more directly observable in text
+- narrower and cleaner
+- more reusable for downstream dimension design
 
 ---
 
 ### Output format
 
-Emit the result as:
+The output must be emitted as a single **fenced Markdown block**.
 
+The **outer fence must use four backticks**.
+
+Inside that fenced block, emit exactly:
+
+```text
+#### 5.4 Layer 1 SBO Instances (Draft)
 ```
-Rubric Template: 5.4 Layer 1 SBO Instances (Draft)
-```
 
-The registry must be presented as a table.
+followed by the registry table.
 
-Columns:
+The registry table must use these columns in this exact order:
 
 | sbo_identifier | sbo_identifier_shortid | submission_id | component_id | indicator_id | sbo_short_description |
 
 Indicators must be grouped by `component_id`.
+
+Within each component group:
+
+- rows should be ordered by `indicator_id`
+- identifiers should remain stable and sequential
+- descriptions should be concise and parallel where possible
 
 ---
 
@@ -240,9 +375,11 @@ The generator must:
 1. Identify each component present in the analytic brief.
 2. Extract candidate indicators associated with that component.
 3. Consolidate overlapping signals into a minimal coherent indicator set.
-4. Produce **4–8 indicators per component** where possible.
-5. Construct the SBO identifiers.
-6. Generate concise `sbo_short_description` values.
+4. Produce approximately **4–8 indicators per component** where possible.
+5. Assign globally unique `indicator_id` values across the full rubric payload.
+6. Construct `sbo_identifier` values using `I_<sid>_<cid>_<iid>`.
+7. Set `sbo_identifier_shortid = indicator_id`.
+8. Generate concise `sbo_short_description` labels that comply with the specification guide.
 
 The generator must **not introduce concepts that are not present in the analytic brief**.
 
@@ -250,14 +387,16 @@ The generator must **not introduce concepts that are not present in the analytic
 
 ### Output restrictions
 
-The generated output must contain only:
+The generated output must contain only a single fenced Markdown block.
 
-```
-Rubric Template: 5.4 Layer 1 SBO Instances (Draft)
+Inside that block, it must contain only:
+
+```text
+#### 5.4 Layer 1 SBO Instances (Draft)
 ```
 
 followed by the table.
 
-No commentary or explanation may appear.
+No commentary, explanation, notes, or prefatory text may appear outside or below the table.
 ===
 ````
