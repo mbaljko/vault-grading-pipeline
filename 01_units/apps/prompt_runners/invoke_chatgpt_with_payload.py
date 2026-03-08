@@ -28,8 +28,21 @@ Example:
       --prompt "Summarize this calibration payload" \
       --payload-file payload.json
 
-On successful API calls, output is written to a file and only the file path is
-printed to stdout.
+On successful API calls, output is written to both JSON and CSV files and the
+resolved file paths are printed to stdout.
+
+Output location behavior:
+- If --prompt-path or --prompt-file is provided, output files are written next
+    to that prompt file as:
+    - <prompt_stem>_output.json
+    - <prompt_stem>_output.csv
+- If no prompt file/path is provided, output files are written next to this
+    script as:
+    - invoke_chatgpt_with_payload_output.json
+    - invoke_chatgpt_with_payload_output.csv
+
+Output paths are based on resolved absolute paths and do not depend on the
+current working directory used to invoke the script.
 """
 
 from __future__ import annotations
