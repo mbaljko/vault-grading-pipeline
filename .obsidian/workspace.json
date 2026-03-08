@@ -276,6 +276,8 @@
   },
   "active": "b2c358848043f2b1",
   "lastOpenFiles": [
+    "01_units/apps/prompt_runners/invoke_chatgpt_with_payload.py",
+    "01_units/apps/prompt_runners",
     "05_docs/01_design/pl1B_rubric_devt/IMPROVEMENT - FUTURE - INDICATOR LOCK.md",
     "05_docs/01_design/pl1B_rubric_devt/Layer1_ScoringManifest_v01 Schema.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Generate Layer 1 Indicator Evaluation Specification.md",
@@ -301,7 +303,6 @@
     "05_docs/01_design/pl1A_canonical_population_prep/Pipeline 1A (Excel,MCode) — Implementation Mapping to Specification.md",
     "05_docs/00_overview/Nomenclature Standard for 4-Layer Grading Ontology.md",
     "05_docs/00_overview/Generalised Dimension-First Grading Process.md",
-    "05_docs/01_design/pl3_production_scoring/Pipeline PL3 — Production Scoring Pipeline (Two-Stage Model) v2.md",
     "05_docs/00_overview/prev",
     "secrets/openai_api_key.txt",
     "env/bin/activate",
@@ -310,7 +311,6 @@
     "env/bin/activate.csh",
     "env/bin/pip3.13",
     "env/bin/pip3",
-    "env/bin/pip",
-    "env/lib/python3.13/site-packages/pip/_internal/vcs/__pycache__/versioncontrol.cpython-313.pyc"
+    "env/bin/pip"
   ]
 }
