@@ -114,6 +114,20 @@
               "icon": "lucide-file",
               "title": "Layer1_ScoringManifest_v01 Schema"
             }
+          },
+          {
+            "id": "0b741ab531247455",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "05_docs/01_design/pl1B_rubric_devt/IMPROVEMENT - FUTURE - INDICATOR LOCK.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "IMPROVEMENT - FUTURE - INDICATOR LOCK"
+            }
           }
         ],
         "currentTab": 4
@@ -304,9 +318,10 @@
   },
   "active": "b2c358848043f2b1",
   "lastOpenFiles": [
+    "05_docs/01_design/pl1B_rubric_devt/IMPROVEMENT - FUTURE - INDICATOR LOCK.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "05_docs/01_design/pl1B_rubric_devt/Layer1_ScoringManifest_v01 Schema.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Generate Layer 1 Indicator Evaluation Specification.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_SBO Instance Registry.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v02.md",
@@ -329,7 +344,6 @@
     "05_docs/00_overview/Nomenclature Standard for 4-Layer Grading Ontology.md",
     "05_docs/00_overview/Generalised Dimension-First Grading Process.md",
     "05_docs/01_design/pl3_production_scoring/Pipeline PL3 — Production Scoring Pipeline (Two-Stage Model) v2.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_wrapper_prompt_generate_calibration_scoring_prompt.md",
     "05_docs/00_overview/prev",
     "secrets/openai_api_key.txt",
     "env/bin/activate",

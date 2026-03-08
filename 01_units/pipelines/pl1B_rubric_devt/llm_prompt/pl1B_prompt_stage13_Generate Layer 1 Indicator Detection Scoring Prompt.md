@@ -19,7 +19,7 @@ PARAM_TARGET_COMPONENT_ID = SectionBResponse
 ````
 ## Wrapper Prompt — Generate Layer 1 Indicator Detection Scoring Prompt (Stage 1.3)
 
-Wrapper prompt: Generate a tightly bounded **Layer 1 SBO scoring prompt** for **indicator evidence detection** using the **Layer1 scoring manifest** under the **Rubric Template architecture**.
+Wrapper prompt: Generate a tightly bounded **Layer 1 SBO scoring prompt** for **indicator evidence detection** using the **Layer 1 scoring manifest** under the **Rubric Template architecture**.
 
 This wrapper prompt **generates a scoring prompt**.  
 It **does not evaluate student work**.
@@ -46,9 +46,9 @@ This parameter determines which rows from the **Layer1 scoring manifest** will b
 
 ---
 
-## Required Input Artefacts (Overview)
+## Required Input Artefacts
 
-Before this wrapper prompt can execute, the following artefacts must be supplied **verbatim** and delimited using:
+All required artefacts must be supplied **verbatim** and delimited using:
 
 ```
 ===
@@ -63,7 +63,7 @@ Required artefacts:
 Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION>
 ```
 
-Required wrapper parameter:
+Required parameter:
 
 ```
 PARAM_TARGET_COMPONENT_ID
@@ -118,7 +118,7 @@ Generate a reusable **Layer 1 SBO scoring prompt** that performs **indicator evi
 The generated prompt must:
 
 - evaluate indicator evidence using the **Layer 1 scoring manifest**
-- apply the **indicator evaluation specification embedded in the manifest**
+- embed the **indicator evaluation specification contained in the manifest**
 - assign an `evidence_status` value for each indicator SBO instance belonging to the target component
 - record indicator-level diagnostic information
 - remain fully executable without requiring the rubric document at scoring runtime
@@ -167,16 +167,12 @@ This wrapper prompt does **not** perform:
 
 ---
 
-## Authoritative Inputs (Verbatim)
+## Authoritative Inputs
 
 The model may rely **only** on the following artefacts supplied verbatim.
 
----
-
 ### Input Artefact  
 `<ASSESSMENT_ID>_AssignmentPayloadSpec_v01`
-
-This artefact defines the canonical grading dataset.
 
 The wrapper must extract:
 
@@ -199,16 +195,14 @@ Evidence rule:
 explicit textual evidence only
 ```
 
-If the assignment payload specification defines wrapper-handling rules for `response_text`, the generated scoring prompt must embed those rules and require that wrapper artefacts be ignored during evidence evaluation.
+If wrapper-handling rules exist for `response_text`, they must be embedded in the generated scoring prompt.
 
 ---
 
 ### Input Artefact  
 `Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION>`
 
-This artefact is the authoritative **Layer 1 scoring manifest**.
-
-The wrapper must extract the following fields:
+The wrapper must extract:
 
 ```
 component_id
@@ -220,10 +214,10 @@ assessment_guidance
 evaluation_notes
 ```
 
-The manifest defines:
+This manifest defines both:
 
 ```
-the complete registry of Layer 1 indicator SBO instances
+the registry of Layer 1 indicators
 the evaluation specification used to detect them
 ```
 
@@ -231,42 +225,33 @@ the evaluation specification used to detect them
 
 ## Manifest Filtering Rule
 
-Before generating the scoring prompt, the wrapper must perform the following operation:
+Before generating the scoring prompt, the wrapper must execute:
 
 ```
 filter Layer1_ScoringManifest
 where component_id = PARAM_TARGET_COMPONENT_ID
 ```
 
-The resulting filtered table defines:
-
-```
-the complete ordered set of indicator SBO instances
-to be evaluated by the scoring prompt
-```
-
 Validation rules:
 
-- If the filtered table is empty → **produce no output**
-- If duplicate `indicator_id` values appear → **produce no output**
+- if the filtered table is empty → **produce no output**
+- if duplicate `indicator_id` values appear → **produce no output**
 
-Only the filtered rows may be embedded in the generated scoring prompt.
-
-No indicators may be invented, omitted, or imported from outside the filtered manifest rows.
+Only filtered rows may be embedded in the generated scoring prompt.
 
 ---
 
 ## Indicator Evidence Status Scale
 
-The generated scoring prompt must embed the following scale.
+The generated scoring prompt must embed this scale.
 
 | value | meaning |
 |---|---|
 | `evidence` | explicit textual evidence clearly satisfies the indicator definition |
-| `partial_evidence` | some explicit textual signal relevant to the indicator is present but incomplete |
+| `partial_evidence` | explicit textual signal relevant to the indicator exists but is incomplete |
 | `little_to_no_evidence` | no interpretable explicit textual signal supporting the indicator is present |
 
-Evidence must be grounded strictly in **explicit response language**.
+Evidence must rely strictly on **explicit response language**.
 
 ---
 
@@ -291,28 +276,24 @@ confidence ∈ {low, medium, high}
 flags ∈ {none, needs_review}
 ```
 
----
-
 ### Field Formatting Rules
 
-The generated scoring prompt must require:
+The scoring prompt must require:
 
 - `evaluation_notes` enclosed in double quotes
 - empty notes represented as `""`
 
-No additional quoting or escaping rules are required.
-
 ---
 
-### CSV Header Row Requirement
+### CSV Header Requirement
 
-The generated scoring prompt must require that output **always begins with the header row**:
+Output must begin with the header row:
 
 ```
 submission_id,component_id,indicator_id,evidence_status,evaluation_notes,confidence,flags
 ```
 
-The header must appear **exactly once**.
+The header appears **exactly once**.
 
 Each subsequent row represents:
 
@@ -320,45 +301,37 @@ Each subsequent row represents:
 submission_id × component_id × indicator_id
 ```
 
-No additional columns may appear.
-
 ---
 
 ## Wrapper Execution Discipline
 
 ### Phase 1 — Artefact ingestion
 
-The user supplies the required artefacts delimited by `===`.
+The wrapper reads artefacts silently.
 
-The wrapper prompt reads the artefacts silently.
-
-No output is produced.
-
-If the message
+If
 
 ```
 BEGIN GENERATION
 ```
 
-is not present, the wrapper prompt must produce **no output**.
-
----
+is absent, produce **no output**.
 
 ### Phase 2 — Prompt generation
 
-When the user sends:
+When
 
 ```
 BEGIN GENERATION
 ```
 
-the wrapper prompt generates the **Layer 1 SBO scoring prompt artefact**.
+appears, generate the scoring prompt artefact.
 
 ---
 
 ## Output Artefact
 
-The wrapper must generate exactly one artefact:
+Generate exactly one artefact:
 
 ```
 RUN_<ASSESSMENT_ID>_<PARAM_TARGET_COMPONENT_ID>_Layer1_SBO_scoring_prompt_v01
@@ -366,22 +339,16 @@ RUN_<ASSESSMENT_ID>_<PARAM_TARGET_COMPONENT_ID>_Layer1_SBO_scoring_prompt_v01
 
 The artefact must:
 
-- reference the specified `PARAM_TARGET_COMPONENT_ID`
-- embed the filtered indicator registry for that component
-- embed the evaluation specification rows for that component
+- reference `PARAM_TARGET_COMPONENT_ID`
+- embed the filtered indicator rows
+- embed the evaluation specification
 - assume the canonical payload structure
-- be reusable across scoring runs
 
 ---
 
 ## Generated Scoring Prompt Structure
 
-The generated scoring prompt must:
-
-- appear in **one fenced Markdown block**
-- use **four backticks as the outer fence**
-- use headings no deeper than **level 2**
-- use bullet lists only
+The scoring prompt must appear in **one fenced Markdown block** (outer fence ````).
 
 Sections must appear in this order:
 
@@ -402,70 +369,104 @@ Failure mode handling
 
 ## Evaluation Discipline
 
+### Indicator Coverage Rule
+
+Before writing any output rows, construct the ordered list of `indicator_id`
+values embedded in the prompt.
+
+Ensure that:
+
+- each `indicator_id` is evaluated exactly once
+- indicators are processed in the order embedded in the prompt
+
+### Evaluation Sequence
+
 Layer 1 SBO scoring must follow this sequence:
 
 - Construct a single internal representation of `response_text`.
 - Apply any wrapper-handling rules from the assignment payload specification.
-- Construct the ordered list of `indicator_id` values from the filtered manifest rows.
-- For each indicator SBO instance:
-  - internally identify whether a relevant textual fragment exists
-  - evaluate the fragment using `indicator_definition` and `assessment_guidance`
-  - assign `evidence_status`
-  - assign `confidence`
-- Emit one CSV row for that indicator.
+- Construct the ordered `indicator_id` list embedded in the prompt.
 
-The evaluator must **not assign `evidence` or `partial_evidence` without first identifying a supporting fragment of text internally**.
+### Evidence Index Rule
 
-If no relevant textual fragment exists, the status must be:
+After constructing the internal representation of `response_text`,
+scan the response once and identify any textual fragments potentially
+relevant to the indicator definitions.
+
+Store these fragments in an internal evidence index.
+
+All indicators must then be evaluated using this evidence index rather
+than rescanning the full response text.
+
+### Analytic Signal Pass Rule
+
+After building the internal evidence index, perform one internal analytic
+signal pass over the indexed fragments.
+
+In that pass, organise the indexed evidence into a small set of candidate
+signal groupings relevant to the target component.
+
+Then evaluate all `indicator_id` values against those internal signal
+groupings rather than re-matching each indicator independently from scratch.
+
+### Indicator Evaluation
+
+For each `indicator_id` in prompt order:
+
+- internally identify whether a relevant textual fragment exists
+- evaluate the fragment using `indicator_definition` and `assessment_guidance`
+- assign `evidence_status`
+- assign `confidence`
+
+### Evidence Gate Rule
+
+Do **not** assign `evidence` or `partial_evidence` without internally
+identifying a supporting textual fragment.
+
+If no relevant fragment exists, the status must be:
 
 ```
 little_to_no_evidence
 ```
+
+### Output Row Count Rule
+
+Before emitting CSV rows, verify that the number of rows to be written
+equals the number of `indicator_id` values embedded in the prompt.
+
+If counts differ, complete the missing evaluations before emitting output.
+
+### Output Emission
+
+- Emit one CSV row for each `indicator_id` in prompt order.
+- Each row corresponds to exactly one  
+  `submission_id × component_id × indicator_id` evaluation.
 
 ---
 
 ## Evidence Interpretation Rules
 
-### Evidence Gate Rule
-
-Before assigning `evidence_status`, the evaluator must internally identify a fragment of `response_text` that supports the decision.
-
-Evaluation constraints:
-
-- Evidence must be grounded in explicit response language.
-- Do not assign `evidence` or `partial_evidence` based only on implication or interpretation.
-- If no supporting fragment exists, assign:
-
-```
-little_to_no_evidence
-```
-
----
-
 ### Evidence Fragment Output Mode
 
 Default behaviour:
 
-- The evaluator must internally identify the fragment supporting the decision.
-- The fragment must **not appear in the output**.
+- supporting fragments are identified internally
+- fragments are **not printed**
 
-Optional future mode:
-
-If the runtime instruction
+Optional runtime mode:
 
 ```
 FRAGMENT_OUTPUT_MODE = on
 ```
 
-appears, `evaluation_notes` must briefly reference the textual fragment that supported the decision.
-
-Otherwise, `evaluation_notes` may summarise the reasoning without quoting the fragment.
+If enabled, `evaluation_notes` may briefly reference the supporting fragment.
 
 ---
 
-### Partial-Evidence Preference Rule
+### Partial Evidence Preference Rule
 
-If the response contains any clearly relevant explicit textual signal that partially satisfies an indicator definition but does not fully satisfy the definition, assign:
+If explicit language partially satisfies an indicator definition but does not
+fully satisfy it, assign:
 
 ```
 partial_evidence
@@ -482,43 +483,37 @@ Indicators must be evaluated independently.
 Do not use:
 
 - other indicators
+- dimension logic
 - indicator combinations
-- dimension definitions
-- mapping logic
-- component-level expectations
+- mapping rules
+- component expectations
 
-to strengthen or weaken an indicator judgement.
+to influence the judgement.
 
 ---
 
 ## Confidence Assignment Rule
 
-Confidence must be derived from the clarity of the explicit textual evidence used to determine `evidence_status`.
-
-Do not estimate probabilities.
-
-Assign confidence using the following interpretation:
+Confidence reflects **clarity of textual evidence**, not probability.
 
 ```
 high
-- clear explicit language directly supports the assigned status
+clear explicit language supports the assigned status
 
 medium
-- explicit language is present but the match is incomplete, qualified, or somewhat ambiguous
+explicit language present but incomplete or ambiguous
 
 low
-- weak or ambiguous explicit signal, or reviewer uncertainty remains despite a decision
+weak or uncertain textual signal
 ```
 
-Confidence must be assigned **after `evidence_status`**.
-
-If:
+If
 
 ```
 evidence_status = little_to_no_evidence
 ```
 
-and no relevant textual fragment exists in the response, assign:
+and no fragment exists, assign:
 
 ```
 confidence = high
@@ -526,82 +521,39 @@ confidence = high
 
 ---
 
-## Required Layer 1 Scoring Semantics
-
-The scoring prompt must enforce:
-
-- exactly one evaluation for each
-
-```
-submission_id × component_id × indicator_id
-```
-
-- evaluation of **all indicators defined in the filtered component manifest**
-
-Before evaluation begins the evaluator must:
-
-- construct the ordered list of `indicator_id` values from the manifest
-- ensure each indicator is evaluated exactly once
-
-The number of output rows must equal the number of embedded indicators.
-
-All emitted rows must contain:
-
-```
-component_id = PARAM_TARGET_COMPONENT_ID
-```
-
-Layer 1 scoring must **not**:
-
-- evaluate dimensions
-- interpret indicator combinations
-- apply mapping rules
-- assign component scores
-- score indicators belonging to other components
-
-If the evaluator is uncertain and cannot identify sufficient explicit support for `evidence` or `partial_evidence`, assign:
-
-```
-evidence_status = little_to_no_evidence
-flags = needs_review
-```
-
----
-
 ## Constraints
 
-The generated scoring prompt must require the evaluator to use only:
+The evaluator must use only:
 
-- the runtime input row
-- the canonical `response_text`
-- the embedded manifest rows for the target component
-- the embedded evidence scale
+- runtime dataset row
+- canonical `response_text`
+- embedded indicator definitions
+- embedded evidence scale
 
 The evaluator must not use:
 
 - external knowledge
-- inferred course intent beyond the embedded materials
-- dimension logic
-- performance-level reasoning
-- assumptions about what the student probably meant if not stated explicitly
+- dimension reasoning
+- performance level reasoning
+- assumptions about intended meaning
 
 ---
 
 ## Content Rules
 
-The generated scoring prompt must require:
+The scoring prompt must require:
 
-- one CSV data row per embedded indicator
-- `component_id` in every row must equal `PARAM_TARGET_COMPONENT_ID`
-- `indicator_id` values must appear in manifest order
-- `evaluation_notes` must remain concise
-- `evaluation_notes` must not include long quotations unless `FRAGMENT_OUTPUT_MODE = on`
+- one CSV row per indicator
+- `component_id = PARAM_TARGET_COMPONENT_ID` in every row
+- indicators emitted in prompt order
+- concise `evaluation_notes`
+- no long quotations unless fragment mode is enabled
 
 ---
 
 ## Failure Mode Handling
 
-If any required artefact or parameter is missing, inconsistent, or contradictory:
+If any artefact or parameter is missing, inconsistent, or contradictory:
 
 - produce **no output**
 - wait silently for corrected inputs
@@ -609,8 +561,8 @@ If any required artefact or parameter is missing, inconsistent, or contradictory
 If the filtered manifest contains:
 
 - no rows
-- duplicate `indicator_id` values
-- missing evaluation specification fields
+- duplicate `indicator_id`
+- missing evaluation fields
 
 the wrapper prompt must **produce no output**.
 ===
