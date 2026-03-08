@@ -458,6 +458,9 @@ Rubric Template: 6.1 Layer 1 SBO Value Derivation (Draft)
 These sections together define the **initial indicator scoring behaviour**.
 ##### Iterative testing process
 Indicator behaviour is tested using a **calibration sample** of student submissions.
+
+Stage 1.3 should begin by testing Layer 1 SBO behaviour on the same calibration sample used in Stage 0.3, since that sample grounded candidate indicator discovery. Once the indicator registry and evaluation specification become coherent, Stage 1.3 should also test behaviour on a separate holdout calibration sample to reduce overfitting and confirm that indicator scoring generalises beyond the discovery sample.
+
 Evaluation is performed using **LLM-generated scoring prompts**.
 Operational workflow:
 ```text

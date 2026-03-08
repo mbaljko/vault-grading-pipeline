@@ -87,8 +87,7 @@
               "title": "pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt"
             }
           }
-        ],
-        "currentTab": 4
+        ]
       }
     ],
     "direction": "vertical"
@@ -234,13 +233,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt"
+              "title": "Outline of Pipeline 1B — Layered Rubric Construction Pipeline"
             }
           },
           {
@@ -274,14 +273,14 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "b2c358848043f2b1",
+  "active": "50f9e0c568115b6f",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt.md",
     "01_units/apps/prompt_runners/invoke_chatgpt_with_payload.py",
     "01_units/apps/prompt_runners",
     "05_docs/01_design/pl1B_rubric_devt/IMPROVEMENT - FUTURE - INDICATOR LOCK.md",
     "05_docs/01_design/pl1B_rubric_devt/Layer1_ScoringManifest_v01 Schema.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Generate Layer 1 Indicator Evaluation Specification.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_SBO Instance Registry.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v02.md",
@@ -310,7 +309,6 @@
     "env/bin/Activate.ps1",
     "env/bin/activate.csh",
     "env/bin/pip3.13",
-    "env/bin/pip3",
-    "env/bin/pip"
+    "env/bin/pip3"
   ]
 }
