@@ -130,6 +130,20 @@
               "icon": "lucide-file",
               "title": "RUBRIC_EXAMPLE_CAL_payload_v1"
             }
+          },
+          {
+            "id": "796f97973975f72e",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v02.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v02"
+            }
           }
         ]
       }
@@ -319,9 +333,10 @@
   },
   "active": "50f9e0c568115b6f",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_Contrastive Pattern Discovery.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v02.md",
     "05_docs/01_design/pl1B_rubric_devt/TRY Contrastive indicator extraction.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_Contrastive Pattern Discovery.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Untitled.md",
     "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>  VERBOSE.md",
     "05_docs/01_design/pl2_calibration/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
@@ -344,7 +359,6 @@
     "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning.pq POTENTIAL OPTIMIZATIONS.md",
     "05_docs/01_design/pl1A_canonical_population_prep/02_cleaning - TO DO.md",
     "05_docs/01_design/pl1A_canonical_population_prep/01_validation.pq - TO DO.md",
-    "05_docs/01_design/pl1B_rubric_devt/TRY Pattern Discovery Pass.md",
     "05_docs/00_overview/prev",
     "secrets/openai_api_key.txt",
     "env/bin/activate",

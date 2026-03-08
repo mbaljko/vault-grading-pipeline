@@ -144,8 +144,49 @@ Example analytic brief structure:
 | Component: SectionBResponse | analytic purpose and expected reasoning |
 | Component: SectionCResponse | analytic purpose and expected reasoning |
 #### Deliverables
+Produce the following document:
 ```
-<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
+<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01.md
+```
+The document must contain the following sections.
+
+| section | required content |
+|---|---|
+| Overview — Analytic Goals and Conceptual Claims | analytic goals of the assignment, conceptual claims students are expected to produce, and the intellectual structure of the submission |
+| Components | analytic interpretation of each assignment component defined in the Component Registry |
+Within the **Components** section, the document must contain one subsection for **each `component_id` defined in the Component Registry** of:
+```
+<ASSESSMENT_ID>_AssignmentPayloadSpec_v01
+```
+Each component subsection must contain:
+
+| subsection content | description |
+|---|---|
+| Analytic purpose | the conceptual purpose of the component within the submission |
+| Expected reasoning structure | the types of reasoning or positioning moves the component asks the student to perform |
+Example structure:
+```
+1. Overview — Analytic Goals and Conceptual Claims
+2. Components
+   2.1 Component: <component_id_1>
+       Analytic purpose
+       Expected reasoning structure
+   2.2 Component: <component_id_2>
+       Analytic purpose
+       Expected reasoning structure
+   ...
+   2.n Component: <component_id_n>
+       Analytic purpose
+       Expected reasoning structure
+```
+The set of component subsections must correspond exactly to the component identifiers defined in:
+```
+<ASSESSMENT_ID>_AssignmentPayloadSpec_v01
+```
+Later stages extend the same document with additional sections:
+```
+3. Analytic Sub-space Identification (Stage 0.2)
+4. Contrastive Pattern Discovery and Candidate Indicator Sketches (Stage 0.3)
 ```
 #### Stage 0.2 Analytic Sub-space Identification
 Some components ask students to perform **multiple distinct analytic moves**.
@@ -162,16 +203,35 @@ They are **not part of the scoring ontology** and do not appear in the Rubric Pa
 | `SectionAResponse` | A3 | professional obligations |
 Analytic sub-spaces serve as a **design scaffold** for indicator discovery and later dimension formation.
 #### Deliverables
+Stage 0.2 extends the previously created document:
 ```
-<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
-    └ component analytic sub-spaces NAMED: "8. Stage 0.2 — Analytic Sub-space Identification"
+<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01.md
 ```
+by adding the following numbered section:
+```
+3. Analytic Sub-space Identification
+```
+This section must contain a **registry of analytic sub-spaces for each assignment component**.
+The registry must include one row for **each analytic sub-space derived from the component instructions**.
+
+| field | description |
+|---|---|
+| `component` | the `component_id` defined in `<ASSESSMENT_ID>_AssignmentPayloadSpec_v01` |
+| `sub-space_id` | analytic sub-space identifier using the convention `<SECTION_LETTER><INTEGER>` |
+| `analytic focus` | concise description of the conceptual task performed within that sub-space |
+The analytic sub-space registry must include **all components defined in the Component Registry** of:
+```
+<ASSESSMENT_ID>_AssignmentPayloadSpec_v01
+```
+If a component contains only a single analytic task, it may be represented by a **single analytic sub-space**.
+This section provides the **analytic scaffolding used during Stage 0.3 contrastive pattern discovery** and **Stage 1 indicator discovery**.
 #### Stage 0.3 Contrastive Pattern Discovery Pass
 Before defining indicator SBO instances, use a **small calibration sample of real student responses** to discover contrastive response patterns.
 This step surfaces **observable signals actually present in student writing** rather than relying only on the assignment description.
 The purpose is to produce **candidate indicators and candidate dimensions**.
 These outputs remain **analytic hypotheses** at this stage.
 They do not become rubric structures until they are instantiated as SBO instances and stabilised through empirical testing.
+
 ##### Calibration sample structure
 
 | field_name |
@@ -184,16 +244,16 @@ Typical calibration sample size:
 | recommended sample |
 |---|
 | 20–40 responses |
-##### Iterative testing process
+##### Contrastive signal extraction procedure
 Contrastive analysis is performed **within each analytic sub-space**.
 
-| step | operation |
-|---|---|
-| 1 | identify analytic sub-spaces within the component |
-| 2 | prompt the model to identify contrastive response pairs |
-| 3 | extract textual signals distinguishing the responses |
-| 4 | group signals into candidate indicators |
-| 5 | identify early signal clusters suggesting candidate dimensions |
+| step | operation                                                      |
+| ---- | -------------------------------------------------------------- |
+| 1    | identify analytic sub-spaces within the component              |
+| 2    | prompt the model to identify contrastive response pairs        |
+| 3    | extract textual signals distinguishing the responses           |
+| 4    | group signals into candidate indicators                        |
+| 5    | identify early signal clusters suggesting candidate dimensions |
 Example extracted signals:
 
 | candidate signal |
@@ -202,20 +262,33 @@ Example extracted signals:
 | recognition of distributed responsibility |
 | description of responsibility hand-off |
 | explicit reference to regulatory oversight |
-These signals become **candidate indicators**. Signal clusters may also suggest **candidate dimensions**.
-##### Exit condition (Stage 0.3)
-Stage 0.3 is complete when the calibration analysis has produced a stable set of **contrastively derived candidate signals** for each analytic sub-space.
-Specifically:
-- each analytic sub-space has been examined using a calibration sample of student responses
-- at least several **contrastive response pairs** have been identified for each analytic sub-space
-- the contrasts reveal **observable textual signals** that distinguish analytically different response types
-- the extracted signals have been organised into a **candidate indicator list**, grouped by analytic sub-space
-- the signals are supported by **example response language drawn from the calibration sample**
-At this stage the signals remain **analytic hypotheses** rather than rubric structures.
-Indicator SBO instances and evaluation specifications are defined later during **Stage 1**.
-Optional:
-- early clusters of related signals may be noted as **candidate conceptual dimensions**, but dimension structures are not finalised at this stage.
-##### Exit condition for Stage 0
+These signals become **candidate indicators**.  
+Signal clusters may also suggest **candidate dimensions**.
+##### Deliverables
+Stage 0.3 extends the previously created document:
+```
+<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01.md
+```
+by adding the following numbered section:
+```
+4. Contrastive Pattern Discovery and Candidate Indicator Sketches
+```
+This section must contain the following subsections.
+
+| subsection | required content |
+|---|---|
+| 4.1 Calibration sample description | description of the calibration dataset used for contrastive analysis |
+| 4.2 Contrastive response observations | examples of contrastive response pairs identified within analytic sub-spaces |
+| 4.3 Candidate indicator signals | list of observable textual signals extracted from contrasts, grouped by analytic sub-space |
+| 4.4 Candidate indicator set | consolidated list of candidate indicators derived from the extracted signals |
+| 4.5 Candidate dimension sketches (optional) | early clusters of related signals suggesting possible conceptual dimensions |
+The **candidate indicator signals** must be grounded in **observable language present in the calibration responses**.
+At this stage:
+- indicators remain **analytic hypotheses**
+- no **indicator SBO identifiers** are assigned
+- no **scoring rules or thresholds** are defined
+Formal indicator SBO instances and evaluation specifications are created later during **Stage 1 — Indicator Discovery and Evaluation Design (Layer 1)**.
+#### Exit condition for Stage 0
 Stage 0 is complete when the Submission Analytic Brief contains:
 - clearly defined analytic purpose for each component
 - identified analytic sub-spaces
