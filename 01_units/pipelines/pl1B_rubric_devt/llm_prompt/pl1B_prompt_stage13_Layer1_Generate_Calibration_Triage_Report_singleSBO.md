@@ -87,11 +87,11 @@ From each partition, select diagnostic rows as follows:
 
 **Enforcement rule for row limits:**
 
-If a partition contains more than 8 rows:  
-1. Sort rows in that partition by `submission_id`.  
-2. Keep only the first 8 rows.  
-3. Discard all remaining rows from the inspection set.  
-4. Never include more than 8 rows from any partition.
+If a partition contains more than 8 rows:
+- Use the dataset order exactly as provided.
+- Keep only the first 8 rows in that partition.
+- Ignore all remaining rows in that partition.
+- Do not inspect, analyse, or reference rows beyond these first 8.
 
 The inspection set therefore contains **at most 24 rows total**.
 
