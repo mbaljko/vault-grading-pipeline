@@ -19,29 +19,30 @@ Inputs:
 
 Outputs:
 - The full API response object is always captured in memory.
-- JSON output file: writes the full API response object and includes
-    `extracted_output_text` for convenience.
 - `extracted_output_text` is derived from that full API response object.
-
-- --output-format <json|csv|md> (repeatable; can be passed multiple times)
-- `--output-format` controls how `extracted_output_text` is emitted as files:
+- `--output-format <json|csv|md>` (repeatable) selects which file artifacts are written.
+    - `json`: write the full API response object file and include
+      `extracted_output_text` for convenience.
     - `csv`: write CSV from `extracted_output_text`.
         - If `extracted_output_text` looks like CSV, rows are parsed and written.
         - Otherwise, a single-column CSV (`output_text`) is written with the raw text.
     - `md`: write `extracted_output_text` as-is to a `.md` file.
-    - `json`: write the full API response object file.
+- `--output-dir <path>` optionally overrides the output directory.
+- Output filename patterns:
+    - JSON: `<stem>_api_response.json`
+    - CSV: `<stem>_output.csv`
+    - Markdown: `<stem>_output.md`
 - Output path behavior:
-    - If --prompt-path or --prompt-file is provided:
-        - <prompt_stem>_api_response.json
-        - <prompt_stem>_output.csv
-        - <prompt_stem>_output.md
+    - If `--output-dir` is provided:
+        - all requested output files are written in that directory.
+        - `<stem>` is `<prompt_stem>` when a prompt file/path is provided, else
+          `invoke_chatgpt_with_payload`.
+    - Otherwise, if --prompt-path or --prompt-file is provided:
         - written next to that prompt file.
     - Otherwise:
-        - invoke_chatgpt_with_payload_api_response.json
-        - invoke_chatgpt_with_payload_output.csv
-        - invoke_chatgpt_with_payload_output.md
         - written next to this script file.
-- Output paths are resolved absolute paths and do not depend on invocation CWD.
+- Paths are resolved to absolute paths before writing. If a relative prompt path or
+  relative `--output-dir` is provided, it is resolved from the current working directory.
 
 Additional invocation parameters (besides input/output options):
 - --temperature <float>
@@ -184,6 +185,15 @@ def parse_args() -> argparse.Namespace:
         help="Model name override (default: configured MODEL constant).",
     )
     parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Optional output directory for generated files. If omitted, outputs are "
+            "written next to the prompt file (when provided) or next to this script."
+        ),
+    )
+    parser.add_argument(
         "--output-format",
         action="append",
         choices=["json", "csv", "md"],
@@ -296,6 +306,20 @@ def build_request_body(
 def resolve_output_file_paths(args: argparse.Namespace) -> tuple[Path, Path, Path]:
     """Resolve output file paths for JSON, CSV, and Markdown artifacts."""
     prompt_source = args.prompt_path or args.prompt_file
+
+    if args.output_dir:
+        output_dir = args.output_dir.resolve()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if prompt_source:
+            stem = prompt_source.stem
+        else:
+            stem = "invoke_chatgpt_with_payload"
+
+        json_path = output_dir / f"{stem}_api_response.json"
+        csv_path = output_dir / f"{stem}_output.csv"
+        md_path = output_dir / f"{stem}_output.md"
+        return json_path, csv_path, md_path
+
     if prompt_source:
         prompt_dir = prompt_source.resolve().parent
         json_path = prompt_dir / f"{prompt_source.stem}_api_response.json"

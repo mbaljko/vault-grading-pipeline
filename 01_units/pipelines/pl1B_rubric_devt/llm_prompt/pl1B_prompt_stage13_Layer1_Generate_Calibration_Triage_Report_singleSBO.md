@@ -32,13 +32,9 @@ constraints:
   - triage_only
 notes: prompt performs calibration triage by sampling scored rows and identifying potentially ambiguous or misclassified cases for human inspection
 ---
-
-PROMPT: Calibration triage
-
+## PROMPT: Calibration triage
 You are helping triage rubric calibration results for a rubric indicator.
-
 The prompt receives two artefacts after the prompt text.
-
 These artefacts will be supplied using the delimiter `===` in the following structure.
 
 ===
@@ -52,40 +48,106 @@ Scored rows follow.
 
 ===
 
+### Purpose
+This prompt performs **calibration triage** for a single rubric indicator by selecting a small diagnostic inspection set and grouping those rows into triage panels for human review.
+This prompt **does not perform scoring**.
+Do not reinterpret the rubric.
+Do not change evidence_status values.
+Do not rescore the responses.
+Only identify rows that may require human inspection.
 
-Procedure:
+### Input integrity requirements
+All rows in the dataset must correspond to **one indicator_id only**.
+If multiple indicator_id values appear in the dataset, treat this as an input error and do not proceed.
+Each row must contain a valid `submission_id` and `evidence_status`.
 
-1. Examine the full dataset to understand the distribution of `evidence_status` values.
+Valid evidence_status values are:
+- evidence  
+- partial_evidence  
+- little_to_no_evidence
 
-2. Internally select a diagnostic inspection set consisting of:
-   - up to 8 rows where `evidence_status = evidence`
-   - up to 8 rows where `evidence_status = partial_evidence`
-   - up to 8 rows where `evidence_status = little_to_no_evidence`
-The inspection set therefore contains **at most 24 rows total**.  
-All rows appearing anywhere in the output **must come from this inspection set**.  
-No additional rows from the dataset may be introduced.  
+Do not invent new evidence_status values.
 
-3. Choose rows that appear representative or potentially ambiguous.
+### Procedure
 
-4. Using only the selected inspection set:
-   - group responses into clear positives, borderline cases, and questionable cases
-   - flag rows that may represent possible misclassifications
+#### Step 1 — Partition the dataset
+Partition the full dataset into three groups using the recorded `evidence_status` values:
+- evidence  
+- partial_evidence  
+- little_to_no_evidence  
 
-Do not change the scoring.  
-Do not rescore the responses.  
-Only flag rows for human review.
+Do not reinterpret or modify these labels.
 
+#### Step 2 — Construct the diagnostic inspection set
+From each partition, select diagnostic rows as follows:
 
-Panels A–C must partition the Selected inspection set.
-Every row in the inspection set must appear in exactly one panel.
-No new rows may appear in the panels.
+- up to **8 rows** where `evidence_status = evidence`
+- up to **8 rows** where `evidence_status = partial_evidence`
+- up to **8 rows** where `evidence_status = little_to_no_evidence`
 
-Output constraint:
-The rows listed in Panel A, Panel B, and Panel C must be drawn only from the Selected inspection set.
-Do not include rows that are not listed in the inspection set table.
-##### Output format
+**Enforcement rule for row limits:**
 
-Emit results as fenced Markdown.
+If a partition contains more than 8 rows:  
+1. Sort rows in that partition by `submission_id`.  
+2. Keep only the first 8 rows.  
+3. Discard all remaining rows from the inspection set.  
+4. Never include more than 8 rows from any partition.
+
+The inspection set therefore contains **at most 24 rows total**.
+
+The limit of 8 rows applies **independently to each evidence_status category**.
+
+If a category contains fewer than 8 rows, include all available rows.
+
+When selecting rows, include a mix of:
+- clearly representative examples
+- potentially ambiguous examples
+
+Do not select only ambiguous rows.
+
+#### Step 3 — Declare the inspection set
+The **Selected inspection set table must list every sampled row**.
+This table is the **registry of rows** used for the remainder of the task.
+
+All rows appearing anywhere later in the output must come from this registry.
+No additional rows from the dataset may be introduced.
+
+#### Step 4 — Perform triage grouping
+Using **only the rows listed in the Selected inspection set**, group them into the following diagnostic panels:
+
+- Panel A — Clear positives  
+- Panel B — Borderline cases  
+- Panel C — Questionable cases  
+
+These panels are **diagnostic groupings only**.  
+They do **not** modify the recorded evidence_status values.
+
+Panels must reflect triage interpretation only.
+
+#### Structural integrity rules
+Panels A–C must form a **strict partition of the Selected inspection set**.
+
+The following conditions must hold:
+
+1. Every row listed in the Selected inspection set must appear in **exactly one panel**.
+2. No row may appear in more than one panel.
+3. No new rows may appear in any panel.
+4. The union of rows appearing in Panels A–C must exactly match the rows listed in the Selected inspection set.
+5. Each row must include the **exact submission_id from the dataset**. Do not alter identifiers.
+
+### Notes for inspection reasoning
+Inspection notes should briefly explain **why the row appears in that panel**.
+
+Do not restate the rubric definition.
+Do not provide general rubric commentary.
+
+Inspection notes should describe the diagnostic reason the row may be:
+- clearly aligned with the indicator
+- weak or incomplete
+- potentially misclassified
+
+### Output format
+Emit results as **fenced Markdown**.
 
 ```
 #### <indicator_id> — <short_indicator_description>
@@ -120,4 +182,12 @@ Was the signal present but missed?
 | submission_id | evidence_status | inspection_note |
 |---|---|---|
 ```
+
+### Behavioural constraints
+- Do not modify the dataset.
+- Do not add or remove rows beyond the inspection set selection.
+- Do not reinterpret or override evidence_status.
+- Do not rescore responses.
+- Only flag rows for human review through panel placement and inspection notes.
+
 ===
