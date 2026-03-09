@@ -38,6 +38,7 @@ Additional invocation parameters (besides input/output options):
 - --temperature <float>
 - --max-output-tokens <int>
 - --model <name>
+- --output-format <csv|json|both>
 - --dry-run
 
 Environment configuration:
@@ -175,6 +176,12 @@ def parse_args() -> argparse.Namespace:
         help="Model name override (default: configured MODEL constant).",
     )
     parser.add_argument(
+        "--output-format",
+        choices=["csv", "json", "both"],
+        default="both",
+        help="Select output artifact(s) to write: csv, json, or both (default).",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print resolved prompt/payload/request body and exit without calling API.",
@@ -288,13 +295,12 @@ def resolve_output_file_paths(args: argparse.Namespace) -> tuple[Path, Path]:
     return json_path, csv_path
 
 
-def write_output_files(
+def write_json_output_file(
     json_output_path: Path,
-    csv_output_path: Path,
     text: str,
     response_obj: dict[str, Any],
 ) -> None:
-    """Write response JSON + extracted text and companion CSV."""
+    """Write full API response JSON with extracted_output_text convenience field."""
     json_payload = dict(response_obj)
     json_payload["extracted_output_text"] = text or ""
 
@@ -302,6 +308,10 @@ def write_output_files(
         json.dumps(json_payload, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+
+
+def write_csv_output_file(csv_output_path: Path, text: str) -> None:
+    """Write CSV derived from extracted text (table parse or single output_text cell)."""
 
     parsed_rows: list[list[str]] = []
     try:
@@ -328,6 +338,27 @@ def write_output_files(
         else:
             writer.writerow(["output_text"])
             writer.writerow([text or ""])
+
+
+def write_requested_output_files(
+    output_format: str,
+    json_output_path: Path,
+    csv_output_path: Path,
+    text: str,
+    response_obj: dict[str, Any],
+) -> dict[str, Path]:
+    """Write requested output artifact(s) and return their paths keyed by format."""
+    written_files: dict[str, Path] = {}
+
+    if output_format in {"json", "both"}:
+        write_json_output_file(json_output_path, text, response_obj)
+        written_files["json"] = json_output_path
+
+    if output_format in {"csv", "both"}:
+        write_csv_output_file(csv_output_path, text)
+        written_files["csv"] = csv_output_path
+
+    return written_files
 
 
 def extract_output_text(response_obj: dict[str, Any]) -> str:
@@ -429,9 +460,17 @@ def main() -> int:
         incomplete_reason = get_incomplete_reason(response_obj)
 
         json_output_path, csv_output_path = resolve_output_file_paths(args)
-        write_output_files(json_output_path, csv_output_path, text, response_obj)
-        print(f"JSON output written to: {json_output_path}")
-        print(f"CSV output written to: {csv_output_path}")
+        written_files = write_requested_output_files(
+            output_format=args.output_format,
+            json_output_path=json_output_path,
+            csv_output_path=csv_output_path,
+            text=text,
+            response_obj=response_obj,
+        )
+        if "json" in written_files:
+            print(f"JSON output written to: {written_files['json']}")
+        if "csv" in written_files:
+            print(f"CSV output written to: {written_files['csv']}")
         if is_platform_limit_reason(incomplete_reason):
             print(
                 "Notice: response is incomplete due to a platform/model token limit "
