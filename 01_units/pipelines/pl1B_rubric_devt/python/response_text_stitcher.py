@@ -13,7 +13,7 @@ Behavior:
 	- Adds `response_text` as a fourth column using submission_id matches from
 	  --input-file-response-texts.
 	- Writes output markdown to the current working directory. The filename is
-	  derived from the first token of the first markdown title.
+	  `STITCHED_CT_REPORT_<first_title_token>.md`.
 """
 
 from __future__ import annotations
@@ -194,7 +194,7 @@ def render_augmented_markdown(input_path: Path, response_lookup: dict[str, str])
 
 
 def derive_output_file_path(markdown_text: str) -> Path:
-	"""Derive output markdown filename from the first token of the first title."""
+	"""Derive `STITCHED_CT_REPORT_<first_title_token>.md` output filename."""
 	base_name = "stitched_output"
 	for line in markdown_text.splitlines():
 		match = TITLE_RE.match(line)
@@ -211,7 +211,7 @@ def derive_output_file_path(markdown_text: str) -> Path:
 			base_name = sanitized
 		break
 
-	return Path.cwd() / f"{base_name}.md"
+	return Path.cwd() / f"STITCHED_CT_REPORT_{base_name}.md"
 
 
 def main() -> int:

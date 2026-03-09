@@ -5,7 +5,7 @@ This script reads a markdown file and prints to stdout only the lines that
 contain the provided `--component-id` string.
 
 Arguments:
-- --markdown-file: path to the markdown file to scan.
+- --sbo-manifest-file: path to the markdown file to scan.
 - --component-id: string token used to match lines.
 
 Output:
@@ -18,7 +18,7 @@ Output:
 
 Example:
 		python run-ct-report-for-manifest.py \
-			--markdown-file /path/to/Layer1_ScoringManifest_PPP_v01.md \
+			--sbo-manifest-file /path/to/Layer1_ScoringManifest_PPP_v01.md \
 			--component-id SectionCResponse
 """
 
@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
 		description="Print markdown lines that contain the specified component ID."
 	)
 	parser.add_argument(
-		"--markdown-file",
+		"--sbo-manifest-file",
 		type=Path,
 		required=True,
 		help="Path to the markdown file to read.",
@@ -79,7 +79,7 @@ def is_separator_row(cells: list[str]) -> bool:
 
 def main() -> int:
 	args = parse_args()
-	markdown_path = args.markdown_file
+	markdown_path = args.sbo_manifest_file
 	component_id = args.component_id
 
 	if not markdown_path.exists() or not markdown_path.is_file():
