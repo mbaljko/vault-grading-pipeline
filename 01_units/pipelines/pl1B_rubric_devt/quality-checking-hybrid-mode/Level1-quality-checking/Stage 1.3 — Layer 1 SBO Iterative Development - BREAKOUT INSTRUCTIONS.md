@@ -90,7 +90,12 @@ Indicator specification:
 <indicator_definition>
 <assessment_guidance>
 <evaluation_notes>
+
+
 Scored rows follow.
+
+
+
 Procedure:
 1. Examine the full dataset to understand the distribution of evidence_status values.
 2. Internally select a diagnostic inspection set consisting of:
