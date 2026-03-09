@@ -7,6 +7,10 @@ contain the provided `--component-id` string.
 Arguments:
 - --sbo-manifest-file: path to the markdown file to scan.
 - --component-id: string token used to match lines.
+- --file-with-response-texts: path to a response-texts file reserved for
+	payload augmentation.
+- --file-with-scored-texts: path to scored-text rows for future payload
+	augmentation.
 
 Output:
 - For each matching line, exactly two lines are written:
@@ -19,12 +23,15 @@ Output:
 Example:
 		python run-ct-report-for-manifest.py \
 			--sbo-manifest-file /path/to/Layer1_ScoringManifest_PPP_v01.md \
-			--component-id SectionCResponse
+			--component-id SectionCResponse \
+			--file-with-response-texts /path/to/response_texts.csv \
+			--file-with-scored-texts /path/to/scored_texts.csv
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import re
 import sys
@@ -50,6 +57,18 @@ def parse_args() -> argparse.Namespace:
 		type=str,
 		required=True,
 		help="Component ID used to filter matching lines.",
+	)
+	parser.add_argument(
+		"--file-with-response-texts",
+		type=Path,
+		required=True,
+		help="Path to response-texts input file for payload augmentation.",
+	)
+	parser.add_argument(
+		"--file-with-scored-texts",
+		type=Path,
+		required=True,
+		help="Path to scored-texts input file for payload augmentation.",
 	)
 	return parser.parse_args()
 
@@ -77,14 +96,70 @@ def is_separator_row(cells: list[str]) -> bool:
 	return all(bool(SEPARATOR_CELL_RE.match(cell.replace(" ", ""))) for cell in cells)
 
 
+def load_scored_rows(input_path: Path) -> list[dict[str, str]]:
+	"""Load scored-text rows from CSV as normalized dictionaries."""
+	rows: list[dict[str, str]] = []
+	with input_path.open("r", encoding="utf-8-sig", newline="") as f:
+		reader = csv.DictReader(f)
+		if not reader.fieldnames:
+			return rows
+
+		for raw_row in reader:
+			normalized_row: dict[str, str] = {}
+			for key, value in raw_row.items():
+				if key is None:
+					continue
+				normalized_row[key.strip()] = (value or "").strip()
+			rows.append(normalized_row)
+
+	return rows
+
+
+def find_matching_scored_rows(
+	manifest_components: dict[str, str],
+	scored_rows: list[dict[str, str]],
+) -> list[dict[str, str]]:
+	"""Find scored-text rows matching the current manifest row."""
+	component_id = (manifest_components.get("component_id") or "").strip()
+	sbo_identifier = (manifest_components.get("sbo_identifier") or "").strip()
+	indicator_id = (manifest_components.get("indicator_id") or "").strip()
+
+	matches: list[dict[str, str]] = []
+	for row in scored_rows:
+		row_component_id = (row.get("component_id") or "").strip()
+		if component_id and row_component_id and row_component_id != component_id:
+			continue
+
+		if sbo_identifier:
+			if (row.get("sbo_identifier") or "").strip() != sbo_identifier:
+				continue
+		elif indicator_id:
+			if (row.get("indicator_id") or "").strip() != indicator_id:
+				continue
+
+		matches.append(row)
+
+	return matches
+
+
 def main() -> int:
 	args = parse_args()
 	markdown_path = args.sbo_manifest_file
 	component_id = args.component_id
+	response_texts_path = args.file_with_response_texts
+	scored_texts_path = args.file_with_scored_texts
 
 	if not markdown_path.exists() or not markdown_path.is_file():
 		print(f"Error: markdown file not found: {markdown_path}", file=sys.stderr)
 		return 1
+	if not response_texts_path.exists() or not response_texts_path.is_file():
+		print(f"Error: response-texts file not found: {response_texts_path}", file=sys.stderr)
+		return 1
+	if not scored_texts_path.exists() or not scored_texts_path.is_file():
+		print(f"Error: scored-texts file not found: {scored_texts_path}", file=sys.stderr)
+		return 1
+
+	scored_rows = load_scored_rows(scored_texts_path)
 
 	with markdown_path.open("r", encoding="utf-8") as f:
 		lines = f.readlines()
@@ -121,8 +196,11 @@ def main() -> int:
 					for idx in range(len(header_cells))
 				}
 				sbo_identifier = extract_sbo_identifier(row_line)
+				matching_scored_rows = find_matching_scored_rows(components, scored_rows)
+				scored_payload = {"matching_scored_rows": matching_scored_rows}
 				print(sbo_identifier)
 				print(json.dumps(components, ensure_ascii=False))
+				print(json.dumps(scored_payload, ensure_ascii=False))
 
 			i += 1
 
