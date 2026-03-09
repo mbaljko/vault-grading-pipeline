@@ -23,14 +23,17 @@ Outputs:
 - CSV output file: derived from `extracted_output_text`.
     - If `extracted_output_text` looks like CSV, rows are parsed and written.
     - Otherwise, a single-column CSV (`output_text`) is written with the raw text.
+- Markdown output file: writes `extracted_output_text` as-is to a `.md` file.
 - Output path behavior:
     - If --prompt-path or --prompt-file is provided:
         - <prompt_stem>_api_response.json
         - <prompt_stem>_output.csv
+        - <prompt_stem>_output.md
         - written next to that prompt file.
     - Otherwise:
         - invoke_chatgpt_with_payload_api_response.json
         - invoke_chatgpt_with_payload_output.csv
+        - invoke_chatgpt_with_payload_output.md
         - written next to this script file.
 - Output paths are resolved absolute paths and do not depend on invocation CWD.
 
@@ -38,7 +41,7 @@ Additional invocation parameters (besides input/output options):
 - --temperature <float>
 - --max-output-tokens <int>
 - --model <name>
-- --output-format <csv|json|both>
+- --output-format <json|csv|md> (repeatable; can be passed multiple times)
 - --dry-run
 
 Environment configuration:
@@ -177,9 +180,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-format",
-        choices=["csv", "json", "both"],
-        default="both",
-        help="Select output artifact(s) to write: csv, json, or both (default).",
+        action="append",
+        choices=["json", "csv", "md"],
+        default=None,
+        help=(
+            "Select output artifact(s) to write. Repeat to write multiple formats "
+            "(for example: --output-format json --output-format csv). "
+            "Defaults to json and csv when omitted."
+        ),
     )
     parser.add_argument(
         "--dry-run",
@@ -280,19 +288,21 @@ def build_request_body(
     return body
 
 
-def resolve_output_file_paths(args: argparse.Namespace) -> tuple[Path, Path]:
-    """Resolve output file paths for raw JSON and companion CSV."""
+def resolve_output_file_paths(args: argparse.Namespace) -> tuple[Path, Path, Path]:
+    """Resolve output file paths for JSON, CSV, and Markdown artifacts."""
     prompt_source = args.prompt_path or args.prompt_file
     if prompt_source:
         prompt_dir = prompt_source.resolve().parent
         json_path = prompt_dir / f"{prompt_source.stem}_api_response.json"
         csv_path = prompt_dir / f"{prompt_source.stem}_output.csv"
-        return json_path, csv_path
+        md_path = prompt_dir / f"{prompt_source.stem}_output.md"
+        return json_path, csv_path, md_path
 
     script_dir = Path(__file__).resolve().parent
     json_path = script_dir / "invoke_chatgpt_with_payload_api_response.json"
     csv_path = script_dir / "invoke_chatgpt_with_payload_output.csv"
-    return json_path, csv_path
+    md_path = script_dir / "invoke_chatgpt_with_payload_output.md"
+    return json_path, csv_path, md_path
 
 
 def write_json_output_file(
@@ -340,23 +350,40 @@ def write_csv_output_file(csv_output_path: Path, text: str) -> None:
             writer.writerow([text or ""])
 
 
+def write_markdown_output_file(markdown_output_path: Path, text: str) -> None:
+    """Write extracted text directly to a Markdown file."""
+    markdown_output_path.write_text(text or "", encoding="utf-8")
+
+
+def resolve_requested_output_formats(output_formats: list[str] | None) -> set[str]:
+    """Return selected output formats, defaulting to JSON + CSV."""
+    if not output_formats:
+        return {"json", "csv"}
+    return set(output_formats)
+
+
 def write_requested_output_files(
-    output_format: str,
+    output_formats: set[str],
     json_output_path: Path,
     csv_output_path: Path,
+    markdown_output_path: Path,
     text: str,
     response_obj: dict[str, Any],
 ) -> dict[str, Path]:
     """Write requested output artifact(s) and return their paths keyed by format."""
     written_files: dict[str, Path] = {}
 
-    if output_format in {"json", "both"}:
+    if "json" in output_formats:
         write_json_output_file(json_output_path, text, response_obj)
         written_files["json"] = json_output_path
 
-    if output_format in {"csv", "both"}:
+    if "csv" in output_formats:
         write_csv_output_file(csv_output_path, text)
         written_files["csv"] = csv_output_path
+
+    if "md" in output_formats:
+        write_markdown_output_file(markdown_output_path, text)
+        written_files["md"] = markdown_output_path
 
     return written_files
 
@@ -459,11 +486,13 @@ def main() -> int:
         text = extract_output_text(response_obj)
         incomplete_reason = get_incomplete_reason(response_obj)
 
-        json_output_path, csv_output_path = resolve_output_file_paths(args)
+        requested_formats = resolve_requested_output_formats(args.output_format)
+        json_output_path, csv_output_path, markdown_output_path = resolve_output_file_paths(args)
         written_files = write_requested_output_files(
-            output_format=args.output_format,
+            output_formats=requested_formats,
             json_output_path=json_output_path,
             csv_output_path=csv_output_path,
+            markdown_output_path=markdown_output_path,
             text=text,
             response_obj=response_obj,
         )
@@ -471,6 +500,8 @@ def main() -> int:
             print(f"JSON output written to: {written_files['json']}")
         if "csv" in written_files:
             print(f"CSV output written to: {written_files['csv']}")
+        if "md" in written_files:
+            print(f"Markdown output written to: {written_files['md']}")
         if is_platform_limit_reason(incomplete_reason):
             print(
                 "Notice: response is incomplete due to a platform/model token limit "
