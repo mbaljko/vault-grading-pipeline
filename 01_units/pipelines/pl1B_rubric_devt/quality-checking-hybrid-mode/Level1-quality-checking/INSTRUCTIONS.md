@@ -47,12 +47,81 @@ little_to_no_evidence
 Ask the LLM to do **triage**, not judgement.
 Example prompt to the LLM:
 ```
-You are helping triage rubric calibration results.
-For indicator I19 below:
-1. group the responses into clear positives, borderline cases, and questionable cases
-2. flag rows that look suspicious (possible false positives or false negatives)
-3. do not change the scoring — only flag cases for human review
+You are helping triage rubric calibration results for a rubric indicator.
+
+Indicator specification:
+<indicator_definition>
+<assessment_guidance>
+<evaluation_notes>
+
+Scored rows follow.
+
+Procedure:
+
+1. Examine the full dataset to understand the distribution of `evidence_status` values.
+
+2. Internally select a diagnostic inspection set consisting of:
+   - up to 8 rows where `evidence_status = evidence`
+   - up to 8 rows where `evidence_status = partial_evidence`
+   - up to 8 rows where `evidence_status = little_to_no_evidence`
+
+   Choose rows that appear representative or potentially ambiguous.
+
+3. Using **only the selected inspection set**:
+   - group the responses into **clear positives**, **borderline cases**, and **questionable cases**
+   - flag rows that may represent **possible misclassifications** (false positives or false negatives)
+
+Do not change the scoring.  
+Do not rescore the responses.  
+Only flag rows for human review.
+
+### Output format
+
+Emit as fenced md. Format the results for inspection using the following structure.
+
+#### `<indicator_id> — <short_indicator_description>`
+
+##### Selected inspection set
+
+List the rows chosen during internal sampling.
+
+| submission_id | evidence_status | reason_selected |
+|---|---|---|
+| <sid> | <status> | brief explanation (representative / ambiguous / boundary case / suspicious pattern) |
+
+##### Triage results
+
+##### Panel A — Clear positives
+Responses where the indicator signal appears clearly present and the assigned `evidence_status` appears appropriate.
+
+| submission_id | evidence_status | inspection_note |
+|---|---|---|
+| <sid> | <status> | brief explanation of why the signal clearly matches the indicator |
+
+##### Panel B — Borderline cases
+Responses where the signal appears weak, ambiguous, or near the boundary between categories.
+
+| submission_id | evidence_status | inspection_note |
+|---|---|---|
+| <sid> | <status> | brief explanation of the ambiguity or boundary issue |
+
+##### Panel C — Questionable cases
+Responses that may represent **possible misclassifications**, such as potential false positives or false negatives.
+
+| submission_id | evidence_status | inspection_note |
+|---|---|---|
+| <sid> | <status> | explanation of why the classification may be incorrect |
+
+Notes:
+- Only include rows from the **selected inspection set** in the panels.
+- A row may appear in only **one panel**.
+- Do not rewrite or reinterpret the rubric.
+- Keep inspection notes concise and focused on the indicator signal.
+- Do not produce narrative summaries outside the defined sections.
 ```
+
+supply the indicator specification and the response text
+
 Output should look like:
 ```
 clear positives: [sid 12, 18, 21]
@@ -74,7 +143,7 @@ Typical panel size:
 5–10 responses per panel
 ```
 The panels should be assembled as follows.
-### Panel A — strong detections
+### Panel A — strong detections (clear positives)
 Filter:
 ```
 indicator_id = Ix
@@ -130,13 +199,16 @@ Did the evaluation instructions make the correct decision ambiguous?
 Record findings in a small log.
 Example:
 
-| indicator | submission | issue | note |
-|---|---|---|---|
-| I19 | 14 | borderline | participation language implied but not explicit |
-| I19 | 9 | false positive | accessibility mentioned but not about participation |
+| indicator | submission | issue          | note                                                |
+| --------- | ---------- | -------------- | --------------------------------------------------- |
+| I19       | 14         | borderline     | participation language implied but not explicit     |
+| I19       | 9          | false positive | accessibility mentioned but not about participation |
 ## 5. Overlap detection (LLM-assisted)
 Indicators that fire together frequently may overlap.
 Have the LLM compute **co-occurrence**.
+
+==PIVOT **Indicator view**==
+
 Example prompt:
 ```
 Using the indicator evidence table, identify pairs of indicators that frequently co-occur with evidence or partial_evidence in the same response.
