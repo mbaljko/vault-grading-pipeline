@@ -8,9 +8,12 @@ Usage:
 
 Behavior:
 	- Reads Panel A/B/C tables from --input-file-base.
-	- Re-emits each panel table as a valid markdown table.
+	- Emits the original markdown content.
+	- Replaces each Panel A/B/C table with a valid augmented markdown table.
 	- Adds `response_text` as a fourth column using submission_id matches from
 	  --input-file-response-texts.
+	- Writes output markdown to the current working directory. The filename is
+	  derived from the first token of the first markdown title.
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from pathlib import Path
 
 PANEL_HEADER_RE = re.compile(r"^\s*#{5}\s*Panel\s+[ABC]\b", re.IGNORECASE)
 HEADING_RE = re.compile(r"^\s*#{1,6}\s+")
+TITLE_RE = re.compile(r"^\s*#{1,6}\s+(.+)\s*$")
 SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
 
 
@@ -115,22 +119,23 @@ def _format_markdown_row(cells: list[str]) -> str:
 	return "| " + " | ".join(escaped) + " |\n"
 
 
-def _print_augmented_panel_table(table_lines: list[str], response_lookup: dict[str, str]) -> None:
+def _render_augmented_panel_table(table_lines: list[str], response_lookup: dict[str, str]) -> list[str]:
 	if not table_lines:
-		return
+		return []
 
 	rows = [_parse_markdown_cells(line) for line in table_lines if line.lstrip().startswith("|")]
 	if not rows:
-		return
+		return []
 
 	header = rows[0]
 	if not header:
-		return
+		return []
 
 	n_cols = len(header)
+	output_lines: list[str] = []
 	augmented_header = header + ["response_text"]
-	sys.stdout.write(_format_markdown_row(augmented_header))
-	sys.stdout.write(_format_markdown_row(["---"] * len(augmented_header)))
+	output_lines.append(_format_markdown_row(augmented_header))
+	output_lines.append(_format_markdown_row(["---"] * len(augmented_header)))
 
 	data_start = 1
 	if len(rows) > 1 and _is_markdown_separator_row(rows[1]):
@@ -147,49 +152,66 @@ def _print_augmented_panel_table(table_lines: list[str], response_lookup: dict[s
 
 		submission_id = row[0].strip()
 		response_text = response_lookup.get(submission_id, "") if submission_id.isdigit() else ""
-		sys.stdout.write(_format_markdown_row(row + [response_text]))
+		output_lines.append(_format_markdown_row(row + [response_text]))
+
+	return output_lines
 
 
-def print_panel_table_lines(input_path: Path, response_lookup: dict[str, str]) -> None:
-	"""Print augmented markdown tables for Panel A/B/C sections."""
-	in_target_panel = False
-	panel_heading = ""
-	table_lines: list[str] = []
-	table_printed = False
-
-	def flush_panel_table() -> None:
-		nonlocal table_lines, table_printed
-		if table_printed or not panel_heading or not table_lines:
-			return
-		sys.stdout.write(panel_heading + "\n\n")
-		_print_augmented_panel_table(table_lines, response_lookup)
-		sys.stdout.write("\n")
-		table_printed = True
-
+def render_augmented_markdown(input_path: Path, response_lookup: dict[str, str]) -> str:
+	"""Return full markdown with Panel A/B/C tables replaced by augmented versions."""
 	with input_path.open("r", encoding="utf-8") as f:
-		for line in f:
-			if PANEL_HEADER_RE.match(line):
-				flush_panel_table()
-				in_target_panel = True
-				panel_heading = line.rstrip("\n")
-				table_lines = []
-				table_printed = False
-				continue
+		lines = f.readlines()
 
-			if not in_target_panel:
-				continue
+	output_lines: list[str] = []
+	i = 0
+	in_target_panel = False
 
-			if HEADING_RE.match(line):
-				flush_panel_table()
-				in_target_panel = False
-				continue
+	while i < len(lines):
+		line = lines[i]
 
-			if line.lstrip().startswith("|"):
-				table_lines.append(line)
-			elif table_lines:
-				flush_panel_table()
+		if PANEL_HEADER_RE.match(line):
+			in_target_panel = True
+			output_lines.append(line)
+			i += 1
+			continue
 
-	flush_panel_table()
+		if in_target_panel and HEADING_RE.match(line):
+			in_target_panel = False
+
+		if in_target_panel and line.lstrip().startswith("|"):
+			table_lines: list[str] = []
+			while i < len(lines) and lines[i].lstrip().startswith("|"):
+				table_lines.append(lines[i])
+				i += 1
+
+			output_lines.extend(_render_augmented_panel_table(table_lines, response_lookup))
+			continue
+
+		output_lines.append(line)
+		i += 1
+
+	return "".join(output_lines)
+
+
+def derive_output_file_path(markdown_text: str) -> Path:
+	"""Derive output markdown filename from the first token of the first title."""
+	base_name = "stitched_output"
+	for line in markdown_text.splitlines():
+		match = TITLE_RE.match(line)
+		if not match:
+			continue
+
+		title_text = match.group(1).strip()
+		if not title_text:
+			continue
+
+		first_token = title_text.split()[0]
+		sanitized = re.sub(r"[^A-Za-z0-9._-]+", "_", first_token).strip("._")
+		if sanitized:
+			base_name = sanitized
+		break
+
+	return Path.cwd() / f"{base_name}.md"
 
 
 def main() -> int:
@@ -205,7 +227,10 @@ def main() -> int:
 		return 1
 
 	response_lookup = build_response_text_lookup(response_texts_path)
-	print_panel_table_lines(input_path, response_lookup)
+	output_text = render_augmented_markdown(input_path, response_lookup)
+	output_path = derive_output_file_path(output_text)
+	output_path.write_text(output_text, encoding="utf-8")
+	print(output_path)
 	return 0
 
 

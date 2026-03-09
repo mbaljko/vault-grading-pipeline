@@ -350,8 +350,9 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "e5174a9fca7b05c1",
+  "active": "4327365546f62972",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1B_rubric_devt/python/run-ct-report-for-manifest.py",
     "01_units/pipelines/pl1B_rubric_devt/python/response_text_stitcher.py",
     "01_units/pipelines/pl1B_rubric_devt/python",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO_output.md",
@@ -386,7 +387,6 @@
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline only sec 1-4.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline - RADICAL CHANGE.md",
     "05_docs/00_overview/prev",
-    "secrets/openai_api_key.txt",
-    "env/bin/activate"
+    "secrets/openai_api_key.txt"
   ]
 }
