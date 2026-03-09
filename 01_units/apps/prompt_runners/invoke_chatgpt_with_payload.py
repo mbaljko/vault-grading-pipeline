@@ -18,12 +18,18 @@ Inputs:
 - If no payload is provided, a built-in sample payload is used.
 
 Outputs:
-- JSON output file: the full API response object (with an added
-    `extracted_output_text` field for convenience).
-- CSV output file: derived from `extracted_output_text`.
-    - If `extracted_output_text` looks like CSV, rows are parsed and written.
-    - Otherwise, a single-column CSV (`output_text`) is written with the raw text.
-- Markdown output file: writes `extracted_output_text` as-is to a `.md` file.
+- The full API response object is always captured in memory.
+- JSON output file: writes the full API response object and includes
+    `extracted_output_text` for convenience.
+- `extracted_output_text` is derived from that full API response object.
+
+- --output-format <json|csv|md> (repeatable; can be passed multiple times)
+- `--output-format` controls how `extracted_output_text` is emitted as files:
+    - `csv`: write CSV from `extracted_output_text`.
+        - If `extracted_output_text` looks like CSV, rows are parsed and written.
+        - Otherwise, a single-column CSV (`output_text`) is written with the raw text.
+    - `md`: write `extracted_output_text` as-is to a `.md` file.
+    - `json`: write the full API response object file.
 - Output path behavior:
     - If --prompt-path or --prompt-file is provided:
         - <prompt_stem>_api_response.json
@@ -41,7 +47,6 @@ Additional invocation parameters (besides input/output options):
 - --temperature <float>
 - --max-output-tokens <int>
 - --model <name>
-- --output-format <json|csv|md> (repeatable; can be passed multiple times)
 - --dry-run
 
 Environment configuration:

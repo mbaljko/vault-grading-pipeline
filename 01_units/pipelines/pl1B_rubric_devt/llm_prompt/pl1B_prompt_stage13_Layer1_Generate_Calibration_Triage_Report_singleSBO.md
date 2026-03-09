@@ -61,6 +61,9 @@ Procedure:
    - up to 8 rows where `evidence_status = evidence`
    - up to 8 rows where `evidence_status = partial_evidence`
    - up to 8 rows where `evidence_status = little_to_no_evidence`
+The inspection set therefore contains **at most 24 rows total**.  
+All rows appearing anywhere in the output **must come from this inspection set**.  
+No additional rows from the dataset may be introduced.  
 
 3. Choose rows that appear representative or potentially ambiguous.
 
@@ -72,6 +75,14 @@ Do not change the scoring.
 Do not rescore the responses.  
 Only flag rows for human review.
 
+
+Panels A–C must partition the Selected inspection set.
+Every row in the inspection set must appear in exactly one panel.
+No new rows may appear in the panels.
+
+Output constraint:
+The rows listed in Panel A, Panel B, and Panel C must be drawn only from the Selected inspection set.
+Do not include rows that are not listed in the inspection set table.
 ##### Output format
 
 Emit results as fenced Markdown.
@@ -87,16 +98,24 @@ Emit results as fenced Markdown.
 ##### Triage results
 
 ##### Panel A — Clear positives
+*Inspection question for these:* Does the response clearly contain the analytic signal described by the indicator_definition?
 
 | submission_id | evidence_status | inspection_note |
 |---|---|---|
 
 ##### Panel B — Borderline cases
+*Inspection questions for these:* 
+- Is the analytic signal actually present?
+- Is the signal weak or incomplete?
+- Does this belong in a different indicator?
 
 | submission_id | evidence_status | inspection_note |
 |---|---|---|
 
 ##### Panel C — Questionable cases
+*Inspection questions for these:* 
+Was the indicator triggered incorrectly?
+Was the signal present but missed?
 
 | submission_id | evidence_status | inspection_note |
 |---|---|---|
