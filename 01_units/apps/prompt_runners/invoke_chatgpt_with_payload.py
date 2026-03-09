@@ -1,48 +1,59 @@
 #!/usr/bin/env python3
-"""Invoke ChatGPT API with a prompt and JSON payload.
+"""Send a prompt and payload to the OpenAI Responses API and persist results.
 
-Set environment variables, then run this script with either:
-- --payload-file path/to/payload.json, or
-- --payload-json '{"key": "value"}'
+What this script does:
+- Resolves prompt and payload inputs from CLI args or built-in defaults.
+- Calls the OpenAI Responses API.
+- Writes the API response plus extracted text to JSON and CSV output files.
 
-Prompt can be provided via:
-- --prompt-path /full/path/to/prompt.md
-- --prompt-file path/to/prompt.txt
-- --prompt "..."
+Inputs:
+- Prompt input (choose one):
+    - --prompt "..."
+    - --prompt-file path/to/prompt.txt
+    - --prompt-path /full/path/to/prompt.md
+- Payload input (choose one):
+    - --payload-json '{"key": "value"}'
+    - --payload-file path/to/payload.txt
+- If no prompt is provided, a built-in default prompt is used.
+- If no payload is provided, a built-in sample payload is used.
 
-If neither prompt option is provided, a built-in default prompt is used.
-If neither payload option is provided, a built-in sample payload is used.
+Outputs:
+- JSON output file: the full API response object (with an added
+    `extracted_output_text` field for convenience).
+- CSV output file: derived from `extracted_output_text`.
+    - If `extracted_output_text` looks like CSV, rows are parsed and written.
+    - Otherwise, a single-column CSV (`output_text`) is written with the raw text.
+- Output path behavior:
+    - If --prompt-path or --prompt-file is provided:
+        - <prompt_stem>_api_response.json
+        - <prompt_stem>_output.csv
+        - written next to that prompt file.
+    - Otherwise:
+        - invoke_chatgpt_with_payload_api_response.json
+        - invoke_chatgpt_with_payload_output.csv
+        - written next to this script file.
+- Output paths are resolved absolute paths and do not depend on invocation CWD.
 
-Optional env vars:
-- OPENAI_ORG_ID
-- OPENAI_PROJECT_ID
-- OPENAI_MODEL
-- OPENAI_API_BASE_URL
-- OPENAI_SYSTEM_PROMPT
+Additional invocation parameters (besides input/output options):
+- --temperature <float>
+- --max-output-tokens <int>
+- --model <name>
+- --dry-run
 
-API key source (exclusive):
-- repository-root `secrets/openai_api_key.txt`
+Environment configuration:
+- Optional env vars:
+    - OPENAI_ORG_ID
+    - OPENAI_PROJECT_ID
+    - OPENAI_MODEL
+    - OPENAI_API_BASE_URL
+    - OPENAI_SYSTEM_PROMPT
+- API key source (exclusive):
+    - repository-root `secrets/openai_api_key.txt`
 
 Example:
-    python invoke_chatgpt_with_payload.py \
-      --prompt "Summarize this calibration payload" \
-      --payload-file payload.json
-
-On successful API calls, output is written to both JSON and CSV files and the
-resolved file paths are printed to stdout.
-
-Output location behavior:
-- If --prompt-path or --prompt-file is provided, output files are written next
-    to that prompt file as:
-    - <prompt_stem>_output.json
-    - <prompt_stem>_output.csv
-- If no prompt file/path is provided, output files are written next to this
-    script as:
-    - invoke_chatgpt_with_payload_output.json
-    - invoke_chatgpt_with_payload_output.csv
-
-Output paths are based on resolved absolute paths and do not depend on the
-current working directory used to invoke the script.
+        python invoke_chatgpt_with_payload.py \
+            --prompt "Summarize this calibration payload" \
+            --payload-file payload.json
 """
 
 from __future__ import annotations
@@ -266,11 +277,15 @@ def resolve_output_file_paths(args: argparse.Namespace) -> tuple[Path, Path]:
     """Resolve output file paths for raw JSON and companion CSV."""
     prompt_source = args.prompt_path or args.prompt_file
     if prompt_source:
-        base = prompt_source.resolve().with_name(f"{prompt_source.stem}_output")
-        return base.with_suffix(".json"), base.with_suffix(".csv")
+        prompt_dir = prompt_source.resolve().parent
+        json_path = prompt_dir / f"{prompt_source.stem}_api_response.json"
+        csv_path = prompt_dir / f"{prompt_source.stem}_output.csv"
+        return json_path, csv_path
 
-    base = Path(__file__).resolve().with_name("invoke_chatgpt_with_payload_output")
-    return base.with_suffix(".json"), base.with_suffix(".csv")
+    script_dir = Path(__file__).resolve().parent
+    json_path = script_dir / "invoke_chatgpt_with_payload_api_response.json"
+    csv_path = script_dir / "invoke_chatgpt_with_payload_output.csv"
+    return json_path, csv_path
 
 
 def write_output_files(

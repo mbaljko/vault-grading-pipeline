@@ -84,7 +84,9 @@ little_to_no_evidence
 ```
 Ask the LLM to perform **triage**, not judgement.
 Example prompt:
+
 ````
+PROMPT: Calibration triage
 You are helping triage rubric calibration results for a rubric indicator.
 Indicator specification:
 <indicator_definition>
