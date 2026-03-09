@@ -24,6 +24,22 @@
             }
           },
           {
+            "id": "461313f2691f6db9",
+            "type": "leaf",
+            "pinned": true,
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
+                "mode": "source",
+                "source": false
+              },
+              "pinned": true,
+              "icon": "lucide-file",
+              "title": "Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS"
+            }
+          },
+          {
             "id": "b2ffdc9b9f16868b",
             "type": "leaf",
             "pinned": true,
@@ -94,13 +110,13 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/INSTRUCTIONS.md",
+                "file": "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
                 "mode": "source",
                 "source": false
               },
               "pinned": true,
               "icon": "lucide-file",
-              "title": "INSTRUCTIONS"
+              "title": "Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS"
             }
           },
           {
@@ -118,7 +134,7 @@
             }
           }
         ],
-        "currentTab": 5
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -264,13 +280,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/INSTRUCTIONS.md",
+                "file": "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of INSTRUCTIONS"
+              "title": "Outline of Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS"
             }
           },
           {
@@ -304,11 +320,11 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "d05e3fc52b1cc60e",
+  "active": "461313f2691f6db9",
   "lastOpenFiles": [
-    "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/The 4-panel indicator diagnostic table.md",
-    "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/INSTRUCTIONS.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
+    "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
+    "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/The 4-panel indicator diagnostic table.md",
     "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode",
     "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt.md",
