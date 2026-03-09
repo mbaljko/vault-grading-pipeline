@@ -1,69 +1,91 @@
-# .
-```
-BEGIN GENERATION
-```
 
+these inputs are expected
 
-these inputs
-```
 ===
-PARAM_TARGET_COMPONENT_ID = SectionBResponse
-===
-<PPP_AssignmentPayloadSpec_v01 contents>
-===
-<Layer1_ScoringManifest_PPP_v01 contents>
-===
-```
-
-# .  
-````
-PROMPT: Calibration triage
-You are helping triage rubric calibration results for a rubric indicator.
 Indicator specification:
 <indicator_definition>
 <assessment_guidance>
 <evaluation_notes>
 
-
+===
 Scored rows follow.
 
+===
+
+
+
+# .  
+````
+PROMPT: Calibration triage
+
+You are helping triage rubric calibration results for a rubric indicator.
+
+The prompt receives two artefacts after the prompt text:
+
+1. Indicator specification  
+2. Scored rows dataset
+
+These artefacts will be supplied using the delimiter `===` in the following structure.
+
+===
+Indicator specification:
+<indicator_definition>
+<assessment_guidance>
+<evaluation_notes>
+===
+
+Scored rows follow.
+===
 
 
 Procedure:
-1. Examine the full dataset to understand the distribution of evidence_status values.
+
+1. Examine the full dataset to understand the distribution of `evidence_status` values.
+
 2. Internally select a diagnostic inspection set consisting of:
-   - up to 8 rows where evidence_status = evidence
-   - up to 8 rows where evidence_status = partial_evidence
-   - up to 8 rows where evidence_status = little_to_no_evidence
+   - up to 8 rows where `evidence_status = evidence`
+   - up to 8 rows where `evidence_status = partial_evidence`
+   - up to 8 rows where `evidence_status = little_to_no_evidence`
+
 3. Choose rows that appear representative or potentially ambiguous.
+
 4. Using only the selected inspection set:
-   - group responses into clear positives, borderline cases, and questionable cases
+   - group responses into **clear positives**, **borderline cases**, and **questionable cases**
    - flag rows that may represent possible misclassifications
-Do not change the scoring.
-Do not rescore the responses.
+
+Do not change the scoring.  
+Do not rescore the responses.  
 Only flag rows for human review.
-```
+
 ##### Output format
+
 Emit results as fenced Markdown.
+
 ```
 #### <indicator_id> — <short_indicator_description>
+
 ##### Selected inspection set
 
 | submission_id | evidence_status | reason_selected |
 |---|---|---|
+
 ##### Triage results
+
 ##### Panel A — Clear positives
 
 | submission_id | evidence_status | inspection_note |
 |---|---|---|
+
 ##### Panel B — Borderline cases
 
 | submission_id | evidence_status | inspection_note |
 |---|---|---|
+
 ##### Panel C — Questionable cases
 
 | submission_id | evidence_status | inspection_note |
 |---|---|---|
+```
 ===
 
 ````
