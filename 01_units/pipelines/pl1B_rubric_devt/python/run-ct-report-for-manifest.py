@@ -119,25 +119,15 @@ def find_matching_scored_rows(
 	manifest_components: dict[str, str],
 	scored_rows: list[dict[str, str]],
 ) -> list[dict[str, str]]:
-	"""Find scored-text rows matching the current manifest row."""
-	component_id = (manifest_components.get("component_id") or "").strip()
-	sbo_identifier = (manifest_components.get("sbo_identifier") or "").strip()
+	"""Find scored-text rows matching the current manifest row by indicator_id."""
 	indicator_id = (manifest_components.get("indicator_id") or "").strip()
+	if not indicator_id:
+		return []
 
 	matches: list[dict[str, str]] = []
 	for row in scored_rows:
-		row_component_id = (row.get("component_id") or "").strip()
-		if component_id and row_component_id and row_component_id != component_id:
-			continue
-
-		if sbo_identifier:
-			if (row.get("sbo_identifier") or "").strip() != sbo_identifier:
-				continue
-		elif indicator_id:
-			if (row.get("indicator_id") or "").strip() != indicator_id:
-				continue
-
-		matches.append(row)
+		if (row.get("indicator_id") or "").strip() == indicator_id:
+			matches.append(row)
 
 	return matches
 
