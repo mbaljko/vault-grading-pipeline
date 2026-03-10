@@ -1,31 +1,45 @@
 #!/usr/bin/env python3
-"""Filter manifest markdown lines by component ID.
+"""Run L1 CT prompt runner for manifest rows that match a component ID.
 
-This script reads a markdown file and prints to stdout only the lines that
-contain the provided `--component-id` string.
+This script scans markdown table rows in `--sbo-manifest-file`, selects rows
+whose raw row line contains `--component-id`, and builds per-row payload inputs
+for `invoke_chatgpt_with_payload.py`.
 
 Arguments:
-- --sbo-manifest-file: path to the markdown file to scan.
-- --component-id: string token used to match lines.
-- --file-with-response-texts: path to a response-texts file reserved for
-	payload augmentation.
-- --file-with-scored-texts: path to scored-text rows for future payload
-	augmentation.
+- `--sbo-manifest-file`: markdown manifest to parse.
+- `--component-id`: string token used to select matching table rows.
+- `--file-with-response-texts`: validated input file path (reserved for
+  payload augmentation).
+- `--file-with-scored-texts`: CSV used to find matching rows by `indicator_id`.
 
-Output:
-- For each matching line, exactly two lines are written:
-	1) `sbo_identifier` only
-	2) a JSON payload containing only the table row components mapped from the
-		 table header to row values
-- If the markdown file is missing, an error is written to stderr and the script
-	exits with code 1.
+Per matching row behavior:
+1. Extract `sbo_identifier` from the row and print it to stdout.
+2. Build `components` from markdown header/value cells.
+3. Build `scored_payload` with `matching_scored_rows` filtered by
+	`indicator_id`.
+4. Write payload file `<sbo_identifier>_payload.json` in manifest directory.
+	Payload file content is text with delimiters:
+	- `===`
+	- JSON for `components`
+	- `===`
+	- JSON for `scored_payload`
+	- `===`
+5. Invoke `invoke_chatgpt_with_payload.py` with:
+	- `--prompt-file` from `L1_CT_PROMPT_FILE_RELATIVE`
+	- `--payload-file` from step 4
+	- `--output-file-stem <sbo_identifier>`
+	- `--output-dir <manifest_dir>/<RUNNER_OUTPUT_SUBDIR>`
+	- `--output-format md`
+
+Exit behavior:
+- Returns 1 with stderr message when required input files are missing.
 
 Example:
-		python run-ct-report-for-manifest.py \
-			--sbo-manifest-file /path/to/Layer1_ScoringManifest_PPP_v01.md \
-			--component-id SectionCResponse \
-			--file-with-response-texts /path/to/response_texts.csv \
-			--file-with-scored-texts /path/to/scored_texts.csv
+	 python run-ct-report-for-manifest.py \
+		  --sbo-manifest-file /path/to/Layer1_ScoringManifest_PPP_v01.md \
+		  --component-id SectionCResponse \
+		  --file-with-response-texts /path/to/response_texts.csv \
+		  --file-with-scored-texts /path/to/scored_texts.csv
 """
 
 from __future__ import annotations
@@ -41,6 +55,17 @@ from pathlib import Path
 
 SBO_IDENTIFIER_RE = re.compile(r"\bI_[A-Za-z0-9_]+\b")
 SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT: Path | None = next(
+	(candidate for candidate in [SCRIPT_DIR, *SCRIPT_DIR.parents] if (candidate / ".git").exists()),
+	None,
+)
+RUNNER_SCRIPT_RELATIVE = Path("01_units/apps/prompt_runners/invoke_chatgpt_with_payload.py")
+L1_CT_PROMPT_FILE_RELATIVE = Path(
+	"01_units/pipelines/pl1B_rubric_devt/llm_prompt/"
+	"pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO.md"
+)
+RUNNER_OUTPUT_SUBDIR = "llm_runner_outputs"
 
 
 def parse_args() -> argparse.Namespace:
@@ -133,14 +158,6 @@ def find_matching_scored_rows(
 	return matches
 
 
-def _find_repo_root(start: Path) -> Path | None:
-	current = start.resolve()
-	for candidate in [current, *current.parents]:
-		if (candidate / ".git").exists():
-			return candidate
-	return None
-
-
 def run_l1_ct_for_payload(
 	payload_dir: Path,
 	components: dict[str, str],
@@ -148,22 +165,25 @@ def run_l1_ct_for_payload(
 	output_file_stem: str,
 ) -> None:
 	"""Invoke the same runner behavior as justfile target l1-ct-secC."""
-	repo_root = _find_repo_root(Path(__file__).resolve().parent)
-	if repo_root is None:
+	if REPO_ROOT is None:
 		raise RuntimeError("Could not locate repository root from script path.")
 
-	runner_script = repo_root / "01_units/apps/prompt_runners/invoke_chatgpt_with_payload.py"
-	prompt_file = (
-		repo_root
-		/ "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO.md"
-	)
-	payload_file = payload_dir / "TMP_PAYLOAD.md"
+	runner_script = REPO_ROOT / RUNNER_SCRIPT_RELATIVE
+	prompt_file = REPO_ROOT / L1_CT_PROMPT_FILE_RELATIVE
+	payload_file = payload_dir / f"{output_file_stem}_payload.json"
+	runner_output_dir = payload_dir / RUNNER_OUTPUT_SUBDIR
+	runner_output_dir.mkdir(parents=True, exist_ok=True)
 
-	payload_body = {
-		"components": components,
-		"scored_payload": scored_payload,
-	}
-	payload_file.write_text(json.dumps(payload_body, indent=2, ensure_ascii=False), encoding="utf-8")
+	components_json = json.dumps(components, indent=2, ensure_ascii=False)
+	scored_payload_json = json.dumps(scored_payload, indent=2, ensure_ascii=False)
+	payload_body = (
+		"===\n"
+		f"{components_json}\n"
+		"===\n"
+		f"{scored_payload_json}\n"
+		"===\n"
+	)
+	payload_file.write_text(payload_body, encoding="utf-8")
 
 	cmd = [
 		sys.executable,
@@ -171,7 +191,7 @@ def run_l1_ct_for_payload(
 		"--output-format",
 		"md",
 		"--output-dir",
-		str(payload_dir),
+		str(runner_output_dir),
 		"--prompt-file",
 		str(prompt_file),
 		"--payload-file",
