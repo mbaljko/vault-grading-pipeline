@@ -20,27 +20,35 @@ Inputs:
 Outputs:
 - The full API response object is always captured in memory.
 - `extracted_output_text` is derived from that full API response object.
+- `--save-full-api-response` controls whether the full API response object is
+    saved as a separate JSON file.
+
+- `extracted_output_text` is written to output files in the following formats:
 - `--output-format <json|csv|md>` (repeatable) selects which file artifacts are written.
-    - `json`: write the full API response object file and include
-      `extracted_output_text` for convenience.
+    - `json`: write JSON containing `extracted_output_text`.
     - `csv`: write CSV from `extracted_output_text`.
         - If `extracted_output_text` looks like CSV, rows are parsed and written.
         - Otherwise, a single-column CSV (`output_text`) is written with the raw text.
     - `md`: write `extracted_output_text` as-is to a `.md` file.
-- `--output-dir <path>` optionally overrides the output directory.
 - Output filename patterns:
-    - JSON: `<stem>_api_response.json`
+        - Extracted-text JSON: `<stem>_output.json`
+        - Full API response JSON (only when `--save-full-api-response` is set):
+            `<stem>_api_response.json`
     - CSV: `<stem>_output.csv`
     - Markdown: `<stem>_output.md`
+- `--output-file-stem <stem>` optionally overrides `<stem>` in all output filenames.
 - Output path behavior:
     - If `--output-dir` is provided:
         - all requested output files are written in that directory.
-        - `<stem>` is `<prompt_stem>` when a prompt file/path is provided, else
-          `invoke_chatgpt_with_payload`.
+                - `<stem>` is `--output-file-stem` when provided; otherwise `<prompt_stem>`
+                    when a prompt file/path is provided; otherwise `invoke_chatgpt_with_payload`.
     - Otherwise, if --prompt-path or --prompt-file is provided:
         - written next to that prompt file.
+                - `<stem>` is `--output-file-stem` when provided; otherwise `<prompt_stem>`.
     - Otherwise:
         - written next to this script file.
+                - `<stem>` is `--output-file-stem` when provided; otherwise
+                    `invoke_chatgpt_with_payload`.
 - Paths are resolved to absolute paths before writing. If a relative prompt path or
   relative `--output-dir` is provided, it is resolved from the current working directory.
 
@@ -48,6 +56,7 @@ Additional invocation parameters (besides input/output options):
 - --temperature <float>
 - --max-output-tokens <int>
 - --model <name>
+- --output-file-stem <stem>
 - --dry-run
 
 Environment configuration:
@@ -205,6 +214,23 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--save-full-api-response",
+        action="store_true",
+        help=(
+            "When set, write a separate JSON file containing the full raw API response object."
+        ),
+    )
+    parser.add_argument(
+        "--output-file-stem",
+        type=str,
+        default=None,
+        help=(
+            "Optional filename stem override for all output artifacts. "
+            "When omitted, stem is derived from prompt file/path or falls back "
+            "to 'invoke_chatgpt_with_payload'."
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print resolved prompt/payload/request body and exit without calling API.",
@@ -303,48 +329,55 @@ def build_request_body(
     return body
 
 
-def resolve_output_file_paths(args: argparse.Namespace) -> tuple[Path, Path, Path]:
-    """Resolve output file paths for JSON, CSV, and Markdown artifacts."""
+def resolve_output_file_paths(args: argparse.Namespace) -> tuple[Path, Path, Path, Path]:
+    """Resolve output file paths for extracted JSON, full JSON, CSV, and Markdown."""
     prompt_source = args.prompt_path or args.prompt_file
+    stem = (
+        args.output_file_stem
+        if args.output_file_stem
+        else (prompt_source.stem if prompt_source else "invoke_chatgpt_with_payload")
+    )
 
     if args.output_dir:
         output_dir = args.output_dir.resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
-        if prompt_source:
-            stem = prompt_source.stem
-        else:
-            stem = "invoke_chatgpt_with_payload"
-
-        json_path = output_dir / f"{stem}_api_response.json"
+        extracted_json_path = output_dir / f"{stem}_output.json"
+        full_api_json_path = output_dir / f"{stem}_api_response.json"
         csv_path = output_dir / f"{stem}_output.csv"
         md_path = output_dir / f"{stem}_output.md"
-        return json_path, csv_path, md_path
+        return extracted_json_path, full_api_json_path, csv_path, md_path
 
     if prompt_source:
         prompt_dir = prompt_source.resolve().parent
-        json_path = prompt_dir / f"{prompt_source.stem}_api_response.json"
-        csv_path = prompt_dir / f"{prompt_source.stem}_output.csv"
-        md_path = prompt_dir / f"{prompt_source.stem}_output.md"
-        return json_path, csv_path, md_path
+        extracted_json_path = prompt_dir / f"{stem}_output.json"
+        full_api_json_path = prompt_dir / f"{stem}_api_response.json"
+        csv_path = prompt_dir / f"{stem}_output.csv"
+        md_path = prompt_dir / f"{stem}_output.md"
+        return extracted_json_path, full_api_json_path, csv_path, md_path
 
     script_dir = Path(__file__).resolve().parent
-    json_path = script_dir / "invoke_chatgpt_with_payload_api_response.json"
-    csv_path = script_dir / "invoke_chatgpt_with_payload_output.csv"
-    md_path = script_dir / "invoke_chatgpt_with_payload_output.md"
-    return json_path, csv_path, md_path
+    extracted_json_path = script_dir / f"{stem}_output.json"
+    full_api_json_path = script_dir / f"{stem}_api_response.json"
+    csv_path = script_dir / f"{stem}_output.csv"
+    md_path = script_dir / f"{stem}_output.md"
+    return extracted_json_path, full_api_json_path, csv_path, md_path
 
 
-def write_json_output_file(
-    json_output_path: Path,
-    text: str,
+def write_extracted_json_output_file(json_output_path: Path, text: str) -> None:
+    """Write extracted output text JSON payload."""
+    json_output_path.write_text(
+        json.dumps({"extracted_output_text": text or ""}, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def write_full_api_response_json_output_file(
+    full_api_json_output_path: Path,
     response_obj: dict[str, Any],
 ) -> None:
-    """Write full API response JSON with extracted_output_text convenience field."""
-    json_payload = dict(response_obj)
-    json_payload["extracted_output_text"] = text or ""
-
-    json_output_path.write_text(
-        json.dumps(json_payload, indent=2, ensure_ascii=False),
+    """Write full raw API response JSON payload."""
+    full_api_json_output_path.write_text(
+        json.dumps(response_obj, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
 
@@ -393,18 +426,17 @@ def resolve_requested_output_formats(output_formats: list[str] | None) -> set[st
 
 def write_requested_output_files(
     output_formats: set[str],
-    json_output_path: Path,
+    extracted_json_output_path: Path,
     csv_output_path: Path,
     markdown_output_path: Path,
     text: str,
-    response_obj: dict[str, Any],
 ) -> dict[str, Path]:
     """Write requested output artifact(s) and return their paths keyed by format."""
     written_files: dict[str, Path] = {}
 
     if "json" in output_formats:
-        write_json_output_file(json_output_path, text, response_obj)
-        written_files["json"] = json_output_path
+        write_extracted_json_output_file(extracted_json_output_path, text)
+        written_files["json"] = extracted_json_output_path
 
     if "csv" in output_formats:
         write_csv_output_file(csv_output_path, text)
@@ -487,7 +519,8 @@ def invoke_chatgpt(body: dict[str, Any]) -> dict[str, Any]:
 def main() -> int:
     start_ts = time.perf_counter()
     args = parse_args()
-    print(f"Request timeout set to: {REQUEST_TIMEOUT_SECONDS} seconds")
+    print(f"Invoking LLM prompt via API call.")
+    print(f"Request timeout set to: {REQUEST_TIMEOUT_SECONDS} seconds. Waiting.")
 
     try:
         prompt = load_prompt(args)
@@ -516,21 +549,31 @@ def main() -> int:
         incomplete_reason = get_incomplete_reason(response_obj)
 
         requested_formats = resolve_requested_output_formats(args.output_format)
-        json_output_path, csv_output_path, markdown_output_path = resolve_output_file_paths(args)
+        (
+            extracted_json_output_path,
+            full_api_json_output_path,
+            csv_output_path,
+            markdown_output_path,
+        ) = resolve_output_file_paths(args)
         written_files = write_requested_output_files(
             output_formats=requested_formats,
-            json_output_path=json_output_path,
+            extracted_json_output_path=extracted_json_output_path,
             csv_output_path=csv_output_path,
             markdown_output_path=markdown_output_path,
             text=text,
-            response_obj=response_obj,
         )
+
+        if args.save_full_api_response:
+            write_full_api_response_json_output_file(full_api_json_output_path, response_obj)
+
         if "json" in written_files:
-            print(f"JSON output written to: {written_files['json']}")
+            print(f"Extracted output JSON written to: {written_files['json']}")
         if "csv" in written_files:
             print(f"CSV output written to: {written_files['csv']}")
         if "md" in written_files:
             print(f"Markdown output written to: {written_files['md']}")
+        if args.save_full_api_response:
+            print(f"Full API response JSON written to: {full_api_json_output_path}")
         if is_platform_limit_reason(incomplete_reason):
             print(
                 "Notice: response is incomplete due to a platform/model token limit "
