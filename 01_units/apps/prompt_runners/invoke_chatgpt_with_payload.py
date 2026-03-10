@@ -29,7 +29,8 @@ Outputs:
     - `csv`: write CSV from `extracted_output_text`.
         - If `extracted_output_text` looks like CSV, rows are parsed and written.
         - Otherwise, a single-column CSV (`output_text`) is written with the raw text.
-    - `md`: write `extracted_output_text` as-is to a `.md` file.
+        - `md`: write `extracted_output_text` to a `.md` file with YAML front matter
+            containing generation metadata (prompt, payload info, timestamp).
 - Output filename patterns:
         - Extracted-text JSON: `<stem>_output.json`
         - Full API response JSON (only when `--save-full-api-response` is set):
@@ -85,6 +86,7 @@ import os
 import re
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -412,9 +414,90 @@ def write_csv_output_file(csv_output_path: Path, text: str) -> None:
             writer.writerow([text or ""])
 
 
-def write_markdown_output_file(markdown_output_path: Path, text: str) -> None:
-    """Write extracted text directly to a Markdown file."""
-    markdown_output_path.write_text(text or "", encoding="utf-8")
+def _quote_yaml_string(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _prompt_source_label(args: argparse.Namespace) -> str:
+    if args.prompt_path:
+        return "prompt_path"
+    if args.prompt_file:
+        return "prompt_file"
+    if args.prompt:
+        return "prompt"
+    return "default"
+
+
+def _payload_source_label(args: argparse.Namespace) -> str:
+    if args.payload_file:
+        return "payload_file"
+    if args.payload_json:
+        return "payload_json"
+    return "default"
+
+
+def _render_markdown_front_matter(
+    args: argparse.Namespace,
+    prompt: str,
+    payload: dict[str, Any],
+    generated_at_utc: str,
+) -> str:
+    prompt_lines = prompt.splitlines() or [""]
+    payload_keys = sorted(str(k) for k in payload.keys())
+    segment_count = 0
+    segments_value = payload.get("segments")
+    if isinstance(segments_value, list):
+        segment_count = len(segments_value)
+
+    lines: list[str] = [
+        "---",
+        f"generated_at_utc: {_quote_yaml_string(generated_at_utc)}",
+        "prompt:",
+        f"  source: {_quote_yaml_string(_prompt_source_label(args))}",
+    ]
+
+    if args.prompt_path:
+        lines.append(f"  path: {_quote_yaml_string(str(args.prompt_path.resolve()))}")
+    elif args.prompt_file:
+        lines.append(f"  path: {_quote_yaml_string(str(args.prompt_file.resolve()))}")
+
+    lines.append("  text: |-")
+    lines.extend(f"    {line}" for line in prompt_lines)
+
+    lines.extend(
+        [
+            "payload:",
+            f"  source: {_quote_yaml_string(_payload_source_label(args))}",
+            f"  top_level_keys: [{', '.join(_quote_yaml_string(k) for k in payload_keys)}]",
+            f"  segment_count: {segment_count}",
+        ]
+    )
+
+    if args.payload_file:
+        lines.append(f"  path: {_quote_yaml_string(str(args.payload_file.resolve()))}")
+
+    lines.append("---")
+    return "\n".join(lines)
+
+
+def write_markdown_output_file(
+    markdown_output_path: Path,
+    text: str,
+    args: argparse.Namespace,
+    prompt: str,
+    payload: dict[str, Any],
+    generated_at_utc: str,
+) -> None:
+    """Write extracted text to Markdown with YAML source metadata front matter."""
+    front_matter = _render_markdown_front_matter(
+        args=args,
+        prompt=prompt,
+        payload=payload,
+        generated_at_utc=generated_at_utc,
+    )
+    body = text or ""
+    markdown_output_path.write_text(f"{front_matter}\n\n{body}", encoding="utf-8")
 
 
 def resolve_requested_output_formats(output_formats: list[str] | None) -> set[str]:
@@ -430,6 +513,10 @@ def write_requested_output_files(
     csv_output_path: Path,
     markdown_output_path: Path,
     text: str,
+    args: argparse.Namespace,
+    prompt: str,
+    payload: dict[str, Any],
+    generated_at_utc: str,
 ) -> dict[str, Path]:
     """Write requested output artifact(s) and return their paths keyed by format."""
     written_files: dict[str, Path] = {}
@@ -443,7 +530,14 @@ def write_requested_output_files(
         written_files["csv"] = csv_output_path
 
     if "md" in output_formats:
-        write_markdown_output_file(markdown_output_path, text)
+        write_markdown_output_file(
+            markdown_output_path=markdown_output_path,
+            text=text,
+            args=args,
+            prompt=prompt,
+            payload=payload,
+            generated_at_utc=generated_at_utc,
+        )
         written_files["md"] = markdown_output_path
 
     return written_files
@@ -549,6 +643,7 @@ def main() -> int:
         incomplete_reason = get_incomplete_reason(response_obj)
 
         requested_formats = resolve_requested_output_formats(args.output_format)
+        generated_at_utc = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
         (
             extracted_json_output_path,
             full_api_json_output_path,
@@ -561,6 +656,10 @@ def main() -> int:
             csv_output_path=csv_output_path,
             markdown_output_path=markdown_output_path,
             text=text,
+            args=args,
+            prompt=prompt,
+            payload=payload,
+            generated_at_utc=generated_at_utc,
         )
 
         if args.save_full_api_response:
