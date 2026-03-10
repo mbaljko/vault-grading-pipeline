@@ -135,6 +135,9 @@ The following conditions must hold:
 4. The union of rows appearing in Panels A–C must exactly match the rows listed in the Selected inspection set.
 5. Each row must include the **exact submission_id from the dataset**. Do not alter identifiers.
 
+Do not report excluded rows, omitted rows, duplicate rows, or partition violations inside any panel.
+If a row is excluded, it must not appear anywhere in the panel tables.
+If a row has already been assigned to a panel, do not mention it again.
 ### Notes for inspection reasoning
 Inspection notes should briefly explain **why the row appears in that panel**.
 

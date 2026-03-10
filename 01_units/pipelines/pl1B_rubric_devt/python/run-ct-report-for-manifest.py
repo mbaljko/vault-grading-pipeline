@@ -1,26 +1,28 @@
 #!/usr/bin/env python3
-"""Run L1 CT prompt runner for manifest rows that match a component ID.
+"""Run L1 CT prompt runner for manifest rows that match a component ID, then stitch response texts.
 
 This script scans markdown table rows in `--sbo-manifest-file`, selects rows
-whose raw row line contains `--component-id`, and builds per-row payload inputs
-for `invoke_chatgpt_with_payload.py`.
+whose raw row line contains `--component-id`, and for each matching row:
+invokes `invoke_chatgpt_with_payload.py` to produce an LLM output markdown
+file, then stitches response texts from `--file-with-response-texts` into
+Panel A/B/C tables in that output.
 
 Arguments:
-- `--sbo-manifest-file`: markdown manifest to parse.
+- `--sbo-manifest-file`: markdown manifest file to parse.
 - `--component-id`: string token used to select matching table rows.
-- `--file-with-response-texts`: validated input file path (reserved for
-  payload augmentation).
+- `--file-with-response-texts`: CSV file with `submission_id` and
+  `response_text` columns; used to augment Panel tables in stitching step.
 - `--file-with-scored-texts`: CSV used to find matching rows by `indicator_id`.
 - `--runner-dry-run`: when set, forwards `--dry-run` to
 	`invoke_chatgpt_with_payload.py`.
 
 Per matching row behavior:
 1. Extract `sbo_identifier` from the row and print it to stdout.
-2. Build `components` from markdown header/value cells.
+2. Build `components` dict from markdown header/value cells.
 3. Build `scored_payload` with `matching_scored_rows` filtered by
 	`indicator_id`.
-4. Write payload file `<sbo_identifier>_payload.json` in manifest directory.
-	Payload file content is text with delimiters:
+4. Write payload file `<sbo_identifier>_payload.json` in the manifest
+	directory. Payload file content is delimiter-separated text:
 	- `===`
 	- JSON for `components`
 	- `===`
@@ -32,16 +34,26 @@ Per matching row behavior:
 	- `--output-file-stem <sbo_identifier>`
 	- `--output-dir <manifest_dir>/<RUNNER_OUTPUT_SUBDIR>`
 	- `--output-format md`
+	Returns the path to the LLM output markdown file.
+6. Apply response text stitching to the LLM output file:
+	- Reads `--file-with-response-texts` CSV to build a
+	  `submission_id -> response_text` lookup.
+	- Copies the LLM output markdown verbatim, with the YAML front matter
+	  passed through unchanged (plus a `post_processing` field appended
+	  before the closing `---`).
+	- Replaces each Panel A/B/C table with an augmented version that adds
+	  a `response_text` column populated by submission_id lookup.
+	- Writes output to `<llm_output_stem>_stitched.md` in the same directory.
 
 Exit behavior:
 - Returns 1 with stderr message when required input files are missing.
 
 Example:
-	 python run-ct-report-for-manifest.py \
-		  --sbo-manifest-file /path/to/Layer1_ScoringManifest_PPP_v01.md \
-		  --component-id SectionCResponse \
-		  --file-with-response-texts /path/to/response_texts.csv \
-		  --file-with-scored-texts /path/to/scored_texts.csv
+	python run-ct-report-for-manifest.py \
+		--sbo-manifest-file /path/to/Layer1_ScoringManifest_PPP_v01.md \
+		--component-id SectionCResponse \
+		--file-with-response-texts /path/to/response_texts.csv \
+		--file-with-scored-texts /path/to/scored_texts.csv
 """
 
 from __future__ import annotations
@@ -59,7 +71,6 @@ SBO_IDENTIFIER_RE = re.compile(r"\bI_[A-Za-z0-9_]+\b")
 SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
 PANEL_HEADER_RE = re.compile(r"^\s*#{5}\s*Panel\s+[ABC]\b", re.IGNORECASE)
 HEADING_RE = re.compile(r"^\s*#{1,6}\s+")
-TITLE_RE = re.compile(r"^\s*#{1,6}\s+(.+)\s*$")
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT: Path | None = next(
 	(candidate for candidate in [SCRIPT_DIR, *SCRIPT_DIR.parents] if (candidate / ".git").exists()),
@@ -224,12 +235,16 @@ def run_l1_ct_for_payload(
 def apply_response_text_stitcher(
 	runner_output_file: Path,
 	response_texts_file: Path,
+	components: dict[str, str],
 ) -> Path:
 	"""Apply response text stitching to runner output markdown file.
-	
-	Augments Panel A/B/C tables by adding a response_text column pulled from
-	the response_texts CSV, matched by submission_id. Returns the path to the
-	stitched output markdown file in the same directory.
+
+	Augments Panel A/B/C sections by:
+	- Inserting the manifest row as a markdown table immediately after each
+	  Panel A/B/C heading.
+	- Adding a response_text column to each Panel table, matched by
+	  submission_id from the response_texts CSV.
+	Returns the path to the stitched output markdown file in the same directory.
 	"""
 	# Build lookup: submission_id -> response_text
 	response_lookup: dict[str, str] = {}
@@ -256,14 +271,17 @@ def apply_response_text_stitcher(
 	in_target_panel = False
 	
 	# Skip YAML front matter block (--- ... ---) before processing markdown structure
+	# Inject post_processing field before the closing --- line
 	if markdown_lines and markdown_lines[0].rstrip() == "---":
 		augmented_lines.append(markdown_lines[0])
 		i = 1
 		while i < len(markdown_lines):
-			augmented_lines.append(markdown_lines[i])
 			if markdown_lines[i].rstrip() == "---":
+				augmented_lines.append(f"post_processing: response_text_stitched\n")
+				augmented_lines.append(markdown_lines[i])
 				i += 1
 				break
+			augmented_lines.append(markdown_lines[i])
 			i += 1
 
 	while i < len(markdown_lines):
@@ -272,6 +290,9 @@ def apply_response_text_stitcher(
 		if PANEL_HEADER_RE.match(line):
 			in_target_panel = True
 			augmented_lines.append(line)
+			augmented_lines.append("\n")
+			augmented_lines.extend(_render_manifest_row_table(components))
+			augmented_lines.append("\n")
 			i += 1
 			continue
 		
@@ -292,23 +313,24 @@ def apply_response_text_stitcher(
 		augmented_lines.append(line)
 		i += 1
 	
-	# Derive output filename from first title token
+	# Derive output filename from runner output file stem + "_stitched"
 	output_text = "".join(augmented_lines)
-	base_name = "stitched_output"
-	for line in output_text.splitlines():
-		match = TITLE_RE.match(line)
-		if match:
-			title_text = match.group(1).strip()
-			if title_text:
-				first_token = title_text.split()[0]
-				sanitized = re.sub(r"[^A-Za-z0-9._-]+", "_", first_token).strip("._")
-				if sanitized:
-					base_name = sanitized
-			break
-	
-	output_path = runner_output_file.parent / f"STITCHED_CT_REPORT_{base_name}.md"
+	output_path = runner_output_file.parent / f"{runner_output_file.stem}_stitched{runner_output_file.suffix}"
 	output_path.write_text(output_text, encoding="utf-8")
 	return output_path
+
+
+def _render_manifest_row_table(components: dict[str, str]) -> list[str]:
+	"""Render the manifest row components dict as a single-row markdown table."""
+	if not components:
+		return []
+	headers = list(components.keys())
+	values = [components[h] for h in headers]
+	return [
+		_format_markdown_row(headers),
+		_format_markdown_row(["---"] * len(headers)),
+		_format_markdown_row(values),
+	]
 
 
 def _parse_markdown_cells(line: str) -> list[str]:
@@ -451,6 +473,7 @@ def main() -> int:
 				stitched_output_file = apply_response_text_stitcher(
 					runner_output_file,
 					response_texts_path,
+					components,
 				)
 				# TODO: process stitched_output_file for further downstream handling
 			i += 1
