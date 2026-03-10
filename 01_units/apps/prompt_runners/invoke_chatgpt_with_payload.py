@@ -4,76 +4,63 @@
 What this script does:
 - Resolves prompt and payload inputs from CLI args or built-in defaults.
 - Calls the OpenAI Responses API.
-- Writes the API response plus extracted text to JSON and CSV output files.
+- Persists extracted output text in requested file formats.
 
 Inputs:
 - Prompt input (choose one):
-    - --prompt "..."
-    - --prompt-file path/to/prompt.txt
-    - --prompt-path /full/path/to/prompt.md
+    - `--prompt "..."`
+    - `--prompt-file path/to/prompt.txt`
+    - `--prompt-path /full/path/to/prompt.md`
 - Payload input (choose one):
-    - --payload-json '{"key": "value"}'
-    - --payload-file path/to/payload.txt
+    - `--payload-json '{"key": "value"}'`
+    - `--payload-file path/to/payload.txt`
 - If no prompt is provided, a built-in default prompt is used.
 - If no payload is provided, a built-in sample payload is used.
 
 Outputs:
 - The full API response object is always captured in memory.
 - `extracted_output_text` is derived from that full API response object.
-- `--save-full-api-response` controls whether the full API response object is
-    saved as a separate JSON file.
-
-- `extracted_output_text` is written to output files in the following formats:
-- `--output-format <json|csv|md>` (repeatable) selects which file artifacts are written.
-    - `json`: write JSON containing `extracted_output_text`.
-    - `csv`: write CSV from `extracted_output_text`.
-        - If `extracted_output_text` looks like CSV, rows are parsed and written.
-        - Otherwise, a single-column CSV (`output_text`) is written with the raw text.
-        - `md`: write `extracted_output_text` to a `.md` file with YAML front matter
-            containing generation metadata (prompt, payload info, timestamp).
+- `--output-format <json|csv|md>` (repeatable) selects which artifacts are written:
+    - `json`: writes JSON containing `extracted_output_text`.
+    - `csv`: writes CSV derived from `extracted_output_text`.
+        - If text looks like CSV, rows are parsed and written.
+        - Otherwise, a single-column CSV (`output_text`) is written.
+    - `md`: writes Markdown with YAML front matter metadata (prompt, payload info, timestamp)
+        followed by `extracted_output_text`.
+- `--save-full-api-response` controls whether a separate raw API response JSON file is written.
 - Output filename patterns:
-        - Extracted-text JSON: `<stem>_output.json`
-        - Full API response JSON (only when `--save-full-api-response` is set):
-            `<stem>_api_response.json`
+    - Extracted JSON: `<stem>_output.json`
+    - Full API response JSON (only when `--save-full-api-response` is set): `<stem>_api_response.json`
     - CSV: `<stem>_output.csv`
     - Markdown: `<stem>_output.md`
-- `--output-file-stem <stem>` optionally overrides `<stem>` in all output filenames.
+- `--output-file-stem <stem>` optionally overrides `<stem>` for all outputs.
 - Output path behavior:
-    - If `--output-dir` is provided:
-        - all requested output files are written in that directory.
-                - `<stem>` is `--output-file-stem` when provided; otherwise `<prompt_stem>`
-                    when a prompt file/path is provided; otherwise `invoke_chatgpt_with_payload`.
-    - Otherwise, if --prompt-path or --prompt-file is provided:
-        - written next to that prompt file.
-                - `<stem>` is `--output-file-stem` when provided; otherwise `<prompt_stem>`.
-    - Otherwise:
-        - written next to this script file.
-                - `<stem>` is `--output-file-stem` when provided; otherwise
-                    `invoke_chatgpt_with_payload`.
-- Paths are resolved to absolute paths before writing. If a relative prompt path or
-  relative `--output-dir` is provided, it is resolved from the current working directory.
+    - If `--output-dir` is provided, all outputs are written there.
+    - Otherwise, when prompt file/path is provided, outputs are written next to that prompt file.
+    - Otherwise, outputs are written next to this script file.
+- Paths are resolved to absolute paths before writing.
 
-Additional invocation parameters (besides input/output options):
-- --temperature <float>
-- --max-output-tokens <int>
-- --model <name>
-- --output-file-stem <stem>
-- --dry-run
+Additional invocation parameters:
+- `--temperature <float>`
+- `--max-output-tokens <int>`
+- `--model <name>`
+- `--output-file-stem <stem>`
+- `--save-full-api-response`
+- `--dry-run`
 
 Environment configuration:
 - Optional env vars:
-    - OPENAI_ORG_ID
-    - OPENAI_PROJECT_ID
-    - OPENAI_MODEL
-    - OPENAI_API_BASE_URL
-    - OPENAI_SYSTEM_PROMPT
-- API key source (exclusive):
-    - repository-root `secrets/openai_api_key.txt`
+    - `OPENAI_ORG_ID`
+    - `OPENAI_PROJECT_ID`
+    - `OPENAI_MODEL`
+    - `OPENAI_API_BASE_URL`
+    - `OPENAI_SYSTEM_PROMPT`
+- API key source (exclusive): `secrets/openai_api_key.txt` at repository root.
 
 Example:
         python invoke_chatgpt_with_payload.py \
-            --prompt "Summarize this calibration payload" \
-            --payload-file payload.json
+                --prompt "Summarize this calibration payload" \
+                --payload-file payload.json
 """
 
 from __future__ import annotations
@@ -626,6 +613,8 @@ def main() -> int:
             temperature=args.temperature,
             max_output_tokens=args.max_output_tokens,
         )
+        requested_formats = resolve_requested_output_formats(args.output_format)
+        generated_at_utc = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
         if args.dry_run:
             print("=== DRY RUN: RESOLVED PROMPT ===")
@@ -634,6 +623,16 @@ def main() -> int:
             print(json.dumps(payload, indent=2, ensure_ascii=False))
             print("\n=== DRY RUN: REQUEST BODY ===")
             print(json.dumps(body, indent=2, ensure_ascii=False))
+            if "md" in requested_formats:
+                print("\n=== DRY RUN: MARKDOWN YAML FRONT MATTER PREVIEW ===")
+                print(
+                    _render_markdown_front_matter(
+                        args=args,
+                        prompt=prompt,
+                        payload=payload,
+                        generated_at_utc=generated_at_utc,
+                    )
+                )
             elapsed_s = time.perf_counter() - start_ts
             print(f"Total running time: {elapsed_s:.2f} seconds")
             return 0
@@ -642,8 +641,6 @@ def main() -> int:
         text = extract_output_text(response_obj)
         incomplete_reason = get_incomplete_reason(response_obj)
 
-        requested_formats = resolve_requested_output_formats(args.output_format)
-        generated_at_utc = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
         (
             extracted_json_output_path,
             full_api_json_output_path,
