@@ -8,13 +8,21 @@ What this script does:
 
 Inputs:
 - Prompt input (choose one):
-    - `--prompt "..."`
-    - `--prompt-file path/to/prompt.txt`
-    - `--prompt-path /full/path/to/prompt.md`
+    - `--prompt "..."`: inline prompt text.
+    - `--prompt-file path/to/prompt.txt`: prompt loaded from a file path.
+    - `--prompt-path /full/path/to/prompt.md`: prompt loaded from a file path
+      (same parsing behavior as `--prompt-file`).
+- Prompt file parsing (`--prompt-file` / `--prompt-path`):
+    - Default: use the entire file content after `.strip()`.
+    - With `--use-first-fenced-block`: extract only the first fenced Markdown
+      block (``` or ````). If no fenced block is found, falls back to full-file text.
+    - Empty content after parsing raises a validation error.
+- Prompt precedence:
+    - At most one of `--prompt`, `--prompt-file`, or `--prompt-path` may be provided.
+    - If none is provided, built-in `DEFAULT_USER_PROMPT` is used.
 - Payload input (choose one):
     - `--payload-json '{"key": "value"}'`
     - `--payload-file path/to/payload.txt`
-- If no prompt is provided, a built-in default prompt is used.
 - If no payload is provided, a built-in sample payload is used.
 
 Outputs:
@@ -47,6 +55,7 @@ Additional invocation parameters:
 - `--output-file-stem <stem>`
 - `--save-full-api-response`
 - `--dry-run`
+- `--use-first-fenced-block`
 
 Environment configuration:
 - Optional env vars:
@@ -144,16 +153,24 @@ def parse_args() -> argparse.Namespace:
         "--prompt-path",
         type=Path,
         help=(
-            "Full path to a Markdown file containing the prompt in a fenced block "
-            "(``` or ````)."
+            "Full path to a text/Markdown file containing prompt text. "
+            "By default the full file is used."
         ),
     )
     parser.add_argument(
         "--prompt-file",
         type=Path,
         help=(
-            "Path to a text/Markdown file containing prompt text. If fenced Markdown "
-            "blocks are present, the first fenced block is used."
+            "Path to a text/Markdown file containing prompt text. "
+            "By default the full file is used."
+        ),
+    )
+    parser.add_argument(
+        "--use-first-fenced-block",
+        action="store_true",
+        help=(
+            "When set with --prompt-file or --prompt-path, use only the first fenced "
+            "Markdown block as the prompt text."
         ),
     )
     parser.add_argument(
@@ -273,10 +290,13 @@ def load_prompt(args: argparse.Namespace) -> str:
         except FileNotFoundError as exc:
             raise ValueError(f"Prompt file not found: {prompt_source}") from exc
 
-        fenced = _extract_first_fenced_block(raw)
-        text = fenced if fenced is not None else raw.strip()
+        if args.use_first_fenced_block:
+            fenced = _extract_first_fenced_block(raw)
+            text = fenced if fenced is not None else raw.strip()
+        else:
+            text = raw.strip()
         if not text:
-            raise ValueError(f"Prompt file is empty or contains an empty fenced block: {prompt_source}")
+            raise ValueError(f"Prompt file is empty: {prompt_source}")
         return text
 
     if args.prompt and args.prompt.strip():
