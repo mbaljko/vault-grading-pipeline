@@ -57,6 +57,9 @@ from pathlib import Path
 
 SBO_IDENTIFIER_RE = re.compile(r"\bI_[A-Za-z0-9_]+\b")
 SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
+PANEL_HEADER_RE = re.compile(r"^\s*#{5}\s*Panel\s+[ABC]\b", re.IGNORECASE)
+HEADING_RE = re.compile(r"^\s*#{1,6}\s+")
+TITLE_RE = re.compile(r"^\s*#{1,6}\s+(.+)\s*$")
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT: Path | None = next(
 	(candidate for candidate in [SCRIPT_DIR, *SCRIPT_DIR.parents] if (candidate / ".git").exists()),
@@ -67,7 +70,6 @@ L1_CT_PROMPT_FILE_RELATIVE = Path(
 	"01_units/pipelines/pl1B_rubric_devt/llm_prompt/"
 	"pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO.md"
 )
-STITCHER_SCRIPT_RELATIVE = Path("01_units/pipelines/pl1B_rubric_devt/python/response_text_stitcher.py")
 RUNNER_OUTPUT_SUBDIR = "Level1-CalibrationTesting-Outputs"
 
 
@@ -225,36 +227,155 @@ def apply_response_text_stitcher(
 ) -> Path:
 	"""Apply response text stitching to runner output markdown file.
 	
-	Calls response_text_stitcher.py on the file using response-texts input.
-	Returns the path to the stitched output file.
+	Augments Panel A/B/C tables by adding a response_text column pulled from
+	the response_texts CSV, matched by submission_id. Returns the path to the
+	stitched output markdown file in the same directory.
 	"""
-	if REPO_ROOT is None:
-		raise RuntimeError("Could not locate repository root from script path.")
+	# Build lookup: submission_id -> response_text
+	response_lookup: dict[str, str] = {}
+	with response_texts_file.open("r", encoding="utf-8-sig", newline="") as f:
+		reader = csv.DictReader(f)
+		if not reader.fieldnames:
+			response_lookup = {}
+		else:
+			normalized = {name.strip().lower(): name for name in reader.fieldnames if name}
+			submission_key = normalized.get("submission_id")
+			response_text_key = normalized.get("response_text")
+			if submission_key and response_text_key:
+				for row in reader:
+					raw_submission_id = (row.get(submission_key) or "").strip()
+					if raw_submission_id and raw_submission_id.isdigit() and raw_submission_id not in response_lookup:
+						response_lookup[raw_submission_id] = row.get(response_text_key) or ""
 	
-	stitcher_script = REPO_ROOT / STITCHER_SCRIPT_RELATIVE
-	output_dir = runner_output_file.parent
+	# Read input markdown and render augmented version
+	with runner_output_file.open("r", encoding="utf-8") as f:
+		markdown_lines = f.readlines()
 	
-	cmd = [
-		sys.executable,
-		str(stitcher_script),
-		"--input-file-based",
-		str(runner_output_file),
-		"--input-file-response-texts",
-		str(response_texts_file),
-	]
-	subprocess.run(cmd, cwd=str(output_dir), check=True)
+	augmented_lines: list[str] = []
+	i = 0
+	in_target_panel = False
 	
-	# The stitcher creates files named STITCHED_CT_REPORT_*.md in the output dir
-	# Find the most recently created one
-	stitched_files = sorted(
-		output_dir.glob("STITCHED_CT_REPORT_*.md"),
-		key=lambda p: p.stat().st_mtime,
-		reverse=True,
-	)
-	if stitched_files:
-		return stitched_files[0]
-	else:
-		raise RuntimeError("Response text stitcher did not produce expected output file")
+	# Skip YAML front matter block (--- ... ---) before processing markdown structure
+	if markdown_lines and markdown_lines[0].rstrip() == "---":
+		augmented_lines.append(markdown_lines[0])
+		i = 1
+		while i < len(markdown_lines):
+			augmented_lines.append(markdown_lines[i])
+			if markdown_lines[i].rstrip() == "---":
+				i += 1
+				break
+			i += 1
+
+	while i < len(markdown_lines):
+		line = markdown_lines[i]
+		
+		if PANEL_HEADER_RE.match(line):
+			in_target_panel = True
+			augmented_lines.append(line)
+			i += 1
+			continue
+		
+		if in_target_panel and HEADING_RE.match(line):
+			in_target_panel = False
+		
+		if in_target_panel and line.lstrip().startswith("|"):
+			# Collect full table
+			table_lines: list[str] = []
+			while i < len(markdown_lines) and markdown_lines[i].lstrip().startswith("|"):
+				table_lines.append(markdown_lines[i])
+				i += 1
+			
+			# Augment and append
+			augmented_lines.extend(_augment_panel_table(table_lines, response_lookup))
+			continue
+		
+		augmented_lines.append(line)
+		i += 1
+	
+	# Derive output filename from first title token
+	output_text = "".join(augmented_lines)
+	base_name = "stitched_output"
+	for line in output_text.splitlines():
+		match = TITLE_RE.match(line)
+		if match:
+			title_text = match.group(1).strip()
+			if title_text:
+				first_token = title_text.split()[0]
+				sanitized = re.sub(r"[^A-Za-z0-9._-]+", "_", first_token).strip("._")
+				if sanitized:
+					base_name = sanitized
+			break
+	
+	output_path = runner_output_file.parent / f"STITCHED_CT_REPORT_{base_name}.md"
+	output_path.write_text(output_text, encoding="utf-8")
+	return output_path
+
+
+def _parse_markdown_cells(line: str) -> list[str]:
+	"""Parse pipe-delimited markdown table cells from a line."""
+	parts = [part.strip() for part in line.strip().split("|")]
+	if parts and parts[0] == "":
+		parts = parts[1:]
+	if parts and parts[-1] == "":
+		parts = parts[:-1]
+	return parts
+
+
+def _is_markdown_separator_row(cells: list[str]) -> bool:
+	"""Check if cells form a markdown table separator row."""
+	if not cells:
+		return False
+	return all(bool(SEPARATOR_CELL_RE.match(cell.replace(" ", ""))) for cell in cells)
+
+
+def _escape_markdown_cell(value: str) -> str:
+	"""Escape pipe characters and remove newlines from markdown cell."""
+	return value.replace("|", "\\|").replace("\n", " ").strip()
+
+
+def _format_markdown_row(cells: list[str]) -> str:
+	"""Format cells as markdown table row."""
+	escaped = [_escape_markdown_cell(cell) for cell in cells]
+	return "| " + " | ".join(escaped) + " |\n"
+
+
+def _augment_panel_table(table_lines: list[str], response_lookup: dict[str, str]) -> list[str]:
+	"""Augment a Panel A/B/C table with response_text column."""
+	if not table_lines:
+		return []
+	
+	rows = [_parse_markdown_cells(line) for line in table_lines if line.lstrip().startswith("|")]
+	if not rows:
+		return []
+	
+	header = rows[0]
+	if not header:
+		return []
+	
+	n_cols = len(header)
+	output_lines: list[str] = []
+	augmented_header = header + ["response_text"]
+	output_lines.append(_format_markdown_row(augmented_header))
+	output_lines.append(_format_markdown_row(["---"] * len(augmented_header)))
+	
+	data_start = 1
+	if len(rows) > 1 and _is_markdown_separator_row(rows[1]):
+		data_start = 2
+	
+	for row in rows[data_start:]:
+		if _is_markdown_separator_row(row):
+			continue
+		
+		if len(row) < n_cols:
+			row = row + [""] * (n_cols - len(row))
+		elif len(row) > n_cols:
+			row = row[:n_cols]
+		
+		submission_id = row[0].strip()
+		response_text = response_lookup.get(submission_id, "") if submission_id.isdigit() else ""
+		output_lines.append(_format_markdown_row(row + [response_text]))
+	
+	return output_lines
 
 
 def main() -> int:
@@ -319,19 +440,19 @@ def main() -> int:
 				print(sbo_identifier)
 				#print(json.dumps(components, ensure_ascii=False))
 				#print(json.dumps(scored_payload, ensure_ascii=False))
-			runner_output_file = run_l1_ct_for_payload(
-				payload_dir,
-				components,
-				scored_payload,
-				sbo_identifier,
-				runner_dry_run,
-			)
-			# Apply response text stitching to the runner output
-			stitched_output_file = apply_response_text_stitcher(
-				runner_output_file,
-				response_texts_path,
-			)
-			# TODO: process stitched_output_file for further downstream handling
+				runner_output_file = run_l1_ct_for_payload(
+					payload_dir,
+					components,
+					scored_payload,
+					sbo_identifier,
+					runner_dry_run,
+				)
+				# Apply response text stitching to the runner output
+				stitched_output_file = apply_response_text_stitcher(
+					runner_output_file,
+					response_texts_path,
+				)
+				# TODO: process stitched_output_file for further downstream handling
 			i += 1
 	return 0
 
