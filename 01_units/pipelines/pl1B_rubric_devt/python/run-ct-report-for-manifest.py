@@ -11,6 +11,8 @@ Arguments:
 - `--file-with-response-texts`: validated input file path (reserved for
   payload augmentation).
 - `--file-with-scored-texts`: CSV used to find matching rows by `indicator_id`.
+- `--runner-dry-run`: when set, forwards `--dry-run` to
+	`invoke_chatgpt_with_payload.py`.
 
 Per matching row behavior:
 1. Extract `sbo_identifier` from the row and print it to stdout.
@@ -65,7 +67,8 @@ L1_CT_PROMPT_FILE_RELATIVE = Path(
 	"01_units/pipelines/pl1B_rubric_devt/llm_prompt/"
 	"pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO.md"
 )
-RUNNER_OUTPUT_SUBDIR = "llm_runner_outputs"
+STITCHER_SCRIPT_RELATIVE = Path("01_units/pipelines/pl1B_rubric_devt/python/response_text_stitcher.py")
+RUNNER_OUTPUT_SUBDIR = "Level1-CalibrationTesting-Outputs"
 
 
 def parse_args() -> argparse.Namespace:
@@ -95,6 +98,11 @@ def parse_args() -> argparse.Namespace:
 		type=Path,
 		required=True,
 		help="Path to scored-texts input file for payload augmentation.",
+	)
+	parser.add_argument(
+		"--runner-dry-run",
+		action="store_true",
+		help="Forward --dry-run to invoke_chatgpt_with_payload.py.",
 	)
 	return parser.parse_args()
 
@@ -163,8 +171,12 @@ def run_l1_ct_for_payload(
 	components: dict[str, str],
 	scored_payload: dict[str, object],
 	output_file_stem: str,
-) -> None:
-	"""Invoke the same runner behavior as justfile target l1-ct-secC."""
+	runner_dry_run: bool,
+) -> Path:
+	"""Invoke the same runner behavior as justfile target l1-ct-secC.
+	
+	Returns the path to the markdown output file written by the runner.
+	"""
 	if REPO_ROOT is None:
 		raise RuntimeError("Could not locate repository root from script path.")
 
@@ -173,6 +185,7 @@ def run_l1_ct_for_payload(
 	payload_file = payload_dir / f"{output_file_stem}_payload.json"
 	runner_output_dir = payload_dir / RUNNER_OUTPUT_SUBDIR
 	runner_output_dir.mkdir(parents=True, exist_ok=True)
+	runner_output_file = runner_output_dir / f"{output_file_stem}_output.md"
 
 	components_json = json.dumps(components, indent=2, ensure_ascii=False)
 	scored_payload_json = json.dumps(scored_payload, indent=2, ensure_ascii=False)
@@ -198,9 +211,50 @@ def run_l1_ct_for_payload(
 		str(payload_file),
 		"--output-file-stem",
 		output_file_stem,
-		#"--dry-run",
 	]
+	if runner_dry_run:
+		cmd.append("--dry-run")
 	subprocess.run(cmd, check=True)
+	
+	return runner_output_file
+
+
+def apply_response_text_stitcher(
+	runner_output_file: Path,
+	response_texts_file: Path,
+) -> Path:
+	"""Apply response text stitching to runner output markdown file.
+	
+	Calls response_text_stitcher.py on the file using response-texts input.
+	Returns the path to the stitched output file.
+	"""
+	if REPO_ROOT is None:
+		raise RuntimeError("Could not locate repository root from script path.")
+	
+	stitcher_script = REPO_ROOT / STITCHER_SCRIPT_RELATIVE
+	output_dir = runner_output_file.parent
+	
+	cmd = [
+		sys.executable,
+		str(stitcher_script),
+		"--input-file-based",
+		str(runner_output_file),
+		"--input-file-response-texts",
+		str(response_texts_file),
+	]
+	subprocess.run(cmd, cwd=str(output_dir), check=True)
+	
+	# The stitcher creates files named STITCHED_CT_REPORT_*.md in the output dir
+	# Find the most recently created one
+	stitched_files = sorted(
+		output_dir.glob("STITCHED_CT_REPORT_*.md"),
+		key=lambda p: p.stat().st_mtime,
+		reverse=True,
+	)
+	if stitched_files:
+		return stitched_files[0]
+	else:
+		raise RuntimeError("Response text stitcher did not produce expected output file")
 
 
 def main() -> int:
@@ -209,6 +263,7 @@ def main() -> int:
 	component_id = args.component_id
 	response_texts_path = args.file_with_response_texts
 	scored_texts_path = args.file_with_scored_texts
+	runner_dry_run = args.runner_dry_run
 
 	if not markdown_path.exists() or not markdown_path.is_file():
 		print(f"Error: markdown file not found: {markdown_path}", file=sys.stderr)
@@ -264,12 +319,19 @@ def main() -> int:
 				print(sbo_identifier)
 				#print(json.dumps(components, ensure_ascii=False))
 				#print(json.dumps(scored_payload, ensure_ascii=False))
-				run_l1_ct_for_payload(
-					payload_dir,
-					components,
-					scored_payload,
-					sbo_identifier,
-				)
+			runner_output_file = run_l1_ct_for_payload(
+				payload_dir,
+				components,
+				scored_payload,
+				sbo_identifier,
+				runner_dry_run,
+			)
+			# Apply response text stitching to the runner output
+			stitched_output_file = apply_response_text_stitcher(
+				runner_output_file,
+				response_texts_path,
+			)
+			# TODO: process stitched_output_file for further downstream handling
 			i += 1
 	return 0
 
