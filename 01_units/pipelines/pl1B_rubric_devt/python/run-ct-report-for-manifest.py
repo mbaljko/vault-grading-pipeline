@@ -362,7 +362,7 @@ def _format_markdown_row(cells: list[str]) -> str:
 
 
 def _augment_panel_table(table_lines: list[str], response_lookup: dict[str, str]) -> list[str]:
-	"""Augment a Panel A/B/C table with response_text column."""
+	"""Augment a Panel A/B/C table with response_text and human_judge_notes columns."""
 	if not table_lines:
 		return []
 	
@@ -376,7 +376,7 @@ def _augment_panel_table(table_lines: list[str], response_lookup: dict[str, str]
 	
 	n_cols = len(header)
 	output_lines: list[str] = []
-	augmented_header = header + ["response_text"]
+	augmented_header = header + ["response_text", "human_judge_notes"]
 	output_lines.append(_format_markdown_row(augmented_header))
 	output_lines.append(_format_markdown_row(["---"] * len(augmented_header)))
 	
@@ -395,7 +395,8 @@ def _augment_panel_table(table_lines: list[str], response_lookup: dict[str, str]
 		
 		submission_id = row[0].strip()
 		response_text = response_lookup.get(submission_id, "") if submission_id.isdigit() else ""
-		output_lines.append(_format_markdown_row(row + [response_text]))
+		human_judge_notes = ""
+		output_lines.append(_format_markdown_row(row + [response_text, human_judge_notes]))
 	
 	return output_lines
 

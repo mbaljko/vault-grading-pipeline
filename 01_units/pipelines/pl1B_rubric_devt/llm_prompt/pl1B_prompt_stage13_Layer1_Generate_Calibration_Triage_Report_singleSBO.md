@@ -109,10 +109,25 @@ Do not select only ambiguous rows.
 The **Selected inspection set table must list every sampled row**.
 This table is the **registry of rows** used for the remainder of the task.
 
+**The Selected inspection set table is the canonical registry for the triage task.**
+
+**Each row in this table must include a `selected_panel` value (A, B, or C).**
+
+**Panel sections later in the output must contain only rows drawn from this registry whose `selected_panel` value matches the panel label.**
+
 All rows appearing anywhere later in the output must come from this registry.
 No additional rows from the dataset may be introduced.
 
 #### Step 4 — Perform triage grouping
+Each row in the Selected inspection set must be assigned exactly one panel label using the `selected_panel` column in the inspection table.
+
+Valid values for `selected_panel` are:
+- A
+- B
+- C
+
+Panel assignment must be completed in the Selected inspection set table before producing the panel sections below.
+
 Using **only the rows listed in the Selected inspection set**, group them into the following diagnostic panels:
 
 - Panel A — Clear positives  
@@ -134,6 +149,9 @@ The following conditions must hold:
 3. No new rows may appear in any panel.
 4. The union of rows appearing in Panels A–C must exactly match the rows listed in the Selected inspection set.
 5. Each row must include the **exact submission_id from the dataset**. Do not alter identifiers.
+6. The `selected_panel` column in the Selected inspection set table must assign exactly one panel (A, B, or C) to every row.
+7. Panel sections must contain only rows whose `selected_panel` value matches that panel.
+8. Every row in the Selected inspection set must appear exactly once in the panel sections.
 
 Do not report excluded rows, omitted rows, duplicate rows, or partition violations inside any panel.
 If a row is excluded, it must not appear anywhere in the panel tables.
@@ -149,6 +167,8 @@ Inspection notes should describe the diagnostic reason the row may be:
 - weak or incomplete
 - potentially misclassified
 
+Construct the Selected inspection set table first, including the `selected_panel` assignments, and only then produce the panel sections by copying rows from that table.
+
 ### Output format
 
 ```
@@ -156,8 +176,8 @@ Inspection notes should describe the diagnostic reason the row may be:
 
 ##### Selected inspection set
 
-| submission_id | evidence_status | reason_selected |
-|---|---|---|
+| submission_id | evidence_status | selected_panel | reason_selected |
+|---|---|---|---|
 
 ##### Triage results
 
