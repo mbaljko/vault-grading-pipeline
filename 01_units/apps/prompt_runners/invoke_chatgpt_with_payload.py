@@ -13,9 +13,11 @@ Inputs:
     - `--prompt-path /full/path/to/prompt.md`: prompt loaded from a file path
       (same parsing behavior as `--prompt-file`).
 - Prompt file parsing (`--prompt-file` / `--prompt-path`):
-    - Default: use the entire file content after `.strip()`.
+        - Default: use the full file content after removing a leading YAML front
+            matter block (if present), then apply `.strip()`.
     - With `--use-first-fenced-block`: extract only the first fenced Markdown
-      block (``` or ````). If no fenced block is found, falls back to full-file text.
+            block (``` or ````) from the YAML-stripped content. If no fenced block is
+            found, falls back to YAML-stripped full-file text.
     - Empty content after parsing raises a validation error.
 - Prompt precedence:
     - At most one of `--prompt`, `--prompt-file`, or `--prompt-path` may be provided.
@@ -96,6 +98,15 @@ def _extract_first_fenced_block(markdown_text: str) -> str | None:
     if not match:
         return None
     return match.group(2).strip()
+
+
+def _strip_leading_yaml_front_matter(text: str) -> str:
+    """Remove leading YAML front matter block from Markdown text, if present."""
+    pattern = re.compile(r"\A(?:\ufeff)?---[ \t]*\r?\n.*?\r?\n---[ \t]*(?:\r?\n|$)", re.DOTALL)
+    match = pattern.match(text)
+    if not match:
+        return text
+    return text[match.end():]
 
 
 def _find_repo_root(start: Path) -> Path | None:
@@ -290,11 +301,12 @@ def load_prompt(args: argparse.Namespace) -> str:
         except FileNotFoundError as exc:
             raise ValueError(f"Prompt file not found: {prompt_source}") from exc
 
+        prompt_body = _strip_leading_yaml_front_matter(raw)
         if args.use_first_fenced_block:
-            fenced = _extract_first_fenced_block(raw)
-            text = fenced if fenced is not None else raw.strip()
+            fenced = _extract_first_fenced_block(prompt_body)
+            text = fenced if fenced is not None else prompt_body.strip()
         else:
-            text = raw.strip()
+            text = prompt_body.strip()
         if not text:
             raise ValueError(f"Prompt file is empty: {prompt_source}")
         return text

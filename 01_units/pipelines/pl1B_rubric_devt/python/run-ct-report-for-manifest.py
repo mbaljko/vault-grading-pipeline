@@ -141,7 +141,12 @@ def _find_repo_root(start: Path) -> Path | None:
 	return None
 
 
-def run_l1_ct_for_payload(payload_dir: Path, components: dict[str, str], scored_payload: dict[str, object]) -> None:
+def run_l1_ct_for_payload(
+	payload_dir: Path,
+	components: dict[str, str],
+	scored_payload: dict[str, object],
+	output_file_stem: str,
+) -> None:
 	"""Invoke the same runner behavior as justfile target l1-ct-secC."""
 	repo_root = _find_repo_root(Path(__file__).resolve().parent)
 	if repo_root is None:
@@ -171,6 +176,9 @@ def run_l1_ct_for_payload(payload_dir: Path, components: dict[str, str], scored_
 		str(prompt_file),
 		"--payload-file",
 		str(payload_file),
+		"--output-file-stem",
+		output_file_stem,
+		#"--dry-run",
 	]
 	subprocess.run(cmd, check=True)
 
@@ -234,9 +242,14 @@ def main() -> int:
 				matching_scored_rows = find_matching_scored_rows(components, scored_rows)
 				scored_payload = {"matching_scored_rows": matching_scored_rows}
 				print(sbo_identifier)
-				print(json.dumps(components, ensure_ascii=False))
-				print(json.dumps(scored_payload, ensure_ascii=False))
-				run_l1_ct_for_payload(payload_dir, components, scored_payload)
+				#print(json.dumps(components, ensure_ascii=False))
+				#print(json.dumps(scored_payload, ensure_ascii=False))
+				run_l1_ct_for_payload(
+					payload_dir,
+					components,
+					scored_payload,
+					sbo_identifier,
+				)
 			i += 1
 	return 0
 

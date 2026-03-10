@@ -147,6 +147,7 @@ Inspection notes should describe the diagnostic reason the row may be:
 - potentially misclassified
 
 ### Output format
+Emit results as **fenced Markdown**.
 
 ```
 #### <indicator_id> — <short_indicator_description>
