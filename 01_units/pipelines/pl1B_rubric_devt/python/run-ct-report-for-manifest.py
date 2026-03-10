@@ -34,6 +34,7 @@ import argparse
 import csv
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -132,6 +133,48 @@ def find_matching_scored_rows(
 	return matches
 
 
+def _find_repo_root(start: Path) -> Path | None:
+	current = start.resolve()
+	for candidate in [current, *current.parents]:
+		if (candidate / ".git").exists():
+			return candidate
+	return None
+
+
+def run_l1_ct_for_payload(payload_dir: Path, components: dict[str, str], scored_payload: dict[str, object]) -> None:
+	"""Invoke the same runner behavior as justfile target l1-ct-secC."""
+	repo_root = _find_repo_root(Path(__file__).resolve().parent)
+	if repo_root is None:
+		raise RuntimeError("Could not locate repository root from script path.")
+
+	runner_script = repo_root / "01_units/apps/prompt_runners/invoke_chatgpt_with_payload.py"
+	prompt_file = (
+		repo_root
+		/ "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO.md"
+	)
+	payload_file = payload_dir / "TMP_PAYLOAD.md"
+
+	payload_body = {
+		"components": components,
+		"scored_payload": scored_payload,
+	}
+	payload_file.write_text(json.dumps(payload_body, indent=2, ensure_ascii=False), encoding="utf-8")
+
+	cmd = [
+		sys.executable,
+		str(runner_script),
+		"--output-format",
+		"md",
+		"--output-dir",
+		str(payload_dir),
+		"--prompt-file",
+		str(prompt_file),
+		"--payload-file",
+		str(payload_file),
+	]
+	subprocess.run(cmd, check=True)
+
+
 def main() -> int:
 	args = parse_args()
 	markdown_path = args.sbo_manifest_file
@@ -148,6 +191,8 @@ def main() -> int:
 	if not scored_texts_path.exists() or not scored_texts_path.is_file():
 		print(f"Error: scored-texts file not found: {scored_texts_path}", file=sys.stderr)
 		return 1
+
+	payload_dir = markdown_path.resolve().parent
 
 	scored_rows = load_scored_rows(scored_texts_path)
 
@@ -191,9 +236,8 @@ def main() -> int:
 				print(sbo_identifier)
 				print(json.dumps(components, ensure_ascii=False))
 				print(json.dumps(scored_payload, ensure_ascii=False))
-
+				run_l1_ct_for_payload(payload_dir, components, scored_payload)
 			i += 1
-
 	return 0
 
 
