@@ -109,7 +109,7 @@ notes: |
   from the contrastive pattern discovery results in the submission analytic
   brief and represent detectable textual signals in student responses.
   The output corresponds to rubric template section 5.4 and must strictly
-  follow identifier conventions defined in Rubric_SpecificationGuide_v01.
+  follow identifier conventions defined in Rubric_SpecificationGuide_v*.
 ---
 ## Wrapper Prompt — Generate Layer 1 SBO Instance Registry (Stage 1.1)
 
@@ -132,7 +132,7 @@ The purpose is to produce the **indicator registry** used by downstream scoring 
 The generated output must conform to the identifier and authoring conventions in:
 
 ```text
-Rubric_SpecificationGuide_v01
+Rubric_SpecificationGuide_v*
 ```
 
 If the instructions in the analytic brief conflict with the specification guide, the **specification guide takes precedence** for identifier formation, short identifiers, and `sbo_short_description` authoring.
@@ -141,11 +141,9 @@ If the instructions in the analytic brief conflict with the specification guide,
 
 ### Required input artefacts
 
-The following artefacts must be supplied verbatim and delimited using:
+Artefacts are separated using the delimiter:
 
 ```text
-===
-<content>
 ===
 ```
 
@@ -153,13 +151,19 @@ Artefacts must appear in the following order:
 
 ```text
 ===
-Rubric_SpecificationGuide_v01
+Rubric_SpecificationGuide_v*
 ===
-<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
+<ASSESSMENT_ID>_SubmissionAnalyticBrief_v*
 ===
 ```
 
 If any artefact is missing, malformed, or inconsistent, the prompt must produce **no output**.
+
+### Artefact validation
+
+The analytic brief must contain candidate indicators derived during Stage 0.3.
+
+If candidate indicators cannot be located in the analytic brief, the generator must produce no output.
 
 ---
 
@@ -216,6 +220,8 @@ Indicator SBO instances must:
 
 Indicators should capture **distinct analytic signals**, not broad conceptual categories.
 
+Indicators may represent either engagement signals or conceptual interpretation signals, provided they correspond to observable textual language patterns in the response.
+
 ---
 
 ### Indicator count expectations
@@ -251,20 +257,20 @@ sbo_short_description
 
 Field meanings:
 
-| field | description |
-|---|---|
-| `sbo_identifier` | canonical Layer 1 SBO identifier |
-| `sbo_identifier_shortid` | compact short reference token |
-| `submission_id` | assessment-level submission identifier primitive used in the rubric payload |
-| `component_id` | canonical component identifier from the analytic brief |
-| `indicator_id` | indicator RP identifier |
-| `sbo_short_description` | concise human-readable label for the analytic signal |
+| field                    | description                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------------------- |
+| `sbo_identifier`         | canonical Layer 1 SBO identifier                                                          |
+| `sbo_identifier_shortid` | compact short reference token                                                             |
+| `submission_id`          | stores the assessment identifier used as the submission-level rubric primitive identifier |
+| `component_id`           | canonical component identifier from the analytic brief                                    |
+| `indicator_id`           | indicator RP identifier                                                                   |
+| `sbo_short_description`  | concise human-readable label for the analytic signal                                      |
 
 ---
 
 ### Identifier conventions
 
-The generated registry must comply with the Layer 1 conventions in `Rubric_SpecificationGuide_v01`.
+The generated registry must comply with the Layer 1 conventions in `Rubric_SpecificationGuide_v*`.
 
 #### Submission identifier (`submission_id`)
 
@@ -333,6 +339,7 @@ I03
 
 Do **not** reset `indicator_id` numbering by component.  
 `indicator_id` values must remain unique within the rubric payload.
+Indicator numbering must begin with I01 and increment sequentially unless the analytic brief explicitly specifies existing indicator identifiers.
 
 #### Canonical SBO identifier (`sbo_identifier`)
 
@@ -387,7 +394,7 @@ Because `indicator_id` values must be unique within the rubric payload, these sh
 
 ### `sbo_short_description` authoring rules
 
-`sbo_short_description` must comply with `Rubric_SpecificationGuide_v01`.
+`sbo_short_description` must comply with `Rubric_SpecificationGuide_v*`.
 
 It must:
 
