@@ -205,6 +205,34 @@ No other variation is permitted.
 
 If two invocations differ only in `PARAM_TARGET_COMPONENT_ID` or in the filtered manifest rows, the generated prompts must remain identical in structure and wording except for those required substitutions.
 
+The wrapper must treat the generated scoring prompt as a **locked canonical template instance**.
+
+Generation must therefore follow **template instantiation discipline** rather than free-form rewriting.
+
+The wrapper must:
+
+- reproduce all canonical template text **verbatim**
+- substitute values **only** at explicitly permitted substitution points
+- preserve punctuation, spacing, bullet grammar, and heading levels
+- preserve section ordering and sentence ordering
+- preserve Markdown structure and table schemas
+
+The wrapper must **not**:
+
+- paraphrase template text
+- rewrite sentences
+- compress or expand lists
+- introduce explanatory prose
+- alter Markdown structure
+- alter table schemas
+- change heading levels
+- reorder sections
+- modify spacing conventions
+
+If the wrapper cannot produce a prompt that matches the canonical template exactly except for permitted substitutions, the wrapper must **produce no output**.
+
+---
+
 ### Target Component Parameter (Required)
 
 The wrapper prompt requires the user to specify the component whose Layer 1 indicators will be scored.
@@ -220,6 +248,8 @@ PARAM_TARGET_COMPONENT_ID = SectionBResponse
 ```
 
 This parameter determines which rows from the `Layer1_ScoringManifest` will be embedded in the generated scoring prompt.
+
+---
 
 ### Required Input Artefacts
 
@@ -249,6 +279,8 @@ The remaining artefacts must appear exactly as produced by their upstream pipeli
 
 If any required artefact or parameter is missing, malformed, or inconsistent, the wrapper prompt must **produce no output**.
 
+---
+
 ### Input Artefact Order (Mandatory)
 
 Artefacts must appear **exactly in the following order**, separated by the delimiter `===`.
@@ -275,6 +307,8 @@ BEGIN GENERATION
 
 If `BEGIN GENERATION` is absent, the wrapper prompt must **produce no output**.
 
+---
+
 ### Example Invocation
 
 ```text
@@ -289,6 +323,8 @@ BEGIN GENERATION
 ```
 
 If the artefacts appear in a different order or if the delimiter structure is violated, the wrapper prompt must **produce no output**.
+
+---
 
 ### Purpose
 
@@ -336,6 +372,8 @@ Layer 3 — Component Performance Mapping
 Layer 4 — Submission Score Derivation
 ```
 
+---
+
 ### Task Classification
 
 This wrapper prompt performs:
@@ -353,11 +391,13 @@ This wrapper prompt does **not** perform:
 - rule invention
 - pedagogical explanation
 
+---
+
 ### Authoritative Inputs
 
 The model may rely **only** on the following artefacts supplied verbatim.
 
-#### Input Artefact
+#### Input Artefact  
 `<ASSESSMENT_ID>_AssignmentPayloadSpec_v*`
 
 The wrapper must extract:
@@ -394,7 +434,7 @@ explicit textual evidence only
 
 If wrapper-handling rules exist for `response_text`, they must be embedded in the generated scoring prompt.
 
-#### Input Artefact
+#### Input Artefact  
 `Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION>`
 
 The wrapper must extract:
@@ -419,6 +459,8 @@ the registry of Layer 1 indicators
 the evaluation specification used to detect them
 ```
 
+---
+
 ### Manifest Filtering Rule
 
 Before generating the scoring prompt, the wrapper must execute:
@@ -441,6 +483,27 @@ Only filtered rows may be embedded in the generated scoring prompt.
 
 The row order of the filtered manifest becomes the canonical embedded indicator order in the generated scoring prompt.
 
+---
+
+### Canonical Template Validation
+
+Before emitting the scoring prompt, the wrapper must perform a **canonical template validation check**.
+
+The wrapper must confirm that:
+
+- all required sections appear exactly once
+- section headings match the canonical template text
+- section ordering is identical to the canonical template
+- lead-in phrases appear exactly as specified
+- the embedded indicator table schema matches the required column structure
+- no unexpected sentences appear in the generated prompt
+- no template sentences are missing
+- permitted substitutions were applied correctly
+
+If any validation rule fails, the wrapper prompt must **produce no output**.
+
+---
+
 ### Indicator Evidence Status Scale
 
 The generated scoring prompt must embed this scale.
@@ -452,6 +515,8 @@ The generated scoring prompt must embed this scale.
 | `little_to_no_evidence` | no interpretable explicit textual signal supporting the indicator is present |
 
 Evidence must rely strictly on **explicit response language**.
+
+---
 
 ### Output Requirements
 
@@ -491,6 +556,8 @@ submission_id,component_id,indicator_id,evidence_status,evaluation_notes,confide
 
 The header appears **exactly once**.
 
+---
+
 ### Wrapper Execution Discipline
 
 #### Phase 1 — Artefact ingestion
@@ -515,6 +582,8 @@ BEGIN GENERATION
 
 appears, generate the scoring prompt artefact.
 
+---
+
 ### Output Artefact
 
 Generate exactly one artefact:
@@ -529,6 +598,8 @@ The artefact must:
 - embed the filtered indicator rows
 - embed the evaluation specification
 - assume the canonical payload structure
+
+---
 
 ### Prompt Template Lock Requirement
 
@@ -608,6 +679,8 @@ Where the target component appears inside a lead-in, only the component value ma
 
 If a generated prompt would differ from the canonical template in wording or structure beyond permitted substitutions, the wrapper prompt must **produce no output**.
 
+---
+
 ### Generated Scoring Prompt Structure
 
 The scoring prompt must appear in **one fenced Markdown block** using an outer fence of four backticks.
@@ -626,6 +699,8 @@ Constraints
 Content rules
 Failure mode handling
 ```
+
+---
 
 ### Required Canonical Runtime Semantics
 
@@ -672,6 +747,8 @@ Instead it must state:
 ```text
 total data row count = number of valid runtime rows × number of embedded indicators
 ```
+
+---
 
 ### Evaluation Discipline
 
@@ -762,6 +839,8 @@ Emit output in this exact structure:
 - then, for runtime row 2, one data row per embedded `indicator_id` in prompt order
 - continue until all valid runtime rows are exhausted
 
+---
+
 ### Evidence Interpretation Rules
 
 The generated scoring prompt must include all of the following.
@@ -806,6 +885,8 @@ Do not use:
 
 to influence the judgement.
 
+---
+
 ### Confidence Assignment Rule
 
 Confidence reflects clarity of textual evidence, not probability.
@@ -825,6 +906,8 @@ weak or uncertain textual signal
 If evidence_status = little_to_no_evidence and no fragment exists, assign confidence = high.
 If you are uncertain and cannot identify sufficient explicit support for evidence or partial_evidence, assign evidence_status = little_to_no_evidence and flags = needs_review.
 ```
+
+---
 
 ### Output Schema
 
@@ -850,6 +933,8 @@ Field rules:
 - no additional columns may appear
 - no explanatory text may appear before or after the CSV
 
+---
+
 ### Constraints
 
 Use only:
@@ -868,15 +953,19 @@ Do not use:
 - performance-level reasoning
 - assumptions about intended meaning
 
+---
+
 ### Content Rules
 
 Require all of the following:
 
-- one CSV row per embedded indicator for each valid runtime row
+- one CSV row per embedded indicator **for each valid runtime row**
 - complete coverage of all valid runtime rows in the runtime dataset
 - `component_id = PARAM_TARGET_COMPONENT_ID` in every emitted row
 - concise `evaluation_notes`
 - no long quotations unless fragment mode is enabled
+
+---
 
 ### Failure Mode Handling
 
