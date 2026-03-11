@@ -77,12 +77,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO"
+              "title": "Pipeline 1B — Layered Rubric Construction Pipeline"
             }
           }
         ],
@@ -154,7 +154,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 594.5
+    "width": 431.5
   },
   "right": {
     "id": "9f47bf4168842e60",
@@ -232,13 +232,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO"
+              "title": "Outline of Pipeline 1B — Layered Rubric Construction Pipeline"
             }
           },
           {
@@ -274,9 +274,9 @@
   },
   "active": "ae8d5d76b5fd66eb",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO.md",
     "01_units/pipelines/pl1B_rubric_devt/RUN_PPP_SectionAResponse_Layer1_SBO_scoring_prompt_v01_output.csv",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO for interactive use.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO.md",
     "05_docs/01_design/pl1B_rubric_devt/TRY Contrastive indicator extraction.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v01.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Generate Layer 1 Indicator Evaluation Specification.md",
@@ -308,7 +308,6 @@
     "05_docs/01_design/pl2_calibration/Pipeline2 - Calibration Runs  Specification.md",
     "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE WITH CONTENT.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Design Document.md",
-    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline only sec 1-4.md",
-    "05_docs/00_overview/prev"
+    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline only sec 1-4.md"
   ]
 }
