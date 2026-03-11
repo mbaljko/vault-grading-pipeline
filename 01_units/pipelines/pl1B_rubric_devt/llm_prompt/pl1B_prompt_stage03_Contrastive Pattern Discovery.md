@@ -57,36 +57,50 @@ Indicator SBO instances and evaluation specifications are defined later during *
 
 ## Input Artefact Format
 
-All required artefacts must be provided verbatim and delimited using:
+All required artefacts are provided in a **single sequence** separated by the delimiter:
 
 ```text
-===
-<ARTEFACT_NAME>
-<content>
 ===
 ```
 
-Artefacts must appear in the following order:
+The delimiter separates artefacts.  
+It does **not** wrap them.
+
+Exactly **three artefacts** must appear, separated by this delimiter.
+
+The structure must therefore be:
 
 ```text
-===
-<ASSESSMENT_ID>_AssignmentPayloadSpec_v01
-<document contents>
-===
+<prompt text>
 
 ===
-<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
-<document contents>
-===
+<document contents of <ASSESSMENT_ID>_AssignmentPayloadSpec_v*>
 
 ===
-CALIBRATION_SAMPLE_<COMPONENT_ID>
+<document contents of <ASSESSMENT_ID>_SubmissionAnalyticBrief_v*>
+
+===
 <table containing:
 submission_id
 component_id
 cleaned_response_text>
-===
 ```
+
+No additional artefacts may appear.
+
+---
+
+## Artefact Interpretation Rules
+
+Artefacts must be interpreted **by position**.
+
+| position | interpretation |
+|---|---|
+| Artefact 1 | `<ASSESSMENT_ID>_AssignmentPayloadSpec_v*` |
+| Artefact 2 | `<ASSESSMENT_ID>_SubmissionAnalyticBrief_v*` |
+| Artefact 3 | calibration sample dataset |
+
+The delimiter `===` must therefore appear **exactly twice** in the payload.
 
 ---
 
@@ -94,7 +108,49 @@ cleaned_response_text>
 
 Before performing any analysis:
 
-1. Verify that the calibration dataset contains the fields:
+### Validation 1 — Artefact count
+
+Confirm that the input contains **exactly three artefacts** separated by the delimiter:
+
+```text
+===
+```
+
+If more or fewer artefacts are detected, **produce no output**.
+
+---
+
+### Validation 2 — Assignment payload specification
+
+Verify that **Artefact 1** contains structural features consistent with an Assignment Payload Specification.
+
+Expected elements include references to:
+
+```text
+assessment_id
+component_id
+component_ids
+```
+
+If the first artefact does not resemble an Assignment Payload Specification, **produce no output**.
+
+---
+
+### Validation 3 — Submission analytic brief
+
+Verify that **Artefact 2** contains the Submission Analytic Brief and includes the section:
+
+```text
+Analytic Sub-space Identification
+```
+
+If the analytic sub-space registry cannot be located, **produce no output**.
+
+---
+
+### Validation 4 — Calibration dataset structure
+
+Verify that **Artefact 3** is a dataset containing the fields:
 
 ```text
 submission_id
@@ -102,27 +158,40 @@ component_id
 cleaned_response_text
 ```
 
-2. Determine the **target component** by examining the `component_id` values in the calibration dataset.
+If any required field is missing, **produce no output**.
 
-3. Verify that the dataset contains **exactly one unique `component_id`**.
+---
 
-If multiple component values are detected, **produce no output**.
+### Validation 5 — Target component detection
 
-4. Verify that the detected `component_id` exists in:
+Determine the **target component** by examining the `component_id` values in the calibration dataset.
+
+The dataset must contain **exactly one unique `component_id`**.
+
+If multiple component identifiers are detected, **produce no output**.
+
+---
+
+### Validation 6 — Component registry verification
+
+Verify that the detected `component_id` exists in the Assignment Payload Specification.
+
+If the component does not exist in the registry, **produce no output**.
+
+---
+
+### Validation 7 — Analytic sub-space lookup
+
+Using the detected `component_id`, locate the corresponding analytic sub-spaces in the Submission Analytic Brief.
+
+Extract the following fields from the analytic sub-space registry:
 
 ```text
-<ASSESSMENT_ID>_AssignmentPayloadSpec_v01
+sub-space_id
+analytic focus
 ```
 
-5. Using the detected `component_id`, locate the corresponding **analytic sub-spaces** in:
-
-```text
-<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
-```
-
-6. Extract the analytic sub-space identifiers and analytic focus descriptions associated with that component.
-
-Contrastive analysis must be performed **separately for each analytic sub-space**.
+Contrastive signal extraction must then be conducted **separately for each analytic sub-space**.
 
 ---
 
