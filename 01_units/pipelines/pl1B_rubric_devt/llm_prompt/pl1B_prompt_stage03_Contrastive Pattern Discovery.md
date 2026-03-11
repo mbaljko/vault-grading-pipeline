@@ -21,7 +21,7 @@ The goal is to identify **observable textual signals in student responses** that
 The output will populate a component-specific section of:
 
 ```text
-<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01.md
+<ASSESSMENT_ID>_SubmissionAnalyticBrief_v*.md
 ```
 
 The generated output must be emitted as **fenced Markdown** and must use the following top-level section heading:
@@ -44,7 +44,7 @@ Where:
 ##### 5.<cid>.5
 ```
 
-Optional analytic sub-space subdivisions within sections should use **level 6 headings**.
+Optional analytic sub-space subdivisions within sections must use **level 6 headings**.
 
 This stage performs **analytic signal discovery only**.
 
@@ -55,7 +55,7 @@ Indicator SBO instances and evaluation specifications are defined later during *
 
 ---
 
-#### Input Artefact Format
+## Input Artefact Format
 
 All required artefacts must be provided verbatim and delimited using:
 
@@ -90,7 +90,7 @@ cleaned_response_text>
 
 ---
 
-#### Artefact Validation Rules
+## Artefact Validation Rules
 
 Before performing any analysis:
 
@@ -120,15 +120,15 @@ If multiple component values are detected, **produce no output**.
 <ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
 ```
 
-6. Extract the analytic sub-space identifiers and descriptions associated with that component.
+6. Extract the analytic sub-space identifiers and analytic focus descriptions associated with that component.
 
 Contrastive analysis must be performed **separately for each analytic sub-space**.
 
 ---
 
-#### Required Inputs
+## Required Inputs
 
-##### Assignment Payload Specification
+### Assignment Payload Specification
 
 ```text
 <ASSESSMENT_ID>_AssignmentPayloadSpec_v01
@@ -136,7 +136,7 @@ Contrastive analysis must be performed **separately for each analytic sub-space*
 
 Used to confirm valid `component_id` values.
 
-##### Submission Analytic Brief
+### Submission Analytic Brief
 
 ```text
 <ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
@@ -147,7 +147,7 @@ Used to obtain:
 - analytic purpose of the component
 - analytic sub-space registry
 
-##### Calibration Sample
+### Calibration Sample
 
 Dataset structure:
 
@@ -167,7 +167,7 @@ Calibration samples are produced earlier in **Pipeline PL2** and represent filte
 
 ---
 
-#### Instructions
+## Instructions
 
 You are analysing a calibration sample of student responses to identify **contrastive analytic signals**.
 
@@ -188,7 +188,82 @@ Contrastive analysis must be conducted **within each analytic sub-space separate
 
 ---
 
-#### Output Requirements
+## Signal Identification Rules
+
+Signals must satisfy all of the following constraints.
+
+### Rule 1 — Signals must be textual
+
+Signals must correspond to **observable textual language patterns** that appear in the response text.
+
+A valid signal must be detectable by locating specific wording or phrasing in the response.
+
+Valid signal examples:
+
+```text
+explicit assignment of accountability to a specific actor
+recognition that responsibility is distributed
+description of responsibility hand-off
+reference to institutional oversight
+explicit reference to accessibility barriers
+```
+
+Invalid signal examples:
+
+```text
+student demonstrates sophisticated thinking
+student recognises complexity
+student shows ethical awareness
+response reflects deeper reflection
+```
+
+Signals must describe **textual features**, not interpretations of student cognition.
+
+---
+
+### Rule 2 — Signals must be analytic-sub-space bounded
+
+Each signal must be associated with **exactly one analytic sub-space**.
+
+Signals must not be defined at the full component level unless the same signal clearly arises independently across multiple sub-spaces.
+
+When a signal appears in multiple sub-spaces, record the signal separately for each sub-space.
+
+---
+
+### Rule 3 — Use contrastive response pairs
+
+Signals must be derived from **contrastive response observations**.
+
+Identify response pairs that approach the analytic task in **clearly different ways**, then extract signals that distinguish those approaches.
+
+---
+
+### Rule 4 — Limit signal proliferation
+
+For each analytic sub-space extract between:
+
+```text
+4–10 candidate signals
+```
+
+If fewer than four signals appear in the calibration sample, include all detectable signals.
+
+Do not produce large exhaustive signal inventories.
+
+Focus on signals that clearly distinguish **different analytic approaches**.
+
+---
+
+### Rule 5 — Signals must be grounded in evidence
+
+Each signal must be traceable to **quoted response language** in the calibration sample.
+
+Short quotations should be used to demonstrate the observed signal.
+
+---
+
+## Output Requirements
 
 The output must be emitted as a single **fenced Markdown block**.
 
@@ -200,27 +275,27 @@ The output must begin with:
 
 where `<cid>` is the detected component identifier.
 
-The section must then contain the following subsections using **level 5 headings**:
+The section must contain the following subsections using **level 5 headings**:
 
 ```text
 ##### 5.<cid>.1 Calibration sample description
 ##### 5.<cid>.2 Contrastive response observations
 ##### 5.<cid>.3 Candidate indicator signals
 ##### 5.<cid>.4 Candidate indicator set
-##### 5.<cid>.5 Candidate dimension sketches (optional)
+##### 5.<cid>.5 Candidate dimension sketches (optional exploratory notes)
 ```
 
-Where further internal structure is required (for example analytic sub-space breakdowns), use **level 6 headings**.
+Where further internal structure is required, use **level 6 headings**.
 
-Within the analytic sub-space subsections, organise the material using **tables** rather than free-form prose wherever possible.
+Tables should be used instead of free-form prose wherever possible.
 
 ---
 
-#### Required Output Structure
+## Required Output Structure
 
-##### 5.<cid>.1 Calibration sample description
+### 5.<cid>.1 Calibration sample description
 
-Insert the following boilerplate text, adapted only by substituting the detected `component_id` where appropriate.
+Insert the following boilerplate text with the detected component identifier substituted where required.
 
 The calibration responses analysed in this section were produced during **Pipeline PL2**, which prepares component-level calibration datasets for rubric construction.
 
@@ -250,22 +325,30 @@ The detected component for this section is:
 
 ---
 
-##### 5.<cid>.2 Contrastive response observations
+### 5.<cid>.2 Contrastive response observations
 
-For each analytic sub-space:
+Before beginning analysis, restate the analytic sub-spaces for the detected component.
 
-1. Examine the responses in the calibration sample.
-2. Identify **pairs of responses that approach the analytic task in clearly different ways**.
+Use the following format.
 
-Each analytic sub-space should be introduced using a **level 6 heading**.
+```text
+###### Analytic Sub-space Registry
+```
 
-Example:
+| sub-space_id | analytic focus |
+|---|---|
+
+Populate this table using the analytic sub-space registry defined in the Submission Analytic Brief.
+
+Then perform contrastive analysis for each analytic sub-space separately.
+
+Each analytic sub-space must be introduced using:
 
 ```text
 ###### Analytic Sub-space: <sub-space_id> — <analytic focus>
 ```
 
-For each sub-space, present the observations in a table with the following columns:
+For each sub-space, present observations using the table:
 
 | analytic sub-space | pair | response A approach | response A example language | response B approach | response B example language | distinguishing signal |
 |---|---|---|---|---|---|---|
@@ -273,83 +356,87 @@ For each sub-space, present the observations in a table with the following colum
 Requirements:
 
 - include the sub-space identifier and analytic focus in the first column
-- identify **multiple contrastive pairs** where possible
+- identify multiple contrastive pairs where possible
 - quote response language that reveals the difference
 - keep quotations brief and evidentiary
 
 ---
 
-##### 5.<cid>.3 Candidate indicator signals
+### 5.<cid>.3 Candidate indicator signals
 
 From the contrastive observations, extract **candidate signals**.
 
-Signals must correspond to **observable textual patterns**.
-
-Examples:
-
-```text
-explicit assignment of accountability
-recognition of distributed responsibility
-description of responsibility hand-off
-explicit reference to regulatory oversight
-```
-
-Present the signals in a table with the following columns:
+Present them in the following table:
 
 | analytic sub-space | candidate signal | brief note on what is being detected |
 |---|---|---|
 
-Group rows by analytic sub-space.
+Requirements:
+
+- group rows by analytic sub-space
+- signals must correspond to textual language patterns
+- each signal must originate from observed response contrasts
 
 ---
 
-##### 5.<cid>.4 Candidate indicator set
+### 5.<cid>.4 Candidate indicator set
 
-Consolidate similar signals into a **candidate indicator list**.
+Consolidate related signals into **candidate indicator statements**.
 
-Candidate indicators should be phrased as **detectable textual properties of the response**.
+Candidate indicators must be phrased as **detectable textual properties of the response**.
 
-Example format:
+Example formats:
 
 ```text
 response explicitly assigns accountability to a specific actor
-response identifies responsibility outside the professional role
-response describes a responsibility hand-off
-response references regulatory oversight
+response recognises distributed responsibility across actors
+response describes responsibility transfer or hand-off
+response references institutional oversight
 ```
 
-Present the indicator set in a table with the following columns:
+Present the consolidated indicators using:
 
 | candidate indicator | source sub-space(s) | basis in extracted signals |
 |---|---|---|
 
 Do not assign final indicator identifiers.
 
-These remain **candidate indicators** and will later be instantiated as **Layer 1 SBO instances** during Stage 1.
+These remain **candidate indicators** and will later be instantiated as **Layer 1 SBO instances during Stage 1**.
 
 ---
 
-##### 5.<cid>.5 Candidate dimension sketches (optional)
+### 5.<cid>.5 Candidate dimension sketches (optional exploratory notes)
 
-If multiple signals appear to reflect a shared conceptual theme, record a **possible dimension sketch**.
+This section may only be produced if multiple signals clearly cluster around a shared conceptual theme.
 
-Present the sketches in a table with the following columns:
+Dimension sketches must remain **tentative analytic hypotheses**.
+
+They must not:
+
+- define scoring logic
+- define dimension boundaries
+- define evaluation thresholds
+- introduce performance levels
+
+Present sketches using:
 
 | candidate dimension sketch | related signals | contributing sub-space(s) | rationale |
 |---|---|---|---|
 
-These sketches are **conceptual hypotheses only** and do not define dimension structures.
-
 ---
 
-#### Constraints
+## Constraints
 
 - Only use evidence present in `cleaned_response_text`.
 - Signals must correspond to **observable textual language**.
 - Do not introduce scoring thresholds.
 - Do not reference rubric performance levels.
 - Do not define dimension scoring rules.
-- Ensure the generated section is valid Markdown and can be pasted directly into `<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01.md`.
+- Ensure the generated section is valid Markdown and can be pasted directly into:
+
+```text
+<ASSESSMENT_ID>_SubmissionAnalyticBrief_v*.md
+```
 
 This stage performs **empirical signal discovery**, not rubric construction.
 
@@ -358,5 +445,18 @@ Indicator SBO instances and evaluation specifications will be created later duri
 ```text
 Stage 1 — Indicator Discovery and Evaluation Design
 ```
+
+---
+
+## Final Validation
+
+Before producing output, silently verify:
+
+- every signal is grounded in quoted response language
+- each signal belongs to a single analytic sub-space
+- signals describe textual patterns rather than interpretations
+- candidate indicators are traceable to extracted signals
+- no scoring rules or performance levels have been introduced
+- analytic sub-space identifiers match the Submission Analytic Brief
 ===
 ````
