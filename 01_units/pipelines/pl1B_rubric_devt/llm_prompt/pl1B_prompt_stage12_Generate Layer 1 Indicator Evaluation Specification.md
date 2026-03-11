@@ -7,8 +7,8 @@ status: active
 owner: EECS3000W26
 
 input_contract:
-  - rubric_specification_guide (Rubric_SpecificationGuide_v01)
-  - submission_analytic_brief (<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01)
+  - rubric_specification_guide (Rubric_SpecificationGuide_v*)
+  - submission_analytic_brief (<ASSESSMENT_ID>_SubmissionAnalyticBrief_v*)
   - layer1_sbo_instance_registry (§5.4 Layer 1 SBO Instances)
   - trigger prompt (`BEGIN GENERATION`)
 
@@ -131,16 +131,21 @@ All artefacts must be supplied verbatim and delimited using:
 
 ===
 \<content\>
+
 ===
+
 
 Artefacts must appear in the following order:
 
 ===
-Rubric_SpecificationGuide_v01
+Rubric_SpecificationGuide_v*
+
 ===
-\<ASSESSMENT_ID\>\_SubmissionAnalyticBrief\_v01
+\<ASSESSMENT_ID\>\_SubmissionAnalyticBrief\_v*
+
 ===
 Rubric_Template: 5.4 Layer 1 SBO Instances
+
 ===
 
 If any artefact is missing, malformed, or inconsistent, the prompt must produce **no output**.
@@ -190,17 +195,15 @@ Component grouping must be derived from the component_id field in the Layer 1 SB
 
 For each component:
 
-1. Emit a section heading:
-
-```
+1. Emit a section heading in markdown
 ##### Component: `\<component_id\>`
-```
 
 2. Immediately after the heading, emit a Markdown table with the schema defined above.
 
 3. Populate one row for each indicator belonging to that component.
 
-Indicators must appear in **increasing `indicator_id` order**.
+Indicators must appear in increasing `indicator_id` order as defined in the Layer 1 SBO instance registry.
+
 
 ---
 

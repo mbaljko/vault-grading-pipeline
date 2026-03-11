@@ -1,22 +1,170 @@
-# .
-```
-BEGIN GENERATION
-```
+---
+prompt_id: pl1B_stage13_layer1_indicator_scoring_prompt_wrapper_v01
+version: v01
+stage: pipeline_pl1B_stage13
+purpose: generate a bounded Layer 1 SBO scoring prompt that performs indicator evidence detection for a single target component using the Layer1_ScoringManifest
+status: active
+owner: EECS3000W26
 
+input_contract:
+  - target_component_parameter (PARAM_TARGET_COMPONENT_ID)
+  - assignment_payload_specification (<ASSESSMENT_ID>_AssignmentPayloadSpec_v*)
+  - layer1_scoring_manifest (Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION>)
+  - trigger prompt (`BEGIN GENERATION`)
 
-these inputs
-```
-===
-PARAM_TARGET_COMPONENT_ID = SectionBResponse
-===
-<PPP_AssignmentPayloadSpec_v01 contents>
-===
-<Layer1_ScoringManifest_PPP_v01 contents>
-===
-```
+input_structure:
+  delimiter: "==="
+  parameter_block:
+    required_format: "PARAM_TARGET_COMPONENT_ID = <COMPONENT_ID>"
+  artefacts:
+    - name: assignment_payload_specification
+      expected_elements:
+        - assessment_id
+        - submission_id
+        - component_id
+        - response_text
+      canonical_scoring_unit: submission_id_x_component_id
+      evidence_rule: explicit_textual_evidence_only
+    - name: layer1_scoring_manifest
+      expected_elements:
+        - component_id
+        - sbo_identifier
+        - indicator_id
+        - sbo_short_description
+        - indicator_definition
+        - assessment_guidance
+        - evaluation_notes
+  artefact_order:
+    - parameter_block
+    - assignment_payload_specification
+    - layer1_scoring_manifest
+    - generation_trigger
 
-# .  
-````
+manifest_processing:
+  filtering_rule: filter_rows_where_component_id_equals_PARAM_TARGET_COMPONENT_ID
+  validation_rules:
+    - filtered_manifest_must_not_be_empty
+    - indicator_id_values_must_be_unique_within_filtered_rows
+
+output_contract: generated_scoring_prompt
+
+output_structure:
+  artefact_name_pattern: RUN_<ASSESSMENT_ID>_<PARAM_TARGET_COMPONENT_ID>_Layer1_SBO_scoring_prompt_v01
+  output_container: fenced_markdown_block
+  outer_fence: "````"
+  required_sections:
+    - Prompt title and restrictions
+    - Authoritative scoring materials
+    - Input format
+    - Evaluation discipline
+    - Evidence interpretation rules
+    - Confidence assignment rule
+    - Output schema
+    - Constraints
+    - Content rules
+    - Failure mode handling
+
+runtime_semantics:
+  input_definition:
+    - runtime_input_dataset_contains_one_or_more_rows
+    - each_runtime_row_represents_submission_id_x_component_id
+    - evaluate_rows_where_component_id_equals_target_component
+    - do_not_stop_after_first_runtime_row
+  batch_output_definition:
+    - emit_one_csv_header_row_once
+    - for_each_runtime_row_emit_one_row_per_indicator
+    - group_output_rows_by_runtime_row
+    - maintain_indicator_order_within_each_group
+    - total_rows_equals_runtime_rows_times_indicator_count
+
+evaluation_pipeline:
+  sequence:
+    - construct_internal_runtime_dataset_representation
+    - identify_valid_runtime_rows_matching_target_component
+    - apply_wrapper_handling_rules_per_runtime_row_if_required
+    - construct_ordered_indicator_id_list_from_manifest
+    - build_evidence_index_from_response_text
+    - perform_single_analytic_signal_pass
+    - group_candidate_fragments_by_indicator_relevance
+    - evaluate_indicators_using_indexed_fragments
+
+indicator_evidence_scale:
+  values:
+    - evidence
+    - partial_evidence
+    - little_to_no_evidence
+  definitions:
+    evidence: explicit_textual_evidence_clearly_satisfies_indicator_definition
+    partial_evidence: explicit_signal_present_but_incomplete
+    little_to_no_evidence: no_interpretable_explicit_signal_present
+
+confidence_scale:
+  values:
+    - high
+    - medium
+    - low
+  interpretation:
+    high: clear_explicit_language_supports_status
+    medium: explicit_language_present_but_ambiguous
+    low: weak_or_uncertain_textual_signal
+
+output_schema:
+  format: csv
+  header: submission_id,component_id,indicator_id,evidence_status,evaluation_notes,confidence,flags
+  fields:
+    - submission_id
+    - component_id
+    - indicator_id
+    - evidence_status
+    - evaluation_notes
+    - confidence
+    - flags
+  allowed_flag_values:
+    - none
+    - needs_review
+
+evaluation_rules:
+  - each_indicator_evaluated_once_per_runtime_row
+  - evidence_or_partial_requires_explicit_fragment
+  - indicators_must_be_evaluated_independently
+  - dimension_logic_must_not_be_used
+  - mapping_rules_must_not_be_used
+  - component_performance_logic_must_not_be_used
+
+content_rules:
+  - output_must_be_csv_only
+  - header_must_appear_once
+  - evaluation_notes_must_be_double_quoted
+  - empty_notes_must_be_emitted_as_double_quotes
+  - component_id_must_equal_target_component
+  - one_output_row_per_indicator_per_runtime_row
+
+constraints:
+  - do_not_modify_scoring_manifest
+  - do_not_invent_indicators
+  - do_not_perform_dimension_scoring
+  - do_not_assign_component_or_submission_scores
+  - evaluator_must_use_only_runtime_dataset_and_embedded_manifest
+
+failure_conditions:
+  - missing_required_parameter
+  - malformed_delimiter_structure
+  - missing_assignment_payload_specification
+  - missing_layer1_scoring_manifest
+  - filtered_manifest_empty
+  - duplicate_indicator_ids_detected
+  - runtime_dataset_contains_no_valid_rows
+  - csv_header_cannot_be_emitted_exactly
+
+notes: |
+  This prompt performs Stage 1.3 of Pipeline PL1B. It generates a reusable
+  Layer 1 SBO scoring prompt that evaluates indicator evidence using the
+  Layer1_ScoringManifest. The wrapper filters indicators by the target
+  component and embeds their definitions and detection guidance into a
+  standalone scoring prompt capable of processing runtime datasets and
+  producing indicator-level evidence status outputs for downstream
+  Layer 2–4 rubric evaluation stages.
+---
 ## Wrapper Prompt — Generate Layer 1 Indicator Detection Scoring Prompt (Stage 1.3)
 
 Wrapper prompt: Generate a tightly bounded **Layer 1 SBO scoring prompt** for **indicator evidence detection** using the **Layer 1 scoring manifest** under the **Rubric Template architecture**.
@@ -631,4 +779,3 @@ Produce no output if complete row coverage cannot be achieved for all valid runt
 ```
 ===
 PARAM_TARGET_COMPONENT_ID = SectionBResponse
-````
