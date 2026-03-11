@@ -9,7 +9,7 @@ owner: EECS3000W26
 input_contract:
   - rubric_specification_guide (Rubric_SpecificationGuide_v*)
   - submission_analytic_brief (<ASSESSMENT_ID>_SubmissionAnalyticBrief_v*)
-  - `BEGIN GENERATION`
+  - trigger prompt (`BEGIN GENERATION`)
     
 input_structure:
   delimiter: "==="
@@ -111,16 +111,6 @@ notes: |
   The output corresponds to rubric template section 5.4 and must strictly
   follow identifier conventions defined in Rubric_SpecificationGuide_v01.
 ---
-
-
-# .
-```
-BEGIN GENERATION
-```
-
-
-# . 
-````
 ## Wrapper Prompt — Generate Layer 1 SBO Instance Registry (Stage 1.1)
 
 ### Prompt title and restrictions
@@ -510,5 +500,5 @@ Inside that block, it must contain only:
 followed by the table.
 
 No commentary, explanation, notes, or prefatory text may appear outside or below the table.
+
 ===
-````
