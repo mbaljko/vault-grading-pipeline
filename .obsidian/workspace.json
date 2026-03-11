@@ -77,16 +77,15 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/TRY Contrastive indicator extraction.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Pipeline 1B — Layered Rubric Construction Pipeline"
+              "title": "TRY Contrastive indicator extraction"
             }
           }
-        ],
-        "currentTab": 4
+        ]
       }
     ],
     "direction": "vertical"
@@ -272,19 +271,22 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "ae8d5d76b5fd66eb",
+  "active": "50f9e0c568115b6f",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
+    "05_docs/01_design/pl1B_rubric_devt/TRY Contrastive indicator extraction.md",
+    "05_docs/01_design/pl1B_rubric_devt/Layer1_ScoringManifest_v01 Schema.md",
+    "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v01.md",
+    "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>.md",
+    "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Design Document.md",
+    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO.md",
     "01_units/pipelines/pl1B_rubric_devt/RUN_PPP_SectionAResponse_Layer1_SBO_scoring_prompt_v01_output.csv",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO for interactive use.md",
-    "05_docs/01_design/pl1B_rubric_devt/TRY Contrastive indicator extraction.md",
-    "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v01.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Generate Layer 1 Indicator Evaluation Specification.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt.md",
-    "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
     "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/The 4-panel indicator diagnostic table.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO_output.md",
-    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "01_units/pipelines/pl1B_rubric_devt/python/run-ct-report-for-manifest.py",
     "01_units/pipelines/pl1B_rubric_devt/python/response_text_stitcher.py",
     "01_units/pipelines/pl1B_rubric_devt/python",
@@ -295,7 +297,6 @@
     "01_units/apps/prompt_runners/invoke_chatgpt_with_payload.py",
     "01_units/apps/prompt_runners",
     "05_docs/01_design/pl1B_rubric_devt/IMPROVEMENT - FUTURE - INDICATOR LOCK.md",
-    "05_docs/01_design/pl1B_rubric_devt/Layer1_ScoringManifest_v01 Schema.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_SBO Instance Registry.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v02.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery.md",
@@ -303,11 +304,9 @@
     "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>  VERBOSE.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Untitled.md",
     "05_docs/01_design/pl1B_rubric_devt/RUBRIC_EXAMPLE_CAL_payload_v1.md",
-    "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>.md",
     "05_docs/01_design/pl2_calibration/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
     "05_docs/01_design/pl2_calibration/Pipeline2 - Calibration Runs  Specification.md",
     "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE WITH CONTENT.md",
-    "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Design Document.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline only sec 1-4.md"
   ]
 }

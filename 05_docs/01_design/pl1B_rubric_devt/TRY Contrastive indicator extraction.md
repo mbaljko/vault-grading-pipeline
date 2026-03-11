@@ -1,5 +1,6 @@
-
 ## Contrastive indicator extraction Method.md
+
+
 The stronger method is **contrastive indicator extraction**, which is a structured way of discovering indicators by examining **pairs or small sets of responses that differ in analytically meaningful ways**. It is stronger than pattern clustering because it forces the model (and you) to identify the **precise textual signals that distinguish two response types**.
 Instead of asking “what patterns exist,” you ask:
 > What observable signals distinguish responses that succeed at the analytic task from those that do not?
