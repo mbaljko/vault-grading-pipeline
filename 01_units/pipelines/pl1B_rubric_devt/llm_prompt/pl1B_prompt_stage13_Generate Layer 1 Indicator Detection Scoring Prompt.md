@@ -275,7 +275,7 @@ indicator_id
 sbo_short_description
 indicator_definition
 assessment_guidance
-evaluation_notes
+the manifest evaluation_notes field as embedded evaluator guidance
 
 - assign an `evidence_status` value for each indicator SBO instance belonging to the target component
 - record indicator-level diagnostic information
@@ -341,8 +341,13 @@ response_text
 If the assignment payload uses `participant_id` as the canonical row identifier, the generated scoring prompt must treat that field as the runtime `submission_id` field in output.
 
 Response text selection rule:
-If the artefact contains a field named `cleaned_response_text`, the generated scoring prompt must treat that field as `response_text`.
-If `cleaned_response_text` is absent, the scoring prompt must use the `response_text` field directly.
+
+The generated scoring prompt must apply the following rule to each runtime row:
+
+- If `cleaned_response_text` exists in the runtime dataset row, use `cleaned_response_text` as the row’s canonical `response_text`.
+- Otherwise, use `response_text` as the row’s canonical `response_text`.
+
+For all later instructions in the generated scoring prompt, the selected field must be treated as the canonical `response_text` for that runtime row.
 
 
 Canonical scoring unit:
@@ -364,7 +369,6 @@ If wrapper-handling rules exist for `response_text`, they must be embedded in th
 
 The wrapper must extract:
 
-```text
 component_id
 sbo_identifier
 indicator_id
@@ -372,7 +376,10 @@ sbo_short_description
 indicator_definition
 assessment_guidance
 evaluation_notes
-```
+
+Within the generated scoring prompt, the manifest field `evaluation_notes` must be treated as embedded evaluator guidance for indicator interpretation.
+It must not be confused with the CSV output field named `evaluation_notes`.
+
 
 This manifest defines both:
 
@@ -392,12 +399,6 @@ where component_id = PARAM_TARGET_COMPONENT_ID
 
 The generated scoring prompt must embed only indicators whose component_id equals PARAM_TARGET_COMPONENT_ID.
 Indicators belonging to other components must not appear in the generated prompt.
-
-
-Validation rules:
-
-- if the filtered table is empty → produce no output
-- if duplicate indicator_id values appear → produce no output
 
 Manifest validation rules:
 
@@ -558,6 +559,13 @@ Evaluate every runtime row whose component_id equals the target component.
 Do not stop after the first runtime row.
 ```
 
+Each runtime row must contain:
+- a submission identifier field
+- `component_id`
+- at least one response text field: `cleaned_response_text` or `response_text`
+
+Apply the response text selection rule per runtime row before evaluation.
+
 If the assignment payload specification implies wrapper handling, the prompt must state that wrapper handling is applied **per runtime row**.
 
 #### Canonical batch-output semantics
@@ -601,7 +609,9 @@ Before writing any output rows, construct the ordered list of valid runtime rows
 
 A valid runtime row is a row whose:
 
-- required fields are present
+- submission identifier field is present
+- `component_id` is present
+- at least one response text field is present: `cleaned_response_text` or `response_text`
 - `component_id` equals `PARAM_TARGET_COMPONENT_ID`
 
 Do not stop after the first valid runtime row.
@@ -614,10 +624,11 @@ Layer 1 SBO scoring must follow this exact sequence:
 
 1. Construct a single internal representation of the runtime input dataset.
 2. Identify the valid runtime rows whose `component_id = PARAM_TARGET_COMPONENT_ID`.
-3. Apply any wrapper-handling rules to each valid runtime row before evaluation.
-4. Construct the ordered `indicator_id` list embedded in the prompt.
-5. For each valid runtime row:
-   - construct a single internal representation of that row’s `response_text`
+3. For each valid runtime row, apply the response text selection rule to determine the row’s canonical `response_text`.
+4. Apply any wrapper-handling rules to each valid runtime row before evaluation.
+5. Construct the ordered `indicator_id` list embedded in the prompt.
+6. For each valid runtime row:
+   - construct a single internal representation of that row’s canonical `response_text`
    - scan the response once and identify potentially relevant textual fragments
    - store those fragments in an internal evidence index
    - perform one internal analytic signal pass over the indexed fragments
@@ -749,6 +760,9 @@ Emit the header row exactly once:
 submission_id,component_id,indicator_id,evidence_status,evaluation_notes,confidence,flags
 ```
 
+In output, `evaluation_notes` refers only to the CSV output field.
+It does not rename or reproduce the manifest `evaluation_notes` field, which serves as embedded evaluator guidance inside the scoring prompt.
+
 It must also state all of the following:
 
 - `submission_id` must be copied from the runtime row
@@ -767,7 +781,7 @@ The generated scoring prompt must require the evaluator to use only:
 - canonical `response_text`
 - the embedded indicator definitions
 - the embedded assessment guidance
-- the embedded evaluation notes
+- the embedded evaluator guidance derived from the manifest `evaluation_notes` field
 - the embedded evidence scale
 
 The evaluator must not use:
