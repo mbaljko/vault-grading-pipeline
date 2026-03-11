@@ -24,7 +24,7 @@ The workflow below is designed for **Layer-1 indicator calibration** and separat
 
 ### 0. Deriving the scoring prompts (mechanical)
 
-derive `Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION>`
+derive `Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION>`  (done manually)
 
 use the prompt "pl1B_stage13_layer1_indicator_scoring_prompt_wrapper_v01"
 in pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt.md

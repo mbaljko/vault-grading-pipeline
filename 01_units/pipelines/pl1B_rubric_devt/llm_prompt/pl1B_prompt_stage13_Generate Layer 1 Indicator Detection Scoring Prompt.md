@@ -7,7 +7,7 @@ status: active
 owner: EECS3000W26
 
 input_contract:
-  - target_component_parameter (PARAM_TARGET_COMPONENT_ID)
+  - target_component_parameter (`PARAM_TARGET_COMPONENT_ID = <INSERT HERE>`)
   - assignment_payload_specification (<ASSESSMENT_ID>_AssignmentPayloadSpec_v*)
   - layer1_scoring_manifest (Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION>)
   - trigger prompt (`BEGIN GENERATION`)
@@ -49,7 +49,7 @@ manifest_processing:
 output_contract: generated_scoring_prompt
 
 output_structure:
-  artefact_name_pattern: RUN_<ASSESSMENT_ID>_<PARAM_TARGET_COMPONENT_ID>_Layer1_SBO_scoring_prompt_v01
+  artefact_name_pattern: RUN_<ASSESSMENT_ID>_<PARAM_TARGET_COMPONENT_ID>_Layer1_SBO_scoring_prompt_v*
   output_container: fenced_markdown_block
   outer_fence: "````"
   required_sections:
@@ -167,7 +167,7 @@ notes: |
 ---
 ## Wrapper Prompt — Generate Layer 1 Indicator Detection Scoring Prompt (Stage 1.3)
 
-Wrapper prompt: Generate a tightly bounded **Layer 1 SBO scoring prompt** for **indicator evidence detection** using the **Layer 1 scoring manifest** under the **Rubric Template architecture**.
+Wrapper prompt: Generate a deterministic Layer 1 indicator evidence detection scoring prompt using the **Layer 1 scoring manifest** under the **Rubric Template architecture**.
 
 This wrapper prompt **generates a scoring prompt**.  
 It **does not evaluate student work**.
@@ -202,7 +202,7 @@ The wrapper prompt expects the following inputs in sequence:
 
 ```text
 PARAM_TARGET_COMPONENT_ID
-<ASSESSMENT_ID>_AssignmentPayloadSpec_v01
+<ASSESSMENT_ID>_AssignmentPayloadSpec_v*
 Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION>
 ```
 
@@ -229,7 +229,7 @@ No additional delimiters or numbering markers may appear.
 PARAM_TARGET_COMPONENT_ID = <COMPONENT_ID>
 ===
 
-<ASSESSMENT_ID>_AssignmentPayloadSpec_v01 contents
+<ASSESSMENT_ID>_AssignmentPayloadSpec_v* contents
 ===
 
 Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION> contents
@@ -266,7 +266,17 @@ Generate a reusable **Layer 1 SBO scoring prompt** that performs **indicator evi
 The generated prompt must:
 
 - evaluate indicator evidence using the `Layer1_ScoringManifest`
+
 - embed the indicator evaluation specification contained in the manifest
+
+For each embedded indicator, the generated scoring prompt must include:
+
+indicator_id
+sbo_short_description
+indicator_definition
+assessment_guidance
+evaluation_notes
+
 - assign an `evidence_status` value for each indicator SBO instance belonging to the target component
 - record indicator-level diagnostic information
 - remain fully executable without requiring the rubric document at scoring runtime
@@ -316,16 +326,24 @@ This wrapper prompt does **not** perform:
 The model may rely **only** on the following artefacts supplied verbatim.
 
 #### Input Artefact
-`<ASSESSMENT_ID>_AssignmentPayloadSpec_v01`
+`<ASSESSMENT_ID>_AssignmentPayloadSpec_v*`
 
 The wrapper must extract:
 
 ```text
 assessment_id
-submission_id
+the canonical submission-level identifier field
 component_id
 response_text
 ```
+
+
+If the assignment payload uses `participant_id` as the canonical row identifier, the generated scoring prompt must treat that field as the runtime `submission_id` field in output.
+
+Response text selection rule:
+If the artefact contains a field named `cleaned_response_text`, the generated scoring prompt must treat that field as `response_text`.
+If `cleaned_response_text` is absent, the scoring prompt must use the `response_text` field directly.
+
 
 Canonical scoring unit:
 
@@ -372,12 +390,24 @@ filter Layer1_ScoringManifest
 where component_id = PARAM_TARGET_COMPONENT_ID
 ```
 
+The generated scoring prompt must embed only indicators whose component_id equals PARAM_TARGET_COMPONENT_ID.
+Indicators belonging to other components must not appear in the generated prompt.
+
+
 Validation rules:
 
-- if the filtered table is empty → **produce no output**
-- if duplicate `indicator_id` values appear → **produce no output**
+- if the filtered table is empty → produce no output
+- if duplicate indicator_id values appear → produce no output
+
+Manifest validation rules:
+
+- if any required manifest column is missing → produce no output
+- if the filtered table is empty → produce no output
+- if duplicate `indicator_id` values appear in the filtered table → produce no output
 
 Only filtered rows may be embedded in the generated scoring prompt.
+
+The row order of the filtered manifest becomes the canonical embedded indicator order in the generated scoring prompt.
 
 ### Indicator Evidence Status Scale
 
@@ -458,7 +488,7 @@ appears, generate the scoring prompt artefact.
 Generate exactly one artefact:
 
 ```text
-RUN_<ASSESSMENT_ID>_<PARAM_TARGET_COMPONENT_ID>_Layer1_SBO_scoring_prompt_v01
+RUN_<ASSESSMENT_ID>_<PARAM_TARGET_COMPONENT_ID>_Layer1_SBO_scoring_prompt_v*
 ```
 
 The artefact must:
@@ -539,6 +569,7 @@ For each runtime row, evaluate all embedded indicator_id values exactly once.
 For each runtime row, emit one CSV data row per embedded indicator_id.
 Emit rows grouped by runtime row.
 Within each runtime row group, emit indicator_id values in embedded prompt order.
+Embedded indicator order must follow the order of rows in the filtered Layer1_ScoringManifest.
 Emit the CSV header exactly once, before all data rows.
 ```
 
@@ -646,14 +677,15 @@ Default behaviour:
 
 - supporting fragments are identified internally
 - fragments are **not printed**
+- `evaluation_notes` should normally be empty and emitted as `""`
 
 Optional runtime mode:
 
-```text
+```
 FRAGMENT_OUTPUT_MODE = on
 ```
 
-If enabled, `evaluation_notes` may briefly reference the supporting fragment.
+If enabled, `evaluation_notes` may briefly reference the supporting fragment used to assign the evidence status.
 
 #### Partial Evidence Preference Rule
 
