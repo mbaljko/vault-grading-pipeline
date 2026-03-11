@@ -258,8 +258,9 @@
   },
   "active": "54ebfa1a7e1a5ecc",
   "lastOpenFiles": [
-    "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt - saved version.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt.md",
+    "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v01.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - engagement signal prompt.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_SBO Instance Registry.md",
@@ -292,7 +293,6 @@
     "05_docs/01_design/pl1A_canonical_population_prep/Untitled.md",
     "05_docs/01_design/pl1B_rubric_devt/RUBRIC_EXAMPLE_CAL_payload_v1.md",
     "05_docs/01_design/pl2_calibration/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md",
-    "05_docs/01_design/pl2_calibration/Pipeline2 - Calibration Runs  Specification.md",
-    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_SID_X_vX TEMPLATE WITH CONTENT.md"
+    "05_docs/01_design/pl2_calibration/Pipeline2 - Calibration Runs  Specification.md"
   ]
 }

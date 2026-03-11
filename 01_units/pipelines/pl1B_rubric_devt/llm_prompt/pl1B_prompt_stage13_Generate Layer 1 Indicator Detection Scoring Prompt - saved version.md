@@ -231,29 +231,14 @@ The wrapper must **not**:
 
 If the wrapper cannot produce a prompt that matches the canonical template exactly except for permitted substitutions, the wrapper must **produce no output**.
 
-The wrapper must treat the canonical scoring prompt text below as the **single authoritative scaffold**.  
-The scaffold must be instantiated by **direct substitution only**.
-
-The wrapper must not synthesise section text from the abstract requirements when the canonical scaffold already provides the required wording.
-
-The wrapper must perform only the following insertion operations on the canonical scaffold:
-
-- replace `[[ASSESSMENT_ID]]`
-- replace `[[TARGET_COMPONENT_ID]]`
-- replace `[[SUBMISSION_IDENTIFIER_FIELD]]`
-- replace `[[WRAPPER_HANDLING_RULE_BULLETS]]`
-- replace `[[EMBEDDED_INDICATOR_TABLE_ROWS]]`
-
-No other insertion points are permitted.
-
-If any required insertion value cannot be determined deterministically from the supplied artefacts, the wrapper must **produce no output**.
+---
 
 ### Target Component Parameter (Required)
 
 The wrapper prompt requires the user to specify the component whose Layer 1 indicators will be scored.
 
 ```text
-PARAM_TARGET_COMPONENT_ID = \<COMPONENT_ID\>
+PARAM_TARGET_COMPONENT_ID = <COMPONENT_ID>
 ```
 
 Example:
@@ -263,6 +248,8 @@ PARAM_TARGET_COMPONENT_ID = SectionBResponse
 ```
 
 This parameter determines which rows from the `Layer1_ScoringManifest` will be embedded in the generated scoring prompt.
+
+---
 
 ### Required Input Artefacts
 
@@ -276,21 +263,23 @@ The wrapper prompt expects the following inputs in sequence:
 
 ```text
 PARAM_TARGET_COMPONENT_ID
-\<ASSESSMENT_ID\>_AssignmentPayloadSpec_v*
-Layer1_ScoringManifest_\<ASSESSMENT_ID\>_v\<VERSION\>
+<ASSESSMENT_ID>_AssignmentPayloadSpec_v*
+Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION>
 ```
 
 The parameter block must appear in the form:
 
 ```text
 ===
-PARAM_TARGET_COMPONENT_ID = \<COMPONENT_ID\>
+PARAM_TARGET_COMPONENT_ID = <COMPONENT_ID>
 ===
 ```
 
 The remaining artefacts must appear exactly as produced by their upstream pipelines and must not be modified.
 
 If any required artefact or parameter is missing, malformed, or inconsistent, the wrapper prompt must **produce no output**.
+
+---
 
 ### Input Artefact Order (Mandatory)
 
@@ -300,13 +289,13 @@ No additional delimiters or numbering markers may appear.
 
 ```text
 ===
-PARAM_TARGET_COMPONENT_ID = \<COMPONENT_ID\>
+PARAM_TARGET_COMPONENT_ID = <COMPONENT_ID>
 ===
 
-\<ASSESSMENT_ID\>_AssignmentPayloadSpec_v* contents
+<ASSESSMENT_ID>_AssignmentPayloadSpec_v* contents
 ===
 
-Layer1_ScoringManifest_\<ASSESSMENT_ID\>_v\<VERSION\> contents
+Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION> contents
 ===
 ```
 
@@ -318,20 +307,24 @@ BEGIN GENERATION
 
 If `BEGIN GENERATION` is absent, the wrapper prompt must **produce no output**.
 
+---
+
 ### Example Invocation
 
 ```text
 ===
 PARAM_TARGET_COMPONENT_ID = SectionBResponse
 ===
-\<PPP_AssignmentPayloadSpec_v01 contents\>
+<PPP_AssignmentPayloadSpec_v01 contents>
 ===
-\<Layer1_ScoringManifest_PPP_v01 contents\>
+<Layer1_ScoringManifest_PPP_v01 contents>
 ===
 BEGIN GENERATION
 ```
 
 If the artefacts appear in a different order or if the delimiter structure is violated, the wrapper prompt must **produce no output**.
+
+---
 
 ### Purpose
 
@@ -379,6 +372,8 @@ Layer 3 — Component Performance Mapping
 Layer 4 — Submission Score Derivation
 ```
 
+---
+
 ### Task Classification
 
 This wrapper prompt performs:
@@ -396,12 +391,14 @@ This wrapper prompt does **not** perform:
 - rule invention
 - pedagogical explanation
 
+---
+
 ### Authoritative Inputs
 
 The model may rely **only** on the following artefacts supplied verbatim.
 
 #### Input Artefact  
-`\<ASSESSMENT_ID\>_AssignmentPayloadSpec_v*`
+`<ASSESSMENT_ID>_AssignmentPayloadSpec_v*`
 
 The wrapper must extract:
 
@@ -438,7 +435,7 @@ explicit textual evidence only
 If wrapper-handling rules exist for `response_text`, they must be embedded in the generated scoring prompt.
 
 #### Input Artefact  
-`Layer1_ScoringManifest_\<ASSESSMENT_ID\>_v\<VERSION\>`
+`Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION>`
 
 The wrapper must extract:
 
@@ -462,6 +459,8 @@ the registry of Layer 1 indicators
 the evaluation specification used to detect them
 ```
 
+---
+
 ### Manifest Filtering Rule
 
 Before generating the scoring prompt, the wrapper must execute:
@@ -484,49 +483,7 @@ Only filtered rows may be embedded in the generated scoring prompt.
 
 The row order of the filtered manifest becomes the canonical embedded indicator order in the generated scoring prompt.
 
-### Canonical Scaffold Insertion Mapping
-
-The wrapper must construct the following deterministic insertion values before scaffold instantiation.
-
-#### Insertion token `[[ASSESSMENT_ID]]`
-
-Set equal to the extracted `assessment_id`.
-
-#### Insertion token `[[TARGET_COMPONENT_ID]]`
-
-Set equal to `PARAM_TARGET_COMPONENT_ID`.
-
-#### Insertion token `[[SUBMISSION_IDENTIFIER_FIELD]]`
-
-Set equal to the canonical submission-level identifier field extracted from the assignment payload specification.
-
-#### Insertion token `[[WRAPPER_HANDLING_RULE_BULLETS]]`
-
-Set equal to the wrapper-handling bullets extracted from the assignment payload specification for `response_text`.
-
-The inserted text must be formatted as Markdown bullet lines only.  
-No introductory sentence may be added inside the insertion value.
-
-If wrapper-handling rules are absent, malformed, or cannot be expressed as bullet lines, the wrapper must **produce no output**.
-
-#### Insertion token `[[EMBEDDED_INDICATOR_TABLE_ROWS]]`
-
-Set equal to the filtered manifest rows formatted as Markdown table body rows using this exact column order:
-
-```text
-indicator_id
-sbo_short_description
-indicator_definition
-assessment_guidance
-embedded evaluator guidance
-```
-
-Each table body row must preserve the filtered manifest row order exactly.
-
-The wrapper must insert only the filtered rows whose `component_id = PARAM_TARGET_COMPONENT_ID`.
-
-No header row may appear inside this insertion value.  
-No prose may appear before or after the inserted rows.
+---
 
 ### Canonical Template Validation
 
@@ -542,9 +499,10 @@ The wrapper must confirm that:
 - no unexpected sentences appear in the generated prompt
 - no template sentences are missing
 - permitted substitutions were applied correctly
-- no insertion tokens remain unresolved in the emitted prompt
 
 If any validation rule fails, the wrapper prompt must **produce no output**.
+
+---
 
 ### Indicator Evidence Status Scale
 
@@ -557,6 +515,8 @@ The generated scoring prompt must embed this scale.
 | `little_to_no_evidence` | no interpretable explicit textual signal supporting the indicator is present |
 
 Evidence must rely strictly on **explicit response language**.
+
+---
 
 ### Output Requirements
 
@@ -596,6 +556,8 @@ submission_id,component_id,indicator_id,evidence_status,evaluation_notes,confide
 
 The header appears **exactly once**.
 
+---
+
 ### Wrapper Execution Discipline
 
 #### Phase 1 — Artefact ingestion
@@ -620,24 +582,14 @@ BEGIN GENERATION
 
 appears, generate the scoring prompt artefact.
 
-#### Phase 3 — Canonical scaffold instantiation
-
-When valid artefacts and `BEGIN GENERATION` are present, the wrapper must instantiate the canonical scaffold exactly once.
-
-Instantiation sequence:
-
-1. Construct all insertion values.
-2. Copy the canonical scaffold text exactly as written.
-3. Replace insertion tokens directly.
-4. Run canonical template validation.
-5. Emit the instantiated scaffold if and only if validation succeeds.
+---
 
 ### Output Artefact
 
 Generate exactly one artefact:
 
 ```text
-RUN_\<ASSESSMENT_ID\>_\<PARAM_TARGET_COMPONENT_ID\>_Layer1_SBO_scoring_prompt_v*
+RUN_<ASSESSMENT_ID>_<PARAM_TARGET_COMPONENT_ID>_Layer1_SBO_scoring_prompt_v*
 ```
 
 The artefact must:
@@ -646,6 +598,8 @@ The artefact must:
 - embed the filtered indicator rows
 - embed the evaluation specification
 - assume the canonical payload structure
+
+---
 
 ### Prompt Template Lock Requirement
 
@@ -712,7 +666,7 @@ Canonical scoring unit:
 Runtime row identifier rule:
 Evidence rule:
 Wrapper-handling rule for response text:
-Embedded indicators for `[[TARGET_COMPONENT_ID]]` appear in the canonical order defined by the filtered `Layer1_ScoringManifest`:
+Embedded indicators for `<PARAM_TARGET_COMPONENT_ID>` appear in the canonical order defined by the filtered `Layer1_ScoringManifest`:
 Indicator evidence status scale:
 Field rules:
 Use only:
@@ -724,6 +678,8 @@ Produce no output if:
 Where the target component appears inside a lead-in, only the component value may vary.
 
 If a generated prompt would differ from the canonical template in wording or structure beyond permitted substitutions, the wrapper prompt must **produce no output**.
+
+---
 
 ### Generated Scoring Prompt Structure
 
@@ -744,379 +700,7 @@ Content rules
 Failure mode handling
 ```
 
-### Canonical Output Scaffold
-
-The wrapper must instantiate the following scaffold **verbatim**.
-
-No text may be added, removed, reordered, or rewritten outside the permitted insertion operations.
-
-````text
-#### RUN_[[ASSESSMENT_ID]]_[[TARGET_COMPONENT_ID]]_Layer1_SBO_scoring_prompt_v01
-
-### Prompt title and restrictions
-
-This prompt performs **Layer 1 SBO scoring** for target component `[[TARGET_COMPONENT_ID]]`.
-
-It determines `evidence_status` values for the embedded indicator SBO instances belonging to this component.
-
-This prompt does **not**:
-
-- evaluate dimensions
-- evaluate indicator combinations
-- apply indicator→dimension mappings
-- assign component performance levels
-- assign submission scores
-- evaluate indicators belonging to other components
-
-Layer 1 SBO scoring performs only:
-
-```text
-indicator evidence detection
-```
-
-### Authoritative scoring materials
-
-Assessment identifier:
-
-```text
-[[ASSESSMENT_ID]]
-```
-
-Target component:
-
-```text
-[[TARGET_COMPONENT_ID]]
-```
-
-Canonical scoring unit:
-
-```text
-submission_id × component_id
-```
-
-Runtime row identifier rule:
-
-- The canonical submission-level identifier field is `[[SUBMISSION_IDENTIFIER_FIELD]]`.
-- In output, copy the runtime row value from `[[SUBMISSION_IDENTIFIER_FIELD]]` into the CSV field named `submission_id`.
-
-Evidence rule:
-
-```text
-explicit textual evidence only
-```
-
-Wrapper-handling rule for response text:
-
-[[WRAPPER_HANDLING_RULE_BULLETS]]
-
-Embedded indicators for `[[TARGET_COMPONENT_ID]]` appear in the canonical order defined by the filtered `Layer1_ScoringManifest`:
-
-| indicator_id | sbo_short_description | indicator_definition | assessment_guidance | embedded evaluator guidance |
-|---|---|---|---|---|
-[[EMBEDDED_INDICATOR_TABLE_ROWS]]
-
-Indicator evidence status scale:
-
-| value | meaning |
-|---|---|
-| `evidence` | explicit textual evidence clearly satisfies the indicator definition |
-| `partial_evidence` | explicit textual signal relevant to the indicator exists but is incomplete |
-| `little_to_no_evidence` | no interpretable explicit textual signal supporting the indicator is present |
-
-Field rules:
-
-- `evaluation_notes` enclosed in double quotes
-- empty notes represented as `""`
-
-Use only:
-
-- the runtime dataset rows
-- canonical `response_text`
-- the embedded indicator definitions
-- the embedded assessment guidance
-- the embedded evaluator guidance derived from the manifest `evaluation_notes` field
-- the embedded evidence scale
-
-Do not use:
-
-- external knowledge
-- dimension reasoning
-- performance-level reasoning
-- assumptions about intended meaning
-
-Require all of the following:
-
-- one CSV row per embedded indicator **for each valid runtime row**
-- complete coverage of all valid runtime rows in the runtime dataset
-- `component_id = [[TARGET_COMPONENT_ID]]` in every emitted row
-- concise `evaluation_notes`
-- no long quotations unless fragment mode is enabled
-
-Produce no output if:
-
-- the runtime dataset contains no valid runtime rows for the target component
-- the CSV header cannot be emitted exactly as specified
-- complete row coverage cannot be achieved for all valid runtime rows
-- any contradiction prevents deterministic evaluation
-
-### Input format
-
-Runtime input will contain a dataset with one or more runtime rows.  
-Each runtime row is one submission_id × component_id evaluation unit.  
-Evaluate every runtime row whose component_id equals the target component.  
-Do not stop after the first runtime row.
-
-Each runtime row must contain:
-
-- a submission identifier field
-- `component_id`
-- at least one response text field: `cleaned_response_text` or `response_text`
-
-Apply the response text selection rule per runtime row before evaluation.
-
-Response text selection rule per runtime row:
-
-- If `cleaned_response_text` exists in the runtime dataset row, use `cleaned_response_text` as the row’s canonical `response_text`.
-- Otherwise, use `response_text` as the row’s canonical `response_text`.
-
-For all later instructions in this prompt, the selected field must be treated as the canonical `response_text` for that runtime row.
-
-Wrapper handling is applied per runtime row.
-
-### Evaluation discipline
-
-For each runtime row, evaluate all embedded indicator_id values exactly once.  
-For each runtime row, emit one CSV data row per embedded indicator_id.  
-Emit rows grouped by runtime row.  
-Within each runtime row group, emit indicator_id values in embedded prompt order.  
-Embedded indicator order must follow the order of rows in the filtered Layer1_ScoringManifest.  
-Emit the CSV header exactly once, before all data rows.
-
-```text
-total data row count = number of valid runtime rows × number of embedded indicators
-```
-
-#### Indicator Coverage Rule
-
-Before writing any output rows, construct the ordered list of embedded `indicator_id` values.
-
-Ensure that:
-
-- each embedded `indicator_id` is evaluated exactly once per runtime row
-- indicators are processed in embedded prompt order
-- every valid runtime row receives a complete indicator evaluation set
-
-#### Runtime Row Coverage Rule
-
-Before writing any output rows, construct the ordered list of valid runtime rows from the runtime dataset.
-
-A valid runtime row is a row whose:
-
-- submission identifier field is present
-- `component_id` is present
-- at least one response text field is present: `cleaned_response_text` or `response_text`
-- `component_id` equals `[[TARGET_COMPONENT_ID]]`
-
-Do not stop after the first valid runtime row.  
-Do not emit output for only a prefix of the runtime dataset.
-
-#### Evaluation Sequence
-
-Layer 1 SBO scoring must follow this exact sequence:
-
-1. Construct a single internal representation of the runtime input dataset.
-2. Identify the valid runtime rows whose `component_id = [[TARGET_COMPONENT_ID]]`.
-3. For each valid runtime row, apply the response text selection rule to determine the row’s canonical `response_text`.
-4. Apply wrapper-handling rules to each valid runtime row before evaluation.
-5. Construct the ordered `indicator_id` list embedded in the prompt.
-6. For each valid runtime row:
-   - construct a single internal representation of that row’s canonical `response_text`
-   - scan the response once and identify potentially relevant textual fragments
-   - store those fragments in an internal evidence index
-   - perform one internal analytic signal pass over the indexed fragments
-   - organise the indexed evidence into candidate signal groupings relevant to the target component
-   - evaluate all embedded `indicator_id` values using the evidence index and signal groupings rather than rescanning the full response text
-
-#### Indicator Evaluation
-
-For each valid runtime row and for each embedded `indicator_id` in prompt order:
-
-- internally identify whether a relevant textual fragment exists
-- evaluate the fragment using the embedded `indicator_definition`
-- evaluate the fragment using the embedded `assessment_guidance`
-- use the embedded evaluator guidance derived from the manifest `evaluation_notes` field
-- assign `evidence_status`
-- assign `confidence`
-- assign `flags`
-
-#### Evidence Gate Rule
-
-Do **not** assign `evidence` or `partial_evidence` without internally identifying a supporting textual fragment.
-
-If no relevant fragment exists, assign:
-
-```text
-little_to_no_evidence
-```
-
-#### Output Row Count Rule
-
-Before emitting CSV rows, verify that:
-
-```text
-number of data rows to be written
-=
-number of valid runtime rows × number of embedded indicators
-```
-
-If counts differ, complete the missing evaluations before emitting output.  
-Do not emit partial output.
-
-#### Output Emission Rule
-
-Emit output in this exact structure:
-
-- one CSV header row
-- then, for runtime row 1, one data row per embedded `indicator_id` in prompt order
-- then, for runtime row 2, one data row per embedded `indicator_id` in prompt order
-- continue until all valid runtime rows are exhausted
-
-### Evidence interpretation rules
-
-#### Evidence Fragment Output Mode
-
-Default behaviour:
-
-- supporting fragments are identified internally
-- fragments are **not printed**
-- `evaluation_notes` should normally be empty and emitted as `""`
-
-Optional runtime mode:
-
-```text
-FRAGMENT_OUTPUT_MODE = on
-```
-
-If enabled, `evaluation_notes` may briefly reference the supporting fragment used to assign the evidence status.
-
-#### Partial Evidence Preference Rule
-
-If explicit language partially satisfies an indicator definition but does not fully satisfy it, assign:
-
-```text
-partial_evidence
-```
-
-Do not collapse weak but relevant explicit evidence into `little_to_no_evidence`.
-
-#### Independence Rule
-
-Indicators must be evaluated independently.
-
-Do not use:
-
-- other indicators
-- dimension logic
-- indicator combinations
-- mapping rules
-- component expectations
-
-to influence the judgement.
-
-### Confidence assignment rule
-
-Confidence reflects clarity of textual evidence, not probability.
-
-```text
-high
-clear explicit language supports the assigned status
-
-medium
-explicit language present but incomplete or ambiguous
-
-low
-weak or uncertain textual signal
-```
-
-```text
-If evidence_status = little_to_no_evidence and no fragment exists, assign confidence = high.
-If you are uncertain and cannot identify sufficient explicit support for evidence or partial_evidence, assign evidence_status = little_to_no_evidence and flags = needs_review.
-```
-
-### Output schema
-
-Output must be CSV.  
-Emit the header row exactly once:
-
-```text
-submission_id,component_id,indicator_id,evidence_status,evaluation_notes,confidence,flags
-```
-
-In output, `evaluation_notes` refers only to the CSV output field.  
-It does not rename or reproduce the manifest `evaluation_notes` field, which serves as embedded evaluator guidance inside the scoring prompt.
-
-Field rules:
-
-- `submission_id` must be copied from the runtime row
-- `component_id` must equal `[[TARGET_COMPONENT_ID]]` in every emitted row
-- `indicator_id` values must appear in embedded prompt order within each runtime row group
-- `evaluation_notes` must always be enclosed in double quotes
-- if `evaluation_notes` is empty, emit `""`
-- `confidence` must be one of: `low`, `medium`, `high`
-- `flags` must be one of: `none`, `needs_review`
-- no additional columns may appear
-- no explanatory text may appear before or after the CSV
-
-### Constraints
-
-Use only:
-
-- the runtime dataset rows
-- canonical `response_text`
-- the embedded indicator definitions
-- the embedded assessment guidance
-- the embedded evaluator guidance derived from the manifest `evaluation_notes` field
-- the embedded evidence scale
-
-Do not use:
-
-- external knowledge
-- dimension reasoning
-- performance-level reasoning
-- assumptions about intended meaning
-
-### Content rules
-
-Require all of the following:
-
-- one CSV row per embedded indicator **for each valid runtime row**
-- complete coverage of all valid runtime rows in the runtime dataset
-- `component_id = [[TARGET_COMPONENT_ID]]` in every emitted row
-- concise `evaluation_notes`
-- no long quotations unless fragment mode is enabled
-
-### Failure mode handling
-
-If any artefact or parameter is missing, inconsistent, or contradictory:
-
-- produce **no output**
-- wait silently for corrected inputs
-
-If the filtered manifest contains:
-
-- no rows
-- duplicate `indicator_id`
-- missing evaluation fields
-
-the wrapper prompt must **produce no output**.
-
-Produce no output if:
-
-- the runtime dataset contains no valid runtime rows for the target component
-- the CSV header cannot be emitted exactly as specified
-- complete row coverage cannot be achieved for all valid runtime rows
-- any contradiction prevents deterministic evaluation
-````
+---
 
 ### Required Canonical Runtime Semantics
 
@@ -1163,6 +747,8 @@ Instead it must state:
 ```text
 total data row count = number of valid runtime rows × number of embedded indicators
 ```
+
+---
 
 ### Evaluation Discipline
 
@@ -1253,6 +839,8 @@ Emit output in this exact structure:
 - then, for runtime row 2, one data row per embedded `indicator_id` in prompt order
 - continue until all valid runtime rows are exhausted
 
+---
+
 ### Evidence Interpretation Rules
 
 The generated scoring prompt must include all of the following.
@@ -1297,6 +885,8 @@ Do not use:
 
 to influence the judgement.
 
+---
+
 ### Confidence Assignment Rule
 
 Confidence reflects clarity of textual evidence, not probability.
@@ -1316,6 +906,8 @@ weak or uncertain textual signal
 If evidence_status = little_to_no_evidence and no fragment exists, assign confidence = high.
 If you are uncertain and cannot identify sufficient explicit support for evidence or partial_evidence, assign evidence_status = little_to_no_evidence and flags = needs_review.
 ```
+
+---
 
 ### Output Schema
 
@@ -1341,6 +933,8 @@ Field rules:
 - no additional columns may appear
 - no explanatory text may appear before or after the CSV
 
+---
+
 ### Constraints
 
 Use only:
@@ -1359,6 +953,8 @@ Do not use:
 - performance-level reasoning
 - assumptions about intended meaning
 
+---
+
 ### Content Rules
 
 Require all of the following:
@@ -1368,6 +964,8 @@ Require all of the following:
 - `component_id = PARAM_TARGET_COMPONENT_ID` in every emitted row
 - concise `evaluation_notes`
 - no long quotations unless fragment mode is enabled
+
+---
 
 ### Failure Mode Handling
 
