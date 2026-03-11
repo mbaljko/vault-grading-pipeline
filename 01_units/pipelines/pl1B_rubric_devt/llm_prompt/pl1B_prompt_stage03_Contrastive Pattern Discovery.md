@@ -5,8 +5,8 @@ BEGIN GENERATION
 
 
 three inputs
-`<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01.md`
 `<ASSESSMENT_ID>_AssignmentPayloadSpec_v01`
+`<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01.md`
 Calibration Sample
 # . 
 ````
@@ -32,7 +32,7 @@ The generated output must be emitted as **fenced Markdown** and must use the fol
 
 Where:
 
-- `<cid>` is determined from the calibration sample and must match a valid `component_id` in `<ASSESSMENT_ID>_AssignmentPayloadSpec_v01`
+- `<cid>` is determined from the calibration sample and must match a valid `component_id` in `<ASSESSMENT_ID>_AssignmentPayloadSpec_v*`
 - all internal structure must use **level 5 and level 6 headings**
 - subsection numbering must use the format:
 
@@ -100,7 +100,7 @@ Artefacts must be interpreted **by position**.
 | Artefact 2 | `<ASSESSMENT_ID>_SubmissionAnalyticBrief_v*` |
 | Artefact 3 | calibration sample dataset |
 
-The delimiter `===` must therefore appear **exactly twice** in the payload.
+The delimiter `===` must therefore appear **exactly three times** in the payload.
 
 ---
 
@@ -200,7 +200,7 @@ Contrastive signal extraction must then be conducted **separately for each analy
 ### Assignment Payload Specification
 
 ```text
-<ASSESSMENT_ID>_AssignmentPayloadSpec_v01
+<ASSESSMENT_ID>_AssignmentPayloadSpec_v*
 ```
 
 Used to confirm valid `component_id` values.
@@ -208,7 +208,7 @@ Used to confirm valid `component_id` values.
 ### Submission Analytic Brief
 
 ```text
-<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01
+<ASSESSMENT_ID>_SubmissionAnalyticBrief_v*
 ```
 
 Used to obtain:
@@ -371,7 +371,7 @@ The calibration responses analysed in this section were produced during **Pipeli
 Calibration datasets are derived from the canonical grading dataset defined in:
 
 ```text
-<ASSESSMENT_ID>_AssignmentPayloadSpec_v01
+<ASSESSMENT_ID>_AssignmentPayloadSpec_v*
 ```
 
 Each dataset contains a filtered subset of responses for a specific component.
