@@ -1,12 +1,124 @@
+---
+prompt_id: pl1B_stage11_layer1_sbo_registry_prompt_v01
+version: v01
+stage: pipeline_pl1B_stage11
+purpose: generate the Layer 1 SBO Instance Registry by consolidating indicator-level analytic signals from the submission analytic brief
+status: active
+owner: EECS3000W26
+
+input_contract:
+  - rubric_specification_guide (Rubric_SpecificationGuide_v*)
+  - submission_analytic_brief (<ASSESSMENT_ID>_SubmissionAnalyticBrief_v*)
+  - `BEGIN GENERATION`
+    
+input_structure:
+  delimiter: "==="
+  artefacts:
+    - name: rubric_specification_guide
+      expected_elements:
+        - layer1_sbo_identifier_structure
+        - indicator_identifier_format
+        - sbo_short_description_rules
+    - name: submission_analytic_brief
+      required_sections:
+        - "Contrastive Pattern Discovery"
+      extracted_elements:
+        - analytic_sub_space_registry
+        - candidate_indicator_signals
+        - candidate_indicator_sets
+        - component_identifiers
+
+output_contract: fenced_markdown_table
+
+output_structure:
+  outer_fence: "````"
+  heading: "#### 5.4 Layer 1 SBO Instances (Draft)"
+  table_columns:
+    - sbo_identifier
+    - sbo_identifier_shortid
+    - submission_id
+    - component_id
+    - indicator_id
+    - sbo_short_description
+  grouping_rule: group_rows_by_component_id
+  ordering_rules:
+    - indicator_id_must_be_globally_unique
+    - indicator_id_must_be_sequential
+    - rows_within_component_sorted_by_indicator_id
+
+identifier_rules:
+  submission_identifier_source: assessment_identifier
+  component_identifier_source: canonical_component_id_from_analytic_brief
+  component_short_identifier_mapping:
+    SectionAResponse: SecA
+    SectionBResponse: SecB
+    SectionCResponse: SecC
+    SectionDResponse: SecD
+    SectionEResponse: SecE
+  indicator_identifier_pattern: "I00-I99"
+  sbo_identifier_pattern: "I_<sid>_<cid>_<iid>"
+  sbo_identifier_shortid_rule: equals_indicator_id
+
+indicator_generation_rules:
+  expected_indicator_range_per_component: "4-8"
+  indicator_source_priority:
+    - candidate_indicator_set
+    - candidate_indicator_signals
+    - contrastive_pattern_observations
+  consolidation_requirements:
+    - merge_redundant_signals
+    - preserve_key_analytic_distinctions
+    - minimise_indicator_overlap
+  indicator_properties:
+    - must_be_observable_in_response_text
+    - must_be_detectable_without_scoring
+    - must_represent_single_signal
+    - must_not_require_multiple_conditions
+
+sbo_description_rules:
+  description_type: compact_analytic_label
+  allowed_forms:
+    - noun_phrase
+    - analytic_label
+  disallowed_patterns:
+    - full_sentence_descriptions
+    - evaluative_language
+    - scoring_threshold_language
+    - performance_level_references
+    - outcome_predictions
+  examples:
+    - distributed responsibility attribution
+    - role boundary articulation
+    - institutional constraint recognition
+    - systemic accessibility barrier recognition
+    - tension identification
+
+constraints:
+  - indicators_must_be_grounded_in_analytic_brief
+  - do_not_invent_new_concepts
+  - do_not_assign_scores
+  - do_not_define_performance_levels
+  - do_not_create_dimension_structures
+  - do_not_generate_additional_sections
+  - output_must_contain_only_one_fenced_block
+  - table_must_follow_required_column_order
+
+notes: |
+  This prompt performs Stage 1.1 of Pipeline PL1B. It constructs the Layer 1 SBO
+  Instance Registry used by downstream scoring prompts. Indicators are derived
+  from the contrastive pattern discovery results in the submission analytic
+  brief and represent detectable textual signals in student responses.
+  The output corresponds to rubric template section 5.4 and must strictly
+  follow identifier conventions defined in Rubric_SpecificationGuide_v01.
+---
+
+
 # .
 ```
 BEGIN GENERATION
 ```
 
 
-three inputs
-`Rubric_SpecificationGuide_v01`
-`<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01.md`
 # . 
 ````
 ## Wrapper Prompt — Generate Layer 1 SBO Instance Registry (Stage 1.1)

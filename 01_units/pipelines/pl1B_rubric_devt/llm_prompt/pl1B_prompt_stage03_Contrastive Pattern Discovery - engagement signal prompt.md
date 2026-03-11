@@ -7,9 +7,9 @@ status: active
 owner: EECS3000W26
 
 input_contract:
-  - assignment_payload_specification
-  - submission_analytic_brief
-  - calibration_sample_dataset
+  - assignment_payload_specification (<ASSESSMENT_ID>_AssignmentPayloadSpec_v*>)
+  - submission_analytic_brief (<ASSESSMENT_ID>_SubmissionAnalyticBrief_v*)
+  - calibration_sample_dataset (lines from csv)
 
 input_structure:
   delimiter: "==="
