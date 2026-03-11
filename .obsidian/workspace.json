@@ -84,8 +84,23 @@
               "icon": "lucide-file",
               "title": "Rubric_SpecificationGuide_v01"
             }
+          },
+          {
+            "id": "6530ca33fca030b8",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Generate Layer 1 Indicator Evaluation Specification.md",
+                "mode": "source",
+                "source": true
+              },
+              "icon": "lucide-file",
+              "title": "pl1B_prompt_stage12_Generate Layer 1 Indicator Evaluation Specification"
+            }
           }
-        ]
+        ],
+        "currentTab": 5
       }
     ],
     "direction": "vertical"
@@ -231,13 +246,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Generate Layer 1 Indicator Evaluation Specification.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Pipeline 1B — Layered Rubric Construction Pipeline"
+              "title": "Outline of pl1B_prompt_stage12_Generate Layer 1 Indicator Evaluation Specification"
             }
           },
           {
@@ -271,12 +286,13 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "50f9e0c568115b6f",
+  "active": "6530ca33fca030b8",
   "lastOpenFiles": [
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_SBO Instance Registry.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Generate Layer 1 Indicator Evaluation Specification.md",
+    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v01.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - engagement signal prompt.md",
-    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO.md",
@@ -288,7 +304,6 @@
     "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric Specification Design Document.md",
     "01_units/pipelines/pl1B_rubric_devt/RUN_PPP_SectionAResponse_Layer1_SBO_scoring_prompt_v01_output.csv",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Generate Layer 1 Indicator Evaluation Specification.md",
     "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/The 4-panel indicator diagnostic table.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO_output.md",
     "01_units/pipelines/pl1B_rubric_devt/python/run-ct-report-for-manifest.py",
