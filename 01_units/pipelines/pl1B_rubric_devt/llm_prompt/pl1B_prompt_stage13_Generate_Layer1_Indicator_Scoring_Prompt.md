@@ -266,19 +266,22 @@ This parameter determines which rows from the `Layer1_ScoringManifest` will be e
 
 ### Required Input Artefacts
 
-All required inputs must be supplied **verbatim** and separated using the delimiter:
+The wrapper expects exactly three input blocks separated using the delimiter:
 
 ```text
 ===
 ```
 
-The wrapper prompt expects the following inputs in sequence:
+The wrapper expects the following three blocks in sequence:
 
-```text
-PARAM_TARGET_COMPONENT_ID
-\<ASSESSMENT_ID\>_AssignmentPayloadSpec_v*
-Layer1_ScoringManifest_\<ASSESSMENT_ID\>_v\<VERSION\>
-```
+1. parameter block  
+   `PARAM_TARGET_COMPONENT_ID = <COMPONENT_ID>`
+
+2. artefact block  
+   `\<ASSESSMENT_ID\>_AssignmentPayloadSpec_v*`
+
+3. artefact block  
+   `Layer1_ScoringManifest_\<ASSESSMENT_ID\>_v\<VERSION\>`
 
 The parameter block must appear in the form:
 
@@ -288,15 +291,38 @@ PARAM_TARGET_COMPONENT_ID = \<COMPONENT_ID\>
 ===
 ```
 
-The remaining artefacts must appear exactly as produced by their upstream pipelines and must not be modified.
+The two artefact blocks must appear exactly as produced by their upstream pipelines and must not be modified.
+The parameter block must appear exactly in the required syntax.
 
 If any required artefact or parameter is missing, malformed, or inconsistent, the wrapper prompt must **produce no output**.
+
+Angle-bracketed expressions in this wrapper, such as `<ASSESSMENT_ID>`, `<COMPONENT_ID>`, and `<VERSION>`, are specification placeholders used to describe required payload content. They are not literal payload text unless they occur inside a verbatim artefact block.
+### Payload Grammar (Normative)
+
+The payload supplied to this wrapper must match the following exact grammar:
+```
+===
+PARAM_TARGET_COMPONENT_ID = <COMPONENT_ID>
+===
+<ASSESSMENT_ID>_AssignmentPayloadSpec_v* contents
+===
+Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION> contents
+```
+
+The payload must contain exactly three blocks.
+The first block is a parameter block.
+The second and third blocks are verbatim artefact blocks.
+No text may appear before the first delimiter.
+No text may appear after the final manifest line.
+No additional delimiter may appear after the manifest block.
+If the payload violates this grammar, the wrapper must produce no output.
+
 
 ### Input Artefact Order (Mandatory)
 
 Artefacts must appear **exactly in the following order**, separated by the delimiter `===`.
 
-No additional delimiters or numbering markers may appear.
+Exactly three blocks must appear, in the required order. No additional block, delimiter-only block, numbering marker, commentary line, or trailing text may appear anywhere in the payload.
 
 ```text
 ===
@@ -307,8 +333,9 @@ PARAM_TARGET_COMPONENT_ID = \<COMPONENT_ID\>
 ===
 
 Layer1_ScoringManifest_\<ASSESSMENT_ID\>_v\<VERSION\> contents
-===
 ```
+
+Exactly three input blocks must be provided. No additional blocks, delimiters, markers, or trailing text are permitted after the manifest block.
 
 ### Example Invocation
 
@@ -319,8 +346,7 @@ PARAM_TARGET_COMPONENT_ID = SectionBResponse
 \<PPP_AssignmentPayloadSpec_v01 contents\>
 ===
 \<Layer1_ScoringManifest_PPP_v01 contents\>
-===
-BEGIN GENERATION
+
 ```
 
 If the artefacts appear in a different order or if the delimiter structure is violated, the wrapper prompt must **produce no output**.
@@ -592,29 +618,19 @@ The header appears **exactly once**.
 
 #### Phase 1 — Artefact ingestion
 
-The wrapper reads artefacts silently.
+The wrapper reads the three input blocks silently.
 
-If
+If the input-block contract is violated, produce **no output**.
 
-```text
-BEGIN GENERATION
-```
+#### Phase 2 — Validation and extraction
 
-is absent, produce **no output**.
+The wrapper validates block count, block order, artefact consistency, and required fields.
 
-#### Phase 2 — Prompt generation
-
-When
-
-```text
-BEGIN GENERATION
-```
-
-appears, generate the scoring prompt artefact.
+If validation fails, produce **no output**.
 
 #### Phase 3 — Canonical scaffold instantiation
 
-When valid artefacts and `BEGIN GENERATION` are present, the wrapper must instantiate the canonical scaffold exactly once.
+When valid input blocks are present, the wrapper must instantiate the canonical scaffold exactly once.
 
 Instantiation sequence:
 
