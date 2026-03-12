@@ -19,6 +19,72 @@ It defines:
 This guide is **human-readable and normative**.  
 It is not itself the machine-readable rubric payload.
 
+#### 0.0 Identifier and Ontology Layers
+
+The rubric system operates across **three distinct identifier domains**.  
+Each domain corresponds to a different level of the grading architecture.
+
+```
+DATASET DOMAIN
+────────────────────────────────────────────────────────
+
+participant_id
+      │
+      └── identifies a participant-authored assignment artefact
+          in the canonical dataset
+
+
+ONTOLOGY DOMAIN (Assessment Artefact and scoring layers)
+────────────────────────────────────────────────────────
+
+Assessment Artefact (AA)
+
+Layer 1–3 AA:
+participant_id × component_id
+        │
+        │ evidence examined
+        ▼
+
+indicator SBO
+        │
+        ▼
+dimension SBO
+        │
+        ▼
+component SBO
+        │
+        ▼
+submission SBO   (Layer 4 aggregation object)
+
+
+RUBRIC PAYLOAD DOMAIN (rubric specification)
+────────────────────────────────────────────────────────
+
+assessment_id
+      │
+      ▼
+sid  (short identifier derived from assessment_id)
+
+      │
+      ▼
+SBO identifiers constructed from RP identifiers
+
+I_<sid>_<cid>_<iid>    indicator SBO
+D_<sid>_<cid>_<did>    dimension SBO
+C_<sid>_<cid>          component SBO
+S_<sid>                submission SBO
+```
+
+#### 0.0 Interpretation
+
+| layer | identifier | role |
+|---|---|---|
+| dataset | `participant_id` | identifies a participant's assignment artefact |
+| ontology | `participant_id × component_id` | defines the Assessment Artefact examined for evidence |
+| rubric payload | `assessment_id` / `sid` | identifies the assessment for which the rubric is authored |
+
+The **submission SBO** therefore refers to the **Layer-4 scoring object representing the assessment-level aggregation**, not to an individual participant submission.
+
 ### 1. Relationship to Related Artefacts
 
 #### 1.1 Artefact Roles
@@ -70,11 +136,11 @@ If any structural change is required — including changes to SBO instances, sca
 
 #### 2.1 Core terms
 
-| term | definition |
-|---|---|
-| Assessment Artefact (AA) | the portion of a student submission from which evidence is examined during a scoring pass |
-| Score-Bearing Object (SBO) | an analytic entity that receives a score derived from evidence found in an AA |
-| scoring layer | a stage of evaluation that assigns scores to one class of SBO |
+| term                       | definition                                                                              |
+| -------------------------- | --------------------------------------------------------------------------------------- |
+| Assessment Artefact (AA)   | the participant-authored artefact from which evidence is examined during a scoring pass |
+| Score-Bearing Object (SBO) | an analytic entity that receives a score derived from evidence found in an AA           |
+| scoring layer              | a stage of evaluation that assigns scores to one class of SBO                           |
 
 #### 2.2 Assessment Artefact by layer
 
@@ -94,6 +160,8 @@ If any structural change is required — including changes to SBO instances, sca
 | Layer 3 | component | `component_score` |
 | Layer 4 | submission | `submission_score` |
 
+The **submission SBO class** represents the **top-level scoring object for the assessment**, not an individual participant submission.  
+Participant artefacts are identified using `participant_id` in the canonical dataset.
 #### 2.4 Score derivation invariant
 When multiple layers are used, score derivation follows the invariant:  
 `AA → indicator SBO scores → dimension SBO scores → component SBO scores → submission SBO score`
@@ -133,7 +201,7 @@ SBO identifiers combine those primitives into **fully qualified identifiers** th
 
 ##### 3.3.1 SBO identifier structure
 Score-Bearing Object (SBO) identifiers are **structured identifiers constructed from Rubric Primitive (RP) identifiers**.  
-They uniquely identify scoring entities across the four scoring layers.  
+They uniquely identify **rubric scoring entities** across the four scoring layers.
 The **prefix of the SBO identifier indicates the SBO class**, which corresponds directly to the scoring layer.
 
 | layer | SBO class | identifier pattern |
@@ -147,11 +215,11 @@ These prefixes (`I`, `D`, `C`, `S`) represent **SBO classes**, not analytic subt
 
 Examples:
 
-| SBO identifier | expansion |
-|---|---|
-| `S_PPP` | submission SBO for assessment `PPP` |
-| `C_PPP_SecA` | component SBO for component `SecA` |
-| `D_PPP_SecA_D01` | dimension SBO `D01` evaluating component `SecA` |
+| SBO identifier   | expansion                                                  |
+| ---------------- | ---------------------------------------------------------- |
+| `S_PPP`          | Layer-4 submission SBO for assessment `PPP                 |
+| `C_PPP_SecA`     | component SBO for component `SecA`                         |
+| `D_PPP_SecA_D01` | dimension SBO `D01` evaluating component `SecA`            |
 | `I_PPP_SecA_I01` | indicator SBO `I01` detecting evidence in component `SecA` |
 
 The values of `\<sid\>`, `\<cid\>`, `\<iid\>`, and `\<did\>` are described below under **Rubric Primitive (RP) identifiers**.
@@ -195,12 +263,12 @@ All RP identifiers should follow the following conventions.
 
 ##### 3.4.2 RP identifier registry
 
-| RP identifier | associated SBO class | value source | example | notes |
-|---|---|---|---|---|
-| `sid` | submission | Assignment Payload Specification | `PPP` | short identifier derived from the assessment identifier and used in SBO construction |
-| `cid` | component | derived from canonical `component_id` | `SecA` | compact identifier used inside SBO identifiers |
-| `iid` | indicator | rubric-defined | `I01` | may use subtype prefixes `I` or `P` |
-| `did` | dimension | rubric-defined | `D01` | may use subtype prefixes `D` or `Q` |
+| RP identifier | associated SBO class | value source                          | example | notes                                                                                                      |
+| ------------- | -------------------- | ------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------- |
+| `sid`         | submission           | Assignment Payload Specification      | `PPP`   | short identifier derived from `assessment_id` and used in construction of submission-layer SBO identifiers |
+| `cid`         | component            | derived from canonical `component_id` | `SecA`  | compact identifier used inside SBO identifiers                                                             |
+| `iid`         | indicator            | rubric-defined                        | `I01`   | may use subtype prefixes `I` or `P`                                                                        |
+| `did`         | dimension            | rubric-defined                        | `D01`   | may use subtype prefixes `D` or `Q`                                                                        |
 
 ##### 3.4.3 Indicator RP identifier (`iid`) format
 Indicator identifiers follow a fixed two-digit numbering scheme.
@@ -416,7 +484,9 @@ Every SBO instance registry must define **instances**, not merely SBO classes.
 An instance must include all fields required by the schema for that layer.
 
 #### 6.2 Layer 4 SBO instances
-Layer 4 defines the submission-level SBO.
+
+Layer 4 defines the submission-level SBO.  
+This SBO represents the assessment-level aggregation object for scoring, not an individual participant artefact.
 
 Required fields:
 
