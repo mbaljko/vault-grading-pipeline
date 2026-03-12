@@ -10,6 +10,57 @@ Its purpose is to:
 This document is **human-readable and explanatory**.
 It is **not used directly by the scoring pipeline**.
 The deterministic rubric specification used by the grading system is defined separately in the **Rubric Payload Document**.
+### Identifier layers used in the rubric system
+The rubric system distinguishes between two layers of identifiers.
+These layers correspond to different parts of the grading architecture: the **canonical dataset structure** and the **runtime scoring outputs** produced by the scoring pipeline.
+#### Dataset identifiers
+The canonical dataset produced by the preprocessing pipeline identifies each student artefact using the field:
+```
+participant_id
+```
+This identifier refers to **one participant’s completed assignment artefact** within the dataset.
+The canonical structural unit used in the dataset is therefore:
+```
+participant_id × component_id
+```
+This unit represents one participant’s response to one assignment component.
+Dataset identifiers are used by:
+- canonical datasets
+- calibration datasets
+- rubric development workflows
+- upstream preprocessing pipelines
+#### Runtime scoring identifiers
+During automated scoring, the grading pipeline emits results using a **standardised output schema**.
+In this schema, the participant identifier is normalised to the field name:
+```
+submission_id
+```
+This standardisation allows scoring outputs from different assignments and pipelines to share a consistent column structure.
+The scoring prompts therefore apply the following mapping:
+```
+participant_id → submission_id
+```
+In other words, the value originating from the dataset field participant_id is copied into the runtime output field submission_id.
+#### Relationship between the two identifier layers
+Conceptually, both identifiers refer to the same underlying entity:
+```
+a participant’s submitted assignment artefact
+```
+However, they appear in different contexts:
+
+|**context**|**identifier used**|
+|---|---|
+|canonical datasets|participant_id|
+|scoring outputs and grading prompts|submission_id|
+This separation allows the dataset structure to remain stable while maintaining a consistent output schema for grading pipelines.
+#### Ontological interpretation
+Within the grading ontology, the **Assessment Artefact (AA)** corresponds to the participant’s assignment artefact.
+Accordingly, the analytic units evaluated during scoring are:
+```
+AA (Layers 1–3) = participant_id × component_id
+AA (Layer 4)    = participant_id
+```
+When results are emitted by the scoring pipeline, the identifier value associated with participant_id appears in the output column named submission_id.
 ### Relationship to the rubric payload document
 Two artefacts define the rubric:
 
@@ -30,8 +81,8 @@ The present document explains **how those structures were designed and how they 
 The rubric follows the grading ontology defined in the project documentation.
 Evidence is evaluated within the **Assessment Artefact (AA)**:
 ```
-AA (Layers 1–3) = submission_id × component_id
-AA (Layer 4)    = submission_id
+AA (Layers 1–3) = participant_id × component_id
+AA (Layer 4)    = participant_id
 ```
 Scores are assigned to **Score-Bearing Objects (SBOs)** across four layers:
 ```

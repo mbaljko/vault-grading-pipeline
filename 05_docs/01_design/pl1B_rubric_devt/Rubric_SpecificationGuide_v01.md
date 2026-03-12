@@ -65,12 +65,12 @@ If any structural change is required — including changes to SBO instances, sca
 | scoring layer | a stage of evaluation that assigns scores to one class of SBO |
 #### 2.2 Assessment Artefact by layer
 
-| layer | AA |
-|---|---|
-| Layer 1 | `submission_id × component_id` |
-| Layer 2 | `submission_id × component_id` |
-| Layer 3 | `submission_id × component_id` |
-| Layer 4 | `submission_id` |
+| layer   | AA                              |
+| ------- | ------------------------------- |
+| Layer 1 | `participant_id × component_id` |
+| Layer 2 | `participant_id × component_id` |
+| Layer 3 | `participant_id × component_id` |
+| Layer 4 | `participant_id`                |
 #### 2.3 Score-Bearing Objects by layer
 
 | layer | SBO class | score_name |
@@ -140,12 +140,12 @@ This allows mapping tables and evaluation logic to refer to indicators and dimen
 #### 3.4 Rubric Primitive (RP) identifiers
 The rubric payload uses four **Rubric Primitive (RP) identifiers**.
 
-| primitive | meaning |
-|---|---|
-| `sid` | submission identifier representing the assessment |
-| `cid` | short identifier representing a component |
-| `iid` | indicator identifier |
-| `did` | dimension identifier |
+| primitive | meaning                                       |
+| --------- | --------------------------------------------- |
+| `sid`     | short identifier derived from `assessment_id` |
+| `cid`     | short identifier representing a component     |
+| `iid`     | indicator identifier                          |
+| `did`     | dimension identifier                          |
 These primitives form the **building blocks used to construct SBO identifiers**.
 The values of `sid` and `cid` originate from the **Assignment Payload Specification**, while `iid` and `did` are defined within the rubric payload.
 ##### 3.4.1 General construction rules
@@ -159,12 +159,12 @@ All RP identifiers should follow the following conventions.
 | alphanumeric | avoid spaces and punctuation |
 ##### 3.4.2 RP identifier registry
 
-| RP identifier | associated SBO class | value source                          | example | notes                                                           |
-| ------------- | -------------------- | ------------------------------------- | ------- | --------------------------------------------------------------- |
-| `sid`         | submission           | Assignment Payload Specification      | `PPP`   | represents the assessment identifier used in the rubric payload |
-| `cid`         | component            | derived from canonical `component_id` | `SecA`  | compact identifier used inside SBO identifiers                  |
-| `iid`         | indicator            | rubric-defined                        | `I01`   | may use subtype prefixes `I` or `P`                             |
-| `did`         | dimension            | rubric-defined                        | `D01`   | may use subtype prefixes `D` or `Q`                             |
+| RP identifier | associated SBO class | value source                          | example | notes                                                                                |
+| ------------- | -------------------- | ------------------------------------- | ------- | ------------------------------------------------------------------------------------ |
+| `sid`         | submission           | Assignment Payload Specification      | `PPP`   | short identifier derived from the assessment identifier and used in SBO construction |
+| `cid`         | component            | derived from canonical `component_id` | `SecA`  | compact identifier used inside SBO identifiers                                       |
+| `iid`         | indicator            | rubric-defined                        | `I01`   | may use subtype prefixes `I` or `P`                                                  |
+| `did`         | dimension            | rubric-defined                        | `D01`   | may use subtype prefixes `D` or `Q`                                                  |
 ##### 3.4.3 Indicator RP identifier (iid) format
 Indicator identifiers follow a fixed two-digit numbering scheme.
 Format:
@@ -346,38 +346,38 @@ An instance must include all fields required by the schema for that layer.
 Layer 4 defines the submission-level SBO.
 Required fields:
 
-| field |
-|---|
-| `sbo_identifier` |
+| field                    |
+| ------------------------ |
+| `sbo_identifier`         |
 | `sbo_identifier_shortid` |
-| `submission_id` |
-| `sbo_short_description` |
+| `assessment_id`          |
+| `sbo_short_description`  |
 #### 6.3 Layer 3 SBO instances
 Layer 3 defines component SBO instances.
 Required fields:
 
-| field |
-|---|
-| `sbo_identifier` |
+| field                    |
+| ------------------------ |
+| `sbo_identifier`         |
 | `sbo_identifier_shortid` |
-| `submission_id` |
-| `component_id` |
-| `sbo_short_description` |
+| `assessment_id`          |
+| `component_id`           |
+| `sbo_short_description`  |
 Constraints:
 - `component_id` must match the assignment payload specification
-- each `(submission_id, component_id)` pair defines a Layer 3 AA
+- each `component_id` must correspond to a valid component defined in the Assignment Payload Specification
 #### 6.4 Layer 2 SBO instances
 Layer 2 defines dimension SBO instances.
 Required fields:
 
-| field |
-|---|
-| `sbo_identifier` |
+| field                    |
+| ------------------------ |
+| `sbo_identifier`         |
 | `sbo_identifier_shortid` |
-| `submission_id` |
-| `component_id` |
-| `dimension_id` |
-| `sbo_short_description` |
+| `assessment_id`          |
+| `component_id`           |
+| `dimension_id`           |
+| `sbo_short_description`  |
 Constraints:
 - `(component_id, dimension_id)` pairs must be unique
 - `dimension_id` values must remain stable across rubric versions
@@ -385,14 +385,14 @@ Constraints:
 Layer 1 defines indicator SBO instances.
 Required fields:
 
-| field |
-|---|
-| `sbo_identifier` |
+| field                    |
+| ------------------------ |
+| `sbo_identifier`         |
 | `sbo_identifier_shortid` |
-| `submission_id` |
-| `component_id` |
-| `indicator_id` |
-| `sbo_short_description` |
+| `assessment_id`          |
+| `component_id`           |
+| `indicator_id`           |
+| `sbo_short_description`  |
 Constraints:
 - indicator SBO instances are defined independently of dimensions
 - an indicator may contribute evidence to one or more dimensions
@@ -491,7 +491,8 @@ No two rows may define identical threshold conditions for the same set of input 
 Mapping tables must guarantee that every possible combination of input values yields a result.
 Coverage may be achieved by:
 1. explicitly enumerating all combinations, or
-2. ensuring that the bottom row defines the ## Rubric_SpecificationGuide_v01
+2. ensuring that the bottom row defines the 
+## Rubric_SpecificationGuide_v01
 ### 0. Purpose
 This document defines the **authoring conventions and normative rules** for creating rubric payloads under the four-layer grading ontology.
 It serves as the companion to the **Rubric Template**.
@@ -597,12 +598,12 @@ Each primitive represents the **instance identifier for a Score-Bearing Object c
 These primitives act as **structural variables** used when constructing SBO identifiers across layers.
 Example expansions:
 
-| SBO identifier | expansion |
-|---|---|
-| `S_PPP` | submission SBO instance for assessment `PPP` |
-| `C_PPP_SecA` | component SBO for component `SecA` within submission `PPP` |
-| `D_PPP_SecA_D1` | dimension `D1` evaluating component `SecA` |
-| `I_PPP_SecA_I1` | indicator `I1` detecting evidence within component `SecA` |
+| SBO identifier  | expansion                                                            |
+| --------------- | -------------------------------------------------------------------- |
+| `S_PPP`         | Layer 4 submission SBO for assessment `PPP`                          |
+| `C_PPP_SecA`    | Layer 3 component SBO for component `SecA` in assessment `PPP`       |
+| `D_PPP_SecA_D1` | Layer 2 dimension SBO `D01` for component `SecA` in assessment `PPP` |
+| `I_PPP_SecA_I1` | Layer 1 indicator SBO `I01` for component `SecA` in assessment `PPP` |
 The primitives therefore serve as the **building blocks from which all SBO identifiers are composed**.
 #### 3.2 General SBO identifier structure
 SBO identifiers follow a predictable layered structure.
