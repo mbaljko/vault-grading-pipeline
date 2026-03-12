@@ -5,17 +5,14 @@ stage: pipeline_pl1B_stage13
 purpose: generate a bounded Layer 1 SBO scoring prompt that performs indicator evidence detection for a single target component using the Layer1_ScoringManifest
 status: active
 owner: EECS3000W26
-
 input_contract:
   - target_component_parameter (`PARAM_TARGET_COMPONENT_ID = <INSERT HERE>`)
   - assignment_payload_specification (<ASSESSMENT_ID>_AssignmentPayloadSpec_v*)
   - layer1_scoring_manifest (Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION>)
-  - trigger prompt (`BEGIN GENERATION`)
-
 input_structure:
-  delimiter: "==="
+  delimiter: §§§
   parameter_block:
-    required_format: "PARAM_TARGET_COMPONENT_ID = <COMPONENT_ID>"
+    required_format: PARAM_TARGET_COMPONENT_ID = <COMPONENT_ID>
   artefacts:
     - name: assignment_payload_specification
       expected_elements:
@@ -39,15 +36,12 @@ input_structure:
     - assignment_payload_specification
     - layer1_scoring_manifest
     - generation_trigger
-
 manifest_processing:
   filtering_rule: filter_rows_where_component_id_equals_PARAM_TARGET_COMPONENT_ID
   validation_rules:
     - filtered_manifest_must_not_be_empty
     - indicator_id_values_must_be_unique_within_filtered_rows
-
 output_contract: generated_scoring_prompt
-
 output_structure:
   artefact_name_pattern: RUN_<ASSESSMENT_ID>_<PARAM_TARGET_COMPONENT_ID>_Layer1_SBO_scoring_prompt_v*
   output_container: fenced_markdown_block
@@ -63,7 +57,6 @@ output_structure:
     - Constraints
     - Content rules
     - Failure mode handling
-
 runtime_semantics:
   input_definition:
     - runtime_input_dataset_contains_one_or_more_rows
@@ -76,7 +69,6 @@ runtime_semantics:
     - group_output_rows_by_runtime_row
     - maintain_indicator_order_within_each_group
     - total_rows_equals_runtime_rows_times_indicator_count
-
 evaluation_pipeline:
   sequence:
     - construct_internal_runtime_dataset_representation
@@ -87,7 +79,6 @@ evaluation_pipeline:
     - perform_single_analytic_signal_pass
     - group_candidate_fragments_by_indicator_relevance
     - evaluate_indicators_using_indexed_fragments
-
 indicator_evidence_scale:
   values:
     - evidence
@@ -97,7 +88,6 @@ indicator_evidence_scale:
     evidence: explicit_textual_evidence_clearly_satisfies_indicator_definition
     partial_evidence: explicit_signal_present_but_incomplete
     little_to_no_evidence: no_interpretable_explicit_signal_present
-
 confidence_scale:
   values:
     - high
@@ -107,7 +97,6 @@ confidence_scale:
     high: clear_explicit_language_supports_status
     medium: explicit_language_present_but_ambiguous
     low: weak_or_uncertain_textual_signal
-
 output_schema:
   format: csv
   header: submission_id,component_id,indicator_id,evidence_status,evaluation_notes,confidence,flags
@@ -122,7 +111,6 @@ output_schema:
   allowed_flag_values:
     - none
     - needs_review
-
 evaluation_rules:
   - each_indicator_evaluated_once_per_runtime_row
   - evidence_or_partial_requires_explicit_fragment
@@ -130,7 +118,6 @@ evaluation_rules:
   - dimension_logic_must_not_be_used
   - mapping_rules_must_not_be_used
   - component_performance_logic_must_not_be_used
-
 content_rules:
   - output_must_be_csv_only
   - header_must_appear_once
@@ -138,14 +125,12 @@ content_rules:
   - empty_notes_must_be_emitted_as_double_quotes
   - component_id_must_equal_target_component
   - one_output_row_per_indicator_per_runtime_row
-
 constraints:
   - do_not_modify_scoring_manifest
   - do_not_invent_indicators
   - do_not_perform_dimension_scoring
   - do_not_assign_component_or_submission_scores
   - evaluator_must_use_only_runtime_dataset_and_embedded_manifest
-
 failure_conditions:
   - missing_required_parameter
   - malformed_delimiter_structure
@@ -155,7 +140,6 @@ failure_conditions:
   - duplicate_indicator_ids_detected
   - runtime_dataset_contains_no_valid_rows
   - csv_header_cannot_be_emitted_exactly
-
 notes: |
   This prompt performs Stage 1.3 of Pipeline PL1B. It generates a reusable
   Layer 1 SBO scoring prompt that evaluates indicator evidence using the
@@ -269,7 +253,7 @@ This parameter determines which rows from the `Layer1_ScoringManifest` will be e
 The wrapper expects exactly three input blocks separated using the delimiter:
 
 ```text
-+++
+§§§
 ```
 
 The wrapper expects the following three blocks in sequence:
@@ -286,9 +270,9 @@ The wrapper expects the following three blocks in sequence:
 The parameter block must appear in the form:
 
 ```text
-+++
+§§§
 PARAM_TARGET_COMPONENT_ID = \<COMPONENT_ID\>
-+++
+§§§
 ```
 
 The two artefact blocks must appear exactly as produced by their upstream pipelines and must not be modified.
@@ -302,11 +286,11 @@ Angle-bracketed expressions in this wrapper, such as `<ASSESSMENT_ID>`, `<COMPON
 
 The payload supplied to this wrapper must match the following exact grammar:
 ```text
-+++
+§§§
 PARAM_TARGET_COMPONENT_ID = <COMPONENT_ID>
-+++
+§§§
 <ASSESSMENT_ID>_AssignmentPayloadSpec_v* contents
-+++
+§§§
 Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION> contents
 ```
 
@@ -321,18 +305,16 @@ If the payload violates this grammar, the wrapper must produce no output.
 
 ### Input Artefact Order (Mandatory)
 
-Artefacts must appear **exactly in the following order**, separated by the delimiter `+++`.
+Artefacts must appear **exactly in the following order**, separated by the delimiter `§§§`.
 
 Exactly three blocks must appear, in the required order. No additional block, delimiter-only block, numbering marker, commentary line, or trailing text may appear anywhere in the payload.
 
 ```text
-+++
+§§§
 PARAM_TARGET_COMPONENT_ID = \<COMPONENT_ID\>
-+++
-
+§§§
 \<ASSESSMENT_ID\>_AssignmentPayloadSpec_v* contents
-+++
-
+§§§
 Layer1_ScoringManifest_\<ASSESSMENT_ID\>_v\<VERSION\> contents
 ```
 
@@ -341,11 +323,11 @@ Exactly three input blocks must be provided. No additional blocks, delimiters, m
 ### Example Invocation
 
 ```text
-+++
+§§§
 PARAM_TARGET_COMPONENT_ID = SectionBResponse
-+++
+§§§
 \<PPP_AssignmentPayloadSpec_v01 contents\>
-+++
+§§§
 \<Layer1_ScoringManifest_PPP_v01 contents\>
 ```
 
@@ -1176,4 +1158,3 @@ Produce no output if:
 - complete row coverage cannot be achieved for all valid runtime rows
 - any contradiction prevents deterministic evaluation
 ````
-
