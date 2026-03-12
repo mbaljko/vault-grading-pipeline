@@ -258,6 +258,8 @@
   },
   "active": "54ebfa1a7e1a5ecc",
   "lastOpenFiles": [
+    "01_units/apps/prompt_runners/__pycache__/invoke_chatgpt_with_payload.cpython-313.pyc",
+    "01_units/apps/prompt_runners/__pycache__",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Generate Layer 1 Indicator Evaluation Specification.md",
@@ -287,12 +289,10 @@
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO_output.csv",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO_api_response.json",
     "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode",
-    "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking",
     "05_docs/01_design/pl1B_rubric_devt/IMPROVEMENT - FUTURE - INDICATOR LOCK.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage2_scoring_prompt_v02.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_wrapper_prompt_generate_stage1_scoring_prompt_v03.md",
     "05_docs/01_design/pl1A_canonical_population_prep/Untitled.md",
-    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_EXAMPLE_CAL_payload_v1.md",
-    "05_docs/01_design/pl2_calibration/Stage 0B - Expand Canonical Grading Targets into Grading Units (Rubric-Dependent).md"
+    "05_docs/01_design/pl1B_rubric_devt/RUBRIC_EXAMPLE_CAL_payload_v1.md"
   ]
 }
