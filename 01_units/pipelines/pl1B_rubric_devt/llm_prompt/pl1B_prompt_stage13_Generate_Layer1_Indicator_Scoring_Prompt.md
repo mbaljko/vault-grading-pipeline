@@ -269,7 +269,7 @@ This parameter determines which rows from the `Layer1_ScoringManifest` will be e
 The wrapper expects exactly three input blocks separated using the delimiter:
 
 ```text
-===
++++
 ```
 
 The wrapper expects the following three blocks in sequence:
@@ -286,9 +286,9 @@ The wrapper expects the following three blocks in sequence:
 The parameter block must appear in the form:
 
 ```text
-===
++++
 PARAM_TARGET_COMPONENT_ID = \<COMPONENT_ID\>
-===
++++
 ```
 
 The two artefact blocks must appear exactly as produced by their upstream pipelines and must not be modified.
@@ -302,11 +302,11 @@ Angle-bracketed expressions in this wrapper, such as `<ASSESSMENT_ID>`, `<COMPON
 
 The payload supplied to this wrapper must match the following exact grammar:
 ```text
-===
++++
 PARAM_TARGET_COMPONENT_ID = <COMPONENT_ID>
-===
++++
 <ASSESSMENT_ID>_AssignmentPayloadSpec_v* contents
-===
++++
 Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION> contents
 ```
 
@@ -321,17 +321,17 @@ If the payload violates this grammar, the wrapper must produce no output.
 
 ### Input Artefact Order (Mandatory)
 
-Artefacts must appear **exactly in the following order**, separated by the delimiter `===`.
+Artefacts must appear **exactly in the following order**, separated by the delimiter `+++`.
 
 Exactly three blocks must appear, in the required order. No additional block, delimiter-only block, numbering marker, commentary line, or trailing text may appear anywhere in the payload.
 
 ```text
-===
++++
 PARAM_TARGET_COMPONENT_ID = \<COMPONENT_ID\>
-===
++++
 
 \<ASSESSMENT_ID\>_AssignmentPayloadSpec_v* contents
-===
++++
 
 Layer1_ScoringManifest_\<ASSESSMENT_ID\>_v\<VERSION\> contents
 ```
@@ -341,11 +341,11 @@ Exactly three input blocks must be provided. No additional blocks, delimiters, m
 ### Example Invocation
 
 ```text
-===
++++
 PARAM_TARGET_COMPONENT_ID = SectionBResponse
-===
++++
 \<PPP_AssignmentPayloadSpec_v01 contents\>
-===
++++
 \<Layer1_ScoringManifest_PPP_v01 contents\>
 ```
 
@@ -1177,7 +1177,3 @@ Produce no output if:
 - any contradiction prevents deterministic evaluation
 ````
 
-
-
-===
-PARAM_TARGET_COMPONENT_ID = SectionBResponse
