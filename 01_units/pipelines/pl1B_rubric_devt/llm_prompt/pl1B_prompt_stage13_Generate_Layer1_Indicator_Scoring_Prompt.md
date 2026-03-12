@@ -414,14 +414,11 @@ response_text
 
 If the assignment payload uses `participant_id` as the canonical row identifier, the generated scoring prompt must treat that field as the runtime `submission_id` field in output.
 
-Response text selection rule:
+Canonical response text rule:
 
-The generated scoring prompt must apply the following rule to each runtime row:
+The canonical evidence surface for each runtime row is the field `response_text`.
 
-- If `cleaned_response_text` exists in the runtime dataset row, use `cleaned_response_text` as the row’s canonical `response_text`.
-- Otherwise, use `response_text` as the row’s canonical `response_text`.
-
-For all later instructions in the generated scoring prompt, the selected field must be treated as the canonical `response_text` for that runtime row.
+For all later instructions in the generated scoring prompt, `response_text` must be treated as the canonical response text for that runtime row.
 
 Canonical scoring unit:
 
@@ -912,14 +909,7 @@ Each runtime row must contain:
 
 - a submission identifier field
 - `component_id`
-- at least one response text field: `cleaned_response_text` or `response_text`
-
-Apply the response text selection rule per runtime row before evaluation.
-
-Response text selection rule per runtime row:
-
-- If `cleaned_response_text` exists in the runtime dataset row, use `cleaned_response_text` as the row’s canonical `response_text`.
-- Otherwise, use `response_text` as the row’s canonical `response_text`.
+- the response text field `response_text`
 
 For all later instructions in this prompt, the selected field must be treated as the canonical `response_text` for that runtime row.
 
@@ -956,7 +946,7 @@ A valid runtime row is a row whose:
 
 - submission identifier field is present
 - `component_id` is present
-- at least one response text field is present: `cleaned_response_text` or `response_text`
+- the response text field `response_text` is present
 - `component_id` equals `[[TARGET_COMPONENT_ID]]`
 
 Do not stop after the first valid runtime row.  
@@ -968,7 +958,7 @@ Layer 1 SBO scoring must follow this exact sequence:
 
 1. Construct a single internal representation of the runtime input dataset.
 2. Identify the valid runtime rows whose `component_id = [[TARGET_COMPONENT_ID]]`.
-3. For each valid runtime row, apply the response text selection rule to determine the row’s canonical `response_text`.
+3. For each valid runtime row, treat the field `response_text` as the row’s canonical response text.
 4. Apply wrapper-handling rules to each valid runtime row before evaluation.
 5. Construct the ordered `indicator_id` list embedded in the prompt.
 6. For each valid runtime row:
