@@ -117,6 +117,12 @@ def parse_args() -> argparse.Namespace:
 		action="store_true",
 		help="Forward --dry-run to invoke_chatgpt_with_payload.py.",
 	)
+	parser.add_argument(
+		"--output-dir",
+		type=Path,
+		required=False,
+		help="Output directory for LLM runner results. If not specified, defaults to <manifest_dir>/Level1-CalibrationTesting-Outputs.",
+	)
 	return parser.parse_args()
 
 
@@ -185,8 +191,12 @@ def run_l1_ct_for_payload(
 	scored_payload: dict[str, object],
 	output_file_stem: str,
 	runner_dry_run: bool,
+	output_dir: Path | None = None,
 ) -> Path:
 	"""Invoke the same runner behavior as justfile target l1-ct-secC.
+	
+	If output_dir is provided, output files are written there.
+	Otherwise, outputs are written to <payload_dir>/Level1-CalibrationTesting-Outputs.
 	
 	Returns the path to the markdown output file written by the runner.
 	"""
@@ -196,7 +206,7 @@ def run_l1_ct_for_payload(
 	runner_script = REPO_ROOT / RUNNER_SCRIPT_RELATIVE
 	prompt_file = REPO_ROOT / L1_CT_PROMPT_FILE_RELATIVE
 	payload_file = payload_dir / f"{output_file_stem}_payload.json"
-	runner_output_dir = payload_dir / RUNNER_OUTPUT_SUBDIR
+	runner_output_dir = output_dir if output_dir else (payload_dir / RUNNER_OUTPUT_SUBDIR)
 	runner_output_dir.mkdir(parents=True, exist_ok=True)
 	runner_output_file = runner_output_dir / f"{output_file_stem}_output.md"
 
@@ -408,6 +418,7 @@ def main() -> int:
 	response_texts_path = args.file_with_response_texts
 	scored_texts_path = args.file_with_scored_texts
 	runner_dry_run = args.runner_dry_run
+	output_dir = args.output_dir
 
 	if not markdown_path.exists() or not markdown_path.is_file():
 		print(f"Error: markdown file not found: {markdown_path}", file=sys.stderr)
@@ -469,6 +480,7 @@ def main() -> int:
 					scored_payload,
 					sbo_identifier,
 					runner_dry_run,
+					output_dir,
 				)
 				# Apply response text stitching to the runner output
 				stitched_output_file = apply_response_text_stitcher(
