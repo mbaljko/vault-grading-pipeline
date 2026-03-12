@@ -310,14 +310,6 @@ Layer1_ScoringManifest_\<ASSESSMENT_ID\>_v\<VERSION\> contents
 ===
 ```
 
-After the final delimiter block, the user must provide:
-
-```text
-BEGIN GENERATION
-```
-
-If `BEGIN GENERATION` is absent, the wrapper prompt must **produce no output**.
-
 ### Example Invocation
 
 ```text
