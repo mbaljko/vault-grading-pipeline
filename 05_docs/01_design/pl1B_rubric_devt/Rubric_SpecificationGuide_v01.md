@@ -487,6 +487,8 @@ Rows must be ordered from **strongest threshold condition** at the top to **weak
 The first row whose threshold condition is satisfied determines the output.
 Once a row is satisfied, later rows are ignored.
 No two rows may define identical threshold conditions for the same set of input SBOs.
+
+
 #### 9.7 Coverage requirement
 Mapping tables must guarantee that every possible combination of input values yields a result.
 Coverage may be achieved by:
@@ -918,40 +920,7 @@ Rows must be ordered from **strongest threshold condition** at the top to **weak
 The first row whose threshold condition is satisfied determines the output.
 Once a row is satisfied, later rows are ignored.
 No two rows may define identical threshold conditions for the same set of input SBOs.
-#### 9.7 Coverage requirement
-Mapping tables must guarantee that every possible combination of input values yields a result.
-Coverage may be achieved by:
-1. explicitly enumerating all combinations, or
-2. ensuring that the bottom row defines the weakest possible threshold condition
-In practice, the bottom row usually uses the weakest values of the input scales so that every input configuration satisfies at least that row.
-#### 9.8 Validity constraints
-A valid mapping table must satisfy all of the following:
-1. `resultant scale value` contains only values from the target SBO scale
-2. input columns contain only values from the corresponding input SBO scales or the wildcard `*`
-3. rows are ordered from strongest to weakest threshold condition
-4. evaluation yields exactly one output value for every possible input combination
-#### 9.9 Evaluation procedure
-Mapping-table evaluation follows this procedure:
-```text
-for each row in the table (top to bottom):
-    if all input values meet or exceed the row thresholds:
-        return resultant_scale_value
-```
-Because rows are ordered from strongest to weakest, the returned value is the strongest satisfied threshold condition.
-### 10. Structural Invariants
-The following invariants must hold for any rubric authored under this guide.
-1. All mapping tables must use input values drawn from the scale associated with the input SBOs and output values drawn from the scale associated with the target SBO.
-2. Every component must define its dimensions.
-3. Every `(component_id, dimension_id)` pair must be unique.
-4. Every `(submission_id, component_id, indicator_id)` combination must correspond to a valid Layer 1 SBO instance.
-5. Mapping tables must produce exactly one score outcome.
-6. Evidence evaluation must operate only within the defined AA.
-7. Indicator SBO instances may contribute evidence to multiple dimension SBOs; dimension membership is defined exclusively by the Layer 2 mapping rules.
-### 11. Normative Status
-This document defines the normative authoring conventions for rubric payloads created under the four-layer grading ontology.
-All rubric templates and populated rubric payloads should conform to these conventions unless an explicitly documented exception is adopted at the assessment level.
-weakest possible threshold condition
-In practice, the bottom row usually uses the weakest values of the input scales so that every input configuration satisfies at least that row.
+
 #### 9.8 Validity constraints
 A valid mapping table must satisfy all of the following:
 1. `resultant scale value` contains only values from the target SBO scale
