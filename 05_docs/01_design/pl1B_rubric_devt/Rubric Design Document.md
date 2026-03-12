@@ -1,4 +1,4 @@
-### Assignment Rubric Design Document
+## Rubric Design Document
 ### Purpose of this document
 This document explains the **conceptual design of the assignment rubric**.  
 It is intended for instructors, course designers, and calibration reviewers.
