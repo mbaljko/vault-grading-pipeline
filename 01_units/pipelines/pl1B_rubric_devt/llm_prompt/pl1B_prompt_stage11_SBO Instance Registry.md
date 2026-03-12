@@ -171,7 +171,7 @@ If candidate indicators cannot be located in the analytic brief, the generator m
 
 Using the **contrastive pattern discovery results** contained in the analytic brief, construct the **Layer 1 SBO Instance Registry**.
 
-Each Layer 1 SBO instance corresponds to **one indicator that can be detected in a student response**.
+Each Layer 1 SBO instance corresponds to **one indicator that can be detected in a response text**.
 
 Indicators must be derived from:
 
@@ -220,7 +220,7 @@ Indicator SBO instances must:
 
 Indicators should capture **distinct analytic signals**, not broad conceptual categories.
 
-Indicators may represent either engagement signals or conceptual interpretation signals, provided they correspond to observable textual language patterns in the response.
+Indicators may represent either engagement signals or detectable conceptual framings, provided they correspond to observable textual language patterns in the response.
 
 ---
 
@@ -249,7 +249,7 @@ Each Layer 1 SBO instance must define the following fields:
 ```text
 sbo_identifier
 sbo_identifier_shortid
-submission_id
+assessment_id
 component_id
 indicator_id
 sbo_short_description
@@ -257,14 +257,14 @@ sbo_short_description
 
 Field meanings:
 
-| field                    | description                                                                               |
-| ------------------------ | ----------------------------------------------------------------------------------------- |
-| `sbo_identifier`         | canonical Layer 1 SBO identifier                                                          |
-| `sbo_identifier_shortid` | compact short reference token                                                             |
-| `submission_id`          | stores the assessment identifier used as the submission-level rubric primitive identifier |
-| `component_id`           | canonical component identifier from the analytic brief                                    |
-| `indicator_id`           | indicator RP identifier                                                                   |
-| `sbo_short_description`  | concise human-readable label for the analytic signal                                      |
+| field                    | description                                                           |
+| ------------------------ | --------------------------------------------------------------------- |
+| `sbo_identifier`         | canonical Layer 1 SBO identifier                                      |
+| `sbo_identifier_shortid` | compact short reference token                                         |
+| `assessment_id`          | identifier of the assessment for which the rubric payload is authored |
+| `component_id`           | canonical component identifier from the analytic brief                |
+| `indicator_id`           | rubric primitive identifier for the indicator                         |
+| `sbo_short_description`  | concise human-readable label for the analytic signal                  |
 
 ---
 
@@ -351,7 +351,7 @@ I_<sid>_<cid>_<iid>
 
 Where:
 
-- `<sid>` = assessment identifier used in `submission_id`
+- `<sid>` = assessment identifier used in `assessment_id`
 - `<cid>` = compact component identifier
 - `<iid>` = `indicator_id`
 
@@ -434,7 +434,7 @@ response describes a responsibility hand-off
 
 When generating the Layer 1 registry:
 
-1. Prefer candidate indicators from the analytic brief that already correspond to **detectable textual signals**.
+1. Prefer candidate indicators from the analytic brief that already correspond to **detectable textual signals in response text**.
 2. Consolidate overlapping indicators when they are functionally redundant.
 3. Preserve important analytic contrasts that are likely to matter downstream.
 4. Avoid producing indicators that are merely broad topic labels.
@@ -465,7 +465,7 @@ followed by the registry table.
 
 The registry table must use these columns in this exact order:
 
-| sbo_identifier | sbo_identifier_shortid | submission_id | component_id | indicator_id | sbo_short_description |
+| sbo_identifier | sbo_identifier_shortid |  assessment_id | component_id | indicator_id | sbo_short_description |
 
 Indicators must be grouped by `component_id`.
 

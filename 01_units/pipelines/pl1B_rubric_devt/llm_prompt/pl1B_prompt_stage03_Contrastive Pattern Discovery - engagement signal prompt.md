@@ -65,7 +65,7 @@ notes: |
 
 This prompt performs **engagement signal extraction** for **Stage 0.3 of Pipeline 1B** in the rubric construction workflow.
 
-The goal is to identify **observable textual signals in student responses** that indicate **how students engage with the positioning task** within each **analytic sub-space**.
+The goal is to identify **observable textual signals in student responses** that indicate **how students engage with the component task** within each **analytic sub-space**.
 
 This stage does **not** extract signals about whether a student’s conceptual interpretation is correct, sophisticated, persuasive, or normatively desirable.
 
@@ -116,7 +116,7 @@ All required artefacts are provided in a **single sequence** separated by the de
 The delimiter separates artefacts.  
 It does **not** wrap them.
 
-Exactly **three artefacts** must appear, separated by this delimiter.
+Exactly three input artefacts must appear after the prompt text, separated by this delimiter.
 
 The structure must therefore be:
 
@@ -190,7 +190,7 @@ If the analytic sub-space registry cannot be located, **produce no output**.
 Verify that **Artefact 3** is a dataset containing the fields:
 
 ```text
-submission_id
+participant_id
 component_id
 cleaned_response_text
 ```
@@ -250,11 +250,11 @@ Used to obtain:
 
 Dataset structure:
 
-| field | description |
-|---|---|
-| `submission_id` | de-identified student identifier |
-| `component_id` | assignment component identifier |
-| `cleaned_response_text` | student response text |
+| field                   | description                                   |
+| ----------------------- | --------------------------------------------- |
+| `participant_id`        | de-identified participant artefact identifier |
+| `component_id`          | assignment component identifier               |
+| `cleaned_response_text` | student response text                         |
 
 Typical calibration sample size:
 
@@ -441,10 +441,10 @@ Each dataset contains a filtered subset of responses for a specific component.
 
 Dataset structure:
 
-| field_name |
-|---|
-| `submission_id` |
-| `component_id` |
+| field_name              |
+| ----------------------- |
+| `participant_id`        |
+| `component_id`          |
 | `cleaned_response_text` |
 
 Calibration samples typically contain **20–40 responses** and are used exclusively for **analytic discovery and rubric development**.

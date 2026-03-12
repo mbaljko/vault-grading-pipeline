@@ -49,7 +49,7 @@ Each such move defines an **analytic sub-space**.
 
 An analytic sub-space is:
 
-- a **task-defined conceptual area within a component response**
+- a **task-defined conceptual area within one component-level response surface**
 - derived directly from the **component instructions**
 - used as an **analytic scaffold** for later rubric construction
 - **not part of the scoring ontology**
@@ -149,7 +149,7 @@ Before producing output, silently verify all of the following.
 
 ### Check A — Coverage check
 
-Every component in the **Component Registry** of:
+Every `component_id` in the **Component Registry** of:
 
 ```text
 <ASSESSMENT_ID>_AssignmentPayloadSpec_v01
@@ -206,7 +206,7 @@ C1
 
 Rules:
 
-- `SECTION_LETTER` must correspond to the component section
+- `SECTION_LETTER` must correspond to the section letter encoded in the relevant `component_id`.
 - numbering must begin at `1` within each component
 - numbering must be consecutive
 - identifiers must be unique within the registry
@@ -280,7 +280,7 @@ State that analytic sub-spaces:
 
 - are task-defined conceptual areas within a component response
 - are derived directly from component instructions
-- are used only as a design scaffold for later stages
+- are used only as a design scaffold for later rubric-construction stages
 - are not part of the scoring ontology
 - do not appear in the Rubric Payload
 
