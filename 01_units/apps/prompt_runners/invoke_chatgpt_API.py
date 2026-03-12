@@ -9,10 +9,8 @@ What this script does:
 Inputs:
 - Prompt instructions (choose one):
     - `--prompt "..."`: inline prompt text.
-    - `--prompt-file path/to/prompt.txt`: prompt loaded from a file path.
-    - `--prompt-path /full/path/to/prompt.md`: prompt loaded from a file path
-      (same parsing behavior as `--prompt-file`).
-- Prompt instructions file parsing (`--prompt-file` / `--prompt-path`):
+    - `--prompt-instructions-file path/to/prompt.txt`: prompt loaded from a file path.
+- Prompt instructions file parsing (`--prompt-instructions-file`):
         - Default: use the full file content after removing a leading YAML front
             matter block (if present), then apply `.strip()`.
     - With `--use-first-fenced-block`: extract only the first fenced Markdown
@@ -20,7 +18,7 @@ Inputs:
             found, falls back to YAML-stripped full-file text.
     - Empty content after parsing raises a validation error.
 - Prompt instructions precedence:
-    - At most one of `--prompt`, `--prompt-file`, or `--prompt-path` may be provided.
+    - At most one of `--prompt` or `--prompt-instructions-file` may be provided.
     - If none is provided, built-in `DEFAULT_USER_PROMPT` is used.
 - Prompt input (choose one):
     - `--prompt-input-json '{"key": "value"}'`
@@ -29,7 +27,11 @@ Inputs:
 - API call structure:
     - Both are combined into a single user message sent to the API as:
         `prompt_instructions\n\nprompt_input`
-    - The system role carries only `SYSTEM_PROMPT` (default: "You are a helpful assistant.").
+    - The system role carries only `SYSTEM_PROMPT`.
+    - A system message is included only when `SYSTEM_PROMPT.strip()` is non-empty.
+      This keeps strict contract runs free of implicit extra instructions.
+      Revert option: always include a system message by removing the conditional branch
+      in `build_request_body`.
 
 Outputs:
 - The full API response object is always captured in memory.
@@ -50,7 +52,7 @@ Outputs:
 - `--output-file-stem <stem>` optionally overrides `<stem>` for all outputs.
 - Output path behavior:
     - If `--output-dir` is provided, all outputs are written there.
-    - Otherwise, when prompt file/path is provided, outputs are written next to that prompt file.
+    - Otherwise, when a prompt instructions file is provided, outputs are written next to it.
     - Otherwise, outputs are written next to this script file.
 - Paths are resolved to absolute paths before writing.
 
@@ -73,7 +75,7 @@ Environment configuration:
 - API key source (exclusive): `secrets/openai_api_key.txt` at repository root.
 
 Example:
-        python invoke_chatgpt_with_payload.py \
+        python invoke_chatgpt_API.py \
             --prompt "Summarize this calibration input" \
             --prompt-input-file input.txt
 """
@@ -147,7 +149,9 @@ ORGANIZATION_ID = os.getenv("OPENAI_ORG_ID", "")
 PROJECT_ID = os.getenv("OPENAI_PROJECT_ID", "")
 MODEL = os.getenv("OPENAI_MODEL", "gpt-5.1")
 API_BASE_URL = os.getenv("OPENAI_API_BASE_URL", "https://api.openai.com/v1")
-SYSTEM_PROMPT = os.getenv("OPENAI_SYSTEM_PROMPT", "You are a helpful assistant.")
+# Intentionally empty by default for strict contract prompting. Override via env when needed.
+# Revert option: set default to "You are a helpful assistant." and/or always include system role.
+SYSTEM_PROMPT = os.getenv("OPENAI_SYSTEM_PROMPT", "")
 REQUEST_TIMEOUT_SECONDS = 600
 DEFAULT_USER_PROMPT = (
     "Analyze the provided text segments. Return concise themes, key claims, "
@@ -160,18 +164,12 @@ DEFAULT_PROMPT_INPUT = (
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Send prompt + payload to ChatGPT API.")
+    parser = argparse.ArgumentParser(
+        description="Send prompt instructions + prompt input to ChatGPT API."
+    )
     parser.add_argument("--prompt", help="User prompt text.")
     parser.add_argument(
-        "--prompt-path",
-        type=Path,
-        help=(
-            "Full path to a text/Markdown file containing prompt text. "
-            "By default the full file is used."
-        ),
-    )
-    parser.add_argument(
-        "--prompt-file",
+        "--prompt-instructions-file",
         type=Path,
         help=(
             "Path to a text/Markdown file containing prompt text. "
@@ -182,7 +180,7 @@ def parse_args() -> argparse.Namespace:
         "--use-first-fenced-block",
         action="store_true",
         help=(
-            "When set with --prompt-file or --prompt-path, use only the first fenced "
+            "When set with --prompt-instructions-file, use only the first fenced "
             "Markdown block as the prompt text."
         ),
     )
@@ -218,7 +216,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Optional output directory for generated files. If omitted, outputs are "
-            "written next to the prompt file (when provided) or next to this script."
+            "written next to the prompt instructions file (when provided) or next to "
+            "this script."
         ),
     )
     parser.add_argument(
@@ -245,14 +244,17 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Optional filename stem override for all output artifacts. "
-            "When omitted, stem is derived from prompt file/path or falls back "
-            "to 'invoke_chatgpt_with_payload'."
+            "When omitted, stem is derived from prompt instructions file or falls back "
+            "to 'invoke_chatgpt_API'."
         ),
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Print resolved prompt/payload/request body and exit without calling API.",
+        help=(
+            "Print resolved prompt instructions/prompt input/request body and exit "
+            "without calling API."
+        ),
     )
     return parser.parse_args()
 
@@ -288,25 +290,20 @@ def load_prompt_input(args: argparse.Namespace) -> str:
     return json.dumps(parsed, indent=2, ensure_ascii=False)
 
 
-def load_prompt(args: argparse.Namespace) -> str:
-    provided_count = sum(
-        bool(x)
-        for x in [
-            args.prompt,
-            args.prompt_file,
-            args.prompt_path,
-        ]
-    )
+def load_prompt_instructions(args: argparse.Namespace) -> str:
+    provided_count = sum(bool(x) for x in [args.prompt, args.prompt_instructions_file])
     if provided_count > 1:
-        raise ValueError("Provide at most one of --prompt, --prompt-file, or --prompt-path.")
+        raise ValueError("Provide at most one of --prompt or --prompt-instructions-file.")
 
-    prompt_source = args.prompt_path or args.prompt_file
+    prompt_instructions_source = args.prompt_instructions_file
 
-    if prompt_source:
+    if prompt_instructions_source:
         try:
-            raw = prompt_source.read_text(encoding="utf-8")
+            raw = prompt_instructions_source.read_text(encoding="utf-8")
         except FileNotFoundError as exc:
-            raise ValueError(f"Prompt file not found: {prompt_source}") from exc
+            raise ValueError(
+                f"Prompt instructions file not found: {prompt_instructions_source}"
+            ) from exc
 
         prompt_body = _strip_leading_yaml_front_matter(raw)
         if args.use_first_fenced_block:
@@ -315,7 +312,7 @@ def load_prompt(args: argparse.Namespace) -> str:
         else:
             text = prompt_body.strip()
         if not text:
-            raise ValueError(f"Prompt file is empty: {prompt_source}")
+            raise ValueError(f"Prompt instructions file is empty: {prompt_instructions_source}")
         return text
 
     if args.prompt and args.prompt.strip():
@@ -332,20 +329,29 @@ def build_request_body(
     max_output_tokens: int | None,
 ) -> dict[str, Any]:
     user_text = f"{prompt_instructions}\n\n{prompt_input}"
+    system_prompt_text = SYSTEM_PROMPT.strip()
+
+    # Default behavior: omit system role when empty to avoid implicit instructions.
+    # Revert by always appending this item regardless of system_prompt_text content.
+    input_items: list[dict[str, Any]] = []
+    if system_prompt_text:
+        input_items.append(
+            {
+                "role": "system",
+                "content": [{"type": "input_text", "text": system_prompt_text}],
+            }
+        )
+    input_items.append(
+        {
+            "role": "user",
+            "content": [{"type": "input_text", "text": user_text}],
+        }
+    )
 
     body: dict[str, Any] = {
         "model": model,
         "temperature": temperature,
-        "input": [
-            {
-                "role": "system",
-                "content": [{"type": "input_text", "text": SYSTEM_PROMPT}],
-            },
-            {
-                "role": "user",
-                "content": [{"type": "input_text", "text": user_text}],
-            },
-        ],
+        "input": input_items,
     }
 
     if max_output_tokens is not None:
@@ -356,11 +362,15 @@ def build_request_body(
 
 def resolve_output_file_paths(args: argparse.Namespace) -> tuple[Path, Path, Path, Path]:
     """Resolve output file paths for extracted JSON, full JSON, CSV, and Markdown."""
-    prompt_source = args.prompt_path or args.prompt_file
+    prompt_instructions_source = args.prompt_instructions_file
     stem = (
         args.output_file_stem
         if args.output_file_stem
-        else (prompt_source.stem if prompt_source else "invoke_chatgpt_with_payload")
+        else (
+            prompt_instructions_source.stem
+            if prompt_instructions_source
+            else "invoke_chatgpt_API"
+        )
     )
 
     if args.output_dir:
@@ -372,8 +382,8 @@ def resolve_output_file_paths(args: argparse.Namespace) -> tuple[Path, Path, Pat
         md_path = output_dir / f"{stem}_output.md"
         return extracted_json_path, full_api_json_path, csv_path, md_path
 
-    if prompt_source:
-        prompt_dir = prompt_source.resolve().parent
+    if prompt_instructions_source:
+        prompt_dir = prompt_instructions_source.resolve().parent
         extracted_json_path = prompt_dir / f"{stem}_output.json"
         full_api_json_path = prompt_dir / f"{stem}_api_response.json"
         csv_path = prompt_dir / f"{stem}_output.csv"
@@ -442,11 +452,9 @@ def _quote_yaml_string(value: str) -> str:
     return f'"{escaped}"'
 
 
-def _prompt_source_label(args: argparse.Namespace) -> str:
-    if args.prompt_path:
-        return "prompt_path"
-    if args.prompt_file:
-        return "prompt_file"
+def _prompt_instructions_source_label(args: argparse.Namespace) -> str:
+    if args.prompt_instructions_file:
+        return "prompt_instructions_file"
     if args.prompt:
         return "prompt"
     return "default"
@@ -471,13 +479,11 @@ def _render_markdown_front_matter(
         "---",
         f"generated_at_utc: {_quote_yaml_string(generated_at_utc)}",
         "prompt_instructions:",
-        f"  source: {_quote_yaml_string(_prompt_source_label(args))}",
+        f"  source: {_quote_yaml_string(_prompt_instructions_source_label(args))}",
     ]
 
-    if args.prompt_path:
-        lines.append(f"  path: {_quote_yaml_string(str(args.prompt_path.resolve()))}")
-    elif args.prompt_file:
-        lines.append(f"  path: {_quote_yaml_string(str(args.prompt_file.resolve()))}")
+    if args.prompt_instructions_file:
+        lines.append(f"  path: {_quote_yaml_string(str(args.prompt_instructions_file.resolve()))}")
 
     lines.append("  text: |-")
     lines.extend(f"    {line}" for line in prompt_lines)
@@ -632,7 +638,7 @@ def main() -> int:
     print(f"Request timeout set to: {REQUEST_TIMEOUT_SECONDS} seconds. Waiting.")
 
     try:
-        prompt_instructions = load_prompt(args)
+        prompt_instructions = load_prompt_instructions(args)
         prompt_input = load_prompt_input(args)
         body = build_request_body(
             model=args.model,

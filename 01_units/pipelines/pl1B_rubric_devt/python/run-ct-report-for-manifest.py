@@ -3,7 +3,7 @@
 
 This script scans markdown table rows in `--sbo-manifest-file`, selects rows
 whose raw row line contains `--component-id`, and for each matching row:
-invokes `invoke_chatgpt_with_payload.py` to produce an LLM output markdown
+invokes `invoke_chatgpt_API.py` to produce an LLM output markdown
 file, then stitches response texts from `--file-with-response-texts` into
 Panel A/B/C tables in that output.
 
@@ -14,7 +14,7 @@ Arguments:
   `response_text` columns; used to augment Panel tables in stitching step.
 - `--file-with-scored-texts`: CSV used to find matching rows by `indicator_id`.
 - `--runner-dry-run`: when set, forwards `--dry-run` to
-	`invoke_chatgpt_with_payload.py`.
+	`invoke_chatgpt_API.py`.
 
 Per matching row behavior:
 1. Extract `sbo_identifier` from the row and print it to stdout.
@@ -28,8 +28,8 @@ Per matching row behavior:
 	- `===`
 	- JSON for `scored_payload`
 	- `===`
-5. Invoke `invoke_chatgpt_with_payload.py` with:
-	- `--prompt-file` from `L1_CT_PROMPT_FILE_RELATIVE`
+5. Invoke `invoke_chatgpt_API.py` with:
+	- `--prompt-instructions-file` from `L1_CT_PROMPT_FILE_RELATIVE`
 	- `--payload-file` from step 4
 	- `--output-file-stem <sbo_identifier>`
 	- `--output-dir <manifest_dir>/<RUNNER_OUTPUT_SUBDIR>`
@@ -76,7 +76,7 @@ REPO_ROOT: Path | None = next(
 	(candidate for candidate in [SCRIPT_DIR, *SCRIPT_DIR.parents] if (candidate / ".git").exists()),
 	None,
 )
-RUNNER_SCRIPT_RELATIVE = Path("01_units/apps/prompt_runners/invoke_chatgpt_with_payload.py")
+RUNNER_SCRIPT_RELATIVE = Path("01_units/apps/prompt_runners/invoke_chatgpt_API.py")
 L1_CT_PROMPT_FILE_RELATIVE = Path(
 	"01_units/pipelines/pl1B_rubric_devt/llm_prompt/"
 	"pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO.md"
@@ -115,7 +115,7 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument(
 		"--runner-dry-run",
 		action="store_true",
-		help="Forward --dry-run to invoke_chatgpt_with_payload.py.",
+		help="Forward --dry-run to invoke_chatgpt_API.py.",
 	)
 	parser.add_argument(
 		"--output-dir",
@@ -228,7 +228,7 @@ def run_l1_ct_for_payload(
 		"md",
 		"--output-dir",
 		str(runner_output_dir),
-		"--prompt-file",
+		"--prompt-instructions-file",
 		str(prompt_file),
 		"--payload-file",
 		str(payload_file),
