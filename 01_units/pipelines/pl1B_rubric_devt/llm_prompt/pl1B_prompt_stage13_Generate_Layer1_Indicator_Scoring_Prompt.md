@@ -297,10 +297,11 @@ The parameter block must appear exactly in the required syntax.
 If any required artefact or parameter is missing, malformed, or inconsistent, the wrapper prompt must **produce no output**.
 
 Angle-bracketed expressions in this wrapper, such as `<ASSESSMENT_ID>`, `<COMPONENT_ID>`, and `<VERSION>`, are specification placeholders used to describe required payload content. They are not literal payload text unless they occur inside a verbatim artefact block.
+
 ### Payload Grammar (Normative)
 
 The payload supplied to this wrapper must match the following exact grammar:
-```
+```text
 ===
 PARAM_TARGET_COMPONENT_ID = <COMPONENT_ID>
 ===
@@ -346,7 +347,6 @@ PARAM_TARGET_COMPONENT_ID = SectionBResponse
 \<PPP_AssignmentPayloadSpec_v01 contents\>
 ===
 \<Layer1_ScoringManifest_PPP_v01 contents\>
-
 ```
 
 If the artefacts appear in a different order or if the delimiter structure is violated, the wrapper prompt must **produce no output**.
@@ -520,23 +520,42 @@ Set equal to the canonical submission-level identifier field extracted from the 
 
 #### Insertion token `[[WRAPPER_HANDLING_RULE_BULLETS]]`
 
-Set equal to the wrapper-handling bullets extracted from the assignment payload specification for `response_text`.
+Set equal to the wrapper-handling rules extracted from the assignment payload specification for `response_text`, but only if those rules already appear in the source artefact as Markdown bullet lines.
 
-The inserted text must be formatted as Markdown bullet lines only.  
-No introductory sentence may be added inside the insertion value.
+The insertion value must preserve the extracted bullet lines verbatim and in source order.
 
-If wrapper-handling rules are absent, malformed, or cannot be expressed as bullet lines, the wrapper must **produce no output**.
+The inserted text must contain bullet lines only.  
+No introductory sentence, paraphrase, normalisation, bullet synthesis, or prose-to-bullet conversion may occur inside the insertion value.
+
+If wrapper-handling rules are absent, malformed, not present as bullet lines in the source artefact, or cannot be extracted verbatim as bullet lines, the wrapper must **produce no output**.
 
 #### Insertion token `[[EMBEDDED_INDICATOR_TABLE_ROWS]]`
 
-Set equal to the filtered manifest rows formatted as Markdown table body rows using this exact column order:
+Set equal to the filtered manifest rows rendered as Markdown table body rows using the following exact column order:
+
+- indicator_id
+- sbo_short_description
+- indicator_definition
+- assessment_guidance
+- embedded evaluator guidance
+
+Each table body row must be constructed deterministically using the following formatting rules:
+
+- each row must begin with `|`
+- each column value must be surrounded by single spaces inside the pipes
+- the final column must end with ` |`
+- the row must contain exactly five columns
+- columns must appear in the required column order
+- column values must preserve the exact text from the source manifest fields
+- leading and trailing whitespace from manifest field values must be trimmed before insertion
+- newline characters inside manifest field values must be replaced with a single space
+- pipe characters inside manifest field values must be escaped as `\|`
+- empty field values must be rendered as an empty cell between pipes
+
+Example row format:
 
 ```text
-indicator_id
-sbo_short_description
-indicator_definition
-assessment_guidance
-embedded evaluator guidance
+| indicator_id | sbo_short_description | indicator_definition | assessment_guidance | embedded evaluator guidance |
 ```
 
 Each table body row must preserve the filtered manifest row order exactly.
@@ -546,25 +565,34 @@ The wrapper must insert only the filtered rows whose `component_id = PARAM_TARGE
 No header row may appear inside this insertion value.  
 No prose may appear before or after the inserted rows.
 
+If any manifest field required to construct a table row is missing, malformed, or cannot be rendered deterministically according to these rules, the wrapper must **produce no output**.
+
 ### Canonical Template Validation
 
-Before emitting the scoring prompt, the wrapper must perform a **canonical template validation check**.
+Before emitting the scoring prompt, the wrapper must perform a **canonical scaffold validation check**.
 
-The wrapper must confirm that:
+The wrapper must confirm that the emitted scoring prompt is an exact structural instantiation of the canonical scaffold.
+
+The following conditions must all hold:
 
 - all required sections appear exactly once
-- section headings match the canonical template text
-- section ordering is identical to the canonical template
-- lead-in phrases appear exactly as specified
-- the embedded indicator table schema matches the required column structure
-- no unexpected sentences appear in the generated prompt
-- no template sentences are missing
-- permitted substitutions were applied correctly
+- section headings match the canonical scaffold text exactly
+- section ordering is identical to the canonical scaffold
+- bullet lists match the canonical scaffold exactly
+- table schemas match the canonical scaffold exactly
+- lead-in phrases match the canonical scaffold exactly
+- no additional sentences appear anywhere in the scaffold
+- no scaffold sentences are missing
+- no scaffold sentences are rewritten or paraphrased
+- permitted substitutions were applied only at the defined insertion tokens
 - no insertion tokens remain unresolved in the emitted prompt
 
-If any validation rule fails, the wrapper prompt must **produce no output**.
+The wrapper must treat the canonical scaffold as immutable text except at the explicitly permitted insertion tokens.
 
-### Indicator Evidence Status Scale
+If any validation rule fails, the wrapper must **produce no output**.
+
+### Wrapper Behaviour
+#### Indicator Evidence Status Scale
 
 The generated scoring prompt must embed this scale.
 
@@ -576,7 +604,7 @@ The generated scoring prompt must embed this scale.
 
 Evidence must rely strictly on **explicit response language**.
 
-### Output Requirements
+#### Output Requirements
 
 Allowed output fields:
 
@@ -597,14 +625,14 @@ confidence ∈ {low, medium, high}
 flags ∈ {none, needs_review}
 ```
 
-#### Field Formatting Rules
+##### Field Formatting Rules
 
 The scoring prompt must require:
 
 - `evaluation_notes` enclosed in double quotes
 - empty notes represented as `""`
 
-#### CSV Header Requirement
+##### CSV Header Requirement
 
 Output must begin with the header row:
 
@@ -614,21 +642,21 @@ submission_id,component_id,indicator_id,evidence_status,evaluation_notes,confide
 
 The header appears **exactly once**.
 
-### Wrapper Execution Discipline
+#### Wrapper Execution Discipline
 
-#### Phase 1 — Artefact ingestion
+##### Phase 1 — Artefact ingestion
 
 The wrapper reads the three input blocks silently.
 
 If the input-block contract is violated, produce **no output**.
 
-#### Phase 2 — Validation and extraction
+##### Phase 2 — Validation and extraction
 
 The wrapper validates block count, block order, artefact consistency, and required fields.
 
 If validation fails, produce **no output**.
 
-#### Phase 3 — Canonical scaffold instantiation
+##### Phase 3 — Canonical scaffold instantiation
 
 When valid input blocks are present, the wrapper must instantiate the canonical scaffold exactly once.
 
@@ -751,6 +779,29 @@ Constraints
 Content rules
 Failure mode handling
 ```
+
+### Wrapper Output Contract
+
+The wrapper must emit exactly one output artefact.
+
+That artefact must consist solely of the instantiated canonical scoring prompt scaffold.
+
+The output must therefore contain:
+
+- one fenced Markdown block
+- using an outer fence of four backticks
+- containing the instantiated canonical scaffold
+
+The wrapper must not emit:
+
+- explanatory text
+- commentary
+- diagnostic notes
+- prefaces or summaries
+- additional Markdown blocks
+- any text before or after the fenced scaffold block
+
+If the wrapper cannot produce a fully instantiated canonical scaffold that passes the canonical template validation rules, the wrapper must produce **no output**.
 
 ### Canonical Output Scaffold
 
