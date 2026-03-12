@@ -25,8 +25,8 @@ Inputs:
     - `--prompt-input-file path/to/input.txt`
 - If no prompt input is provided, a built-in sample input is used.
 - API call structure:
-    - Both are combined into a single user message sent to the API as:
-        `prompt_instructions\n\nprompt_input`
+    - Both are combined into a single user message sent to the API as JSON text with fields:
+        `{"prompt_instructions": "...", "prompt_input": "..."}`
     - The system role carries only `SYSTEM_PROMPT`.
     - A system message is included only when `SYSTEM_PROMPT.strip()` is non-empty.
       This keeps strict contract runs free of implicit extra instructions.
@@ -63,6 +63,7 @@ Additional invocation parameters:
 - `--output-file-stem <stem>`
 - `--save-full-api-response`
 - `--dry-run`
+- `--verbose`
 - `--use-first-fenced-block`
 
 Environment configuration:
@@ -256,13 +257,21 @@ def parse_args() -> argparse.Namespace:
             "without calling API."
         ),
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help=(
+            "Print resolved request body JSON and prompt_instructions/prompt_input "
+            "diagnostics before invoking the API."
+        ),
+    )
     return parser.parse_args()
 
 
 def load_prompt_input(args: argparse.Namespace) -> str:
     """Return prompt input as plain text.
 
-    - ``--prompt-input-file``: file content is read and returned as-is (plain text).
+    - ``--prompt-input-file``: full file content is read and returned as-is (plain text).
     - ``--prompt-input-json``: JSON is parsed then pretty-printed back to text.
     - Neither provided: returns ``DEFAULT_PROMPT_INPUT``.
     """
@@ -278,7 +287,8 @@ def load_prompt_input(args: argparse.Namespace) -> str:
         except FileNotFoundError as exc:
             raise ValueError(f"Prompt input file not found: {args.prompt_input_file}") from exc
 
-        prompt_input_text = _extract_first_fenced_block(raw) or raw.strip()
+        # Keep prompt input fully intact; do not apply fenced-block extraction.
+        prompt_input_text = raw.strip()
         if not prompt_input_text:
             raise ValueError(f"Prompt input file is empty: {args.prompt_input_file}")
         return prompt_input_text
@@ -328,7 +338,14 @@ def build_request_body(
     temperature: float,
     max_output_tokens: int | None,
 ) -> dict[str, Any]:
-    user_text = f"{prompt_instructions}\n\n{prompt_input}"
+    user_text = json.dumps(
+        {
+            "prompt_instructions": prompt_instructions,
+            "prompt_input": prompt_input,
+        },
+        indent=2,
+        ensure_ascii=False,
+    )
     system_prompt_text = SYSTEM_PROMPT.strip()
 
     # Default behavior: omit system role when empty to avoid implicit instructions.
@@ -647,6 +664,27 @@ def main() -> int:
             temperature=args.temperature,
             max_output_tokens=args.max_output_tokens,
         )
+        if args.verbose:
+            print("=== VERBOSE: REQUEST BODY ===")
+            print(json.dumps(body, indent=2, ensure_ascii=False))
+            user_text = ""
+            for item in body.get("input", []):
+                if isinstance(item, dict) and item.get("role") == "user":
+                    for content in item.get("content", []):
+                        if isinstance(content, dict) and content.get("type") == "input_text":
+                            text = content.get("text")
+                            if isinstance(text, str):
+                                user_text = text
+                                break
+                    break
+            print("=== VERBOSE: INPUT DIAGNOSTICS ===")
+            print(f"prompt_instructions_chars: {len(prompt_instructions)}")
+            print(f"prompt_input_chars: {len(prompt_input)}")
+            print(f"user_message_chars: {len(user_text)}")
+            print(
+                "prompt_input_field_in_user_message: "
+                f"{'\"prompt_input\"' in user_text}"
+            )
         requested_formats = resolve_requested_output_formats(args.output_format)
         generated_at_utc = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 

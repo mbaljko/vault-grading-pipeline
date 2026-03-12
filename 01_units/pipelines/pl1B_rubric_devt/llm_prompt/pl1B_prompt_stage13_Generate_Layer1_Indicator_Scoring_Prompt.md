@@ -782,11 +782,22 @@ The wrapper must not emit:
 
 If the wrapper cannot produce a fully instantiated canonical scaffold that passes the canonical template validation rules, the wrapper must produce **no output**.
 
-### Canonical Output Scaffold
+### Canonical Output Scaffold Source
 
-The wrapper must instantiate the following scaffold **verbatim**.
+The following block is a source representation of the canonical scaffold.
 
-No text may be added, removed, reordered, or rewritten outside the permitted insertion operations.
+It is provided only so the wrapper can copy the scaffold text exactly during instantiation.
+
+The fence markers and the info string are not part of the scaffold content itself.
+
+The generated output must:
+- emit exactly one fenced Markdown block using an outer fence of four backticks
+- contain the instantiated scaffold content inside that fence
+- not emit the literal info string `text`
+
+Within the scaffold content, no text may be added, removed, reordered, or rewritten outside the permitted insertion operations.
+
+Source representation of scaffold:
 
 ````text
 #### RUN_[[ASSESSMENT_ID]]_[[TARGET_COMPONENT_ID]]_Layer1_SBO_scoring_prompt_v01
