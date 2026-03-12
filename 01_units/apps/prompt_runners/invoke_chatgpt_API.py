@@ -63,7 +63,7 @@ Additional invocation parameters:
 - `--output-file-stem <stem>`
 - `--save-full-api-response`
 - `--dry-run`
-- `--verbose`
+- `--verbose [true|false]`
 - `--use-first-fenced-block`
 
 Environment configuration:
@@ -164,6 +164,20 @@ DEFAULT_PROMPT_INPUT = (
 )
 
 
+def _parse_cli_bool(value: str | bool) -> bool:
+    """Parse common true/false tokens for CLI flags."""
+    if isinstance(value, bool):
+        return value
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "t", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "f", "no", "n", "off"}:
+        return False
+    raise argparse.ArgumentTypeError(
+        "Expected boolean value for --verbose (true/false, yes/no, 1/0)."
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Send prompt instructions + prompt input to ChatGPT API."
@@ -259,10 +273,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--verbose",
-        action="store_true",
+        nargs="?",
+        const=True,
+        default=False,
+        type=_parse_cli_bool,
         help=(
             "Print resolved request body JSON and prompt_instructions/prompt_input "
-            "diagnostics before invoking the API."
+            "diagnostics before invoking the API. Accepts optional true/false; "
+            "if value is omitted, defaults to true."
         ),
     )
     return parser.parse_args()

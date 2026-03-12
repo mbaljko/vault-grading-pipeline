@@ -784,25 +784,32 @@ If the wrapper cannot produce a fully instantiated canonical scaffold that passe
 
 ### Canonical Output Scaffold Source
 
-The following block is a source representation of the canonical scaffold.
+The following block is a **source representation** of the canonical scaffold.
 
-It is provided only so the wrapper can copy the scaffold text exactly during instantiation.
+It exists only so the wrapper can copy the scaffold text exactly during instantiation.
 
-The fence markers and the info string are not part of the scaffold content itself.
+The fence markers and the info string used in this source representation are **not part of the scaffold content itself**.
 
-The generated output must:
-- emit exactly one fenced Markdown block using an outer fence of four backticks
-- contain the instantiated scaffold content inside that fence
-- not emit the literal info string `text`
+The generated output must consist solely of the instantiated scaffold content.
+
+The generated output must be emitted as plain Markdown.
+
+No surrounding code fences, container blocks, commentary, or explanatory text may appear before or after the scaffold content.
+
+The first line of the generated output must be exactly:
+
+#### RUN_[[ASSESSMENT_ID]]_[[TARGET_COMPONENT_ID]]_Layer1_SBO_scoring_prompt_v01
 
 Within the scaffold content, no text may be added, removed, reordered, or rewritten outside the permitted insertion operations.
 
+The outer four-backtick fence used in this source representation exists only to preserve the scaffold text verbatim inside this specification and must not appear in the generated output.
+
 Source representation of scaffold:
 
-````text
-#### RUN_[[ASSESSMENT_ID]]_[[TARGET_COMPONENT_ID]]_Layer1_SBO_scoring_prompt_v01
+````markdown
+### RUN_[[ASSESSMENT_ID]]_[[TARGET_COMPONENT_ID]]_Layer1_SBO_scoring_prompt_v01
 
-### Prompt title and restrictions
+#### Prompt title and restrictions
 
 This prompt performs **Layer 1 SBO scoring** for target component `[[TARGET_COMPONENT_ID]]`.
 
@@ -823,7 +830,7 @@ Layer 1 SBO scoring performs only:
 indicator evidence detection
 ```
 
-### Authoritative scoring materials
+#### Authoritative scoring materials
 
 Assessment identifier:
 
@@ -908,7 +915,7 @@ Produce no output if:
 - complete row coverage cannot be achieved for all valid runtime rows
 - any contradiction prevents deterministic evaluation
 
-### Input format
+#### Input format
 
 Runtime input will contain a dataset with one or more runtime rows.  
 Each runtime row represents one submission-level evaluation unit:
@@ -926,7 +933,7 @@ For all later instructions in this prompt, the selected field must be treated as
 
 Wrapper handling is applied per runtime row.
 
-### Evaluation discipline
+#### Evaluation discipline
 
 For each runtime row, evaluate all embedded indicator_id values exactly once.  
 For each runtime row, emit one CSV data row per embedded indicator_id.  
@@ -939,7 +946,7 @@ Emit the CSV header exactly once, before all data rows.
 total data row count = number of valid runtime rows × number of embedded indicators
 ```
 
-#### Indicator Coverage Rule
+##### Indicator Coverage Rule
 
 Before writing any output rows, construct the ordered list of embedded `indicator_id` values.
 
@@ -949,7 +956,7 @@ Ensure that:
 - indicators are processed in embedded prompt order
 - every valid runtime row receives a complete indicator evaluation set
 
-#### Runtime Row Coverage Rule
+##### Runtime Row Coverage Rule
 
 Before writing any output rows, construct the ordered list of valid runtime rows from the runtime dataset.
 
@@ -963,7 +970,7 @@ A valid runtime row is a row whose:
 Do not stop after the first valid runtime row.  
 Do not emit output for only a prefix of the runtime dataset.
 
-#### Evaluation Sequence
+##### Evaluation Sequence
 
 Layer 1 SBO scoring must follow this exact sequence:
 
@@ -980,7 +987,7 @@ Layer 1 SBO scoring must follow this exact sequence:
    - organise the indexed evidence into candidate signal groupings relevant to the target component
    - evaluate all embedded `indicator_id` values using the evidence index and signal groupings rather than rescanning the full response text
 
-#### Indicator Evaluation
+##### Indicator Evaluation
 
 For each valid runtime row and for each embedded `indicator_id` in prompt order:
 
@@ -992,7 +999,7 @@ For each valid runtime row and for each embedded `indicator_id` in prompt order:
 - assign `confidence`
 - assign `flags`
 
-#### Evidence Gate Rule
+##### Evidence Gate Rule
 
 Do **not** assign `evidence` or `partial_evidence` without internally identifying a supporting textual fragment.
 
@@ -1002,7 +1009,7 @@ If no relevant fragment exists, assign:
 little_to_no_evidence
 ```
 
-#### Output Row Count Rule
+##### Output Row Count Rule
 
 Before emitting CSV rows, verify that:
 
@@ -1015,7 +1022,7 @@ number of valid runtime rows × number of embedded indicators
 If counts differ, complete the missing evaluations before emitting output.  
 Do not emit partial output.
 
-#### Output Emission Rule
+##### Output Emission Rule
 
 Emit output in this exact structure:
 
@@ -1024,9 +1031,9 @@ Emit output in this exact structure:
 - then, for runtime row 2, one data row per embedded `indicator_id` in prompt order
 - continue until all valid runtime rows are exhausted
 
-### Evidence interpretation rules
+#### Evidence interpretation rules
 
-#### Evidence Fragment Output Mode
+##### Evidence Fragment Output Mode
 
 Default behaviour:
 
@@ -1042,7 +1049,7 @@ FRAGMENT_OUTPUT_MODE = on
 
 If enabled, `evaluation_notes` may briefly reference the supporting fragment used to assign the evidence status.
 
-#### Partial Evidence Preference Rule
+##### Partial Evidence Preference Rule
 
 If explicit language partially satisfies an indicator definition but does not fully satisfy it, assign:
 
@@ -1052,7 +1059,7 @@ partial_evidence
 
 Do not collapse weak but relevant explicit evidence into `little_to_no_evidence`.
 
-#### Independence Rule
+##### Independence Rule
 
 Indicators must be evaluated independently.
 
@@ -1066,7 +1073,7 @@ Do not use:
 
 to influence the judgement.
 
-### Confidence assignment rule
+#### Confidence assignment rule
 
 Confidence reflects clarity of textual evidence, not probability.
 
@@ -1086,7 +1093,7 @@ If evidence_status = little_to_no_evidence and no fragment exists, assign confid
 If you are uncertain and cannot identify sufficient explicit support for evidence or partial_evidence, assign evidence_status = little_to_no_evidence and flags = needs_review.
 ```
 
-### Output schema
+#### Output schema
 
 Output must be CSV.  
 Emit the header row exactly once:
@@ -1110,7 +1117,7 @@ Field rules:
 - no additional columns may appear
 - no explanatory text may appear before or after the CSV
 
-### Constraints
+#### Constraints
 
 Use only:
 
@@ -1128,7 +1135,7 @@ Do not use:
 - performance-level reasoning
 - assumptions about intended meaning
 
-### Content rules
+#### Content rules
 
 Require all of the following:
 
@@ -1138,7 +1145,7 @@ Require all of the following:
 - concise `evaluation_notes`
 - no long quotations unless fragment mode is enabled
 
-### Failure mode handling
+#### Failure mode handling
 
 If any artefact or parameter is missing, inconsistent, or contradictory:
 
