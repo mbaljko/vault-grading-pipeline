@@ -1,31 +1,35 @@
 #!/usr/bin/env python3
-"""Send a prompt and payload to the OpenAI Responses API and persist results.
+"""Send prompt instructions and prompt input to the OpenAI Responses API and persist results.
 
 What this script does:
-- Resolves prompt and payload inputs from CLI args or built-in defaults.
+- Resolves prompt instructions and prompt input from CLI args or built-in defaults.
 - Calls the OpenAI Responses API.
 - Persists extracted output text in requested file formats.
 
 Inputs:
-- Prompt input (choose one):
+- Prompt instructions (choose one):
     - `--prompt "..."`: inline prompt text.
     - `--prompt-file path/to/prompt.txt`: prompt loaded from a file path.
     - `--prompt-path /full/path/to/prompt.md`: prompt loaded from a file path
       (same parsing behavior as `--prompt-file`).
-- Prompt file parsing (`--prompt-file` / `--prompt-path`):
+- Prompt instructions file parsing (`--prompt-file` / `--prompt-path`):
         - Default: use the full file content after removing a leading YAML front
             matter block (if present), then apply `.strip()`.
     - With `--use-first-fenced-block`: extract only the first fenced Markdown
             block (``` or ````) from the YAML-stripped content. If no fenced block is
             found, falls back to YAML-stripped full-file text.
     - Empty content after parsing raises a validation error.
-- Prompt precedence:
+- Prompt instructions precedence:
     - At most one of `--prompt`, `--prompt-file`, or `--prompt-path` may be provided.
     - If none is provided, built-in `DEFAULT_USER_PROMPT` is used.
-- Payload input (choose one):
-    - `--payload-json '{"key": "value"}'`
-    - `--payload-file path/to/payload.txt`
-- If no payload is provided, a built-in sample payload is used.
+- Prompt input (choose one):
+    - `--prompt-input-json '{"key": "value"}'`
+    - `--prompt-input-file path/to/input.txt`
+- If no prompt input is provided, a built-in sample input is used.
+- API call structure:
+    - Both are combined into a single user message sent to the API as:
+        `prompt_instructions\n\nprompt_input`
+    - The system role carries only `SYSTEM_PROMPT` (default: "You are a helpful assistant.").
 
 Outputs:
 - The full API response object is always captured in memory.
@@ -35,7 +39,7 @@ Outputs:
     - `csv`: writes CSV derived from `extracted_output_text`.
         - If text looks like CSV, rows are parsed and written.
         - Otherwise, a single-column CSV (`output_text`) is written.
-    - `md`: writes Markdown with YAML front matter metadata (prompt, payload info, timestamp)
+    - `md`: writes Markdown with YAML front matter metadata (instructions source, input source, timestamp)
         followed by `extracted_output_text`.
 - `--save-full-api-response` controls whether a separate raw API response JSON file is written.
 - Output filename patterns:
@@ -70,8 +74,8 @@ Environment configuration:
 
 Example:
         python invoke_chatgpt_with_payload.py \
-                --prompt "Summarize this calibration payload" \
-                --payload-file payload.json
+            --prompt "Summarize this calibration input" \
+            --prompt-input-file input.txt
 """
 
 from __future__ import annotations
@@ -149,12 +153,10 @@ DEFAULT_USER_PROMPT = (
     "Analyze the provided text segments. Return concise themes, key claims, "
     "and any notable inconsistencies."
 )
-DEFAULT_PAYLOAD: dict[str, Any] = {
-    "segments": [
-        "Example segment A.",
-        "Example segment B.",
-    ]
-}
+DEFAULT_PROMPT_INPUT = (
+    "Example input segment A.\n"
+    "Example input segment B."
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -185,13 +187,13 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--payload-file",
+        "--prompt-input-file",
         type=Path,
-        help="Path to text/Markdown payload file (handled as text).",
+        help="Path to a text/Markdown file containing prompt input (passed as plain text).",
     )
     parser.add_argument(
-        "--payload-json",
-        help="Inline JSON payload string.",
+        "--prompt-input-json",
+        help="Inline JSON prompt input string (pretty-printed and passed as text).",
     )
     parser.add_argument(
         "--temperature",
@@ -255,30 +257,35 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_payload(args: argparse.Namespace) -> dict[str, Any]:
-    if args.payload_file and args.payload_json:
-        raise ValueError("Provide at most one of --payload-file or --payload-json.")
+def load_prompt_input(args: argparse.Namespace) -> str:
+    """Return prompt input as plain text.
 
-    if not args.payload_file and not args.payload_json:
-        return DEFAULT_PAYLOAD
+    - ``--prompt-input-file``: file content is read and returned as-is (plain text).
+    - ``--prompt-input-json``: JSON is parsed then pretty-printed back to text.
+    - Neither provided: returns ``DEFAULT_PROMPT_INPUT``.
+    """
+    if args.prompt_input_file and args.prompt_input_json:
+        raise ValueError("Provide at most one of --prompt-input-file or --prompt-input-json.")
 
-    if args.payload_file:
+    if not args.prompt_input_file and not args.prompt_input_json:
+        return DEFAULT_PROMPT_INPUT
+
+    if args.prompt_input_file:
         try:
-            raw = args.payload_file.read_text(encoding="utf-8")
+            raw = args.prompt_input_file.read_text(encoding="utf-8")
         except FileNotFoundError as exc:
-            raise ValueError(f"Payload file not found: {args.payload_file}") from exc
+            raise ValueError(f"Prompt input file not found: {args.prompt_input_file}") from exc
 
-        payload_text = _extract_first_fenced_block(raw) or raw.strip()
-        if not payload_text:
-            raise ValueError(f"Payload file is empty: {args.payload_file}")
-
-        # --payload-file handler: always treat input as text content
-        return {"segments": [payload_text.strip()]}
+        prompt_input_text = _extract_first_fenced_block(raw) or raw.strip()
+        if not prompt_input_text:
+            raise ValueError(f"Prompt input file is empty: {args.prompt_input_file}")
+        return prompt_input_text
 
     try:
-        return json.loads(args.payload_json)
+        parsed = json.loads(args.prompt_input_json)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"--payload-json is not valid JSON: {exc}") from exc
+        raise ValueError(f"--prompt-input-json is not valid JSON: {exc}") from exc
+    return json.dumps(parsed, indent=2, ensure_ascii=False)
 
 
 def load_prompt(args: argparse.Namespace) -> str:
@@ -319,15 +326,12 @@ def load_prompt(args: argparse.Namespace) -> str:
 
 def build_request_body(
     model: str,
-    prompt: str,
-    payload: dict[str, Any],
+    prompt_instructions: str,
+    prompt_input: str,
     temperature: float,
     max_output_tokens: int | None,
 ) -> dict[str, Any]:
-    user_text = (
-        f"Prompt:\n{prompt}\n\n"
-        f"Payload (JSON):\n{json.dumps(payload, indent=2, ensure_ascii=False)}"
-    )
+    user_text = f"{prompt_instructions}\n\n{prompt_input}"
 
     body: dict[str, Any] = {
         "model": model,
@@ -448,31 +452,25 @@ def _prompt_source_label(args: argparse.Namespace) -> str:
     return "default"
 
 
-def _payload_source_label(args: argparse.Namespace) -> str:
-    if args.payload_file:
-        return "payload_file"
-    if args.payload_json:
-        return "payload_json"
+def _prompt_input_source_label(args: argparse.Namespace) -> str:
+    if args.prompt_input_file:
+        return "prompt_input_file"
+    if args.prompt_input_json:
+        return "prompt_input_json"
     return "default"
 
 
 def _render_markdown_front_matter(
     args: argparse.Namespace,
-    prompt: str,
-    payload: dict[str, Any],
+    prompt_instructions: str,
+    prompt_input: str,
     generated_at_utc: str,
 ) -> str:
-    prompt_lines = prompt.splitlines() or [""]
-    payload_keys = sorted(str(k) for k in payload.keys())
-    segment_count = 0
-    segments_value = payload.get("segments")
-    if isinstance(segments_value, list):
-        segment_count = len(segments_value)
-
+    prompt_lines = prompt_instructions.splitlines() or [""]
     lines: list[str] = [
         "---",
         f"generated_at_utc: {_quote_yaml_string(generated_at_utc)}",
-        "prompt:",
+        "prompt_instructions:",
         f"  source: {_quote_yaml_string(_prompt_source_label(args))}",
     ]
 
@@ -486,15 +484,13 @@ def _render_markdown_front_matter(
 
     lines.extend(
         [
-            "payload:",
-            f"  source: {_quote_yaml_string(_payload_source_label(args))}",
-            f"  top_level_keys: [{', '.join(_quote_yaml_string(k) for k in payload_keys)}]",
-            f"  segment_count: {segment_count}",
+            "prompt_input:",
+            f"  source: {_quote_yaml_string(_prompt_input_source_label(args))}",
         ]
     )
 
-    if args.payload_file:
-        lines.append(f"  path: {_quote_yaml_string(str(args.payload_file.resolve()))}")
+    if args.prompt_input_file:
+        lines.append(f"  path: {_quote_yaml_string(str(args.prompt_input_file.resolve()))}")
 
     lines.append("---")
     return "\n".join(lines)
@@ -504,15 +500,15 @@ def write_markdown_output_file(
     markdown_output_path: Path,
     text: str,
     args: argparse.Namespace,
-    prompt: str,
-    payload: dict[str, Any],
+    prompt_instructions: str,
+    prompt_input: str,
     generated_at_utc: str,
 ) -> None:
     """Write extracted text to Markdown with YAML source metadata front matter."""
     front_matter = _render_markdown_front_matter(
         args=args,
-        prompt=prompt,
-        payload=payload,
+        prompt_instructions=prompt_instructions,
+        prompt_input=prompt_input,
         generated_at_utc=generated_at_utc,
     )
     body = text or ""
@@ -533,8 +529,8 @@ def write_requested_output_files(
     markdown_output_path: Path,
     text: str,
     args: argparse.Namespace,
-    prompt: str,
-    payload: dict[str, Any],
+    prompt_instructions: str,
+    prompt_input: str,
     generated_at_utc: str,
 ) -> dict[str, Path]:
     """Write requested output artifact(s) and return their paths keyed by format."""
@@ -553,8 +549,8 @@ def write_requested_output_files(
             markdown_output_path=markdown_output_path,
             text=text,
             args=args,
-            prompt=prompt,
-            payload=payload,
+            prompt_instructions=prompt_instructions,
+            prompt_input=prompt_input,
             generated_at_utc=generated_at_utc,
         )
         written_files["md"] = markdown_output_path
@@ -636,12 +632,12 @@ def main() -> int:
     print(f"Request timeout set to: {REQUEST_TIMEOUT_SECONDS} seconds. Waiting.")
 
     try:
-        prompt = load_prompt(args)
-        payload = load_payload(args)
+        prompt_instructions = load_prompt(args)
+        prompt_input = load_prompt_input(args)
         body = build_request_body(
             model=args.model,
-            prompt=prompt,
-            payload=payload,
+            prompt_instructions=prompt_instructions,
+            prompt_input=prompt_input,
             temperature=args.temperature,
             max_output_tokens=args.max_output_tokens,
         )
@@ -649,10 +645,10 @@ def main() -> int:
         generated_at_utc = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
         if args.dry_run:
-            print("=== DRY RUN: RESOLVED PROMPT ===")
-            print(prompt)
-            print("\n=== DRY RUN: RESOLVED PAYLOAD ===")
-            print(json.dumps(payload, indent=2, ensure_ascii=False))
+            print("=== DRY RUN: RESOLVED PROMPT INSTRUCTIONS ===")
+            print(prompt_instructions)
+            print("\n=== DRY RUN: RESOLVED PROMPT INPUT ===")
+            print(prompt_input)
             print("\n=== DRY RUN: REQUEST BODY ===")
             print(json.dumps(body, indent=2, ensure_ascii=False))
             if "md" in requested_formats:
@@ -660,8 +656,8 @@ def main() -> int:
                 print(
                     _render_markdown_front_matter(
                         args=args,
-                        prompt=prompt,
-                        payload=payload,
+                        prompt_instructions=prompt_instructions,
+                        prompt_input=prompt_input,
                         generated_at_utc=generated_at_utc,
                     )
                 )
@@ -686,8 +682,8 @@ def main() -> int:
             markdown_output_path=markdown_output_path,
             text=text,
             args=args,
-            prompt=prompt,
-            payload=payload,
+            prompt_instructions=prompt_instructions,
+            prompt_input=prompt_input,
             generated_at_utc=generated_at_utc,
         )
 
