@@ -272,15 +272,14 @@ Field meanings:
 
 The generated registry must comply with the Layer 1 conventions in `Rubric_SpecificationGuide_v*`.
 
-#### Submission identifier (`submission_id`)
+#### Assessment identifier (`assessment_id`)
 
-Use the assessment identifier as the submission-level rubric primitive identifier.
+
+`assessment_id` identifies the assessment for which the rubric payload is authored.
 
 Example:
 
-```text
 PPP
-```
 
 #### Component identifier (`component_id`)
 
@@ -351,7 +350,7 @@ I_<sid>_<cid>_<iid>
 
 Where:
 
-- `<sid>` = assessment identifier used in `assessment_id`
+- `<sid>` = assessment identifier
 - `<cid>` = compact component identifier
 - `<iid>` = `indicator_id`
 
@@ -465,7 +464,7 @@ followed by the registry table.
 
 The registry table must use these columns in this exact order:
 
-| sbo_identifier | sbo_identifier_shortid |  assessment_id | component_id | indicator_id | sbo_short_description |
+| sbo_identifier | sbo_identifier_shortid | assessment_id | component_id | indicator_id | sbo_short_description |
 
 Indicators must be grouped by `component_id`.
 

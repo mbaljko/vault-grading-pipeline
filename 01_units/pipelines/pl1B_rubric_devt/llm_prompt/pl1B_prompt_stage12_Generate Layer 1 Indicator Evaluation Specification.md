@@ -119,7 +119,7 @@ The generated output corresponds to:
 
 Rubric Template: 6.1 Layer 1 SBO Value Derivation (Draft)
 
-This stage converts the **Layer 1 indicator registry** into an **operational evaluation specification** describing how each indicator is detected in student responses.
+This stage converts the **Layer 1 indicator registry** into an **operational evaluation specification** describing how each indicator is detected in response text.
 
 This prompt does **not modify the indicator registry** and does **not perform scoring**.
 
@@ -165,13 +165,13 @@ The table schema is:
 
 Column meanings:
 
-| column | purpose                                                             |
-| --------------------- | ------------------------------------------------------------------- |
-| sbo_identifier | canonical identifier of the indicator SBO instance                  |
-| sbo_short_description | sbo_short_description must be copied **verbatim** from Section 5.4. |
-| indicator_definition | conceptual definition of the analytic signal                        |
-| assessment_guidance | operational guidance for detecting the signal                       |
-| evaluation_notes | clarifications, exclusions, or interpretive boundaries              |
+| column | purpose                                                                                                               |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| sbo_identifier | canonical identifier of the indicator SBO instance                                                                    |
+| sbo_short_description | `sbo_short_description` must be copied verbatim from the Layer 1 SBO instance registry (Rubric Template Section 5.4). |
+| indicator_definition | conceptual definition of the analytic signal                                                                          |
+| assessment_guidance | operational guidance for detecting the signal                                                                         |
+| evaluation_notes | clarifications, exclusions, or interpretive boundaries                                                                |
 
 ### Schema invariants
 
@@ -191,11 +191,13 @@ The generated tables must obey the following rules:
 
 Evaluation specifications must be emitted as **Markdown tables**.
 
-Component grouping must be derived from the component_id field in the Layer 1 SBO instance registry.
+Component grouping must be derived exclusively from the `component_id`
+field in the Layer 1 SBO instance registry contained in Section 5.4.
 
 For each component:
 
-1. Emit a section heading in markdown
+1. Emit a section heading in Markdown:
+
 ##### Component: `\<component_id\>`
 
 2. Immediately after the heading, emit a Markdown table with the schema defined above.
@@ -265,7 +267,7 @@ Do not assign evidence when the response mentions teamwork without describing sh
 The generator must perform the following steps:
 
 1. Read the Layer 1 SBO instance registry in **Rubric Template Section 5.4: Layer 1 SBO Instances**.
-2. Identify each indicator SBO instance.
+2. Identify each Layer 1 indicator SBO instance listed in Section 5.4.
 3. Locate the corresponding analytic signals in the analytic brief.
 4. Translate those signals into evaluation specifications.
 5. Populate one row per indicator in the appropriate component table.

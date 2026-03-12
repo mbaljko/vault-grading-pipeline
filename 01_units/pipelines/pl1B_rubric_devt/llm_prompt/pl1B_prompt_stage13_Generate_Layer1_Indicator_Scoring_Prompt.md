@@ -154,7 +154,7 @@ notes: |
 Wrapper prompt: Generate a deterministic and canonically formatted Layer 1 indicator evidence detection scoring prompt using the **Layer 1 scoring manifest** under the **Rubric Template architecture**.
 
 This wrapper prompt **generates a scoring prompt**.  
-It **does not evaluate student work**.
+This wrapper prompt does not evaluate participant responses.
 
 The generated scoring prompt performs **Layer 1 SBO scoring**, which determines `evidence_status` values for the embedded indicator SBO instances belonging to one target component.
 
@@ -182,7 +182,7 @@ Allowed substitutions are limited to:
 - `ASSESSMENT_ID`
 - `PARAM_TARGET_COMPONENT_ID`
 - the canonical submission-level identifier field name
-- wrapper-handling rules extracted from the assignment payload specification
+- wrapper-handling rules for response_text extracted from the assignment payload specification
 - filtered embedded indicator rows from the `Layer1_ScoringManifest`
 
 No other variation is permitted.
@@ -903,7 +903,8 @@ Produce no output if:
 ### Input format
 
 Runtime input will contain a dataset with one or more runtime rows.  
-Each runtime row is one submission_id × component_id evaluation unit.  
+Each runtime row represents one submission-level evaluation unit:
+[[SUBMISSION_IDENTIFIER_FIELD]] × component_id
 Evaluate every runtime row whose component_id equals the target component.  
 Do not stop after the first runtime row.
 

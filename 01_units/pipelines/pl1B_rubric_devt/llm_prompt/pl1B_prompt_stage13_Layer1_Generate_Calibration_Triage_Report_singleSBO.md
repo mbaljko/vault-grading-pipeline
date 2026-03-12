@@ -33,13 +33,14 @@ constraints:
 notes: prompt performs calibration triage by sampling scored rows and identifying potentially ambiguous or misclassified cases for human inspection
 ---
 ## PROMPT: Calibration triage
-You are helping triage rubric calibration results for a rubric indicator.
+You are helping triage calibration results for a single Layer 1 indicator.
 The prompt receives two artefacts after the prompt text.
 These artefacts will be supplied using the delimiter `===` in the following structure.
 
 ===
 Indicator specification:
 <indicator_definition>
+<short_indicator_description>
 <assessment_guidance>
 <evaluation_notes>
 
@@ -99,9 +100,8 @@ The limit of 8 rows applies **independently to each evidence_status category**.
 
 If a category contains fewer than 8 rows, include all available rows.
 
-When selecting rows, include a mix of:
-- clearly representative examples
-- potentially ambiguous examples
+Selection must follow dataset order only.
+Do not optimise for representativeness, ambiguity, or coverage beyond the enforced per-partition row limit.
 
 Do not select only ambiguous rows.
 
@@ -130,7 +130,7 @@ Panel assignment must be completed in the Selected inspection set table before p
 
 Using **only the rows listed in the Selected inspection set**, group them into the following diagnostic panels:
 
-- Panel A — Clear positives  
+- Panel A — Clearly aligned cases
 - Panel B — Borderline cases  
 - Panel C — Questionable cases  
 
