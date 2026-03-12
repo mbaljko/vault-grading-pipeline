@@ -18,12 +18,13 @@ It is not itself the machine-readable rubric payload.
 ### 1. Relationship to Related Artefacts
 #### 1.1 Artefact Roles
 
-| artefact | role |
-|---|---|
-| `Rubric_Template` | schema document defining the structure of the rubric payload |
-| `Rubric_SpecificationGuide_v01` | normative guide defining how the template is to be authored |
+| artefact                                           | role                                                                           |
+| -------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `Rubric_Template`                                  | schema document defining the structure of the rubric payload                   |
+| `Rubric_SpecificationGuide_v01`                    | normative guide defining how the template is to be authored                    |
 | `Pipeline_1B_Layered_Rubric_Construction_Pipeline` | procedural guide describing how rubric structures are developed and stabilised |
-| `<ASSESSMENT_ID>_AssignmentPayloadSpec_v01` | canonical data architecture and evidence surface specification |
+| `<ASSESSMENT_ID>_AssignmentPayloadSpec_v01`        | canonical data architecture and evidence surface specification                 |
+
 #### 1.2 Interpretive boundary
 The rubric payload must be interpretable **without external design commentary**, but the conventions by which it is authored are defined here.
 This guide therefore governs:
