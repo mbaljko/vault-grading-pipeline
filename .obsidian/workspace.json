@@ -257,6 +257,8 @@
   },
   "active": "50f9e0c568115b6f",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
+    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/apps/prompt_runners/invoke_chatgpt_API_output.md",
     "01_units/apps/prompt_runners/__pycache__/invoke_chatgpt_API.cpython-313.pyc",
@@ -277,9 +279,7 @@
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt - saved version.md",
     "01_units/pipelines/pl1B_rubric_devt/python/__pycache__/run-ct-report-for-manifest.cpython-313.pyc",
     "01_units/pipelines/pl1B_rubric_devt/python/__pycache__",
-    "01_units/pipelines/pl1B_rubric_devt/quality-checking-hybrid-mode/Level1-quality-checking/Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO for interactive use.md",
-    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "05_docs/01_design/pl1B_rubric_devt/TRY Contrastive indicator extraction.md",
     "05_docs/01_design/pl1B_rubric_devt/Layer1_ScoringManifest_v01 Schema.md",
     "01_units/pipelines/pl1B_rubric_devt/RUN_PPP_SectionAResponse_Layer1_SBO_scoring_prompt_v01_output.csv",
