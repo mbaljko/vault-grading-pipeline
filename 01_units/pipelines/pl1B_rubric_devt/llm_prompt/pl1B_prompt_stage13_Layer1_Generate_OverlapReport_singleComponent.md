@@ -1,5 +1,5 @@
 ---
-prompt_id: generate_indicator_triage_panels
+prompt_id: calibration_triage
 version: v01
 stage: calibration
 purpose: triage scored indicator rows to identify cases that may require human review during rubric calibration

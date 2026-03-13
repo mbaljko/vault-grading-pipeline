@@ -1,269 +1,493 @@
-## Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS
-The most efficient workflow is to treat the process as **three nested passes**:
-1. mechanical scanning (LLM or tooling)  
-2. targeted human inspection  
-3. rubric revision decision  
-The key idea is that the LLM should **help you find the interesting rows**, but **you decide what they mean**.
-The workflow below is designed for **Layer-1 indicator calibration** and separates:
-- **indicator behaviour inspection**
-- **indicator overlap detection**
-- **rubric revision decisions**
-### A compact workflow summary
-```
-1 run scoring prompt
-2 prepare scoring dataset
-3 run early overlap scan
-4 LLM triages indicators
-5 human inspects Panels A–C
-6 inspect Panel D for flagged overlap pairs
-7 run instruction clarity test
-8 human decides rubric revisions
-9 revise Section 5.4 or 6.1
-10 re-run scoring prompt
-```
+## Stage 1.3 — Layer 1 SBO Iterative Development (Calibration Workflow)
 
-### 0. Deriving the scoring prompts (mechanical)
+This workflow supports **Layer-1 indicator calibration** for a rubric.
 
-derive `Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION>`  (done manually)
+The process separates three roles:
 
-use the prompt "pl1B_stage13_layer1_indicator_scoring_prompt_wrapper_v01"
-in pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt.md
+1. **mechanical execution** (running prompts and preparing datasets)  
+2. **LLM-assisted diagnostic triage** (finding rows worth inspecting)  
+3. **human rubric design decisions**
 
-### 1. Prepare the scoring dataset (mechanical)
-After running the Stage-1 scoring prompt you will have a table like:
+The LLM helps **locate interesting cases**.  
+Humans decide **what those cases mean for the rubric**.
+
+The workflow is organised into three analytic phases:
+
+- dataset analysis
+- indicator calibration
+- rubric revision
+
+---
+
+## 1. Run the scoring prompt (mechanical)
+
+### Action
+
+Generate the Layer-1 scoring prompt and run it on the calibration dataset.
+
+Derive:
+
+`Layer1_ScoringManifest_$begin:math:display$ASSESSMENT\_ID$end:math:display$_v$begin:math:display$VERSION$end:math:display$`
+
+using the wrapper prompt:
+
+`pl1B_stage13_layer1_indicator_scoring_prompt_wrapper_v01`
+
+located in:
+
+`pl1B_prompt_stage13_Generate Layer 1 Indicator Detection Scoring Prompt.md`
+
+### Output
+
+A scored dataset with rows of the form:
 
 | submission_id | component_id | indicator_id | evidence_status | evaluation_notes |
 |---|---|---|---|---|
-Reshape the dataset so it can be inspected easily.
-Two useful views are recommended.
-##### Indicator view
+
+### Decision
+
+None.  
+This stage only produces the raw scoring dataset.
+
+---
+
+## 2. Prepare the scoring dataset (mechanical)
+
+### Action
+
+Reshape the scoring output into two inspection views.
+
+#### Indicator view
 
 | submission_id | I17 | I18 | I19 | I20 | … |
 |---|---|---|---|---|---|
-This view makes it easy to inspect **indicator overlap patterns**.
-##### Row view
+
+Purpose:
+
+- reveal patterns where indicators fire together
+- support overlap inspection
+
+#### Row view
 
 | submission_id | indicator_id | evidence_status |
 |---|---|---|
-This view is used for **indicator-by-indicator inspection**.
-No LLM assistance is required at this stage.
-### 2. Early overlap scan (LLM-assisted)
-Before inspecting indicators individually, perform a **quick overlap scan**.
+
 Purpose:
-- detect indicators that frequently fire together  
-- identify potential redundancy  
-- identify indicator bundles that should be inspected jointly  
-Ask the LLM:
+
+- support indicator-by-indicator triage
+
+### Decision
+
+None.  
+This stage prepares the dataset for inspection.
+
+---
+
+# DATASET ANALYSIS
+
+Dataset analysis inspects **patterns across indicators** before analysing indicators individually.
+
+---
+
+## 3. Overlap screening (LLM-assisted)
+
+### Purpose
+
+Detect indicators that frequently fire together.
+
+This stage performs **screening**, not interpretation.
+
+### Action
+
+Provide the **indicator view table** to the LLM.
+
+Prompt:
+
 ```
 Using the indicator evidence table below, identify pairs of indicators that frequently co-occur with evidence or partial_evidence in the same response.
+
 Report the indicator pairs and the number of co-occurrences.
 ```
-Example output:
+
+### Output
+
+A ranked list of indicator pairs.
+
+Example:
+
 ```
 I17 + I19 : 23
 I17 + I21 : 20
 I19 + I21 : 19
 ```
-Important:
-High co-occurrence does **not automatically mean indicators should be merged**.
-High overlap may indicate:
-- true redundancy  
-- partial conceptual overlap  
-- coherent conceptual framing expressed together by students  
-The purpose of this step is **screening**, not decision-making.
-Record pairs that appear unusually frequent.
-These pairs will later be inspected using **Panel D**.
-### 3. Indicator-level triage (LLM-assisted)
-Inspect indicators **one at a time**.
-For each indicator:
-1. Filter rows where
+
+### Human decision
+
+Record pairs with **unusually high co-occurrence**.
+
+These pairs become **candidate overlap pairs** for inspection later.
+
+Do **not** decide whether indicators should be merged at this stage.
+
+Possible interpretations of overlap include:
+
+- genuine conceptual redundancy
+- partial conceptual overlap
+- distinct signals frequently expressed together
+
+The purpose is **screening**, not rubric modification.
+
+---
+
+# INDICATOR CALIBRATION
+
+Indicator calibration examines **how individual indicators behave**.
+
+Each indicator is inspected independently.
+
+---
+
+## 4. Indicator triage (LLM-assisted)
+
+### Purpose
+
+Select a **small diagnostic inspection set** for one indicator.
+
+The LLM helps identify rows worth inspecting.
+
+### Action
+
+Filter the dataset for a single indicator:
+
 ```
 indicator_id = Ix
 ```
-2. Sort rows by
+
+Sort rows by:
+
 ```
 evidence_status
 ```
-You now have three clusters:
+
+The rows will fall into three clusters:
+
 ```
 evidence
 partial_evidence
 little_to_no_evidence
 ```
-Ask the LLM to perform **triage**, not judgement.
-Example prompt:
+
+Provide the indicator specification and the scored rows to the LLM.
+
+Prompt:
 
 ````
 PROMPT: Calibration triage
-You are helping triage rubric calibration results for a rubric indicator.
-Indicator specification:
-<indicator_definition>
-<assessment_guidance>
-<evaluation_notes>
 
+You are helping triage rubric calibration results for a rubric indicator.
+
+Indicator specification:
+
+\<indicator_definition\>  
+\<assessment_guidance\>  
+\<evaluation_notes\>
 
 Scored rows follow.
 
-
-
 Procedure:
+
 1. Examine the full dataset to understand the distribution of evidence_status values.
+
 2. Internally select a diagnostic inspection set consisting of:
-   - up to 8 rows where evidence_status = evidence
-   - up to 8 rows where evidence_status = partial_evidence
-   - up to 8 rows where evidence_status = little_to_no_evidence
+
+- up to 8 rows where evidence_status = evidence  
+- up to 8 rows where evidence_status = partial_evidence  
+- up to 8 rows where evidence_status = little_to_no_evidence  
+
 3. Choose rows that appear representative or potentially ambiguous.
+
 4. Using only the selected inspection set:
-   - group responses into clear positives, borderline cases, and questionable cases
-   - flag rows that may represent possible misclassifications
-Do not change the scoring.
-Do not rescore the responses.
+
+- group responses into clear positives, borderline cases, and questionable cases  
+- flag rows that may represent possible misclassifications  
+
+Do not change the scoring.  
+Do not rescore the responses.  
 Only flag rows for human review.
-```
-##### Output format
+````
+
+### Output format
+
 Emit results as fenced Markdown.
+
 ```
-#### <indicator_id> — <short_indicator_description>
+#### Ix — short indicator description
+
 ##### Selected inspection set
 
 | submission_id | evidence_status | reason_selected |
 |---|---|---|
+
 ##### Triage results
+
 ##### Panel A — Clear positives
 
 | submission_id | evidence_status | inspection_note |
 |---|---|---|
+
 ##### Panel B — Borderline cases
 
 | submission_id | evidence_status | inspection_note |
 |---|---|---|
+
 ##### Panel C — Questionable cases
 
 | submission_id | evidence_status | inspection_note |
 |---|---|---|
-````
-Notes:
-- Only include rows from the **selected inspection set**
-- A row may appear in only **one panel**
-- Do not reinterpret the rubric
-### 4. Inspect indicator diagnostic panels (human)
-For each indicator, inspect the triage output.
+```
 
-| panel | purpose |
-|---|---|
-| Panel A | confirm true positives |
-| Panel B | inspect decision boundary |
-| Panel C | detect possible misclassifications |
-##### Panel A — clear positives
+### Decision
+
+None.
+
+The LLM only prepares diagnostic panels.
+
+Human inspection occurs in the next step.
+
+---
+
+## 5. Indicator inspection (human)
+
+### Purpose
+
+Determine whether the indicator behaves correctly.
+
+Inspect Panels A–C produced in the triage stage.
+
+---
+
+### Panel A — Clear positives
+
 Purpose:
+
 Confirm that the indicator fires on **clear examples of the intended analytic signal**.
+
 Inspection question:
+
 ```
 Does the response clearly contain the analytic signal described by the indicator_definition?
 ```
-If not → possible **false positive**.
-##### Panel B — boundary cases
+
+### Action
+
+If the signal is **not actually present**, record a **false positive**.
+
+---
+
+### Panel B — Boundary cases
+
 Purpose:
-Inspect the **decision boundary between evidence and non-evidence**.
+
+Inspect the **decision boundary** between evidence and non-evidence.
+
 Boundary cases may include responses scored as:
+
 ```
 evidence
 partial_evidence
 little_to_no_evidence
 ```
+
 Inspection questions:
+
 ```
 Is the analytic signal actually present?
 Is the signal weak or incomplete?
-Does this belong in a different indicator?
+Does this response belong in a different indicator?
 ```
-These cases reveal **definition or guidance ambiguity**.
-##### Panel C — questionable cases
+
+### Action
+
+Record cases revealing:
+
+- unclear indicator definition
+- unclear guidance
+- indicator boundary ambiguity
+
+---
+
+### Panel C — Questionable cases
+
 Purpose:
+
 Detect **possible misclassifications**.
+
 These may include:
+
 ```
 false positives
 false negatives
 ```
+
 Inspection questions:
+
 ```
 Was the indicator triggered incorrectly?
 Was the signal present but missed?
 ```
+
+### Action
+
 Record findings in a diagnostic log.
 
 | indicator | submission | issue | note |
 |---|---|---|---|
-### 5. Focused overlap inspection (Panel D)
-For indicator pairs flagged during the **early overlap scan**, perform a joint inspection.
-Construct **Panel D**.
 
-| panel | purpose |
-|---|---|
-| Panel D | inspect potential indicator overlap |
+This log informs rubric revisions later.
+
+---
+
+## 6. Focused overlap inspection (human)
+
+### Purpose
+
+Inspect indicator pairs flagged during **overlap screening**.
+
+Determine whether indicators detect **distinct or redundant signals**.
+
+### Action
+
+For each flagged pair:
+
+```
+Ix
+Iy
+```
+
 Filter rows where both indicators fire.
+
 Example filter:
+
 ```
 indicator_Ix ∈ {evidence, partial_evidence}
 AND
 indicator_Iy ∈ {evidence, partial_evidence}
 ```
-Sample 5–10 responses.
-Inspection questions:
+
+Sample **5–10 responses**.
+
+Inspect those responses jointly.
+
+### Inspection questions
+
 ```
-Are these actually distinct analytic signals?
-Or are the indicators detecting the same conceptual phenomenon?
+Do the two indicators detect distinct analytic signals?
+Or are they detecting the same conceptual phenomenon?
 ```
-Possible outcomes:
-- signals are distinct → keep both indicators
-- signals partially overlap → narrow definitions
-- signals are redundant → merge indicators
-### 6. Instruction clarity test (LLM-assisted)
-To test whether **evaluation instructions are operationally clear**, examine responses from **Panel B**.
+
+### Possible outcomes
+
+| outcome | action |
+|---|---|
+| signals clearly distinct | keep both indicators |
+| signals partially overlap | narrow indicator definitions |
+| signals redundant | merge indicators |
+
+### Decision
+
+Record overlap findings for use in the revision stage.
+
+---
+
+## 7. Instruction clarity test (LLM-assisted)
+
+### Purpose
+
+Determine whether the **indicator instructions are operationally clear**.
+
+Ambiguous instructions often appear in **Panel B boundary cases**.
+
+### Action
+
 Provide the LLM:
-- the indicator definition  
-- the assessment guidance  
-- borderline responses  
-Prompt example:
+
+- indicator definition  
+- assessment guidance  
+- evaluation notes  
+- borderline responses from Panel B  
+
+Prompt:
+
 ```
 Explain why this response should be classified as evidence, partial_evidence, or little_to_no_evidence using the indicator instructions.
 ```
-If multiple plausible interpretations appear, the instructions are likely ambiguous.
-Typical fixes:
+
+### Interpretation
+
+If multiple plausible classifications appear, the instructions are ambiguous.
+
+### Possible fixes
+
 - tighten `indicator_definition`
 - clarify exclusions in `evaluation_notes`
 - add examples to `assessment_guidance`
-### 7. Revision step (human)
-Based on the inspection results, revise the rubric specification.
-##### Indicator registry (Section 5.4)
+
+Record required instruction changes.
+
+---
+
+# REVISION
+
+This phase converts diagnostic findings into rubric updates.
+
+---
+
+## 8. Rubric revision (human)
+
+Use findings from:
+
+- indicator inspection
+- overlap inspection
+- instruction clarity test
+
+### Revise the indicator registry (Section 5.4)
+
 Possible changes:
-- merge indicators  
-- remove redundant indicators  
-- split ambiguous indicators  
-- narrow indicator scope  
-##### Evaluation specification (Section 6.1)
+
+- merge redundant indicators
+- remove indicators that detect no unique signal
+- split indicators that capture multiple signals
+- narrow overly broad indicator scope
+
+### Revise the evaluation specification (Section 6.1)
+
 Possible changes:
-- clarify wording  
-- add exclusions  
-- strengthen detection rules  
-- add examples  
-### 8. Re-run the scoring prompt
-After revising the rubric specification:
-```
-generate updated scoring prompt
-run on calibration dataset
-compare behaviour
-```
-Repeat the calibration cycle until behaviour stabilises.
-### What the LLM should and should not do
-LLM should assist with:
-- triaging diagnostic rows  
-- clustering cases  
-- detecting overlap patterns  
-- identifying ambiguous interpretations  
-LLM should **not decide**:
-- whether indicators are conceptually valid  
-- whether indicators should be merged  
-- whether the rubric reflects the assignment's analytic goals  
-These are **human rubric design decisions**.
+
+- clarify wording
+- add exclusion rules
+- add boundary examples
+- strengthen detection guidance
+
+### Decision
+
+Produce an updated rubric specification.
+
+---
+
+## 9. Re-run the scoring prompt
+
+### Action
+
+After revising the rubric:
+
+1. regenerate the Layer-1 scoring prompt  
+2. run it on the same calibration dataset  
+3. compare indicator behaviour
+
+### Decision
+
+Evaluate whether indicator behaviour has stabilised.
+
+If problems remain:
+
+Repeat the calibration cycle beginning at **Step 3**.
