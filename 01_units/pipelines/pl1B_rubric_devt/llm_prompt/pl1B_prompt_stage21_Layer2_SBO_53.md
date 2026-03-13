@@ -1,14 +1,15 @@
 ---
-prompt_id: pl1B_stage11_layer1_sbo_registry_prompt_v01
+prompt_id: pl1B_stage21_layer2_sbo_registry_prompt_v01
 version: v01
-stage: pipeline_pl1B_stage11
-purpose: generate the Layer 1 SBO Instance Registry by consolidating indicator-level analytic signals from the submission analytic brief
+stage: pipeline_pl1B_stage21
+purpose: generate the Layer 2 SBO Instance Registry by consolidating conceptual evaluation dimensions derived from indicator evidence patterns
 status: active
 owner: EECS3000W26
 
 input_contract:
   - rubric_specification_guide (Rubric_SpecificationGuide_v*)
-  - submission_analytic_brief (<ASSESSMENT_ID>_SubmissionAnalyticBrief_v*)
+  - submission_analytic_brief (\<ASSESSMENT_ID\>_SubmissionAnalyticBrief_v*)
+  - layer1_sbo_registry (Rubric Template 5.4 Layer 1 SBO Instances)
   - trigger prompt (`BEGIN GENERATION`)
     
 input_structure:
@@ -16,35 +17,41 @@ input_structure:
   artefacts:
     - name: rubric_specification_guide
       expected_elements:
-        - layer1_sbo_identifier_structure
-        - indicator_identifier_format
+        - layer2_sbo_identifier_structure
+        - dimension_identifier_format
         - sbo_short_description_rules
     - name: submission_analytic_brief
       required_sections:
+        - "Analytic Sub-space Identification"
         - "Contrastive Pattern Discovery"
       extracted_elements:
         - analytic_sub_space_registry
+        - candidate_dimension_sketches
         - candidate_indicator_signals
-        - candidate_indicator_sets
         - component_identifiers
+    - name: layer1_sbo_registry
+      expected_elements:
+        - indicator_registry
+        - component_identifier_list
+        - indicator_short_descriptions
 
 output_contract: fenced_markdown_table
 
 output_structure:
   outer_fence: "````"
-  heading: "#### 5.4 Layer 1 SBO Instances (Draft)"
+  heading: "#### 5.3 Layer 2 SBO Instances (Draft)"
   table_columns:
     - sbo_identifier
     - sbo_identifier_shortid
-    - submission_id
+    - assessment_id
     - component_id
-    - indicator_id
+    - dimension_id
     - sbo_short_description
   grouping_rule: group_rows_by_component_id
   ordering_rules:
-    - indicator_id_must_be_globally_unique
-    - indicator_id_must_be_sequential
-    - rows_within_component_sorted_by_indicator_id
+    - dimension_id_must_be_globally_unique
+    - dimension_id_must_be_sequential
+    - rows_within_component_sorted_by_dimension_id
 
 identifier_rules:
   submission_identifier_source: assessment_identifier
@@ -55,31 +62,32 @@ identifier_rules:
     SectionCResponse: SecC
     SectionDResponse: SecD
     SectionEResponse: SecE
-  indicator_identifier_pattern: "I00-I99"
-  sbo_identifier_pattern: "I_<sid>_<cid>_<iid>"
-  sbo_identifier_shortid_rule: equals_indicator_id
+  dimension_identifier_pattern: "D00-D99"
+  sbo_identifier_pattern: "D_<sid>_<cid>_<did>"
+  sbo_identifier_shortid_rule: equals_dimension_id
 
-indicator_generation_rules:
-  expected_indicator_range_per_component: "4-8"
-  indicator_source_priority:
-    - candidate_indicator_set
-    - candidate_indicator_signals
-    - contrastive_pattern_observations
+dimension_generation_rules:
+  expected_dimension_range_per_component: "2-4"
+  dimension_source_priority:
+    - candidate_dimension_sketches
+    - analytic_sub_spaces
+    - clusters_of_related_indicators
+    - conceptual_patterns_observed_in_indicator_sets
   consolidation_requirements:
-    - merge_redundant_signals
-    - preserve_key_analytic_distinctions
-    - minimise_indicator_overlap
-  indicator_properties:
-    - must_be_observable_in_response_text
-    - must_be_detectable_without_scoring
-    - must_represent_single_signal
-    - must_not_require_multiple_conditions
+    - merge_redundant_dimension_concepts
+    - preserve_key_conceptual_distinctions
+    - minimise_dimension_overlap
+  dimension_properties:
+    - must_represent_conceptual_evaluation_criterion
+    - must_be_supported_by_indicator_evidence
+    - must_not_duplicate_indicator_signals
+    - must_not_require_performance_thresholds
 
 sbo_description_rules:
-  description_type: compact_analytic_label
+  description_type: conceptual_dimension_label
   allowed_forms:
     - noun_phrase
-    - analytic_label
+    - analytic_dimension_label
   disallowed_patterns:
     - full_sentence_descriptions
     - evaluative_language
@@ -87,55 +95,56 @@ sbo_description_rules:
     - performance_level_references
     - outcome_predictions
   examples:
-    - distributed responsibility attribution
-    - role boundary articulation
-    - institutional constraint recognition
-    - systemic accessibility barrier recognition
-    - tension identification
+    - accountability attribution clarity
+    - role boundary reasoning
+    - institutional constraint awareness
+    - systemic impact recognition
+    - ethical tension articulation
 
 constraints:
-  - indicators_must_be_grounded_in_analytic_brief
+  - dimensions_must_be_grounded_in_analytic_brief_or_indicator_patterns
   - do_not_invent_new_concepts
   - do_not_assign_scores
   - do_not_define_performance_levels
-  - do_not_create_dimension_structures
+  - do_not_generate_dimension_mapping_rules
   - do_not_generate_additional_sections
   - output_must_contain_only_one_fenced_block
   - table_must_follow_required_column_order
 
 notes: |
-  This prompt performs Stage 1.1 of Pipeline PL1B. It constructs the Layer 1 SBO
-  Instance Registry used by downstream scoring prompts. Indicators are derived
-  from the contrastive pattern discovery results in the submission analytic
-  brief and represent detectable textual signals in student responses.
-  The output corresponds to rubric template section 5.4 and must strictly
-  follow identifier conventions defined in Rubric_SpecificationGuide_v*.
+  This prompt performs Stage 2.1 of Pipeline PL1B. It constructs the Layer 2 SBO
+  Instance Registry representing conceptual evaluation dimensions. Dimensions
+  are derived from analytic sub-spaces, candidate dimension sketches, and
+  observed indicator patterns from the Layer 1 registry. The output corresponds
+  to rubric template section 5.3 and must strictly follow identifier conventions
+  defined in Rubric_SpecificationGuide_v*.
 ---
-## Wrapper Prompt — Generate Layer 1 SBO Instance Registry (Stage 1.1)
+
+## Wrapper Prompt — Generate Layer 2 SBO Instance Registry (Stage 2.1)
 
 ### Prompt title and restrictions
 
-This wrapper prompt generates the **Layer 1 SBO Instance Registry** for an assessment rubric.
+This wrapper prompt generates the **Layer 2 SBO Instance Registry** for an assessment rubric.
 
 The generated output corresponds to:
 
-```text
-Rubric Template: 5.4 Layer 1 SBO Instances
+```
+Rubric Template: 5.3 Layer 2 SBO Instances
 ```
 
-This stage defines the **set of Layer 1 Score-Bearing Object (SBO) instances** that represent **indicator-level analytic signals** for each component.
+This stage defines the **set of Layer 2 Score-Bearing Object (SBO) instances** that represent **conceptual evaluation dimensions** for each component.
 
-This prompt **does not perform scoring** and **does not assign performance levels**.
+This prompt **does not perform scoring** and **does not define dimension value derivation rules**.
 
-The purpose is to produce the **indicator registry** used by downstream scoring prompts.
+The purpose is to produce the **dimension registry** used by downstream dimension scoring logic.
 
 The generated output must conform to the identifier and authoring conventions in:
 
-```text
+```
 Rubric_SpecificationGuide_v*
 ```
 
-If the instructions in the analytic brief conflict with the specification guide, the **specification guide takes precedence** for identifier formation, short identifiers, and `sbo_short_description` authoring.
+If the analytic brief conflicts with the specification guide, the **specification guide takes precedence** for identifier formation and description authoring.
 
 ---
 
@@ -143,308 +152,207 @@ If the instructions in the analytic brief conflict with the specification guide,
 
 Artefacts are separated using the delimiter:
 
-```text
+```
 ===
 ```
 
 Artefacts must appear in the following order:
 
-```text
+```
 ===
 Rubric_SpecificationGuide_v*
 ===
-<ASSESSMENT_ID>_SubmissionAnalyticBrief_v*
+\<ASSESSMENT_ID\>_SubmissionAnalyticBrief_v*
+===
+Layer1_SBO_Registry
 ===
 ```
 
 If any artefact is missing, malformed, or inconsistent, the prompt must produce **no output**.
 
-### Artefact validation
-
-The analytic brief must contain candidate indicators derived during Stage 0.3.
-
-If candidate indicators cannot be located in the analytic brief, the generator must produce no output.
-
 ---
 
 ### Objective
 
-Using the **contrastive pattern discovery results** contained in the analytic brief, construct the **Layer 1 SBO Instance Registry**.
+Using the **analytic scaffolding and stabilised indicator registry**, construct the **Layer 2 SBO Instance Registry**.
 
-Each Layer 1 SBO instance corresponds to **one indicator that can be detected in a response text**.
+Each Layer 2 SBO instance corresponds to **one conceptual evaluation dimension** applied to a component response.
 
-Indicators must be derived from:
+Dimensions must be derived from:
 
 - analytic sub-spaces
-- contrastive response observations
-- candidate indicator signals
-- candidate indicator sets
+- candidate dimension sketches from Stage 0
+- clusters of related indicators
+- conceptual evaluation goals described in the analytic brief
 
-Indicators represent **detectable textual signals**.
-
-They must **not encode scoring thresholds** and **must not reference performance levels**.
+Dimensions represent **conceptual evaluation criteria**, not observable textual signals.
 
 ---
 
-### Conceptual definition of a Layer 1 SBO instance
+### Conceptual definition of a Layer 2 SBO instance
 
-A Layer 1 SBO instance represents a **detectable analytic signal in the response text**.
+A Layer 2 SBO instance represents a **conceptual analytic dimension used to interpret indicator evidence**.
 
-Indicators should correspond to signals such as:
+Examples of dimension concepts:
 
-```text
-distributed responsibility attribution
-responsibility hand-off articulation
-institutional constraint recognition
-systemic accessibility barrier recognition
+```
+accountability attribution clarity
+professional role boundary reasoning
+institutional constraint awareness
+systemic accessibility awareness
+ethical tension articulation
 ```
 
-Indicators must reflect **observable claims or framings expressed in the response**.
+Dimensions must capture **conceptual distinctions used to evaluate reasoning quality**.
 
-They must **not encode evaluative judgement**.
-
----
-
-### Indicator design rules
-
-Indicator SBO instances must:
-
-- correspond to observable textual signals
-- be grounded in signals extracted during Stage 0.3
-- avoid embedding scoring thresholds
-- avoid referencing performance levels
-- avoid encoding dimension satisfaction
-- avoid compound indicators that require multiple conditions
-- remain narrow enough to be evaluated directly from the response text
-- remain distinguishable from neighbouring indicators in the same component
-
-Indicators should capture **distinct analytic signals**, not broad conceptual categories.
-
-Indicators may represent either engagement signals or detectable conceptual framings, provided they correspond to observable textual language patterns in the response.
+They must **not encode performance levels**.
 
 ---
 
-### Indicator count expectations
+### Dimension design rules
 
-Typical indicator counts:
+Dimension SBO instances must:
 
-```text
-4–8 indicator SBO instances per component
+- represent conceptual evaluation criteria
+- integrate related indicator signals
+- remain conceptually distinct from neighbouring dimensions
+- remain interpretable across responses
+- avoid encoding scoring thresholds
+- avoid referencing performance categories
+
+Dimensions should organise indicators into **coherent conceptual families**.
+
+---
+
+### Dimension count expectations
+
+Typical dimension counts:
+
+```
+2–4 dimension SBO instances per component
 ```
 
-If more candidate signals exist, the generator must **select a coherent minimal set** that captures the primary analytic distinctions observed in the calibration responses.
+If more candidate dimensions exist, the generator must **consolidate them into a coherent minimal conceptual structure**.
 
-Indicators should:
+Dimensions should:
 
-- maximise coverage of observed response variation
-- minimise redundancy
+- capture the primary analytic evaluation axes
+- minimise conceptual overlap
 - remain clearly distinguishable
 
 ---
 
 ### Required fields
 
-Each Layer 1 SBO instance must define the following fields:
+Each Layer 2 SBO instance must define the following fields:
 
-```text
+```
 sbo_identifier
 sbo_identifier_shortid
 assessment_id
 component_id
-indicator_id
+dimension_id
 sbo_short_description
 ```
 
 Field meanings:
 
-| field                    | description                                                           |
-| ------------------------ | --------------------------------------------------------------------- |
-| `sbo_identifier`         | canonical Layer 1 SBO identifier                                      |
-| `sbo_identifier_shortid` | compact short reference token                                         |
-| `assessment_id`          | identifier of the assessment for which the rubric payload is authored |
-| `component_id`           | canonical component identifier from the analytic brief                |
-| `indicator_id`           | rubric primitive identifier for the indicator                         |
-| `sbo_short_description`  | concise human-readable label for the analytic signal                  |
+| field | description |
+|---|---|
+| `sbo_identifier` | canonical Layer 2 SBO identifier |
+| `sbo_identifier_shortid` | compact short reference token |
+| `assessment_id` | identifier of the assessment |
+| `component_id` | canonical component identifier |
+| `dimension_id` | rubric primitive identifier for the dimension |
+| `sbo_short_description` | concise label describing the conceptual dimension |
 
 ---
 
 ### Identifier conventions
 
-The generated registry must comply with the Layer 1 conventions in `Rubric_SpecificationGuide_v*`.
+#### Dimension identifier (`dimension_id`)
 
-#### Assessment identifier (`assessment_id`)
+Must follow the primitive identifier format:
 
-
-`assessment_id` identifies the assessment for which the rubric payload is authored.
-
-Example:
-
-PPP
-
-#### Component identifier (`component_id`)
-
-`component_id` must remain the **canonical dataset component identifier** from the analytic brief.
-
-Examples:
-
-```text
-SectionAResponse
-SectionBResponse
-SectionCResponse
-SectionDResponse
-SectionEResponse
 ```
-
-#### Component short identifier (`cid`) for identifier construction
-
-For identifier construction only, derive a compact `cid` from `component_id` using the specification guide conventions.
-
-Use the following mappings unless the input artefacts explicitly define different canonical `cid` values:
-
-| component_id | cid |
-|---|---|
-| `SectionAResponse` | `SecA` |
-| `SectionBResponse` | `SecB` |
-| `SectionCResponse` | `SecC` |
-| `SectionDResponse` | `SecD` |
-| `SectionEResponse` | `SecE` |
-
-`cid` is **not** an output column in the registry table.  
-It is used only to construct `sbo_identifier`.
-
-#### Indicator identifier (`indicator_id`)
-
-`indicator_id` must follow the rubric primitive identifier format:
-
-```text
-I00 – I99
+D00 – D99
 ```
 
 Rules:
 
-- must begin with `I`
-- must use a two-digit numeric suffix
-- must be zero-padded
-- must be unique within the rubric payload
-- should be assigned sequentially in the order indicators are introduced in the registry
+- must begin with `D`
+- must use two-digit numeric suffix
+- must be globally unique
+- must increment sequentially
 
 Examples:
 
-```text
-I01
-I02
-I03
 ```
-
-Do **not** reset `indicator_id` numbering by component.  
-`indicator_id` values must remain unique within the rubric payload.
-Indicator numbering must begin with I01 and increment sequentially unless the analytic brief explicitly specifies existing indicator identifiers.
-
-#### Canonical SBO identifier (`sbo_identifier`)
-
-Layer 1 SBO identifiers must follow this structure:
-
-```text
-I_<sid>_<cid>_<iid>
+D01
+D02
+D03
 ```
-
-Where:
-
-- `<sid>` = assessment identifier
-- `<cid>` = compact component identifier
-- `<iid>` = `indicator_id`
-
-Examples:
-
-```text
-I_PPP_SecA_I01
-I_PPP_SecB_I07
-I_PPP_SecE_I24
-```
-
-Do **not** use dotted identifiers such as:
-
-```text
-PPP.SectionAResponse.I01
-```
-
-#### SBO short identifier (`sbo_identifier_shortid`)
-
-For Layer 1 SBO instances, `sbo_identifier_shortid` should normally be set equal to the `indicator_id`.
-
-Examples:
-
-```text
-I01
-I02
-I03
-```
-
-Do **not** generate short identifiers such as:
-
-```text
-SBO_A_I01
-SBO_SecA_I01
-```
-
-Because `indicator_id` values must be unique within the rubric payload, these short identifiers remain unambiguous.
 
 ---
 
-### `sbo_short_description` authoring rules
+#### Canonical SBO identifier
 
-`sbo_short_description` must comply with `Rubric_SpecificationGuide_v*`.
+Layer 2 SBO identifiers must follow this structure:
 
-It must:
-
-- be concise
-- be a compact human-readable label
-- distinguish the SBO from neighbouring instances
-- describe the analytic signal without using sentence form
-- avoid embedding scoring thresholds
-- avoid embedding downstream outcomes
-- avoid evaluative language such as `good`, `strong`, `sufficient`, `appropriate`, or `correct`
-
-It should usually be written as a **short noun phrase** or **compact analytic label**, not as a full sentence.
-
-Preferred forms:
-
-```text
-distributed responsibility attribution
-role boundary articulation
-institutional constraint recognition
-systemic harm recognition
-neutral-tool framing
-tension identification
+```
+D_<sid>_<cid>_<did>
 ```
 
-Do **not** require descriptions to begin with the word `response`.
+Examples:
 
-Do **not** use sentence-style formats such as:
+```
+D_PPP_SecA_D01
+D_PPP_SecB_D03
+```
 
-```text
-response identifies where responsibility resides
-response describes a responsibility hand-off
+---
+
+#### SBO short identifier
+
+For Layer 2 SBO instances:
+
+```
+sbo_identifier_shortid = dimension_id
+```
+
+---
+
+### sbo_short_description rules
+
+Descriptions must:
+
+- be concise
+- use noun phrases
+- distinguish conceptual evaluation dimensions
+- avoid evaluative adjectives
+- avoid sentence form
+
+Preferred examples:
+
+```
+accountability attribution reasoning
+role boundary interpretation
+institutional constraint awareness
+systemic impact reasoning
+ethical tension articulation
 ```
 
 ---
 
 ### Consolidation rules
 
-When generating the Layer 1 registry:
+When generating the dimension registry:
 
-1. Prefer candidate indicators from the analytic brief that already correspond to **detectable textual signals in response text**.
-2. Consolidate overlapping indicators when they are functionally redundant.
-3. Preserve important analytic contrasts that are likely to matter downstream.
-4. Avoid producing indicators that are merely broad topic labels.
-5. Avoid producing multiple indicators that differ only cosmetically.
-6. Retain enough indicators to cover the main contrastive variation for each component.
-
-Where several candidate indicators overlap, prefer the version that is:
-
-- more directly observable in text
-- narrower and cleaner
-- more reusable for downstream dimension design
+1. Begin with candidate dimension sketches from Stage 0.
+2. Compare with analytic sub-spaces.
+3. Examine clusters of indicators from the Layer 1 registry.
+4. Merge overlapping conceptual dimensions.
+5. Preserve major analytic distinctions required for evaluating responses.
 
 ---
 
@@ -452,27 +360,27 @@ Where several candidate indicators overlap, prefer the version that is:
 
 The output must be emitted as a single **fenced Markdown block**.
 
-The **outer fence must use four backticks**.
+The outer fence must use four backticks.
 
-Inside that fenced block, emit exactly:
+Inside that block emit exactly:
 
-```text
-#### 5.4 Layer 1 SBO Instances (Draft)
+```
+#### 5.3 Layer 2 SBO Instances (Draft)
 ```
 
 followed by the registry table.
 
-The registry table must use these columns in this exact order:
+The table must use these columns in this exact order:
 
-| sbo_identifier | sbo_identifier_shortid | assessment_id | component_id | indicator_id | sbo_short_description |
+| sbo_identifier | sbo_identifier_shortid | assessment_id | component_id | dimension_id | sbo_short_description |
 
-Indicators must be grouped by `component_id`.
+Rows must be grouped by `component_id`.
 
 Within each component group:
 
-- rows should be ordered by `indicator_id`
-- identifiers should remain stable and sequential
-- descriptions should be concise and parallel where possible
+- rows ordered by `dimension_id`
+- identifiers sequential
+- descriptions concise and parallel
 
 ---
 
@@ -480,31 +388,27 @@ Within each component group:
 
 The generator must:
 
-1. Identify each component present in the analytic brief.
-2. Extract candidate indicators associated with that component.
-3. Consolidate overlapping signals into a minimal coherent indicator set.
-4. Produce approximately **4–8 indicators per component** where possible.
-5. Assign globally unique `indicator_id` values across the full rubric payload.
-6. Construct `sbo_identifier` values using `I_<sid>_<cid>_<iid>`.
-7. Set `sbo_identifier_shortid = indicator_id`.
-8. Generate concise `sbo_short_description` labels that comply with the specification guide.
-
-The generator must **not introduce concepts that are not present in the analytic brief**.
+1. Identify components present in the analytic brief.
+2. Examine analytic sub-spaces and candidate dimension sketches.
+3. Analyse clusters of related indicators from the Layer 1 registry.
+4. Consolidate signals into conceptual dimensions.
+5. Produce approximately **2–4 dimensions per component**.
+6. Assign globally unique `dimension_id` values.
+7. Construct identifiers using `D_<sid>_<cid>_<did>`.
+8. Generate concise conceptual dimension labels.
 
 ---
 
 ### Output restrictions
 
-The generated output must contain only a single fenced Markdown block.
+The generated output must contain **only one fenced Markdown block**.
 
-Inside that block, it must contain only:
+Inside that block it must contain only:
 
-```text
-#### 5.4 Layer 1 SBO Instances (Draft)
+```
+#### 5.3 Layer 2 SBO Instances (Draft)
 ```
 
 followed by the table.
 
-No commentary, explanation, notes, or prefatory text may appear outside or below the table.
-
-===
+No commentary or explanatory text may appear outside the table.
