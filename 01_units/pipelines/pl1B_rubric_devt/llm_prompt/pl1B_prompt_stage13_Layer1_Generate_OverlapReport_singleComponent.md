@@ -1,21 +1,15 @@
 ---
-prompt_id: calibration_triage
+prompt_id: generate_indicator_overlap_report
 version: v01
 stage: calibration
-purpose: triage scored indicator rows to identify cases that may require human review during rubric calibration
+purpose: detect indicator co-occurrence patterns within a single component to support overlap inspection during rubric calibration
 status: active
 owner: EECS3000W26
 input_contract:
-  - indicator_specification
   - scored_rows_dataset
 input_structure:
   delimiter: "==="
   artefacts:
-    - name: indicator_specification
-      fields:
-        - indicator_definition
-        - assessment_guidance
-        - evaluation_notes
     - name: scored_rows_dataset
       expected_columns:
         - submission_id
@@ -29,187 +23,264 @@ output_contract: fenced_markdown_tables
 constraints:
   - do_not_rescore_responses
   - do_not_modify_scoring
-  - triage_only
-notes: prompt performs calibration triage by sampling scored rows and identifying potentially ambiguous or misclassified cases for human inspection
+  - descriptive_analysis_only
+notes: prompt identifies indicator pairs that frequently co-occur in the same submission where either indicator registers evidence or partial_evidence
 ---
-## PROMPT: Calibration triage
-You are helping triage calibration results for a single Layer 1 indicator.
-The prompt receives two artefacts after the prompt text.
-These artefacts will be supplied using the delimiter `===` in the following structure.
+## PROMPT: Indicator overlap report
 
-===
-Indicator specification:
-<indicator_definition>
-<short_indicator_description>
-<assessment_guidance>
-<evaluation_notes>
+You are helping analyse **indicator co-occurrence patterns** in a scored dataset produced during Layer 1 rubric calibration.
 
-===
-Scored rows follow.
+The prompt receives **one artefact** after the prompt text using the delimiter `===`.
 
+```
 ===
+Scored rows dataset follows.
+===
+```
 
 ### Purpose
-This prompt performs **calibration triage** for a single rubric indicator by selecting a small diagnostic inspection set and grouping those rows into triage panels for human review.
+
+This prompt produces an **Overlap Report** for a single rubric component.
+
+The goal is to identify **indicator pairs that frequently fire together** within the same submission and provide additional descriptive statistics that help humans interpret overlap patterns.
+
+This report helps humans detect possible:
+
+- redundant indicators  
+- partially overlapping indicators  
+- conceptually distinct indicators that frequently appear together  
+
+The prompt performs **descriptive overlap analysis only**.
+
 This prompt **does not perform scoring**.
-Do not reinterpret the rubric.
-Do not change evidence_status values.
+
+Do not reinterpret the rubric.  
+Do not change `evidence_status` values.  
 Do not rescore the responses.
-Only identify rows that may require human inspection.
+
+Only analyse the existing scoring results.
+
+---
 
 ### Input integrity requirements
-All rows in the dataset must correspond to **one indicator_id only**.
-If multiple indicator_id values appear in the dataset, treat this as an input error and do not proceed.
-Each row must contain a valid `submission_id` and `evidence_status`.
 
-Valid evidence_status values are:
-- evidence  
-- partial_evidence  
-- little_to_no_evidence
+All rows must correspond to **one `component_id` only**.
 
-Do not invent new evidence_status values.
+If multiple `component_id` values appear in the dataset, treat this as an input error and do not proceed.
 
-### Procedure
+Each row must contain a valid:
 
-#### Step 1 — Partition the dataset
-Partition the full dataset into three groups using the recorded `evidence_status` values:
+- `submission_id`
+- `indicator_id`
+- `evidence_status`
+
+Valid `evidence_status` values are:
+
 - evidence  
 - partial_evidence  
 - little_to_no_evidence  
 
-Do not reinterpret or modify these labels.
+Do not invent new evidence_status values.
 
-#### Step 2 — Construct the diagnostic inspection set
-From each partition, select diagnostic rows as follows:
+---
 
-- up to **8 rows** where `evidence_status = evidence`
-- up to **8 rows** where `evidence_status = partial_evidence`
-- up to **8 rows** where `evidence_status = little_to_no_evidence`
+## Procedure
 
-**Enforcement rule for row limits:**
+### Step 1 — Construct indicator evidence matrix
 
-If a partition contains more than 8 rows:
-- Use the dataset order exactly as provided.
-- Keep only the first 8 rows in that partition.
-- Ignore all remaining rows in that partition.
-- Do not inspect, analyse, or reference rows beyond these first 8.
+Using the dataset, internally construct a table with the structure:
 
-The inspection set therefore contains **at most 24 rows total**.
+| submission_id | indicator_id | evidence_status |
 
-The limit of 8 rows applies **independently to each evidence_status category**.
-
-If a category contains fewer than 8 rows, include all available rows.
-
-Selection must follow dataset order only.
-Do not optimise for representativeness, ambiguity, or coverage beyond the enforced per-partition row limit.
-
-Do not select only ambiguous rows.
-
-#### Step 3 — Declare the inspection set
-The **Selected inspection set table must list every sampled row**.
-This table is the **registry of rows** used for the remainder of the task.
-
-**The Selected inspection set table is the canonical registry for the triage task.**
-
-**Each row in this table must include a `selected_panel` value (A, B, or C).**
-
-**Panel sections later in the output must contain only rows drawn from this registry whose `selected_panel` value matches the panel label.**
-
-All rows appearing anywhere later in the output must come from this registry.
-No additional rows from the dataset may be introduced.
-
-#### Step 4 — Perform triage grouping
-Each row in the Selected inspection set must be assigned exactly one panel label using the `selected_panel` column in the inspection table.
-
-Valid values for `selected_panel` are:
-- A
-- B
-- C
-
-Panel assignment must be completed in the Selected inspection set table before producing the panel sections below.
-
-Using **only the rows listed in the Selected inspection set**, group them into the following diagnostic panels:
-
-- Panel A — Clearly aligned cases
-- Panel B — Borderline cases  
-- Panel C — Questionable cases  
-
-These panels are **diagnostic groupings only**.  
-They do **not** modify the recorded evidence_status values.
-
-Panels must reflect triage interpretation only.
-
-#### Structural integrity rules
-Panels A–C must form a **strict partition of the Selected inspection set**.
-
-The following conditions must hold:
-
-1. Every row listed in the Selected inspection set must appear in **exactly one panel**.
-2. No row may appear in more than one panel.
-3. No new rows may appear in any panel.
-4. The union of rows appearing in Panels A–C must exactly match the rows listed in the Selected inspection set.
-5. Each row must include the **exact submission_id from the dataset**. Do not alter identifiers.
-6. The `selected_panel` column in the Selected inspection set table must assign exactly one panel (A, B, or C) to every row.
-7. Panel sections must contain only rows whose `selected_panel` value matches that panel.
-8. Every row in the Selected inspection set must appear exactly once in the panel sections.
-
-Do not report excluded rows, omitted rows, duplicate rows, or partition violations inside any panel.
-If a row is excluded, it must not appear anywhere in the panel tables.
-If a row has already been assigned to a panel, do not mention it again.
-### Notes for inspection reasoning
-Inspection notes should briefly explain **why the row appears in that panel**.
-
-Do not restate the rubric definition.
-Do not provide general rubric commentary.
-
-Inspection notes should describe the diagnostic reason the row may be:
-- clearly aligned with the indicator
-- weak or incomplete
-- potentially misclassified
-
-Construct the Selected inspection set table first, including the `selected_panel` assignments, and only then produce the panel sections by copying rows from that table.
-
-### Output format
+From this table determine which indicators fire with:
 
 ```
-#### <indicator_id> — <short_indicator_description>
+evidence
+or
+partial_evidence
+```
 
-##### Selected inspection set
+Indicators with `little_to_no_evidence` must be ignored for activation and overlap calculations.
 
-| submission_id | evidence_status | selected_panel | reason_selected |
+---
+
+### Step 2 — Compute indicator activation counts
+
+For each `indicator_id`, compute:
+
+```
+activation_count
+```
+
+This is the number of unique `submission_id` values where the indicator has:
+
+```
+evidence
+or
+partial_evidence
+```
+
+This table provides the baseline frequency of each indicator.
+
+---
+
+### Step 3 — Determine active indicators per submission
+
+For each `submission_id`:
+
+1. Identify all indicators where `evidence_status` is:
+
+```
+evidence
+or
+partial_evidence
+```
+
+2. Record the set of **active indicators** for that submission.
+
+If a submission contains fewer than two active indicators, it contributes **no overlap pairs**.
+
+---
+
+### Step 4 — Generate indicator pairs
+
+For each submission that has two or more active indicators:
+
+1. Generate all **unordered indicator pairs** from the active indicator set.
+
+Example:
+
+```
+I17
+I19
+I21
+```
+
+The generated pairs are:
+
+```
+I17 + I19
+I17 + I21
+I19 + I21
+```
+
+Each pair contributes **one co-occurrence** for that submission.
+
+Pairs must be treated as **unordered**.
+
+```
+I17 + I19
+```
+
+and
+
+```
+I19 + I17
+```
+
+must be treated as the **same pair**.
+
+---
+
+### Step 5 — Aggregate pair counts
+
+Across the full dataset:
+
+1. Count how many submissions contain each unordered pair.
+2. Each pair must appear **only once in the final table**.
+3. Duplicate pair rows must not appear.
+
+This produces:
+
+```
+co_occurrence_count
+```
+
+for each indicator pair.
+
+---
+
+### Step 6 — Compute conditional overlap ratios
+
+For each indicator pair:
+
+```
+A + B
+```
+
+Compute two ratios:
+
+```
+overlap_ratio_A = co_occurrence_count / activation_count(A)
+overlap_ratio_B = co_occurrence_count / activation_count(B)
+```
+
+These ratios indicate how strongly the indicators are associated.
+
+Values near **1.0** indicate that the indicators almost always appear together.
+
+---
+
+### Step 7 — Identify strongest overlap per indicator
+
+For each indicator:
+
+1. Identify the indicator with which it has the **largest co_occurrence_count**.
+2. Record that pair as the indicator’s **strongest overlap**.
+
+---
+
+### Step 8 — Sort pair table
+
+Sort indicator pairs by:
+
+```
+co_occurrence_count (descending)
+```
+
+If counts are equal, sort alphabetically by the pair.
+
+---
+
+## Output format
+
+Emit the overlap report as Markdown.
+
+```
+### Overlap report — component \<component_id\>
+
+#### Indicator activation counts
+
+| indicator_id | activation_count |
+|---|---|
+
+#### Pair overlap table
+
+| indicator_pair | co_occurrence_count | overlap_ratio_A | overlap_ratio_B |
 |---|---|---|---|
 
-##### Triage results
+#### Strongest overlap per indicator
 
-##### Panel A — Clear positives
-*Inspection question for these:* Does the response clearly contain the analytic signal described by the indicator_definition?
-
-| submission_id | evidence_status | inspection_note |
-|---|---|---|
-
-##### Panel B — Borderline cases
-*Inspection questions for these:* 
-- Is the analytic signal actually present?
-- Is the signal weak or incomplete?
-- Does this belong in a different indicator?
-
-| submission_id | evidence_status | inspection_note |
-|---|---|---|
-
-##### Panel C — Questionable cases
-*Inspection questions for these:* 
-Was the indicator triggered incorrectly?
-Was the signal present but missed?
-
-| submission_id | evidence_status | inspection_note |
+| indicator_id | strongest_overlap_indicator | pair_count |
 |---|---|---|
 ```
 
-### Behavioural constraints
-- Do not modify the dataset.
-- Do not add or remove rows beyond the inspection set selection.
-- Do not reinterpret or override evidence_status.
-- Do not rescore responses.
-- Only flag rows for human review through panel placement and inspection notes.
+Output rules:
 
-===
+- Each indicator pair must appear **only once**.
+- Only include pairs where `co_occurrence_count ≥ 1`.
+- Ratios should be expressed as **decimal values between 0 and 1**.
+- No explanatory commentary may appear outside the tables.
+
+---
+
+## Behavioural constraints
+
+- Do not modify the dataset.
+- Do not reinterpret `evidence_status`.
+- Do not infer rubric meaning.
+- Do not propose rubric changes.
+- Do not explain conceptual overlap.
+- Do not add narrative explanation.
+
+The output must contain **descriptive statistics only**.

@@ -27,7 +27,7 @@ Generate the Layer-1 scoring prompt and run it on the calibration dataset.
 
 Derive:
 
-`Layer1_ScoringManifest_$begin:math:display$ASSESSMENT\_ID$end:math:display$_v$begin:math:display$VERSION$end:math:display$`
+`Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION>`
 
 using the wrapper prompt:
 
@@ -139,11 +139,82 @@ The purpose is **screening**, not rubric modification.
 
 ---
 
+## 3A. Collapse candidate screening (human)
+
+### Purpose
+
+Identify indicator clusters that may **collapse or merge** before running full indicator calibration.
+
+High co-occurrence alone does not prove redundancy, but it may signal that indicators are functionally identical.
+
+### Action
+
+Inspect the overlap report and identify indicator pairs where:
+
+- co-occurrence counts are extremely high relative to indicator activation counts, or  
+- conditional overlap ratios are close to **1.0**.
+
+Clusters may appear as dense sets of mutually overlapping indicators.
+
+Example cluster:
+
+```
+I25
+I27
+I28
+I29
+```
+
+where most pairs have extremely high overlap counts.
+
+### Collapse candidate rule
+
+Mark a cluster as a **collapse candidate** when:
+
+- most pairs in the cluster have conditional overlap ≥ 0.85, and  
+- the cluster appears structurally dense.
+
+### Minimal semantic inspection
+
+Before collapsing indicators, perform a short semantic check.
+
+1. Sample **3–5 responses** where the indicators co-occur.
+2. Inspect whether the signals are conceptually distinct.
+
+Inspection question:
+
+```
+Are these indicators detecting genuinely different analytic signals?
+```
+
+### Possible outcomes
+
+| outcome | action |
+|---|---|
+| clearly redundant | merge indicators before running full triage |
+| partially distinct | keep indicators but narrow definitions |
+| distinct but commonly co-expressed | keep indicators and proceed with full calibration |
+
+### Decision rule
+
+If indicators are clearly redundant:
+
+- merge indicators immediately
+- update the indicator registry
+- regenerate the scoring prompt
+- rerun the scoring dataset
+
+Otherwise proceed with full calibration.
+
+Even when collapsing indicators, run **triage for at least one representative indicator** to verify that the signal is detected correctly.
+
+---
+
 # INDICATOR CALIBRATION
 
 Indicator calibration examines **how individual indicators behave**.
 
-Each indicator is inspected independently.
+Each indicator is inspected independently unless it has already been collapsed.
 
 ---
 
@@ -449,6 +520,7 @@ Use findings from:
 - indicator inspection
 - overlap inspection
 - instruction clarity test
+- collapse candidate screening
 
 ### Revise the indicator registry (Section 5.4)
 
