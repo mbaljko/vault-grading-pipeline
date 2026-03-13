@@ -438,7 +438,7 @@ how those indicators are evaluated
 ```
 #### Stage 1.3 — Layer 1 SBO Iterative Development
 
-NOTE: Operationalization found in [[Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS]]
+NOTE: Operationalization found in [[Pipeline 1B — Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS]]
 
 Layer 1 SBO development establishes how **indicator scores are derived from the Assessment Artefact (AA)**.
 Layer 1 behaviour is defined by two sections of the Rubric Template:
