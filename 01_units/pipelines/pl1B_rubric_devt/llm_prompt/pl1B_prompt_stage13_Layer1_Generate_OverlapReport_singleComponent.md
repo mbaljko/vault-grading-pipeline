@@ -42,13 +42,17 @@ Scored rows dataset follows.
 
 This prompt produces an **Overlap Report** for a single rubric component.
 
-The goal is to identify **indicator pairs that frequently fire together** within the same submission and provide additional descriptive statistics that help humans interpret overlap patterns.
+The goal is to identify:
 
-This report helps humans detect possible:
+- indicator pairs that frequently fire together  
+- indicator pairs with **very high conditional overlap (≥ 0.85)**  
+- **clusters of indicators** where all pairwise conditional overlaps are ≥ 0.85  
+
+These diagnostics help humans detect possible:
 
 - redundant indicators  
 - partially overlapping indicators  
-- conceptually distinct indicators that frequently appear together  
+- tightly coupled indicator clusters  
 
 The prompt performs **descriptive overlap analysis only**.
 
@@ -88,11 +92,11 @@ Do not invent new evidence_status values.
 
 ### Step 1 — Construct indicator evidence matrix
 
-Using the dataset, internally construct a table with the structure:
+Using the dataset, internally construct a table:
 
 | submission_id | indicator_id | evidence_status |
 
-From this table determine which indicators fire with:
+Determine which indicators fire with:
 
 ```
 evidence
@@ -120,15 +124,13 @@ or
 partial_evidence
 ```
 
-This table provides the baseline frequency of each indicator.
-
 ---
 
 ### Step 3 — Determine active indicators per submission
 
 For each `submission_id`:
 
-1. Identify all indicators where `evidence_status` is:
+1. Identify indicators with
 
 ```
 evidence
@@ -136,7 +138,7 @@ or
 partial_evidence
 ```
 
-2. Record the set of **active indicators** for that submission.
+2. Record the set of **active indicators**.
 
 If a submission contains fewer than two active indicators, it contributes **no overlap pairs**.
 
@@ -144,9 +146,9 @@ If a submission contains fewer than two active indicators, it contributes **no o
 
 ### Step 4 — Generate indicator pairs
 
-For each submission that has two or more active indicators:
+For each submission with two or more active indicators:
 
-1. Generate all **unordered indicator pairs** from the active indicator set.
+Generate all **unordered indicator pairs**.
 
 Example:
 
@@ -156,15 +158,13 @@ I19
 I21
 ```
 
-The generated pairs are:
+Pairs:
 
 ```
 I17 + I19
 I17 + I21
 I19 + I21
 ```
-
-Each pair contributes **one co-occurrence** for that submission.
 
 Pairs must be treated as **unordered**.
 
@@ -178,17 +178,18 @@ and
 I19 + I17
 ```
 
-must be treated as the **same pair**.
+are the same pair.
+
+Each pair contributes **one co-occurrence** for that submission.
 
 ---
 
 ### Step 5 — Aggregate pair counts
 
-Across the full dataset:
+Across the dataset:
 
-1. Count how many submissions contain each unordered pair.
-2. Each pair must appear **only once in the final table**.
-3. Duplicate pair rows must not appear.
+1. Count the number of submissions containing each pair.
+2. Ensure each unordered pair appears **only once**.
 
 This produces:
 
@@ -196,49 +197,85 @@ This produces:
 co_occurrence_count
 ```
 
-for each indicator pair.
+for each pair.
 
 ---
 
 ### Step 6 — Compute conditional overlap ratios
 
-For each indicator pair:
+For each pair:
 
 ```
 A + B
 ```
 
-Compute two ratios:
+Compute:
 
 ```
 overlap_ratio_A = co_occurrence_count / activation_count(A)
 overlap_ratio_B = co_occurrence_count / activation_count(B)
 ```
 
-These ratios indicate how strongly the indicators are associated.
-
-Values near **1.0** indicate that the indicators almost always appear together.
+Values near **1.0** indicate the indicators almost always appear together.
 
 ---
 
-### Step 7 — Identify strongest overlap per indicator
+### Step 7 — Identify high-overlap pairs
+
+A pair qualifies as a **high-overlap pair** if:
+
+```
+overlap_ratio_A ≥ 0.85
+AND
+overlap_ratio_B ≥ 0.85
+```
+
+These pairs indicate extremely strong association between indicators.
+
+---
+
+### Step 8 — Identify high-overlap clusters
+
+Identify **clusters of indicators** where:
+
+```
+all pairwise conditional overlaps ≥ 0.85
+```
+
+That is, for every pair within the cluster:
+
+```
+overlap_ratio_A ≥ 0.85
+AND
+overlap_ratio_B ≥ 0.85
+```
+
+Clusters must contain **at least three indicators**.
+
+Clusters represent tightly coupled indicators that frequently fire together.
+
+Indicators may appear in **only one cluster**.
+
+---
+
+### Step 9 — Identify strongest overlap per indicator
 
 For each indicator:
 
 1. Identify the indicator with which it has the **largest co_occurrence_count**.
-2. Record that pair as the indicator’s **strongest overlap**.
+2. Record that pair as the indicator’s strongest overlap.
 
 ---
 
-### Step 8 — Sort pair table
+### Step 10 — Sort pair table
 
-Sort indicator pairs by:
+Sort pairs by:
 
 ```
 co_occurrence_count (descending)
 ```
 
-If counts are equal, sort alphabetically by the pair.
+If counts tie, sort alphabetically by pair.
 
 ---
 
@@ -259,6 +296,23 @@ Emit the overlap report as Markdown.
 | indicator_pair | co_occurrence_count | overlap_ratio_A | overlap_ratio_B |
 |---|---|---|---|
 
+#### High-overlap pairs (conditional overlap ≥ 0.85)
+
+| indicator_pair | overlap_ratio_A | overlap_ratio_B |
+|---|---|---|
+
+#### High-overlap clusters (all pairwise conditional overlap ≥ 0.85)
+
+Cluster 1:
+I25  
+I27  
+I28  
+I29  
+
+Cluster 2:
+I31  
+I32  
+
 #### Strongest overlap per indicator
 
 | indicator_id | strongest_overlap_indicator | pair_count |
@@ -267,10 +321,10 @@ Emit the overlap report as Markdown.
 
 Output rules:
 
-- Each indicator pair must appear **only once**.
-- Only include pairs where `co_occurrence_count ≥ 1`.
-- Ratios should be expressed as **decimal values between 0 and 1**.
-- No explanatory commentary may appear outside the tables.
+- Each pair must appear **only once**.
+- Only include pairs with `co_occurrence_count ≥ 1`.
+- Ratios must be decimals between **0 and 1**.
+- Do not include commentary outside the tables.
 
 ---
 
