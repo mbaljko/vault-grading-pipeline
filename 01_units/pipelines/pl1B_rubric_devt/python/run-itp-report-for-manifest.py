@@ -29,7 +29,7 @@ Per matching row behavior:
 	- JSON for `scored_payload`
 	- `===`
 5. Invoke `invoke_chatgpt_API.py` with:
-	- `--prompt-instructions-file` from `L1_CT_PROMPT_FILE_RELATIVE`
+	- `--prompt-instructions-file` from `L1_ITP_PROMPT_FILE_RELATIVE`
 	- `--prompt-input-file` from step 4
 	- `--output-file-stem <sbo_identifier>`
 	- `--output-dir <manifest_dir>/<RUNNER_OUTPUT_SUBDIR>`
@@ -49,7 +49,7 @@ Exit behavior:
 - Returns 1 with stderr message when required input files are missing.
 
 Example:
-	python run-ct-report-for-manifest.py \
+	python run-itp-report-for-manifest.py \
 		--sbo-manifest-file /path/to/Layer1_ScoringManifest_PPP_v01.md \
 		--component-id SectionCResponse \
 		--file-with-response-texts /path/to/response_texts.csv \
@@ -77,9 +77,9 @@ REPO_ROOT: Path | None = next(
 	None,
 )
 RUNNER_SCRIPT_RELATIVE = Path("01_units/apps/prompt_runners/invoke_chatgpt_API.py")
-L1_CT_PROMPT_FILE_RELATIVE = Path(
+L1_ITP_PROMPT_FILE_RELATIVE = Path(
 	"01_units/pipelines/pl1B_rubric_devt/llm_prompt/"
-	"pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO.md"
+	"pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md"
 )
 RUNNER_OUTPUT_SUBDIR = "Level1-CalibrationTesting-Outputs"
 
@@ -185,7 +185,7 @@ def find_matching_scored_rows(
 	return matches
 
 
-def run_l1_ct_for_payload(
+def run_l1_itp_for_payload(
 	payload_dir: Path,
 	components: dict[str, str],
 	scored_payload: dict[str, object],
@@ -193,7 +193,7 @@ def run_l1_ct_for_payload(
 	runner_dry_run: bool,
 	output_dir: Path | None = None,
 ) -> Path:
-	"""Invoke the same runner behavior as justfile target l1-ct-secC.
+	"""Invoke the same runner behavior as justfile target l1-itp-secC.
 	
 	If output_dir is provided, output files are written there.
 	Otherwise, outputs are written to <payload_dir>/Level1-CalibrationTesting-Outputs.
@@ -205,7 +205,7 @@ def run_l1_ct_for_payload(
 		raise RuntimeError("Could not locate repository root from script path.")
 
 	runner_script = REPO_ROOT / RUNNER_SCRIPT_RELATIVE
-	prompt_file = REPO_ROOT / L1_CT_PROMPT_FILE_RELATIVE
+	prompt_file = REPO_ROOT / L1_ITP_PROMPT_FILE_RELATIVE
 	runner_output_dir = output_dir if output_dir else (payload_dir / RUNNER_OUTPUT_SUBDIR)
 	runner_output_dir.mkdir(parents=True, exist_ok=True)
 	payload_file = runner_output_dir / f"{output_file_stem}_payload.json"
@@ -475,7 +475,7 @@ def main() -> int:
 				print(sbo_identifier)
 				#print(json.dumps(components, ensure_ascii=False))
 				#print(json.dumps(scored_payload, ensure_ascii=False))
-				runner_output_file = run_l1_ct_for_payload(
+				runner_output_file = run_l1_itp_for_payload(
 					payload_dir,
 					components,
 					scored_payload,
