@@ -69,8 +69,7 @@
               "title": "pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt"
             }
           }
-        ],
-        "currentTab": 3
+        ]
       }
     ],
     "direction": "vertical"
@@ -216,13 +215,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt"
+              "title": "Outline of Pipeline 1B — Layered Rubric Construction Pipeline"
             }
           },
           {
@@ -256,15 +255,15 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "54ebfa1a7e1a5ecc",
+  "active": "50f9e0c568115b6f",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/apps/prompt_runners/invoke_chatgpt_API_output.md",
     "01_units/apps/prompt_runners/__pycache__/invoke_chatgpt_API.cpython-313.pyc",
     "01_units/apps/prompt_runners/invoke_chatgpt_API.py",
     "01_units/apps/prompt_runners/__pycache__/invoke_chatgpt_with_payload.cpython-313.pyc",
     "01_units/apps/prompt_runners/__pycache__",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Generate Layer 1 Indicator Evaluation Specification.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_SBO Instance Registry.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - engagement signal prompt.md",

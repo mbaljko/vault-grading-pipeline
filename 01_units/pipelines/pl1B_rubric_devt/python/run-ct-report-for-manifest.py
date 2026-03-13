@@ -30,7 +30,7 @@ Per matching row behavior:
 	- `===`
 5. Invoke `invoke_chatgpt_API.py` with:
 	- `--prompt-instructions-file` from `L1_CT_PROMPT_FILE_RELATIVE`
-	- `--payload-file` from step 4
+	- `--prompt-input-file` from step 4
 	- `--output-file-stem <sbo_identifier>`
 	- `--output-dir <manifest_dir>/<RUNNER_OUTPUT_SUBDIR>`
 	- `--output-format md`
@@ -197,6 +197,7 @@ def run_l1_ct_for_payload(
 	
 	If output_dir is provided, output files are written there.
 	Otherwise, outputs are written to <payload_dir>/Level1-CalibrationTesting-Outputs.
+	The generated intermediate payload file is written to the same output directory.
 	
 	Returns the path to the markdown output file written by the runner.
 	"""
@@ -205,9 +206,9 @@ def run_l1_ct_for_payload(
 
 	runner_script = REPO_ROOT / RUNNER_SCRIPT_RELATIVE
 	prompt_file = REPO_ROOT / L1_CT_PROMPT_FILE_RELATIVE
-	payload_file = payload_dir / f"{output_file_stem}_payload.json"
 	runner_output_dir = output_dir if output_dir else (payload_dir / RUNNER_OUTPUT_SUBDIR)
 	runner_output_dir.mkdir(parents=True, exist_ok=True)
+	payload_file = runner_output_dir / f"{output_file_stem}_payload.json"
 	runner_output_file = runner_output_dir / f"{output_file_stem}_output.md"
 
 	components_json = json.dumps(components, indent=2, ensure_ascii=False)
@@ -230,7 +231,7 @@ def run_l1_ct_for_payload(
 		str(runner_output_dir),
 		"--prompt-instructions-file",
 		str(prompt_file),
-		"--payload-file",
+		"--prompt-input-file",
 		str(payload_file),
 		"--output-file-stem",
 		output_file_stem,
