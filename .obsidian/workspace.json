@@ -117,12 +117,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage22_Layer2_SBO_62.md",
+                "file": "Design Note - Extensible Architecture for `vault-grading-pipeline`.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "pl1B_prompt_stage22_Layer2_SBO_62"
+              "title": "Design Note - Extensible Architecture for `vault-grading-pipeline`"
             }
           }
         ],
@@ -272,13 +272,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage22_Layer2_SBO_62.md",
+                "file": "Design Note - Extensible Architecture for `vault-grading-pipeline`.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of pl1B_prompt_stage22_Layer2_SBO_62"
+              "title": "Outline of Design Note - Extensible Architecture for `vault-grading-pipeline`"
             }
           },
           {
@@ -314,10 +314,11 @@
   },
   "active": "e2e41aa682e94d51",
   "lastOpenFiles": [
+    "README.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage22_Layer2_SBO_62.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage21_Layer2_SBO_53.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage22_Layer2_SBO_62.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_OverlapReport_singleComponent.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
@@ -348,7 +349,6 @@
     "05_docs/01_design/pl1B_rubric_devt/Layer1_ScoringManifest_v01 Schema.md",
     "01_units/pipelines/pl1B_rubric_devt/RUN_PPP_SectionAResponse_Layer1_SBO_scoring_prompt_v01_output.csv",
     "05_docs/01_design/pl1B_rubric_devt/The 4-panel indicator diagnostic table.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO_output.md",
     "01_units/pipelines/pl1B_rubric_devt/python/run-ct-report-for-manifest.py"
   ]
 }
