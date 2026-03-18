@@ -22,8 +22,39 @@
               "icon": "lucide-file",
               "title": "Pipeline 1B — Layered Rubric Construction Pipeline"
             }
+          },
+          {
+            "id": "348c9e2b5301e78b",
+            "type": "leaf",
+            "pinned": true,
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification.md",
+                "mode": "source",
+                "source": false
+              },
+              "pinned": true,
+              "icon": "lucide-file",
+              "title": "pl1B_prompt_stage02_Analytic Sub-space Identification"
+            }
+          },
+          {
+            "id": "39c750c954581812",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification_inclCaseStudy.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "pl1B_prompt_stage02_Analytic Sub-space Identification_inclCaseStudy"
+            }
           }
-        ]
+        ],
+        "currentTab": 2
       }
     ],
     "direction": "vertical"
@@ -169,13 +200,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification_inclCaseStudy.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Pipeline 1B — Layered Rubric Construction Pipeline"
+              "title": "Outline of pl1B_prompt_stage02_Analytic Sub-space Identification_inclCaseStudy"
             }
           },
           {
@@ -209,16 +240,19 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "50f9e0c568115b6f",
+  "active": "39c750c954581812",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification.md",
+    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification_inclCaseStudy.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - engagement signal prompt.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage21_Layer2_SBO_53.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_OverlapReport_singleComponent.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage01_SubmissionAnalyticBrief_Sec1-3.md",
-    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification.md",
     "05_docs/01_design/pl1A_canonical_population_prep/prev_ver/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
     "01_units/pipelines/pl1A_canonical_population_prep/excel/README.md",
     "01_units/pipelines/pl1A_canonical_population_prep/excel/Pipeline1A_Excel_Implementation_Standard.md",
@@ -238,11 +272,8 @@
     "01_units/apps/prompt_runners/invoke_chatgpt_API.py",
     "01_units/apps/prompt_runners/__pycache__/invoke_chatgpt_with_payload.cpython-313.pyc",
     "01_units/apps/prompt_runners/__pycache__",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - engagement signal prompt.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
     "05_docs/01_design/pl1B_rubric_devt/TO DO - FOR THE FUTURE.md",
     "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>.md",
-    "05_docs/01_design/pl1B_rubric_devt/TEMPLATE for RUBRIC_<ASSESSMENT_ID>_<STATUS>_payload_v<VERSION>  VERBOSE.md",
     "01_units/pipelines/pl1B_rubric_devt/python/__pycache__/run-ct-report-for-manifest.cpython-313.pyc",
     "01_units/pipelines/pl1B_rubric_devt/python/__pycache__",
     "01_units/pipelines/pl1B_rubric_devt/RUN_PPP_SectionAResponse_Layer1_SBO_scoring_prompt_v01_output.csv",
