@@ -1,15 +1,15 @@
 ---
-prompt_id: pl1B_stage03A_engagement_signal_prompt_v01
-version: v01
-stage: pipeline_pl1B_stage03A
-purpose: extract engagement signals from calibration responses to identify observable patterns of task engagement within analytic sub-spaces
+prompt_id: pl1B_stage03_contrastive_pattern_prompt_v02
+version: v02
+stage: pipeline_pl1B_stage03
+purpose: "perform contrastive pattern discovery on calibration responses to identify conceptual analytic patterns within analytic sub-spaces that support later human-verifiable signal design"
 status: active
 owner: EECS3000W26
 
 input_contract:
-  - assignment_payload_specification (<ASSESSMENT_ID>_AssignmentPayloadSpec_v*>)
-  - submission_analytic_brief (<ASSESSMENT_ID>_SubmissionAnalyticBrief_v*)
-  - calibration_sample_dataset (lines from csv)
+  - "assignment_payload_specification (<ASSESSMENT_ID>_AssignmentPayloadSpec_v*)"
+  - "submission_analytic_brief (<ASSESSMENT_ID>_SubmissionAnalyticBrief_v*)"
+  - "calibration_sample_dataset (lines from csv)"
 
 input_structure:
   delimiter: "==="
@@ -19,7 +19,7 @@ input_structure:
         - assessment_id
         - component_id
         - component_ids
-        - response_field_name
+        - component_definitions_sufficient_to_validate_component_id
     - name: submission_analytic_brief
       required_section:
         - "Analytic Sub-space Identification"
@@ -38,26 +38,30 @@ output_structure:
   root_heading_pattern: "#### 5.<cid>"
   subsections:
     - "##### 5.<cid>.1 Calibration sample description"
-    - "##### 5.<cid>.2 Contrastive response observations"
-    - "##### 5.<cid>.3 Candidate engagement signals"
-    - "##### 5.<cid>.4 Candidate indicator set"
+    - "##### 5.<cid>.2 Analytic sub-space registry"
+    - "##### 5.<cid>.3 Contrastive pattern observations"
+    - "##### 5.<cid>.4 Verification-relevant pattern summary"
+    - "##### 5.<cid>.5 Stage 1 design implications"
 
 constraints:
-  - signals_must_describe_engagement_patterns
-  - signals_must_be_observable_textual_features
-  - signals_must_be_bounded_to_analytic_subspace
-  - signals_must_be_supported_by_quoted_response_text
+  - patterns_must_describe_conceptual_analytic_features
+  - patterns_must_be_observable_textual_features
+  - patterns_must_be_bounded_to_analytic_subspace
+  - patterns_must_be_supported_by_quoted_response_text
   - do_not_infer_student_cognition
-  - do_not_classify_conceptual_positions
+  - do_not_evaluate_quality_or_performance_levels
   - do_not_define_scoring_rules
   - do_not_reference_rubric_performance_levels
   - do_not_generate_dimension_structures
+  - do_not_generate_candidate_indicators
+  - focus_on_conceptual_entities_relationships_and_constraints_only
 
 notes: |
-  This prompt performs Stage 0.3 engagement signal extraction for rubric construction.
-  Signals describe observable ways students engage with the positioning task, not
-  conceptual interpretations of the stance taken. Output is appended to the
-  SubmissionAnalyticBrief under Section 5.<cid>.
+  This prompt performs Stage 0.3 contrastive pattern discovery for rubric construction.
+  Patterns describe observable conceptual analytic structures in student responses, including
+  entities, relationships, constraints, and required analytic forms.
+  The goal is to surface contrastive patterns that will support later human-verifiable
+  Layer 1 signal design without defining indicators or scoring rules.
 ---
 
 ## Prompt — Stage 0.3 Contrastive Pattern Discovery for Human-Verification-Oriented Signal Design
