@@ -1,8 +1,18 @@
+
 // Stage 0 — Validation join (Excel/Power Query)
 // Purpose:
 // - Map each LMS export row to the grading worksheet’s stable identifier (`Identifier` like "Participant 7835077")
 // - Emit an explicit canonical `submission_id` (digits-only) while preserving the original `GW.Identifier`
-// - Emit `__join_status` that gates grading eligibility (grade only `matched_unique`) 
+// - Emit `__join_status` that gates grading eligibility (grade only `matched_unique`)
+//
+// Role of the grading worksheet (GW):
+// - GW is the authoritative reference list of participants for grading.
+// - Each LMS export row is matched to GW by normalized name, resolving ambiguities and ensuring stable identity.
+// - GW provides the canonical identifier (`GW.Identifier`) and full name for each participant.
+// - Only rows that match uniquely to GW are considered eligible for grading (`matched_unique`).
+// - GW enables robust join logic, disambiguating duplicate names and supporting internal submission tracking.
+//
+// Note: Students listed in GW who do not have a matching submission in the LMS export will not appear in the output. The current script does not flag or report missing submissions from GW.
 
 let
     Raw = Excel.CurrentWorkbook(){[Name="Table_raw"]}[Content],
