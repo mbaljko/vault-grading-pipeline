@@ -39,8 +39,7 @@
               "title": "pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt"
             }
           }
-        ],
-        "currentTab": 1
+        ]
       }
     ],
     "direction": "vertical"
@@ -186,13 +185,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt"
+              "title": "Outline of Pipeline 1B — Layered Rubric Construction Pipeline"
             }
           },
           {
@@ -226,10 +225,10 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "7546e197986ede40",
+  "active": "50f9e0c568115b6f",
   "lastOpenFiles": [
-    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
+    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification_inclCaseStudy.md",
     "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification.md",
