@@ -315,7 +315,7 @@ This section must contain:
 
 ## Required Output Structure
 
-Output exactly the following structure and nothing else.
+Output exactly the following structure and nothing else. Output as md with outer fence ````
 
 ### Required heading
 
