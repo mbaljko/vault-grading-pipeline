@@ -211,6 +211,20 @@ Indicators must appear in increasing `indicator_id` order as defined in the Laye
 
 # Indicator specification guidance
 
+### Binary evaluation constraint (critical)
+
+Layer 1 operates as a **binary signal detection layer**.
+
+Each indicator must be evaluated as:
+
+- 1 = clear, sufficient, explicit textual evidence
+- 0 = absent, insufficient, vague, or ambiguous evidence
+
+Accordingly:
+
+- “partial”, “weak”, or “implicit” signals must be treated as **not present**
+- evaluation guidance must support **fast and consistent human verification**
+- guidance must reduce interpretive ambiguity at the threshold boundary
 ### indicator_definition
 
 A concise conceptual description of the analytic signal.
@@ -240,6 +254,15 @@ This section should:
 - reference typical phrasing patterns where helpful
 - remain general rather than enumerating exhaustive keyword lists
 
+assessment_guidance must:
+
+- describe what **counts as clear, explicit presence**
+- distinguish this from:
+  - vague mention
+  - incomplete structure
+  - implied but unstated relationships
+- support a **yes/no verification decision without deliberation**
+
 Example:
 
 Look for language indicating that responsibility is shared across people, teams, institutions, or systems involved in computing work.
@@ -255,6 +278,12 @@ These may include:
 - distinctions between similar indicators
 - cases where evidence should not be assigned
 - reminders about interpretive boundaries
+
+evaluation_notes must explicitly include:
+
+- common **false-positive forms** that should not be counted as present
+- clarification of **borderline cases that must be treated as not present**
+- distinctions between this indicator and closely related indicators
 
 Example:
 

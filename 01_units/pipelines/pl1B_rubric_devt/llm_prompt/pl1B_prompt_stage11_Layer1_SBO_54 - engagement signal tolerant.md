@@ -203,29 +203,6 @@ Indicators must reflect **observable claims or framings expressed in the respons
 
 They must **not encode evaluative judgement**.
 
-
-### Layer 1 verification constraint (critical)
-
-All Layer 1 SBO instances must support a **binary human-verification decision**.
-
-Each SBO must be interpretable as:
-
-> Is there clear, sufficient, explicit textual evidence that this analytic signal is present?
-
-Accordingly, each SBO must:
-
-- correspond to a signal that can be **verified directly from explicit text**
-- have an **implicit minimum threshold of recognisable structure**
-- avoid signals that could be triggered by:
-  - vague mention
-  - implied meaning
-  - partial or incomplete phrasing
-
-If a signal cannot be reliably evaluated using a **present / not present decision**, it must not be included as a Layer 1 SBO.
-
-Borderline, weak, or ambiguous forms must be assumed to fall into **not present** at Layer 1 and must instead be handled through:
-- Stage 0.3 contrastive pattern distinctions
-- multi-SBO aggregation downstream
 ---
 
 ### Indicator design rules
@@ -240,24 +217,10 @@ Indicator SBO instances must:
 - avoid compound indicators that require multiple conditions
 - remain narrow enough to be evaluated directly from the response text
 - remain distinguishable from neighbouring indicators in the same component
-- be verifiable using a **binary present / not-present decision**
-- require **recognisable structural expression**, not keyword presence alone
-- exclude signals that would frequently produce borderline ambiguity under binary evaluation
 
 Indicators should capture **distinct analytic signals**, not broad conceptual categories.
 
-Indicators must represent **conceptual analytic signals only**.
-
-They must reflect:
-- explicit identification of required analytic entities
-- explicit structuring of relationships among those entities
-- explicit adherence to analytic constraints
-
-Indicators must not represent:
-- engagement
-- effort
-- writing quality
-- general reasoning quality
+Indicators may represent either engagement signals or detectable conceptual framings, provided they correspond to observable textual language patterns in the response.
 
 ---
 
