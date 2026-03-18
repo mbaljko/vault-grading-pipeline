@@ -32,7 +32,9 @@ input_structure:
         - component_id
         - cleaned_response_text
 
-output_contract: fenced_markdown_section
+output_contract:
+  format: fenced_markdown_section
+  fencing_rule: "outer fence must use four backticks if any inner triple-backtick fences are present"
 
 output_structure:
   root_heading_pattern: "#### 5.<cid>"
@@ -336,6 +338,27 @@ For each analytic sub-space, discover patterns that help distinguish:
 Do **not** convert these into score labels or final thresholds.  
 Simply document the contrastive patterns.
 
+### Rule 4A — Decompose patterns for later human verification
+
+Because later Layer 1 design may use a binary human-verification surface, Stage 0.3 must surface distinctions at a finer level than broad pattern labels.
+
+For each analytic sub-space:
+
+- decompose broad response patterns into **atomic observable textual features** where possible
+- distinguish **different borderline subtypes** if they would behave differently under later binary verification
+- identify the **minimum textual configuration** that could plausibly count as presence of the pattern
+- identify **false-positive or superficially compliant forms** that may look relevant but should not be treated as sufficient evidence
+
+Atomic observable textual features may include:
+- explicit naming of a required entity
+- explicit naming of an institutional setting
+- explicit naming of an operational process
+- explicit in-scope / out-of-scope contrast markers
+- explicit omitted-case-content statements
+- explicit non-evaluative boundary markers
+
+Do not turn these into formal indicators or scoring rules.
+They remain empirical analytic observations used to support later Stage 1 design.
 ### Rule 5 — Limit proliferation
 For each analytic sub-space, extract a manageable set of patterns.
 
@@ -409,6 +432,20 @@ If a pattern cannot be tied to a **specific conceptual requirement of the task**
 ## Output Requirements
 The output must be emitted as a single **fenced Markdown block**.
 
+Fencing constraint (mandatory):
+
+If the output contains any inner fenced code blocks using triple backticks (```),
+the entire output must be wrapped in an outer fence using four backticks (````).
+
+The outer fence must:
+
+- open with: ````markdown
+- close with: ````
+
+All inner fences must remain triple backticks.
+
+Failure to follow this rule invalidates the output.
+
 The output must begin with:
 
 ```text
@@ -477,6 +514,7 @@ Then use the table:
 Populate this table using the analytic sub-space registry defined in the Submission Analytic Brief.
 
 ### 5.`<cid>`.3 Contrastive pattern observations
+
 Perform contrastive analysis for each analytic sub-space separately.
 
 Each analytic sub-space must be introduced using:
@@ -485,7 +523,11 @@ Each analytic sub-space must be introduced using:
 ###### Analytic Sub-space: <sub-space_id> — <analytic focus>
 ```
 
-For each sub-space, present observations using the table:
+For each analytic sub-space, use the following three-part structure.
+
+#### Part A — Contrastive observation table
+
+Use the table:
 
 | analytic sub-space | contrast group | response pattern description | example language | contrastive counterpart | counterpart example language | analytic difference observed |
 |---|---|---|---|---|---|---|
@@ -495,7 +537,51 @@ Requirements:
 - keep quotations brief and evidentiary
 - include patterns that help differentiate clear, borderline, and insufficient execution where the sample permits
 - remain descriptive and empirical
+- do not collapse distinct borderline forms into one row if they differ analytically
 
+#### Part B — Atomic feature decomposition
+
+After the contrastive observation table, insert the heading:
+
+```text
+###### Atomic feature decomposition: <sub-space_id> — <analytic focus>
+```
+
+Then use the table:
+
+| broad pattern | atomic observable feature | example language | verification relevance |
+|---|---|---|---|
+
+Requirements:
+- decompose broad patterns into smaller observable textual features where possible
+- features must remain textual and directly observable
+- features may include required entities, relationships, constraints, boundary markers, or structural forms
+- do not convert features into formal indicators
+
+#### Part C — Threshold-relevant edge forms
+
+After the atomic feature table, insert the heading:
+
+```text
+###### Threshold-relevant edge forms: <sub-space_id> — <analytic focus>
+```
+
+Then use the table:
+
+| edge-form class | description | example language | why this matters later |
+|---|---|---|---|
+
+Allowed values for `edge-form class`:
+- `minimum plausible presence`
+- `borderline subtype`
+- `false-positive risk`
+
+Requirements:
+- `minimum plausible presence` identifies the smallest textual form that could plausibly be treated as presence
+- `borderline subtype` distinguishes different partial forms that may behave differently under binary verification
+- `false-positive risk` identifies superficially compliant or misleading forms that should not automatically count as presence
+- remain descriptive only
+- do not define scoring rules, thresholds, or evaluation decisions
 ### 5.`<cid>`.4 Verification-relevant pattern summary
 For each analytic sub-space, summarise the discovered patterns in a way that will later support human verification design.
 
@@ -571,3 +657,10 @@ Before producing output, silently verify:
 - no scoring rules or performance levels have been introduced
 - no candidate indicators have been created
 - analytic sub-space identifiers match the Submission Analytic Brief
+- outer fencing uses four backticks if any inner triple-backtick blocks are present
+- broad patterns have been decomposed into smaller observable textual features where the sample supports this
+- borderline patterns have been subdivided where different partial forms are visible
+- minimum plausible presence forms have been surfaced where identifiable
+- false-positive or superficially compliant forms have been surfaced where identifiable
+
+===
