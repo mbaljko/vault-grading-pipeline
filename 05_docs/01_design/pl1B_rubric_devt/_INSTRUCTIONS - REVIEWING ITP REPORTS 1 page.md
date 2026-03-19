@@ -1,103 +1,70 @@
-### Layer 1 ITP triage — rapid review checklist
+### Layer 1 ITP triage — compact checklist
 #### Objective
-Rapidly review Indicator Triage (ITP) reports to:
-- detect threshold failures (false positives / false negatives)  
-- identify indicator boundary problems  
-- decide targeted rubric revisions  
-#### 1. Anchor the threshold (≤ 20 sec)
-```text
-What must be explicitly present for this to count as 1?
-```
-- require explicit, structurally recognisable evidence  
-- ignore nuance, quality, or partiality  
-#### 2. Panel C (priority)
-```text
-Look for: false positives / false negatives
-```
-For each row (quick skim):
-- FP → triggered on vague / incomplete signal  
-- FN → valid structure present but missed  
-Record mentally:
-```text
-FP pattern?  FN pattern?
-```
-#### 3. Panel B (boundary check)
-```text
-Look for: threshold ambiguity
-```
-Ask:
-- would two graders disagree here?  
-- is “sufficient evidence” unclear?  
-If yes:
-```text
-boundary problem
-```
-#### 4. Pattern detection (choose one only)
-```text
-[ ] FP inflation
-[ ] FN suppression
-[ ] boundary ambiguity
-[ ] no issue
-```
-#### 5. Cause classification
-```text
-[ ] threshold too loose
-[ ] threshold too strict
-[ ] definition unclear
-[ ] guidance ambiguous
-```
+- detect threshold failures (FP / FN)  
+- identify boundary problems  
+- decide one targeted revision  
+#### Stop rules
+- For each indicator, identify **the single most important failure mode** (not all probs)
+- Commit to **one concrete change direction** per indicator only (not multiple)
+- do not analyse all rows, just on obvious patterns/repeated structures 
+- do not rewrite full indicator, only decide what needs to change
+#### Per-indicator workflow (≈ 3 min)
+1. Define threshold — identify what must be explicitly present for 1
+2. Scan Panel C — identify FP / FN patterns
+3. Scan Panel B — check for ambiguity and disagreement risk
+4. Select pattern — choose one dominant issue
+5. Classify cause — determine source of failure
+6. Assign action — choose one fix
+7. Check Panel A (optional) — confirm clear positives are valid
+#### Pattern classification - Issue Types(choose one)
+
+| Code               | Meaning                                |
+| ------------------ | -------------------------------------- |
+| FP inflation       | weak / vague signals marked as present |
+| FN suppression     | valid signals missed                   |
+| Boundary ambiguity | inconsistent threshold interpretation  |
+| No issue           | threshold working as intended          |
+#### Cause classification (choose one)
+
+| Cause | Description |
+|---|---|
+| Threshold too loose | vague or minimal signals pass |
+| Threshold too strict | valid variants excluded |
+| Definition unclear | signal not well specified |
+| Guidance ambiguous | instructions allow multiple interpretations |
 <div class="page-break" style="page-break-before: always;"></div>
 
+#### Action mapping (choose one)
 
-#### 6. Action (choose one)
-```text
-[ ] tighten threshold (require explicit structure)
-[ ] relax threshold (allow valid variants)
-[ ] clarify definition (sharpen wording)
-[ ] add exclusion rule (block false positives)
-```
-#### 7. Optional quick sanity check (Panel A)
-```text
-Do these clearly meet threshold?
-```
-- if yes → move on  
-- if not → FP issue  
-### Output note template
-```markdown
-## \<indicator_id\>
-Issue type:
-- 
-Pattern:
-- 
-Cause:
-- 
-Action:
-- 
-```
-### Fast pattern recognition cues
-```text
-vague mention → FP → tighten
-keyword-only → FP → add exclusion
-missed valid structure → FN → relax
-mixed interpretations → boundary → clarify
-```
-### Stop rules
-Move on when:
-- one issue identified  
-- one action selected  
-Do not:
-- analyse every row  
-- resolve all edge cases  
-- rewrite the full indicator  
-### Global scan (after all indicators)
-```text
-same issue repeating → system-level fix
-```
-Examples:
-- multiple indicators over-triggering → global threshold tightening  
-- repeated confusion types → add shared contrast rule  
-### Core rule
-```text
-Layer 1 = explicit, sufficient, structurally recognisable signal only
-```
-Anything less = 0
+| Pattern            | Action                                         |
+| ------------------ | ---------------------------------------------- |
+| FP inflation       | tighten threshold (require explicit structure) |
+| FN suppression     | relax threshold (allow valid variants)         |
+| Boundary ambiguity | clarify definition                             |
+| Keyword-trigger FP | add exclusion rule                             |
+#### Fast recognition cues
+
+| Cue | Interpretation | Action |
+|---|---|---|
+| vague mention | FP | tighten |
+| keyword only | FP | add exclusion |
+| missed valid structure | FN | relax |
+| mixed interpretations | boundary | clarify |
+#### Output note template
+
+| Field | Entry |
+|---|---|
+| Indicator | \<indicator_id\> |
+| Issue type |  |
+| Pattern |  |
+| Cause |  |
+| Action |  |
+#### Batch scan (after all indicators)
+
+| Signal | Action |
+|---|---|
+| repeated FP across indicators | global threshold tightening |
+| repeated confusion type | add shared contrast rule |
+#### Core rule
+- Layer 1 = explicit, sufficient, structurally recognisable signal only  
+- anything less = 0  
