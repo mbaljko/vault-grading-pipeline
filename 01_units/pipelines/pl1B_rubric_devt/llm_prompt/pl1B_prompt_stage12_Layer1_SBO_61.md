@@ -206,6 +206,7 @@ For each component:
 
 Indicators must appear in increasing `indicator_id` order as defined in the Layer 1 SBO instance registry.
 
+
 ---
 
 # Indicator specification guidance
@@ -217,16 +218,13 @@ Layer 1 operates as a **binary signal detection layer**.
 Each indicator must be evaluated as:
 
 - 1 = clear, sufficient, explicit textual evidence
-- 0 = absent, insufficient, vague, ambiguous, or partial evidence
+- 0 = absent, insufficient, vague, or ambiguous evidence
 
 Accordingly:
 
-- “partial”, “weak”, “implicit”, or “incomplete” signals must be treated as **not present**
-- evaluation guidance must support **fast, low-deliberation human verification**
-- guidance must define a **clear detection threshold**, not a spectrum of quality
-
----
-
+- “partial”, “weak”, or “implicit” signals must be treated as **not present**
+- evaluation guidance must support **fast and consistent human verification**
+- guidance must reduce interpretive ambiguity at the threshold boundary
 ### indicator_definition
 
 A concise conceptual description of the analytic signal.
@@ -240,87 +238,56 @@ The definition should:
 
 The definition must remain **conceptual rather than procedural**.
 
----
+Example:
 
-### assessment_guidance (strict verification form)
-
-This field must define a **deterministic detection rule**.
-
-It must be written as a **trigger condition**, not exploratory guidance.
-
-#### Required structure
-
-Each `assessment_guidance` entry must:
-
-1. Use the form:
-
-   > **Assign `present` only if the response explicitly includes:**
-
-2. Specify the **minimum required structural elements** using:
-   - AND conditions (required elements)
-   - explicit structural requirements (e.g., pairing, triads, sequencing)
-
-3. Define the **minimum complete form** required for presence:
-   - what must be present simultaneously
-   - what cannot be omitted
-
-4. Use **observable textual features only**:
-   - named elements
-   - explicit phrases
-   - identifiable structural patterns
-
-#### Prohibited forms
-
-- Do not use:
-  - “look for”
-  - “may include”
-  - “such as”
-  - open-ended pattern descriptions
-
-- Do not allow:
-  - implicit or inferred structure
-  - partial completion of required elements
-
-#### Threshold rule (mandatory)
-
-Presence must require:
-- **recognisable, complete structure**, not keyword mention
-
-If any required element is missing:
-- the indicator must be **not_present**
+Detects statements that attribute responsibility across multiple actors such as individuals, teams, institutions, or tools.
 
 ---
 
-### evaluation_notes (strict boundary rules)
+### assessment_guidance
 
-This field must define **explicit rejection conditions and edge-case handling**.
+Operational guidance describing **how the signal may appear in response text**.
 
-#### Required structure
+This section should:
 
-Each `evaluation_notes` entry must include:
+- describe the kinds of language that express the signal
+- reference typical phrasing patterns where helpful
+- remain general rather than enumerating exhaustive keyword lists
 
-1. **False-positive rejection rules** using the form:
+assessment_guidance must:
 
-   - If the response only includes X → `not_present`
-   - If the response substitutes Y for required element Z → `not_present`
+- describe what **counts as clear, explicit presence**
+- distinguish this from:
+  - vague mention
+  - incomplete structure
+  - implied but unstated relationships
+- support a **yes/no verification decision without deliberation**
 
-2. **Borderline collapse rules**:
+Example:
 
-   - Partial forms → `not_present`
-   - Implicit or inferred relationships → `not_present`
-   - Structurally incomplete expressions → `not_present`
+Look for language indicating that responsibility is shared across people, teams, institutions, or systems involved in computing work.
 
-3. **Disambiguation rules** where relevant:
+---
 
-   - clarify distinction from closely related indicators
-   - specify what does *not* qualify for this indicator
+### evaluation_notes
 
-#### Required properties
+Clarifications or edge-case guidance.
 
-- All rules must be **decisive**, not advisory
-- Avoid descriptive language such as:
-  - “insufficient”, “weak”, “vague” without specifying why
-- Each exclusion must map to a **clear structural absence or substitution**
+These may include:
+
+- distinctions between similar indicators
+- cases where evidence should not be assigned
+- reminders about interpretive boundaries
+
+evaluation_notes must explicitly include:
+
+- common **false-positive forms** that should not be counted as present
+- clarification of **borderline cases that must be treated as not present**
+- distinctions between this indicator and closely related indicators
+
+Example:
+
+Do not assign evidence when the response mentions teamwork without describing shared responsibility.
 
 ---
 
@@ -331,10 +298,7 @@ The generator must perform the following steps:
 1. Read the Layer 1 SBO instance registry in **Rubric Template Section 5.4: Layer 1 SBO Instances**.
 2. Identify each Layer 1 indicator SBO instance listed in Section 5.4.
 3. Locate the corresponding analytic signals in the analytic brief.
-4. Translate those signals into **binary verification specifications** using:
-   - explicit structural thresholds
-   - deterministic detection rules
-   - explicit rejection conditions
+4. Translate those signals into evaluation specifications.
 5. Populate one row per indicator in the appropriate component table.
 
 ---
@@ -368,7 +332,5 @@ Inside that block it must contain:
 - Markdown tables following the defined schema
 
 Narrative indicator blocks must **not** be used.
-
----
 
 ===
