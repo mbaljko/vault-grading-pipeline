@@ -40,6 +40,22 @@
             }
           },
           {
+            "id": "9178482fcc1c5292",
+            "type": "leaf",
+            "pinned": true,
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification.md",
+                "mode": "source",
+                "source": false
+              },
+              "pinned": true,
+              "icon": "lucide-file",
+              "title": "__NOTE - Layer 1 SBO Human Verification"
+            }
+          },
+          {
             "id": "3309ed40bb2de32b",
             "type": "leaf",
             "pinned": true,
@@ -61,58 +77,16 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification.md",
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "__NOTE - Layer 1 SBO Human Verification"
-            }
-          },
-          {
-            "id": "4332ce3c9e3e06a9",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12b_DeriveLayer1ScoringManifest.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "pl1B_prompt_stage12b_DeriveLayer1ScoringManifest"
-            }
-          },
-          {
-            "id": "72d565aeb8f8e9c1",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt"
-            }
-          },
-          {
-            "id": "ab78b4e6d5607a69",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt"
+              "title": "pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO"
             }
           }
         ],
-        "currentTab": 6
+        "currentTab": 4
       }
     ],
     "direction": "vertical"
@@ -258,13 +232,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt"
+              "title": "Outline of pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO"
             }
           },
           {
@@ -298,16 +272,18 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "ab78b4e6d5607a69",
+  "active": "92111ca040023785",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO - triary.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12b_DeriveLayer1ScoringManifest.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
+    "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12b_DeriveLayer1ScoringManifest.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - prev version,  needs tightening.md",
-    "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54 - engagement signal tolerant.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO for interactive use.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_prompt_stage12_Layer1_SBO_61 - prev version, needs tightening.md",
@@ -319,13 +295,11 @@
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification_inclCaseStudy.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - engagement - signal prompt.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage21_Layer2_SBO_53.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage01_SubmissionAnalyticBrief_Sec1-3.md",
     "05_docs/01_design/pl1A_canonical_population_prep/prev_ver/Pipeline 1A - Prepare Canonical Grading Targets (Rubric-Agnostic).md",
     "01_units/pipelines/pl1A_canonical_population_prep/excel/README.md",
     "01_units/pipelines/pl1A_canonical_population_prep/excel/Pipeline1A_Excel_Implementation_Standard.md",
     "Design Note - Extensible Architecture for `vault-grading-pipeline`.md",
-    "README.md",
     "01_units/pipelines/pl1B_rubric_devt/python/__pycache__/run-itp-report-for-manifest.cpython-313.pyc",
     "01_units/pipelines/pl1B_rubric_devt/python/run-itp-report-for-manifest.py",
     "01_units/apps/prompt_runners/__pycache__/invoke_chatgpt_API.cpython-313.pyc",

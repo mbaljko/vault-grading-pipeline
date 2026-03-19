@@ -13,6 +13,9 @@ Arguments:
 - `--file-with-response-texts`: CSV file with `submission_id` and
   `response_text` columns; used to augment Panel tables in stitching step.
 - `--file-with-scored-texts`: CSV used to find matching rows by `indicator_id`.
+- `--prompt-instructions-file`: optional explicit prompt file path for the ITP runner.
+- `--temperature`: optional sampling temperature forwarded to `invoke_chatgpt_API.py`.
+- `--top-p`: optional nucleus sampling value forwarded to `invoke_chatgpt_API.py`.
 - `--runner-dry-run`: when set, forwards `--dry-run` to
 	`invoke_chatgpt_API.py`.
 
@@ -113,6 +116,26 @@ def parse_args() -> argparse.Namespace:
 		help="Path to scored-texts input file for payload augmentation.",
 	)
 	parser.add_argument(
+		"--prompt-instructions-file",
+		type=Path,
+		required=False,
+		help="Explicit prompt instructions file for the ITP runner.",
+	)
+	parser.add_argument(
+		"--temperature",
+		type=float,
+		required=False,
+		default=0.2,
+		help="Sampling temperature forwarded to invoke_chatgpt_API.py.",
+	)
+	parser.add_argument(
+		"--top-p",
+		type=float,
+		required=False,
+		default=1.0,
+		help="Top-p value forwarded to invoke_chatgpt_API.py.",
+	)
+	parser.add_argument(
 		"--runner-dry-run",
 		action="store_true",
 		help="Forward --dry-run to invoke_chatgpt_API.py.",
@@ -190,6 +213,9 @@ def run_l1_itp_for_payload(
 	components: dict[str, str],
 	scored_payload: dict[str, object],
 	output_file_stem: str,
+	prompt_file: Path,
+	temperature: float,
+	top_p: float,
 	runner_dry_run: bool,
 	output_dir: Path | None = None,
 ) -> Path:
@@ -205,7 +231,6 @@ def run_l1_itp_for_payload(
 		raise RuntimeError("Could not locate repository root from script path.")
 
 	runner_script = REPO_ROOT / RUNNER_SCRIPT_RELATIVE
-	prompt_file = REPO_ROOT / L1_ITP_PROMPT_FILE_RELATIVE
 	runner_output_dir = output_dir if output_dir else (payload_dir / RUNNER_OUTPUT_SUBDIR)
 	runner_output_dir.mkdir(parents=True, exist_ok=True)
 	payload_file = runner_output_dir / f"{output_file_stem}_payload.json"
@@ -235,6 +260,10 @@ def run_l1_itp_for_payload(
 		str(payload_file),
 		"--output-file-stem",
 		output_file_stem,
+		"--temperature",
+		str(temperature),
+		"--top-p",
+		str(top_p),
 	]
 	if runner_dry_run:
 		cmd.append("--dry-run")
@@ -418,8 +447,12 @@ def main() -> int:
 	component_id = args.component_id
 	response_texts_path = args.file_with_response_texts
 	scored_texts_path = args.file_with_scored_texts
+	prompt_instructions_file = args.prompt_instructions_file
+	temperature = args.temperature
+	top_p = args.top_p
 	runner_dry_run = args.runner_dry_run
 	output_dir = args.output_dir
+	prompt_file = prompt_instructions_file or (REPO_ROOT / L1_ITP_PROMPT_FILE_RELATIVE if REPO_ROOT else None)
 
 	if not markdown_path.exists() or not markdown_path.is_file():
 		print(f"Error: markdown file not found: {markdown_path}", file=sys.stderr)
@@ -429,6 +462,9 @@ def main() -> int:
 		return 1
 	if not scored_texts_path.exists() or not scored_texts_path.is_file():
 		print(f"Error: scored-texts file not found: {scored_texts_path}", file=sys.stderr)
+		return 1
+	if prompt_file is None or not prompt_file.exists() or not prompt_file.is_file():
+		print(f"Error: prompt instructions file not found: {prompt_file}", file=sys.stderr)
 		return 1
 
 	payload_dir = markdown_path.resolve().parent
@@ -480,6 +516,9 @@ def main() -> int:
 					components,
 					scored_payload,
 					sbo_identifier,
+					prompt_file,
+					temperature,
+					top_p,
 					runner_dry_run,
 					output_dir,
 				)

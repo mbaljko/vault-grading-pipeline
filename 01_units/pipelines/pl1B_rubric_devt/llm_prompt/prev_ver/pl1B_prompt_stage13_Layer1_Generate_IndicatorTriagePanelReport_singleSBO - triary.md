@@ -64,6 +64,7 @@ Each row must contain a valid `submission_id` and `evidence_status`.
 
 Valid evidence_status values are:
 - evidence  
+- partial_evidence  
 - little_to_no_evidence
 
 Do not invent new evidence_status values.
@@ -71,17 +72,19 @@ Do not invent new evidence_status values.
 ### Procedure
 
 #### Step 1 — Partition the dataset
-Partition the full dataset into two groups using the recorded `evidence_status` values:
+Partition the full dataset into three groups using the recorded `evidence_status` values:
 - evidence  
-- little_to_no_evidence   
+- partial_evidence  
+- little_to_no_evidence  
 
 Do not reinterpret or modify these labels.
 
 #### Step 2 — Construct the diagnostic inspection set
 From each partition, select diagnostic rows as follows:
 
-- up to **12 rows** where `evidence_status = evidence`
-- up to **12 rows** where `evidence_status = little_to_no_evidence`
+- up to **8 rows** where `evidence_status = evidence`
+- up to **8 rows** where `evidence_status = partial_evidence`
+- up to **8 rows** where `evidence_status = little_to_no_evidence`
 
 **Enforcement rule for row limits:**
 
@@ -93,7 +96,7 @@ If a partition contains more than 8 rows:
 
 The inspection set therefore contains **at most 24 rows total**.
 
-The limit of 12 rows applies **independently to each evidence_status category**.
+The limit of 8 rows applies **independently to each evidence_status category**.
 
 If a category contains fewer than 8 rows, include all available rows.
 
@@ -127,9 +130,9 @@ Panel assignment must be completed in the Selected inspection set table before p
 
 Using **only the rows listed in the Selected inspection set**, group them into the following diagnostic panels:
 
-Panel A — Clear threshold-satisfying positives
-Panel B — Threshold-boundary cases  
-Panel C — Likely misclassifications  
+- Panel A — Clearly aligned cases
+- Panel B — Borderline cases  
+- Panel C — Questionable cases  
 
 These panels are **diagnostic groupings only**.  
 They do **not** modify the recorded evidence_status values.
@@ -159,17 +162,12 @@ Inspection notes should briefly explain **why the row appears in that panel**.
 Do not restate the rubric definition.
 Do not provide general rubric commentary.
 
-
 Inspection notes should describe the diagnostic reason the row may be:
-- clearly meet the threshold for explicit, sufficient evidence
-- fall near the threshold boundary (ambiguous or insufficient)
-- represent a likely false positive or false negative
+- clearly aligned with the indicator
+- weak or incomplete
+- potentially misclassified
 
 Construct the Selected inspection set table first, including the `selected_panel` assignments, and only then produce the panel sections by copying rows from that table.
-
-Inspection must apply a binary threshold interpretation:
-- “evidence” requires clear, explicit, structurally recognisable signal presence
-- vague, implied, or incomplete signals must be treated as not present
 
 ### Output format
 
@@ -184,25 +182,24 @@ Inspection must apply a binary threshold interpretation:
 ##### Triage results
 
 ##### Panel A — Clear positives
-*Inspection question for these:* Does the response contain clear, sufficient, explicit evidence that satisfies the indicator threshold?
+*Inspection question for these:* Does the response clearly contain the analytic signal described by the indicator_definition?
 
 | submission_id | evidence_status | inspection_note |
 |---|---|---|
 
 ##### Panel B — Borderline cases
-  
 *Inspection questions for these:* 
-- Is the evidence sufficient to meet the threshold for presence?
-- Is the signal ambiguous, implied, or structurally incomplete?
-- Is this a boundary case where graders may disagree on threshold satisfaction?  
+- Is the analytic signal actually present?
+- Is the signal weak or incomplete?
+- Does this belong in a different indicator?
 
 | submission_id | evidence_status | inspection_note |
 |---|---|---|
 
 ##### Panel C — Questionable cases
 *Inspection questions for these:* 
-Was this incorrectly marked as present (false positive)?
-Was this incorrectly marked as not present (false negative)?
+Was the indicator triggered incorrectly?
+Was the signal present but missed?
 
 | submission_id | evidence_status | inspection_note |
 |---|---|---|
