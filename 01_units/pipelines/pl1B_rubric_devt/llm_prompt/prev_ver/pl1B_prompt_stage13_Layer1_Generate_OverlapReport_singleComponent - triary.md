@@ -48,8 +48,6 @@ The goal is to identify:
 - indicator pairs with **very high conditional overlap (≥ 0.85)**  
 - **clusters of indicators** where all pairwise conditional overlaps are ≥ 0.85  
 
-Activation in this report is binary and is based only on indicators marked `evidence`.
-
 These diagnostics help humans detect possible:
 
 - redundant indicators  
@@ -83,6 +81,7 @@ Each row must contain a valid:
 Valid `evidence_status` values are:
 
 - evidence  
+- partial_evidence  
 - little_to_no_evidence  
 
 Do not invent new evidence_status values.
@@ -101,11 +100,11 @@ Determine which indicators fire with:
 
 ```
 evidence
+or
+partial_evidence
 ```
 
-Indicators with `little_to_no_evidence` must be treated as not active and ignored for activation and overlap calculations.
-
-This report analyses overlap among binary verified indicator activations only. It does not treat vague, partial, or borderline forms as active.
+Indicators with `little_to_no_evidence` must be ignored for activation and overlap calculations.
 
 ---
 
@@ -121,6 +120,8 @@ This is the number of unique `submission_id` values where the indicator has:
 
 ```
 evidence
+or
+partial_evidence
 ```
 
 ---
@@ -133,6 +134,8 @@ For each `submission_id`:
 
 ```
 evidence
+or
+partial_evidence
 ```
 
 2. Record the set of **active indicators**.
@@ -309,7 +312,6 @@ I29
 Cluster 2:
 I31  
 I32  
-I33  
 
 #### Strongest overlap per indicator
 
