@@ -151,12 +151,12 @@ notes: |
 ---
 ## Wrapper Prompt — Generate Canonical Layer 1 Indicator Detection Scoring Prompt (Stage 1.3)
 
-Wrapper prompt: Generate a deterministic and canonically formatted Layer 1 indicator evidence detection scoring prompt using the **Layer 1 scoring manifest** under the **Rubric Template architecture**.
+Wrapper prompt: Generate a deterministic and canonically formatted Layer 1 indicator detection scoring prompt using the **Layer 1 scoring manifest** under the **Rubric Template architecture**.
 
 This wrapper prompt **generates a scoring prompt**.  
 This wrapper prompt does not evaluate participant responses.
 
-The generated scoring prompt performs **Layer 1 SBO scoring**, which determines `evidence_status` values for the embedded indicator SBO instances belonging to one target component.
+The generated scoring prompt performs **Layer 1 SBO scoring**, which determines binary `evidence_status` values for the embedded indicator SBO instances belonging to one target component.
 
 ### Canonicalisation requirement
 
@@ -182,7 +182,7 @@ Allowed substitutions are limited to:
 - `ASSESSMENT_ID`
 - `PARAM_TARGET_COMPONENT_ID`
 - the canonical submission-level identifier field name
-- wrapper-handling rules for response_text extracted from the assignment payload specification
+- wrapper-handling rules for `response_text` extracted from the assignment payload specification
 - filtered embedded indicator rows from the `Layer1_ScoringManifest`
 
 No other variation is permitted.
@@ -275,33 +275,33 @@ PARAM_TARGET_COMPONENT_ID = \<COMPONENT_ID\>
 §§§
 ```
 
-The two artefact blocks must appear exactly as produced by their upstream pipelines and must not be modified.
+The two artefact blocks must appear exactly as produced by their upstream pipelines and must not be modified.  
 The parameter block must appear exactly in the required syntax.
 
 If any required artefact or parameter is missing, malformed, or inconsistent, the wrapper prompt must **produce no output**.
 
-Angle-bracketed expressions in this wrapper, such as `<ASSESSMENT_ID>`, `<COMPONENT_ID>`, and `<VERSION>`, are specification placeholders used to describe required payload content. They are not literal payload text unless they occur inside a verbatim artefact block.
+Angle-bracketed expressions in this wrapper, such as `\<ASSESSMENT_ID\>`, `\<COMPONENT_ID\>`, and `\<VERSION\>`, are specification placeholders used to describe required payload content. They are not literal payload text unless they occur inside a verbatim artefact block.
 
 ### Payload Grammar (Normative)
 
 The payload supplied to this wrapper must match the following exact grammar:
+
 ```text
 §§§
 PARAM_TARGET_COMPONENT_ID = <COMPONENT_ID>
 §§§
 <ASSESSMENT_ID>_AssignmentPayloadSpec_v* contents
 §§§
-<ASSESSMENT_ID>_Layer1_ScoringManifest_v*\<VERSION\>* contents
+<ASSESSMENT_ID>_Layer1_ScoringManifest_v*<VERSION>* contents
 ```
 
-The payload must contain exactly three blocks.
-The first block is a parameter block.
-The second and third blocks are verbatim artefact blocks.
-No text may appear before the first delimiter.
-No text may appear after the final manifest line.
-No additional delimiter may appear after the manifest block.
+The payload must contain exactly three blocks.  
+The first block is a parameter block.  
+The second and third blocks are verbatim artefact blocks.  
+No text may appear before the first delimiter.  
+No text may appear after the final manifest line.  
+No additional delimiter may appear after the manifest block.  
 If the payload violates this grammar, the wrapper must produce no output.
-
 
 ### Input Artefact Order (Mandatory)
 
@@ -335,11 +335,11 @@ If the artefacts appear in a different order or if the delimiter structure is vi
 
 ### Purpose
 
-Generate a reusable **Layer 1 SBO scoring prompt** that performs **indicator evidence detection**.
+Generate a reusable **Layer 1 SBO scoring prompt** that performs **binary indicator detection**.
 
 The generated prompt must:
 
-- evaluate indicator evidence using the `Layer1_ScoringManifest`
+- evaluate indicator presence using the `Layer1_ScoringManifest`
 - embed the indicator evaluation specification contained in the manifest
 
 For each embedded indicator, the generated scoring prompt must include:
@@ -368,7 +368,7 @@ The generated prompt must **not**:
 Layer 1 SBO scoring performs only:
 
 ```text
-indicator evidence detection
+binary indicator presence detection
 ```
 
 Outputs produced by the Layer 1 scoring prompt will later be consumed by:
@@ -468,7 +468,7 @@ filter Layer1_ScoringManifest
 where component_id = PARAM_TARGET_COMPONENT_ID
 ```
 
-The generated scoring prompt must embed only indicators whose component_id equals `PARAM_TARGET_COMPONENT_ID`.  
+The generated scoring prompt must embed only indicators whose `component_id` equals `PARAM_TARGET_COMPONENT_ID`.  
 Indicators belonging to other components must not appear in the generated prompt.
 
 Manifest validation rules:
@@ -571,15 +571,15 @@ The wrapper must treat the canonical scaffold as immutable text except at the ex
 If any validation rule fails, the wrapper must **produce no output**.
 
 ### Wrapper Behaviour
+
 #### Indicator Evidence Status Scale
 
 The generated scoring prompt must embed this scale.
 
 | value | meaning |
 |---|---|
-| `evidence` | explicit textual evidence clearly satisfies the indicator definition |
-| `partial_evidence` | explicit textual signal relevant to the indicator exists but is incomplete |
-| `little_to_no_evidence` | no interpretable explicit textual signal supporting the indicator is present |
+| `present` | clear, sufficient, explicit textual evidence fully satisfies the indicator definition |
+| `not_present` | the indicator is absent or supported only by partial, weak, implicit, incomplete, vague, or ambiguous evidence |
 
 Evidence must rely strictly on **explicit response language**.
 
@@ -807,7 +807,7 @@ The outer four-backtick fence used in this source representation exists only to 
 Source representation of scaffold:
 
 ````markdown
-### RUN_[[ASSESSMENT_ID]]_[[TARGET_COMPONENT_ID]]_Layer1_SBO_scoring_prompt_v01
+#### RUN_[[ASSESSMENT_ID]]_[[TARGET_COMPONENT_ID]]_Layer1_SBO_scoring_prompt_v01
 
 #### Prompt title and restrictions
 
@@ -827,7 +827,7 @@ This prompt does **not**:
 Layer 1 SBO scoring performs only:
 
 ```text
-indicator evidence detection
+binary indicator presence detection
 ```
 
 #### Authoritative scoring materials
@@ -875,9 +875,8 @@ Indicator evidence status scale:
 
 | value | meaning |
 |---|---|
-| `evidence` | explicit textual evidence clearly satisfies the indicator definition |
-| `partial_evidence` | explicit textual signal relevant to the indicator exists but is incomplete |
-| `little_to_no_evidence` | no interpretable explicit textual signal supporting the indicator is present |
+| `present` | clear, sufficient, explicit textual evidence fully satisfies the indicator definition |
+| `not_present` | the indicator is absent or supported only by partial, weak, implicit, incomplete, vague, or ambiguous evidence |
 
 Field rules:
 
@@ -981,17 +980,16 @@ Layer 1 SBO scoring must follow this exact sequence:
 5. Construct the ordered `indicator_id` list embedded in the prompt.
 6. For each valid runtime row:
    - construct a single internal representation of that row’s canonical `response_text`
-   - scan the response once and identify potentially relevant textual fragments
-   - store those fragments in an internal evidence index
-   - perform one internal analytic signal pass over the indexed fragments
-   - organise the indexed evidence into candidate signal groupings relevant to the target component
-   - evaluate all embedded `indicator_id` values using the evidence index and signal groupings rather than rescanning the full response text
+   - identify candidate supporting fragments for each embedded indicator without inferring unstated meaning
+   - evaluate each embedded `indicator_id` against the explicit threshold stated in the embedded indicator specification
+   - treat partial, weak, implicit, incomplete, vague, or ambiguous matches as `not_present`
+   - evaluate all embedded `indicator_id` values using explicit fragment comparison rather than holistic interpretation
 
 ##### Indicator Evaluation
 
 For each valid runtime row and for each embedded `indicator_id` in prompt order:
 
-- internally identify whether a relevant textual fragment exists
+- internally identify whether a supporting textual fragment exists
 - evaluate the fragment using the embedded `indicator_definition`
 - evaluate the fragment using the embedded `assessment_guidance`
 - use the embedded evaluator guidance derived from the manifest `evaluation_notes` field
@@ -1001,12 +999,18 @@ For each valid runtime row and for each embedded `indicator_id` in prompt order:
 
 ##### Evidence Gate Rule
 
-Do **not** assign `evidence` or `partial_evidence` without internally identifying a supporting textual fragment.
+Do **not** assign `present` unless a supporting textual fragment is explicitly present and fully satisfies the embedded indicator threshold.
 
-If no relevant fragment exists, assign:
+If no such fragment exists, assign:
 
 ```text
-little_to_no_evidence
+not_present
+```
+
+If the response contains only partial, weak, implicit, incomplete, vague, or ambiguous evidence, assign:
+
+```text
+not_present
 ```
 
 ##### Output Row Count Rule
@@ -1049,15 +1053,23 @@ FRAGMENT_OUTPUT_MODE = on
 
 If enabled, `evaluation_notes` may briefly reference the supporting fragment used to assign the evidence status.
 
-##### Partial Evidence Preference Rule
+##### Binary Threshold Rule
 
-If explicit language partially satisfies an indicator definition but does not fully satisfy it, assign:
+Presence requires a complete, explicit textual match to the embedded indicator specification.
+
+Do not assign `present` for:
+
+- partial matches
+- implied structure
+- incomplete structure
+- vague mention
+- keyword mention without required analytic structure
+
+All such cases must be assigned:
 
 ```text
-partial_evidence
+not_present
 ```
-
-Do not collapse weak but relevant explicit evidence into `little_to_no_evidence`.
 
 ##### Independence Rule
 
@@ -1075,22 +1087,23 @@ to influence the judgement.
 
 #### Confidence assignment rule
 
-Confidence reflects clarity of textual evidence, not probability.
+Confidence reflects clarity of the basis for the binary decision, not degree of evidence.
 
 ```text
 high
-clear explicit language supports the assigned status
+the assigned status is clearly supported by explicit textual evidence or by a clear absence of qualifying evidence
 
 medium
-explicit language present but incomplete or ambiguous
+the assigned status is determinable, but the boundary is close and should be flagged for review if needed
 
 low
-weak or uncertain textual signal
+use only when a binary decision is still required but the evidence surface is unusually difficult to parse because of malformed or highly unclear text
 ```
 
 ```text
-If evidence_status = little_to_no_evidence and no fragment exists, assign confidence = high.
-If you are uncertain and cannot identify sufficient explicit support for evidence or partial_evidence, assign evidence_status = little_to_no_evidence and flags = needs_review.
+If evidence_status = not_present because no qualifying fragment exists, assign confidence = high.
+If a decision is boundary-close, assign flags = needs_review.
+Do not use confidence to introduce partial credit or graded evidence.
 ```
 
 #### Output schema
@@ -1134,6 +1147,7 @@ Do not use:
 - dimension reasoning
 - performance-level reasoning
 - assumptions about intended meaning
+- inferential reconstruction of missing structure
 
 #### Content rules
 
