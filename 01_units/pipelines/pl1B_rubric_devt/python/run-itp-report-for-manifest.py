@@ -483,6 +483,10 @@ def main() -> int:
 					runner_dry_run,
 					output_dir,
 				)
+				if runner_dry_run:
+					print(f"Skipping response_text stitching in runner dry-run mode for {sbo_identifier}")
+					i += 1
+					continue
 				# Apply response text stitching to the runner output
 				stitched_output_file = apply_response_text_stitcher(
 					runner_output_file,
