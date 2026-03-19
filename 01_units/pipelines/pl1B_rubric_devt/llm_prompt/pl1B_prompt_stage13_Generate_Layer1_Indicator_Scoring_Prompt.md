@@ -5,6 +5,9 @@ stage: pipeline_pl1B_stage13
 purpose: generate a bounded Layer 1 SBO scoring prompt that performs indicator evidence detection for a single target component using the Layer1_ScoringManifest
 status: active
 owner: EECS3000W26
+generation_parameters:
+  temperature: 0
+  top_p: 1
 input_contract:
   - target_component_parameter (`PARAM_TARGET_COMPONENT_ID = <INSERT HERE>`)
   - assignment_payload_specification (<ASSESSMENT_ID>_AssignmentPayloadSpec_v*)
@@ -81,22 +84,20 @@ evaluation_pipeline:
     - evaluate_indicators_using_indexed_fragments
 indicator_evidence_scale:
   values:
-    - evidence
-    - partial_evidence
-    - little_to_no_evidence
+    - present
+    - not_present
   definitions:
-    evidence: explicit_textual_evidence_clearly_satisfies_indicator_definition
-    partial_evidence: explicit_signal_present_but_incomplete
-    little_to_no_evidence: no_interpretable_explicit_signal_present
+    present: explicit_textual_evidence_fully_and_clearly_satisfies_indicator_definition
+    not_present: indicator_absent_or_supported_only_by_partial_weak_implicit_incomplete_vague_or_ambiguous_evidence
 confidence_scale:
   values:
     - high
     - medium
     - low
   interpretation:
-    high: clear_explicit_language_supports_status
-    medium: explicit_language_present_but_ambiguous
-    low: weak_or_uncertain_textual_signal
+    high: decision_clearly_supported_by_explicit_evidence_or_clear_absence_of_qualifying_evidence
+    medium: decision_boundary_is_close_and_may_require_review
+    low: use_only_when_binary_decision_is_required_but_text_is_highly_unclear_or_malformed
 output_schema:
   format: csv
   header: submission_id,component_id,indicator_id,evidence_status,evaluation_notes,confidence,flags
@@ -113,11 +114,13 @@ output_schema:
     - needs_review
 evaluation_rules:
   - each_indicator_evaluated_once_per_runtime_row
-  - evidence_or_partial_requires_explicit_fragment
+  - present_requires_explicit_fragment_that_fully_satisfies_indicator_definition
+  - partial_or_weak_or_implicit_evidence_must_be_classified_as_not_present
   - indicators_must_be_evaluated_independently
   - dimension_logic_must_not_be_used
   - mapping_rules_must_not_be_used
   - component_performance_logic_must_not_be_used
+  - no_inferential_reconstruction_of_missing_structure
 content_rules:
   - output_must_be_csv_only
   - header_must_appear_once

@@ -215,6 +215,12 @@ def parse_args() -> argparse.Namespace:
         help="Sampling temperature.",
     )
     parser.add_argument(
+        "--top-p",
+        type=float,
+        default=1.0,
+        help="Nucleus sampling probability (top_p).",
+    )
+    parser.add_argument(
         "--max-output-tokens",
         type=int,
         default=None,
@@ -354,6 +360,7 @@ def build_request_body(
     prompt_instructions: str,
     prompt_input: str,
     temperature: float,
+    top_p: float,
     max_output_tokens: int | None,
 ) -> dict[str, Any]:
     user_text = json.dumps(
@@ -386,6 +393,7 @@ def build_request_body(
     body: dict[str, Any] = {
         "model": model,
         "temperature": temperature,
+        "top_p": top_p,
         "input": input_items,
     }
 
@@ -680,6 +688,7 @@ def main() -> int:
             prompt_instructions=prompt_instructions,
             prompt_input=prompt_input,
             temperature=args.temperature,
+            top_p=args.top_p,
             max_output_tokens=args.max_output_tokens,
         )
         if args.verbose:
