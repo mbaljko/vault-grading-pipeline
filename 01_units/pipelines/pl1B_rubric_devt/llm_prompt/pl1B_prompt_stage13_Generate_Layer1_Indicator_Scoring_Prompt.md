@@ -265,7 +265,7 @@ The wrapper expects the following three blocks in sequence:
    `\<ASSESSMENT_ID\>_AssignmentPayloadSpec_v*`
 
 3. artefact block  
-   `Layer1_ScoringManifest_\<ASSESSMENT_ID\>_v\<VERSION\>`
+   `\<ASSESSMENT_ID\>_Layer1_ScoringManifest_v\<VERSION\>`
 
 The parameter block must appear in the form:
 
@@ -291,7 +291,7 @@ PARAM_TARGET_COMPONENT_ID = <COMPONENT_ID>
 §§§
 <ASSESSMENT_ID>_AssignmentPayloadSpec_v* contents
 §§§
-Layer1_ScoringManifest_<ASSESSMENT_ID>_v<VERSION> contents
+<ASSESSMENT_ID>_Layer1_ScoringManifest_v*\<VERSION\>* contents
 ```
 
 The payload must contain exactly three blocks.
@@ -315,7 +315,7 @@ PARAM_TARGET_COMPONENT_ID = \<COMPONENT_ID\>
 §§§
 \<ASSESSMENT_ID\>_AssignmentPayloadSpec_v* contents
 §§§
-Layer1_ScoringManifest_\<ASSESSMENT_ID\>_v\<VERSION\> contents
+\<ASSESSMENT_ID\>_Layer1_ScoringManifest_v\<VERSION\> contents
 ```
 
 Exactly three input blocks must be provided. No additional blocks, delimiters, markers, or trailing text are permitted after the manifest block.
@@ -328,7 +328,7 @@ PARAM_TARGET_COMPONENT_ID = SectionBResponse
 §§§
 \<PPP_AssignmentPayloadSpec_v01 contents\>
 §§§
-\<Layer1_ScoringManifest_PPP_v01 contents\>
+\<PPP_Layer1_ScoringManifest_v01 contents\>
 ```
 
 If the artefacts appear in a different order or if the delimiter structure is violated, the wrapper prompt must **produce no output**.
@@ -435,7 +435,7 @@ explicit textual evidence only
 If wrapper-handling rules exist for `response_text`, they must be embedded in the generated scoring prompt.
 
 #### Input Artefact  
-`Layer1_ScoringManifest_\<ASSESSMENT_ID\>_v\<VERSION\>`
+`\<ASSESSMENT_ID\>_Layer1_ScoringManifest_v\<VERSION\>`
 
 The wrapper must extract:
 

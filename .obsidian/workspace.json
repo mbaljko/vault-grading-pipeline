@@ -70,22 +70,6 @@
             }
           },
           {
-            "id": "5f6a1a3a3c3c2941",
-            "type": "leaf",
-            "pinned": true,
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
-                "mode": "source",
-                "source": false
-              },
-              "pinned": true,
-              "icon": "lucide-file",
-              "title": "pl1B_prompt_stage12_Layer1_SBO_61"
-            }
-          },
-          {
             "id": "6011b848c4d5172e",
             "type": "leaf",
             "state": {
@@ -100,7 +84,7 @@
             }
           }
         ],
-        "currentTab": 5
+        "currentTab": 4
       }
     ],
     "direction": "vertical"
@@ -288,8 +272,9 @@
   },
   "active": "6011b848c4d5172e",
   "lastOpenFiles": [
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO for interactive use.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO for interactive use.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61 - prev version, needs tightening.md",
     "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
@@ -312,7 +297,6 @@
     "Design Note - Extensible Architecture for `vault-grading-pipeline`.md",
     "README.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage22_Layer2_SBO_62.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO.md",
     "01_units/pipelines/pl1B_rubric_devt/python/__pycache__/run-itp-report-for-manifest.cpython-313.pyc",
     "01_units/pipelines/pl1B_rubric_devt/python/run-itp-report-for-manifest.py",
