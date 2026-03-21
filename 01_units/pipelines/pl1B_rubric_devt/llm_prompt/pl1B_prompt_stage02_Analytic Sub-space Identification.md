@@ -6,7 +6,7 @@ BEGIN GENERATION
 
 the inputs
 `<ASSESSMENT_ID>_AssignmentPayloadSpec_v01`
-`<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01.md`
+`<ASSESSMENT_ID>_SubmissionAnalyticBrief_v00.md`
 Calibration Sample
 # . 
 ````

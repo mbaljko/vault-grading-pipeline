@@ -143,10 +143,10 @@ Example analytic brief structure:
 | Component: SectionAResponse | analytic purpose and expected reasoning |
 | Component: SectionBResponse | analytic purpose and expected reasoning |
 | Component: SectionCResponse | analytic purpose and expected reasoning |
-#### Deliverables
+##### Deliverables
 Produce the following document:
 ```
-<ASSESSMENT_ID>_SubmissionAnalyticBrief_v01.md
+<ASSESSMENT_ID>_SubmissionAnalyticBrief_v00.md
 ```
 The document must contain the following sections.
 
@@ -204,7 +204,7 @@ They are **not part of the scoring ontology** and do not appear in the Rubric Pa
 | `SectionAResponse` | A2 | role boundary and responsibility hand-off |
 | `SectionAResponse` | A3 | professional obligations |
 Analytic sub-spaces serve as a **design scaffold** for indicator discovery and later dimension formation.
-#### Deliverables
+##### Deliverables
 Stage 0.2 extends the previously created document:
 ```
 <ASSESSMENT_ID>_SubmissionAnalyticBrief_v01.md
@@ -227,7 +227,7 @@ The analytic sub-space registry must include **all components defined in the Com
 ```
 If a component contains only a single analytic task, it may be represented by a **single analytic sub-space**.
 This section provides the **analytic scaffolding used during Stage 0.3 contrastive pattern discovery** and **Stage 1 indicator discovery**.
-#### Stage 0.3 Contrastive Pattern Discovery Pass
+stage0#### Stage 0.3 Contrastive Pattern Discovery Pass
 Before defining indicator SBO instances, use a **small calibration sample of real student responses** to discover contrastive response patterns.
 This step surfaces **observable signals actually present in student writing** rather than relying only on the assignment description.
 The purpose is to produce **candidate indicators and candidate dimensions**.
