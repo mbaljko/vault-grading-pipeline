@@ -82,6 +82,17 @@ Accordingly, this stage must do more than list candidate signals. It must surfac
 - **insufficient or misaligned patterns** that should not be treated as presence of the target signal
 - **contrastive distinctions** that later help define verification thresholds
 
+In addition, this stage must explicitly distinguish between:
+
+- **minimum plausible presence patterns**: the smallest explicit textual configurations that could support binary verification of a signal
+- **extended-structure patterns**: additional explicit structures that are not required for minimal task completion but appear in stronger responses and may support non-saturating Layer 1 indicator design
+
+Extended-structure patterns must:
+- remain **textually observable**
+- remain **non-evaluative**
+- capture **additional structure**, not quality or degree
+- be usable later for **binary human verification**
+
 The output will populate a component-specific section of:
 
 ```text
@@ -359,6 +370,38 @@ Atomic observable textual features may include:
 
 Do not turn these into formal indicators or scoring rules.
 They remain empirical analytic observations used to support later Stage 1 design.
+
+### Rule 4B — Distinguish minimum plausible presence from extended structure
+
+For each analytic sub-space, Stage 0.3 must explicitly search for and preserve two different classes of contrastive pattern:
+
+1. **minimum plausible presence patterns**
+   - the smallest explicit textual forms that could plausibly support binary presence
+   - these typically correspond to baseline or core analytic structure
+
+2. **extended-structure patterns**
+   - additional explicit structures that go beyond minimum plausible presence
+   - these are not required for baseline task completion
+   - they must not be framed as “better,” “stronger,” “clearer,” or “more sophisticated”
+   - they must instead be framed as **additional structural elements** or **expanded structural configurations**
+
+Valid extended-structure patterns may include:
+- additional distinct entities of the same required type
+- additional distinct mechanisms
+- additional workflow positions or stages
+- explicit chaining or propagation across stages
+- explicit actor–output–action configurations beyond the minimum viable form
+- explicit conditional or branching structures
+
+Invalid extended-structure patterns include:
+- stronger explanation
+- clearer reasoning
+- more detailed discussion
+- multiple sentences of explanation
+- better justification
+- more persuasive articulation
+
+If an apparent high-end pattern cannot be expressed as **additional explicit structure**, it must not be recorded as an extended-structure pattern.
 ### Rule 5 — Limit proliferation
 For each analytic sub-space, extract a manageable set of patterns.
 
@@ -370,7 +413,7 @@ Target range:
 
 If fewer than three meaningful patterns appear in the calibration sample, include all detectable patterns.
 
-Do not produce exhaustive inventories.
+Do not produce exhaustive inventories. However, do not collapse extended-structure patterns into minimum plausible presence patterns when they represent distinct additional structure that may matter later for non-saturating Layer 1 design.
 
 ### Rule 6 — Ground every pattern in quoted evidence
 Every pattern must be traceable to **quoted response language** in the calibration sample.
@@ -429,6 +472,20 @@ All patterns must instead be grounded in:
 - whether required analytic constraints are respected or violated
 
 If a pattern cannot be tied to a **specific conceptual requirement of the task**, it must be excluded.
+
+For extended-structure discovery, conceptual patterns must still be framed as **additional structure**, not as stronger performance.
+
+Accordingly:
+
+- valid: “response explicitly names a second distinct output”
+- valid: “response explicitly links outputs across two workflow stages”
+- valid: “response explicitly identifies two distinct mediation mechanisms”
+
+- invalid: “response gives a stronger explanation”
+- invalid: “response is more developed”
+- invalid: “response shows deeper understanding”
+
+Extended-structure patterns must remain compatible with later **binary human verification**.
 ## Output Requirements
 The output must be emitted as a single **fenced Markdown block**.
 
@@ -538,6 +595,14 @@ Requirements:
 - include patterns that help differentiate clear, borderline, and insufficient execution where the sample permits
 - remain descriptive and empirical
 - do not collapse distinct borderline forms into one row if they differ analytically
+- include contrastive observations for both:
+  - **minimum plausible presence patterns**
+  - **extended-structure patterns**
+  where the sample supports them
+- when extended-structure patterns are observed, distinguish them from:
+  - minimal viable forms
+  - merely more verbose forms
+  - quality-like interpretations
 
 #### Part B — Atomic feature decomposition
 
@@ -582,6 +647,11 @@ Requirements:
 - `false-positive risk` identifies superficially compliant or misleading forms that should not automatically count as presence
 - remain descriptive only
 - do not define scoring rules, thresholds, or evaluation decisions
+- where supported by the sample, identify edge forms separating:
+  - minimum plausible presence
+  - extended-structure presence
+- if an extended pattern appears only in a subset of stronger responses, describe the **minimum explicit textual configuration** required for that extended structure to count as present later
+- do not frame these distinctions as excellence or quality; frame them as **presence or absence of additional structure**
 ### 5.`<cid>`.4 Verification-relevant pattern summary
 For each analytic sub-space, summarise the discovered patterns in a way that will later support human verification design.
 
@@ -597,7 +667,8 @@ Then use the table:
 |---|---|---|
 
 Allowed values for `pattern class`:
-- `likely sufficient explicit evidence`
+- `minimum plausible presence`
+- `extended-structure presence`
 - `borderline / partial evidence`
 - `insufficient or misaligned evidence`
 
@@ -606,6 +677,10 @@ Requirements:
 - do not define thresholds
 - do not define evaluation rules
 - do identify the distinctions that later Stage 1 must preserve or resolve
+- do explicitly preserve the distinction between:
+  - **minimum plausible presence**
+  - **extended-structure presence**
+  where the sample supports that distinction
 
 ### 5.`<cid>`.5 Stage 1 design implications
 This section records only the implications of the discovered contrasts for later indicator and verification design.
@@ -620,6 +695,11 @@ Implications may include observations such as:
 - borderline responses cluster around incomplete linkage between mechanism and workflow stage
 - later Stage 1 should decide whether partial forms are collapsed into absence or retained through multi-signal reconstruction
 - human verification will require examples clarifying what counts as sufficient explicit evidence
+- later Layer 1 design may need to distinguish between:
+  - core indicators capturing minimum plausible presence
+  - advanced indicators capturing extended structure
+- advanced indicator candidates must be framed as additional explicit structure, not as degree or quality
+- if extended-structure patterns are present, later Stage 1 should preserve them as non-saturating indicator candidates rather than collapsing them into core presence indicators
 
 Do **not**:
 - define final indicators
@@ -662,6 +742,10 @@ Before producing output, silently verify:
 - borderline patterns have been subdivided where different partial forms are visible
 - minimum plausible presence forms have been surfaced where identifiable
 - false-positive or superficially compliant forms have been surfaced where identifiable
+- minimum plausible presence patterns have been surfaced where identifiable
+- extended-structure patterns have been surfaced where identifiable
+- any extended-structure patterns are expressed as additional structure rather than quality or degree
+- no extended-structure pattern has been described using evaluative language such as “stronger,” “better,” “clearer,” or “more developed”
 
 ===
 

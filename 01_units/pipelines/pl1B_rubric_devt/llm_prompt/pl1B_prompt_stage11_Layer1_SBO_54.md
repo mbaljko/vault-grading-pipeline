@@ -159,11 +159,16 @@ Rubric_SpecificationGuide_v*
 
 If any artefact is missing, malformed, or inconsistent, the prompt must produce **no output**.
 
+
 ### Artefact validation
 
-The analytic brief must contain candidate indicators derived during Stage 0.3.
+The analytic brief must contain candidate indicator material derived during Stage 0.3.
 
-If candidate indicators cannot be located in the analytic brief, the generator must produce no output.
+Specifically, the analytic brief must preserve distinctions relevant to:
+- **minimum plausible presence**
+- **extended-structure presence**
+
+If candidate indicators cannot be located in the analytic brief, or if the Stage 0.3 material does not preserve a usable distinction between minimum plausible presence patterns and extended-structure patterns where such patterns exist, the generator must produce no output.
 
 ---
 
@@ -179,10 +184,25 @@ Indicators must be derived from:
 - contrastive response observations
 - candidate indicator signals
 - candidate indicator sets
+- distinctions between:
+  - **minimum plausible presence patterns**
+  - **extended-structure patterns**
 
 Indicators represent **detectable textual signals**.
 
 They must **not encode scoring thresholds** and **must not reference performance levels**.
+
+The generated Layer 1 registry must preserve both:
+
+1. **Core analytic structure indicators**
+   - capture minimum plausible presence
+   - expected to saturate around baseline competent performance
+
+2. **Advanced structural indicators**
+   - capture additional explicit structure observed in stronger responses
+   - are not required for minimum plausible presence
+   - remain binary-verifiable
+   - must not encode degree, quality, or strength
 
 ---
 
@@ -203,6 +223,45 @@ Indicators must reflect **observable claims or framings expressed in the respons
 
 They must **not encode evaluative judgement**.
 
+### Core vs advanced indicator classes
+
+Layer 1 SBO instances may belong to one of two functional classes.
+
+#### Core analytic structure indicators
+
+These indicators capture **minimum plausible presence** of the target analytic structure.
+
+Properties:
+- detect baseline required structure
+- expected to appear in most responses at or above “meets expectations”
+- may saturate among stronger responses
+
+#### Advanced structural indicators
+
+These indicators capture **additional explicit structure** beyond minimum plausible presence.
+
+Properties:
+- detect structures not required for baseline task completion
+- may appear only in stronger responses
+- must remain binary-verifiable
+- must detect **additional structure**, not quality, degree, or strength
+
+Valid advanced signals may include:
+- additional distinct entities of a required type
+- additional distinct mechanisms
+- additional workflow placements
+- explicit cross-stage linkage
+- explicit actor–output–action configurations beyond the minimum viable form
+- explicit conditional or branching structures
+
+Invalid advanced signals include:
+- stronger explanation
+- clearer reasoning
+- more developed response
+- more detailed discussion
+- higher-quality articulation
+
+Advanced indicators must still satisfy all Layer 1 binary verification constraints.
 
 ### Layer 1 verification constraint (critical)
 
@@ -226,6 +285,18 @@ If a signal cannot be reliably evaluated using a **present / not present decisio
 Borderline, weak, or ambiguous forms must be assumed to fall into **not present** at Layer 1 and must instead be handled through:
 - Stage 0.3 contrastive pattern distinctions
 - multi-SBO aggregation downstream
+
+For advanced structural indicators specifically:
+
+- the signal may require **more than one identifiable textual element**
+- the signal may be supported by **distributed but explicit textual evidence**
+- however, it must still support a defensible binary verification decision without requiring holistic quality judgement
+
+Advanced indicators must be rejected if they depend on:
+- perceived sophistication
+- explanatory strength
+- interpretive richness
+- comparative evaluation against other responses
 ---
 
 ### Indicator design rules
@@ -237,8 +308,6 @@ Indicator SBO instances must:
 - avoid embedding scoring thresholds
 - avoid referencing performance levels
 - avoid encoding dimension satisfaction
-- avoid compound indicators that require multiple conditions
-- remain narrow enough to be evaluated directly from the response text
 - remain distinguishable from neighbouring indicators in the same component
 - be verifiable using a **binary present / not-present decision**
 - require **recognisable structural expression**, not keyword presence alone
@@ -258,6 +327,41 @@ Indicators must not represent:
 - effort
 - writing quality
 - general reasoning quality
+- degree, quality, strength, sophistication, or persuasiveness
+
+#### Rule for core indicators
+
+Core indicators:
+- should correspond to **minimum plausible presence**
+- should capture baseline analytic structure
+- may saturate among stronger responses
+
+#### Rule for advanced indicators
+
+Advanced indicators:
+- must correspond to **extended-structure patterns** identified in Stage 0.3
+- must capture **additional explicit structure**, not degree or quality of the same structure
+- may rely on more than one textual element where the signal itself is structurally multi-part
+- must still support a defensible yes/no verification decision
+
+#### Compoundness rule (revised)
+
+Do not create indicators that are compound in the sense of:
+- bundling unrelated signals into one indicator
+- requiring multiple independent conditions that do not form a single coherent structure
+
+However, an advanced indicator may capture a **single coherent extended structure** even when that structure is expressed through more than one textual element.
+
+Examples of acceptable advanced structures:
+- second distinct output
+- second distinct mediation mechanism
+- cross-stage mediation linkage
+- output–actor–action configuration
+
+Examples of unacceptable compound indicators:
+- site + output + linkage all at once
+- output + mechanism + workflow + human role all at once
+- any indicator that merely restates an entire sub-space
 
 ---
 
@@ -266,16 +370,23 @@ Indicators must not represent:
 Typical indicator counts:
 
 ```text
-4–8 indicator SBO instances per component
+4–10 indicator SBO instances per component
 ```
 
-If more candidate signals exist, the generator must **select a coherent minimal set** that captures the primary analytic distinctions observed in the calibration responses.
+The generator should normally aim to include both:
+	•	3–6 core analytic structure indicators
+	•	2–4 advanced structural indicators
+where the analytic brief supports both classes
+
+If more candidate signals exist, the generator must select a coherent minimal but non-collapsing set that captures both:
+	•	minimum plausible presence
+	•	extended structural variation
 
 Indicators should:
-
-- maximise coverage of observed response variation
-- minimise redundancy
-- remain clearly distinguishable
+	•	maximise coverage of observed response variation
+	•	minimise redundancy
+	•	remain clearly distinguishable
+	•	preserve important extended-structure contrasts rather than collapsing them into core indicators
 
 ---
 
@@ -475,13 +586,24 @@ When generating the Layer 1 registry:
 3. Preserve important analytic contrasts that are likely to matter downstream.
 4. Avoid producing indicators that are merely broad topic labels.
 5. Avoid producing multiple indicators that differ only cosmetically.
-6. Retain enough indicators to cover the main contrastive variation for each component.
+6. Retain enough indicators to cover both:
+   - the main minimum-plausible-presence structure
+   - the main extended-structure variation for each component
+
+Do not collapse an extended-structure pattern into a core indicator when it represents:
+- an additional explicit entity
+- an additional explicit mechanism
+- an additional workflow position
+- an additional explicit relational structure
 
 Where several candidate indicators overlap, prefer the version that is:
 
 - more directly observable in text
 - narrower and cleaner
 - more reusable for downstream dimension design
+- more clearly classifiable as either:
+  - core analytic structure
+  - advanced structural extension
 
 ---
 
@@ -505,6 +627,8 @@ The registry table must use these columns in this exact order:
 
 Indicators must be grouped by `component_id`.
 
+Indicator class (core vs advanced) is an internal generation distinction only and must not appear as an output column unless separately required by a later template revision.
+
 Within each component group:
 
 - rows should be ordered by `indicator_id`
@@ -519,14 +643,35 @@ The generator must:
 
 1. Identify each component present in the analytic brief.
 2. Extract candidate indicators associated with that component.
-3. Consolidate overlapping signals into a minimal coherent indicator set.
-4. Produce approximately **4–8 indicators per component** where possible.
-5. Assign globally unique `indicator_id` values across the full rubric payload.
-6. Construct `sbo_identifier` values using `I_<sid>_<cid>_<iid>`.
-7. Set `sbo_identifier_shortid = indicator_id`.
-8. Generate concise `sbo_short_description` labels that comply with the specification guide.
+3. Separate candidate signals into:
+   - core analytic structure candidates
+   - advanced structural candidates
+4. Consolidate overlapping signals within each class without collapsing advanced structural candidates into core candidates.
+5. Produce approximately **4–10 indicators per component** where possible.
+6. Ensure the final set includes both classes where supported by the analytic brief.
+7. Assign globally unique `indicator_id` values across the full rubric payload.
+8. Construct `sbo_identifier` values using `I_<sid>_<cid>_<iid>`.
+9. Set `sbo_identifier_shortid = indicator_id`.
+10. Generate concise `sbo_short_description` labels that comply with the specification guide.
 
 The generator must **not introduce concepts that are not present in the analytic brief**.
+
+---
+
+### Registry composition check
+
+Before emitting the registry, the generator must verify for each component:
+
+- whether the analytic brief contains evidence of:
+  - minimum plausible presence patterns
+  - extended-structure patterns
+
+If both are present in the analytic brief, the registry must preserve both classes of indicators.
+
+A component-level registry is invalid if:
+- it contains only core indicators despite clear extended-structure patterns in the analytic brief
+- it represents extended structure using degree or quality language rather than additional structure
+- it collapses non-saturating structural patterns into core minimum-presence indicators
 
 ---
 
