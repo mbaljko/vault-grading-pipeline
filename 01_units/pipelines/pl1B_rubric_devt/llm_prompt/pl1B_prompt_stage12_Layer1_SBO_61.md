@@ -221,10 +221,39 @@ Each indicator must be evaluated as:
 - 0 = absent, insufficient, vague, or ambiguous evidence
 
 Accordingly:
-
-- “partial”, “weak”, or “implicit” signals must be treated as **not present**
+-  “partial”, “weak”, “incomplete”, or “structurally insufficient” signals must be treated as **not present**
 - evaluation guidance must support **fast and consistent human verification**
 - guidance must reduce interpretive ambiguity at the threshold boundary
+
+### Indicator class interpretation (core vs advanced)
+
+Layer 1 indicators may include two structural classes:
+
+- **Core indicators (I01–I69)** → detect minimum plausible presence of required analytic structure  
+- **Advanced indicators (I90–I99)** → detect extended analytic structure that appears only in more developed responses  
+
+These classes differ in the **type of structure required**, not in degree or quality.
+
+Rules:
+
+- Both classes remain **binary** (`present` / `not_present`)
+- Advanced indicators must detect **additional structural elements**, not stronger execution of the same structure
+- Core indicators must not require extended elaboration beyond minimum viable analytic structure
+
+Interpretation for evaluators:
+
+- Core indicators:  
+  → satisfied by a **single clear instance** of the required structure
+
+- Advanced indicators:  
+  → satisfied only when **additional, explicitly articulated structure** is present  
+  → absence of this additional structure must be treated as `not_present`, even if the core structure is correct
+
+Do not:
+
+- interpret advanced indicators as “better” or “stronger” versions of core indicators  
+- assign `present` based on clarity, fluency, or persuasiveness  
+- collapse advanced indicators into core indicator judgements
 ### indicator_definition
 
 A concise conceptual description of the analytic signal.
@@ -267,6 +296,35 @@ Example:
 
 Look for language indicating that responsibility is shared across people, teams, institutions, or systems involved in computing work.
 
+
+Additional requirement for advanced indicators (`I9x`):
+
+- assessment guidance must specify the **additional structural elements required** beyond minimum presence
+- guidance must make clear that:
+  - a single instance is insufficient if the indicator requires **multiple elements, stages, or relations**
+  - the structure must be **explicitly articulated**, not inferred
+
+Example distinction:
+
+- Core indicator:
+  - “flags guide review order” → sufficient
+
+- Advanced indicator:
+  - requires:
+    - multiple workflow stages OR
+    - multiple distinct structuring effects OR
+    - explicit multi-step mediation chain
+
+Do not use language such as:
+- “more detailed”
+- “stronger explanation”
+- “well-developed”
+
+Instead specify:
+- number of elements
+- types of relations
+- structural configuration required
+
 ---
 
 ### evaluation_notes
@@ -289,6 +347,27 @@ Example:
 
 Do not assign evidence when the response mentions teamwork without describing shared responsibility.
 
+
+Additional requirement for advanced indicators (`I9x`):
+
+evaluation_notes must explicitly clarify:
+
+- what **minimal forms are insufficient** (even if correct at core level)
+- what **partial extended structures** must still be treated as `not_present`
+- how this indicator differs from:
+  - the corresponding core indicator(s)
+  - other advanced indicators
+
+Typical exclusions to include:
+
+- single-instance explanations where multiple are required
+- generic statements of influence without structural differentiation
+- repetition of the same structure rather than addition of new structure
+
+Example:
+
+Do not assign when the response correctly describes one mediation relationship but does not introduce additional stages, actors, or structuring mechanisms required by this indicator.
+
 ---
 
 # Generation procedure
@@ -298,8 +377,36 @@ The generator must perform the following steps:
 1. Read the Layer 1 SBO instance registry in **Rubric Template Section 5.4: Layer 1 SBO Instances**.
 2. Identify each Layer 1 indicator SBO instance listed in Section 5.4.
 3. Locate the corresponding analytic signals in the analytic brief.
-4. Translate those signals into evaluation specifications.
+4. Translate those signals into evaluation specifications, ensuring:
+   - core indicators (`I01–I69`) are defined using **minimum viable structural presence**
+   - advanced indicators (`I90–I99`) are defined using **additional required structural elements**
+   For advanced indicators:
+   - identify the extended-structure patterns from Stage 0.3
+   - ensure the definition reflects **distinct structural additions**, not degree of explanation
+   - ensure the signal cannot be satisfied by the corresponding core structure alone
 5. Populate one row per indicator in the appropriate component table.
+
+---
+
+# Indicator class validation (pre-output check)
+
+Before emitting the evaluation specification, verify:
+
+- all indicators with `indicator_id` in the `I90–I99` range:
+  - require additional structural elements beyond core indicators
+  - cannot be satisfied by single-instance or minimal formulations
+
+- no indicator encodes:
+  - strength
+  - quality
+  - clarity
+  - completeness
+
+- all indicators remain:
+  - binary verifiable
+  - grounded in explicit textual evidence
+
+If these conditions are not satisfied, the output is invalid and must not be produced.
 
 ---
 
