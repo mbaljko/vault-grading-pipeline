@@ -154,9 +154,22 @@
               "icon": "lucide-file",
               "title": "pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt"
             }
+          },
+          {
+            "id": "2b262663f2f6621c",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "pl1B_prompt_stage11_Layer1_SBO_54"
+            }
           }
-        ],
-        "currentTab": 9
+        ]
       }
     ],
     "direction": "vertical"
@@ -302,13 +315,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt"
+              "title": "Outline of Pipeline 1B — Layered Rubric Construction Pipeline"
             }
           },
           {
@@ -342,15 +355,16 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "2a6eb2300f5a58ad",
+  "active": "50f9e0c568115b6f",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
+    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage01_SubmissionAnalyticBrief_Sec1-3.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v02.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12b_DeriveLayer1ScoringManifest.md",
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS 1 page.md",
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS 1 page 1.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
@@ -367,7 +381,6 @@
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO for interactive use.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_prompt_stage12_Layer1_SBO_61 - prev version, needs tightening.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v01.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification_inclCaseStudy.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - engagement - signal prompt.md",
     "01_units/pipelines/pl1B_rubric_devt/python/__pycache__/run-itp-report-for-manifest.cpython-313.pyc",
