@@ -1,4 +1,6 @@
 ### Note — Repositioning Layer 1 SBO Value Derivation for Human Verification
+
+==Layer 1 must include indicators that detect structures that only appear in exceptional answers==
 #### Purpose of this shift
 Layer 1 SBO value derivation is being repositioned to support a **human verification workflow**, rather than a fully expressive analytic evaluation.
 The goal is not to capture the full nuance of student performance at this stage, but to enable:
