@@ -63,8 +63,8 @@ If multiple indicator_id values appear in the dataset, treat this as an input er
 Each row must contain a valid `submission_id` and `evidence_status`.
 
 Valid evidence_status values are:
-- evidence  
-- little_to_no_evidence
+- present  
+- not_present
 
 Do not invent new evidence_status values.
 
@@ -80,8 +80,8 @@ Do not reinterpret or modify these labels.
 #### Step 2 — Construct the diagnostic inspection set
 From each partition, select diagnostic rows as follows:
 
-- up to **12 rows** where `evidence_status = evidence`
-- up to **12 rows** where `evidence_status = little_to_no_evidence`
+- up to **12 rows** where `evidence_status = present`
+- up to **12 rows** where `evidence_status = not_present`
 
 **Enforcement rule for row limits:**
 
