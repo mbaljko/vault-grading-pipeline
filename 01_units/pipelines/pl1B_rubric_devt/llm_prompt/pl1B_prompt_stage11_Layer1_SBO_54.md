@@ -488,6 +488,20 @@ Do **not** reset `indicator_id` numbering by component.
 `indicator_id` values must remain unique within the rubric payload.
 Indicator numbering must begin with I01 and increment sequentially unless the analytic brief explicitly specifies existing indicator identifiers.
 
+#### Indicator identifier range partition (additional rule)
+
+Indicator identifiers must be assigned using the following reserved ranges:
+
+- `I01–I69` → core analytic structure indicators (minimum plausible presence)
+- `I90–I99` → advanced structural indicators (extended structure)
+
+Rules:
+
+- Advanced indicators must use identifiers in the `I9x` range
+- Core indicators must not use identifiers in the `I9x` range
+- Do not interleave core and advanced identifiers numerically
+- Maintain sequential ordering within each range where possible
+
 #### Canonical SBO identifier (`sbo_identifier`)
 
 Layer 1 SBO identifiers must follow this structure:
@@ -649,12 +663,29 @@ The generator must:
 4. Consolidate overlapping signals within each class without collapsing advanced structural candidates into core candidates.
 5. Produce approximately **4–10 indicators per component** where possible.
 6. Ensure the final set includes both classes where supported by the analytic brief.
-7. Assign globally unique `indicator_id` values across the full rubric payload.
-8. Construct `sbo_identifier` values using `I_<sid>_<cid>_<iid>`.
-9. Set `sbo_identifier_shortid = indicator_id`.
-10. Generate concise `sbo_short_description` labels that comply with the specification guide.
+7. Assign `indicator_id` values using the reserved ranges:
+   - assign core indicators first using `I01–I69`
+   - assign advanced indicators using `I90–I99`
+   Ensure:
+   - no overlap between ranges
+   - all identifiers remain globally unique
+1. Construct `sbo_identifier` values using `I_<sid>_<cid>_<iid>`.
+2. Set `sbo_identifier_shortid = indicator_id`.
+3. Generate concise `sbo_short_description` labels that comply with the specification guide.
 
 The generator must **not introduce concepts that are not present in the analytic brief**.
+
+### Indicator range integrity constraint
+
+Before emitting the registry, the generator must verify:
+
+- all indicators derived from minimum plausible presence patterns use `I01–I69`
+- all indicators derived from extended-structure patterns use `I90–I99`
+
+A registry is invalid if:
+
+- an advanced structural indicator is assigned outside the `I9x` range
+- a core indicator is assigned inside the `I9x` range
 
 ---
 
