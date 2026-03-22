@@ -7,6 +7,8 @@ a set of thee analytic claims, each one following the specified template
 
 If I give you a set of student submissions, can you parse each one into 3 columns, one analytic claim per column.
 
+ensure the number of output rows matches the number of input rows
+
 emit  as fenced md, each row containing one submission, each of the three columns delimited  by ∞
 
 ===
