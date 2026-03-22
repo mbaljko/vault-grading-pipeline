@@ -107,22 +107,22 @@ The model may interpret the conceptual role of each component from the assignmen
 ### Required structural form
 
 ```
-1. Overview — Analytic Goals and Conceptual Claims
-2. Components
-   2.1 Component: <component_id_1>
-       Analytic purpose
-       Indicators of engagement with the analytic or positioning dimension
-       Initial meanings for scoring labels
-   2.2 Component: <component_id_2>
-       Analytic purpose
-       Indicators of engagement with the analytic or positioning dimension
-       Initial meanings for scoring labels
+### 1. Overview — Analytic Goals and Conceptual Claims
+### 2. Components
+#### 2.1 Component: <component_id_1>
+##### Analytic purpose
+##### Indicators of engagement with the analytic or positioning dimension
+##### Initial meanings for scoring labels
+#### 2.2 Component: <component_id_2>
+##### Analytic purpose
+##### Indicators of engagement with the analytic or positioning dimension
+##### Initial meanings for scoring labels
    ...
-   2.n Component: <component_id_n>
-       Analytic purpose
-       Indicators of engagement with the analytic or positioning dimension
-       Initial meanings for scoring labels
-3. Conceptual Structure of the Submission
+#### 2.n Component: <component_id_n>
+##### Analytic purpose
+##### Indicators of engagement with the analytic or positioning dimension
+##### Initial meanings for scoring labels
+### 3. Conceptual Structure of the Submission
 ```
 
 The set of component subsections must correspond exactly to the component identifiers defined in:
