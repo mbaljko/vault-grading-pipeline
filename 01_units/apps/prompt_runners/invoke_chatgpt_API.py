@@ -232,6 +232,15 @@ def parse_args() -> argparse.Namespace:
         help="Model name override (default: configured MODEL constant).",
     )
     parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=REQUEST_TIMEOUT_SECONDS,
+        help=(
+            "HTTP request timeout in seconds for the Responses API call "
+            f"(default: {REQUEST_TIMEOUT_SECONDS})."
+        ),
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=None,
@@ -647,9 +656,11 @@ def is_platform_limit_reason(reason: str | None) -> bool:
     )
 
 
-def invoke_chatgpt(body: dict[str, Any]) -> dict[str, Any]:
+def invoke_chatgpt(body: dict[str, Any], timeout_seconds: int) -> dict[str, Any]:
     if not API_KEY:
         raise ValueError("API key file is missing/empty: secrets/openai_api_key.txt")
+    if timeout_seconds <= 0:
+        raise ValueError("--timeout-seconds must be a positive integer")
 
     url = f"{API_BASE_URL}/responses"
     headers = {
@@ -665,7 +676,7 @@ def invoke_chatgpt(body: dict[str, Any]) -> dict[str, Any]:
     req = Request(url, data=data, headers=headers, method="POST")
 
     try:
-        with urlopen(req, timeout=REQUEST_TIMEOUT_SECONDS) as resp:
+        with urlopen(req, timeout=timeout_seconds) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except HTTPError as exc:
         error_body = exc.read().decode("utf-8", errors="replace")
@@ -678,7 +689,7 @@ def main() -> int:
     start_ts = time.perf_counter()
     args = parse_args()
     print(f"Invoking LLM prompt via API call.")
-    print(f"Request timeout set to: {REQUEST_TIMEOUT_SECONDS} seconds. Waiting.")
+    print(f"Request timeout set to: {args.timeout_seconds} seconds. Waiting.")
 
     try:
         prompt_instructions = load_prompt_instructions(args)
@@ -736,7 +747,7 @@ def main() -> int:
             print(f"Total running time: {elapsed_s:.2f} seconds")
             return 0
 
-        response_obj = invoke_chatgpt(body)
+        response_obj = invoke_chatgpt(body, args.timeout_seconds)
         text = extract_output_text(response_obj)
         incomplete_reason = get_incomplete_reason(response_obj)
 
