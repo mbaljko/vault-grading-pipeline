@@ -163,7 +163,19 @@ def parse_markdown_cells(line: str) -> list[str]:
 		parts = parts[1:]
 	if parts and parts[-1] == "":
 		parts = parts[:-1]
-	return parts
+	return [_normalize_markdown_cell(part) for part in parts]
+
+
+def _normalize_markdown_cell(value: str) -> str:
+	"""Normalize markdown table cell content for downstream matching.
+
+	This strips wrapping backticks used for inline-code cells so manifest values
+	like `I11` compare cleanly against plain CSV values like I11.
+	"""
+	stripped = value.strip()
+	if len(stripped) >= 2 and stripped.startswith("`") and stripped.endswith("`"):
+		return stripped[1:-1].strip()
+	return stripped
 
 
 def is_separator_row(cells: list[str]) -> bool:
