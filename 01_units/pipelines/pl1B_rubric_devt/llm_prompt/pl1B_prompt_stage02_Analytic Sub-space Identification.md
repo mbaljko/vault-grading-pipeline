@@ -7,7 +7,7 @@ BEGIN GENERATION
 the inputs
 `<ASSESSMENT_ID>_AssignmentPayloadSpec_v01`
 `<ASSESSMENT_ID>_SubmissionAnalyticBrief_v00.md`
-Calibration Sample
+
 # . 
 ````
 ## PROMPT: Stage 0.2 Analytic Sub-space Identification
