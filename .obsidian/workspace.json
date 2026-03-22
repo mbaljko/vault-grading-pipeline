@@ -414,6 +414,8 @@
   },
   "active": "9e98422f1e332763",
   "lastOpenFiles": [
+    "01_units/pipelines/pl3_production_scoring/python/stitch_scored_csv_with_response_text.py",
+    "01_units/pipelines/pl3_production_scoring/python",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
@@ -439,7 +441,6 @@
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO for interactive use.md",
     "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_prompt_stage12_Layer1_SBO_61 - prev version, needs tightening.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v01.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification_inclCaseStudy.md",
     "01_units/pipelines/pl1B_rubric_devt/python/__pycache__/run-itp-report-for-manifest.cpython-313.pyc",
     "01_units/pipelines/pl1B_rubric_devt/python/run-itp-report-for-manifest.py",
     "01_units/apps/prompt_runners/__pycache__/invoke_chatgpt_API.cpython-313.pyc",
@@ -448,7 +449,6 @@
     "01_units/apps/prompt_runners/__pycache__",
     "01_units/pipelines/pl1B_rubric_devt/python/__pycache__/run-ct-report-for-manifest.cpython-313.pyc",
     "01_units/pipelines/pl1B_rubric_devt/python/__pycache__",
-    "01_units/pipelines/pl1B_rubric_devt/RUN_PPP_SectionAResponse_Layer1_SBO_scoring_prompt_v01_output.csv",
-    "01_units/pipelines/pl1B_rubric_devt/python/run-ct-report-for-manifest.py"
+    "01_units/pipelines/pl1B_rubric_devt/RUN_PPP_SectionAResponse_Layer1_SBO_scoring_prompt_v01_output.csv"
   ]
 }
