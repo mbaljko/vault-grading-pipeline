@@ -62,7 +62,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
                 "mode": "source",
                 "source": false
               },
@@ -77,7 +77,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12b_DeriveLayer1ScoringManifest.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage12b_DeriveLayer1ScoringManifest.md",
                 "mode": "source",
                 "source": false
               },
@@ -91,7 +91,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
                 "mode": "source",
                 "source": false
               },
@@ -105,7 +105,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12b_DeriveLayer1ScoringManifest.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage12b_DeriveLayer1ScoringManifest.md",
                 "mode": "source",
                 "source": false
               },
@@ -119,7 +119,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage01_SubmissionAnalyticBrief_Sec1-3.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage01_SubmissionAnalyticBrief_Sec1-3.md",
                 "mode": "source",
                 "source": false
               },
@@ -133,7 +133,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification.md",
                 "mode": "source",
                 "source": false
               },
@@ -147,7 +147,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
                 "mode": "source",
                 "source": false
               },
@@ -161,7 +161,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
                 "mode": "source",
                 "source": false
               },
@@ -175,7 +175,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
                 "mode": "source",
                 "source": false
               },
@@ -189,7 +189,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
                 "mode": "source",
                 "source": false
               },
@@ -203,7 +203,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
                 "mode": "source",
                 "source": false
               },
@@ -217,7 +217,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage01_SubmissionAnalyticBrief_Sec1-3.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage01_SubmissionAnalyticBrief_Sec1-3.md",
                 "mode": "source",
                 "source": false
               },
@@ -231,7 +231,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage01_AssignmentPayloadSpec.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage01_AssignmentPayloadSpec.md",
                 "mode": "source",
                 "source": false
               },
@@ -245,7 +245,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
                 "mode": "source",
                 "source": false
               },
@@ -400,7 +400,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -440,41 +440,41 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "8e7760f37e5cbfa1",
+  "active": "e5174a9fca7b05c1",
   "lastOpenFiles": [
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage01_SubmissionAnalyticBrief_Sec1-3.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage01_AssignmentPayloadSpec.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage01_SubmissionAnalyticBrief_Sec1-3.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage01_AssignmentPayloadSpec.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP1B.md",
     "01_units/pipelines/pl1A_canonical_population_prep/python/segment_as_per_prompt.py",
     "01_units/pipelines/pl1A_canonical_population_prep/python",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12b_DeriveLayer1ScoringManifest.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage12b_DeriveLayer1ScoringManifest.md",
     "01_units/pipelines/pl3_production_scoring/python/stitch_scored_csv_with_response_text.py",
     "01_units/pipelines/pl3_production_scoring/python",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
     "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification v2.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
     "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification v1.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v02.md",
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS.md",
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS 1 page.md",
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS 1 page 1.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_OverlapReport_singleComponent.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_prompt_stage13_Layer1_Generate_OverlapReport_singleComponent - triary.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage21_Layer2_SBO_53.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO - triary.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/prev_ver/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - prev version,  needs tightening.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54 - engagement signal tolerant.md",
-    "01_units/pipelines/pl1B_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO for interactive use.md",
-    "01_units/pipelines/pl1B_rubric_devt/python/__pycache__/run-itp-report-for-manifest.cpython-313.pyc",
-    "01_units/pipelines/pl1B_rubric_devt/python/run-itp-report-for-manifest.py",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_OverlapReport_singleComponent.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/prev_ver/pl1B_prompt_stage13_Layer1_Generate_OverlapReport_singleComponent - triary.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage21_Layer2_SBO_53.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/prev_ver/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO - triary.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/prev_ver/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - prev version,  needs tightening.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54 - engagement signal tolerant.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_Calibration_Triage_Report_singleSBO for interactive use.md",
+    "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/run-itp-report-for-manifest.cpython-313.pyc",
+    "01_units/pipelines/pl1C_rubric_devt/python/run-itp-report-for-manifest.py",
     "01_units/apps/prompt_runners/__pycache__/invoke_chatgpt_API.cpython-313.pyc",
     "01_units/apps/prompt_runners/invoke_chatgpt_API.py",
     "01_units/apps/prompt_runners/__pycache__/invoke_chatgpt_with_payload.cpython-313.pyc"
