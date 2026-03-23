@@ -458,6 +458,8 @@
   },
   "active": "00821057bf5dc0c3",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1A_canonical_population_prep/python/__pycache__/segment_as_per_prompt.cpython-313.pyc",
+    "01_units/pipelines/pl1A_canonical_population_prep/python/__pycache__",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP1B.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2B.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
@@ -488,11 +490,9 @@
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage21_Layer2_SBO_53.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/prev_ver/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO - triary.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/prev_ver/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - prev version,  needs tightening.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54 - engagement signal tolerant.md",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/run-itp-report-for-manifest.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/run-itp-report-for-manifest.py",
     "01_units/apps/prompt_runners/__pycache__/invoke_chatgpt_API.cpython-313.pyc",
-    "01_units/apps/prompt_runners/invoke_chatgpt_API.py",
-    "01_units/apps/prompt_runners/__pycache__/invoke_chatgpt_with_payload.cpython-313.pyc"
+    "01_units/apps/prompt_runners/invoke_chatgpt_API.py"
   ]
 }
