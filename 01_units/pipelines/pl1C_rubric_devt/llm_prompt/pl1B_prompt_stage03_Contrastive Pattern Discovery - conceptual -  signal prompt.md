@@ -150,7 +150,7 @@ The structure must therefore be:
 <table containing:
 submission_id
 component_id
-cleaned_response_text>
+response_text>
 ```
 
 No additional artefacts may appear.
@@ -206,7 +206,7 @@ Verify that **Artefact 3** is a dataset containing the fields:
 ```text
 submission_id
 component_id
-cleaned_response_text
+response_text
 ```
 
 If any required field is missing, **produce no output**.
@@ -259,11 +259,11 @@ Used to obtain:
 
 Dataset structure:
 
-| field | description |
-|---|---|
+| field           | description |
+| --------------- | -------------------------------- |
 | `submission_id` | de-identified student identifier |
-| `component_id` | assignment component identifier |
-| `cleaned_response_text` | student response text |
+| `component_id`  | assignment component identifier |
+| `response_text` | student response text |
 
 Typical calibration sample size:
 
@@ -540,11 +540,11 @@ Each dataset contains a filtered subset of responses for a specific component.
 
 Dataset structure:
 
-| field_name |
-|---|
+| field_name      |
+| --------------- |
 | `submission_id` |
-| `component_id` |
-| `cleaned_response_text` |
+| `component_id`  |
+| `response_text` |
 
 Calibration samples typically contain **20–40 responses** and are used exclusively for **analytic discovery and rubric development**.
 
@@ -708,7 +708,7 @@ Do **not**:
 - define performance levels
 
 ## Constraints
-- Only use evidence present in `cleaned_response_text`.
+- Only use evidence present in `response_text`.
 - Patterns must correspond to **observable textual language**.
 - Do not introduce scoring thresholds.
 - Do not reference rubric performance levels.
