@@ -10,8 +10,10 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 
 RESPONSE_TEXT_COLUMN = "response_text"
@@ -64,6 +66,35 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=DEFAULT_BATCH_SIZE,
         help=f"Number of cleaned submissions to send in each LLM runner call (default: {DEFAULT_BATCH_SIZE}).",
+    )
+    parser.add_argument(
+        "--batch-cache-dir",
+        type=Path,
+        required=True,
+        help="Directory used to store per-batch cache artifacts for reruns and rebuilds.",
+    )
+    parser.add_argument(
+        "--rerun-batch",
+        type=int,
+        action="append",
+        default=[],
+        help="Rerun only the specified batch number. Repeatable.",
+    )
+    parser.add_argument(
+        "--rerun-batches",
+        type=str,
+        default="",
+        help="Comma-separated list of batch numbers to rerun, for example 3,5,8.",
+    )
+    parser.add_argument(
+        "--rerun-failed-batches",
+        action="store_true",
+        help="Rerun only batches currently marked failed in the batch cache.",
+    )
+    parser.add_argument(
+        "--rebuild-from-batch-cache",
+        action="store_true",
+        help="Do not invoke the LLM runner; rebuild final outputs only from existing batch cache artifacts.",
     )
     return parser.parse_args()
 
@@ -268,6 +299,91 @@ def parse_batch_llm_output(extracted_output_text: str, expected_rows: int) -> li
     return parsed_rows
 
 
+def parse_rerun_batch_numbers(rerun_batch: list[int], rerun_batches: str) -> set[int]:
+    batch_numbers: set[int] = set()
+    for batch_number in rerun_batch:
+        if batch_number <= 0:
+            raise ValueError(f"--rerun-batch values must be positive integers, received: {batch_number}")
+        batch_numbers.add(batch_number)
+
+    if rerun_batches.strip():
+        for raw_value in rerun_batches.split(","):
+            value = raw_value.strip()
+            if not value:
+                continue
+            batch_number = int(value)
+            if batch_number <= 0:
+                raise ValueError(
+                    f"--rerun-batches values must be positive integers, received: {batch_number}"
+                )
+            batch_numbers.add(batch_number)
+
+    return batch_numbers
+
+
+def build_batch_specs(rows: list[dict[str, str]], batch_size: int) -> list[dict[str, Any]]:
+    batch_specs: list[dict[str, Any]] = []
+    for batch_number, start_index in enumerate(range(0, len(rows), batch_size), start=1):
+        end_index = min(start_index + batch_size, len(rows))
+        batch_specs.append(
+            {
+                "batch_number": batch_number,
+                "start_index": start_index,
+                "end_index": end_index,
+                "start_row": start_index + 1,
+                "end_row": end_index,
+                "rows": rows[start_index:end_index],
+                "stem": f"batch_{batch_number:04d}_rows_{start_index + 1}_{end_index}",
+            }
+        )
+    return batch_specs
+
+
+def build_batch_cache_paths(batch_cache_dir: Path, batch_spec: dict[str, Any]) -> dict[str, Path]:
+    stem = str(batch_spec["stem"])
+    return {
+        "input": batch_cache_dir / f"{stem}_input.txt",
+        "output_json": batch_cache_dir / f"{stem}_output.json",
+        "audit_csv": batch_cache_dir / f"{stem}_audit.csv",
+        "status_json": batch_cache_dir / f"{stem}_status.json",
+    }
+
+
+def load_batch_status(status_path: Path) -> dict[str, Any] | None:
+    if not status_path.exists():
+        return None
+    return json.loads(status_path.read_text(encoding="utf-8"))
+
+
+def write_batch_status(
+    status_path: Path,
+    batch_spec: dict[str, Any],
+    claim_column_names: list[str],
+    status: str,
+    elapsed_seconds: float,
+    error_message: str = "",
+) -> None:
+    payload = {
+        "batch_number": batch_spec["batch_number"],
+        "start_row": batch_spec["start_row"],
+        "end_row": batch_spec["end_row"],
+        "submission_ids": [row.get("submission_id", "") for row in batch_spec["rows"]],
+        "claim_columns": claim_column_names,
+        "status": status,
+        "elapsed_seconds": round(elapsed_seconds, 4),
+        "error_message": error_message,
+    }
+    status_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def summarize_batch_rows(batch_rows: list[dict[str, str]]) -> tuple[int, Counter[str]]:
+    reconstruction_counter = Counter(
+        row.get("reconstruction_check_output", "") or "<empty>" for row in batch_rows
+    )
+    llm_error_count = sum(1 for row in batch_rows if (row.get("llm_error", "") or "").strip())
+    return llm_error_count, reconstruction_counter
+
+
 def invoke_runner_for_batch(
     runner_script_path: Path,
     runner_prompt_path: Path,
@@ -426,6 +542,10 @@ def load_audit_rows(output_audit_path: Path, claim_column_names: list[str]) -> l
     return rows
 
 
+def load_batch_audit_rows(batch_audit_path: Path, claim_column_names: list[str]) -> list[dict[str, str]]:
+    return load_audit_rows(batch_audit_path, claim_column_names)
+
+
 def count_physical_lines(input_path: Path) -> int:
     with input_path.open("r", encoding="utf-8-sig") as handle:
         return sum(1 for _ in handle)
@@ -436,6 +556,7 @@ def print_summary(
     prefix: str,
     label: str,
     claim_column_names: list[str],
+    elapsed_seconds: float | None = None,
 ) -> None:
     reconstruction_counter = Counter(
         row.get("reconstruction_check_output", "") or "<empty>" for row in rows
@@ -446,9 +567,324 @@ def print_summary(
     print(f"[{prefix}] total_rows={len(rows)}", flush=True)
     print(f"[{prefix}] llm_error_rows={llm_error_count}", flush=True)
     print(f"[{prefix}] claim_columns={', '.join(claim_column_names)}", flush=True)
+    if elapsed_seconds is not None:
+        print(f"[{prefix}] elapsed_seconds={elapsed_seconds:.2f}", flush=True)
 
     for status, count in sorted(reconstruction_counter.items()):
         print(f"[{prefix}] reconstruction[{status}]={count}", flush=True)
+
+
+def print_cached_batch_summary(
+    batch_spec: dict[str, Any],
+    batch_rows: list[dict[str, str]],
+    claim_column_names: list[str],
+    status_payload: dict[str, Any] | None,
+    total_batches: int,
+) -> None:
+    elapsed_seconds = None
+    if status_payload is not None:
+        raw_elapsed = status_payload.get("elapsed_seconds")
+        if isinstance(raw_elapsed, int | float):
+            elapsed_seconds = float(raw_elapsed)
+
+    print(
+        f"[batch {batch_spec['batch_number']}/{total_batches}] using cached successful batch artifacts",
+        flush=True,
+    )
+    print_summary(
+        batch_rows,
+        prefix=f"batch-summary {batch_spec['batch_number']}/{total_batches}",
+        label=f"rows {batch_spec['start_row']}-{batch_spec['end_row']}",
+        claim_column_names=claim_column_names,
+        elapsed_seconds=elapsed_seconds,
+    )
+
+
+def should_run_batch(
+    batch_spec: dict[str, Any],
+    batch_paths: dict[str, Path],
+    selected_batches: set[int],
+    rerun_failed_batches: bool,
+    rebuild_from_batch_cache: bool,
+) -> bool:
+    if rebuild_from_batch_cache:
+        return False
+
+    batch_status = load_batch_status(batch_paths["status_json"])
+    batch_number = int(batch_spec["batch_number"])
+    status_value = batch_status.get("status") if batch_status else ""
+    has_success_cache = status_value == "success" and batch_paths["audit_csv"].exists()
+
+    if selected_batches:
+        return batch_number in selected_batches
+
+    if rerun_failed_batches:
+        return status_value == "failed"
+
+    return not has_success_cache
+
+
+def run_one_batch(
+    batch_spec: dict[str, Any],
+    batch_paths: dict[str, Path],
+    total_batches: int,
+    claim_column_names: list[str],
+    runner_script_path: Path,
+    runner_prompt_path: Path,
+    temperature: float,
+    top_p: float,
+    runner_dry_run: bool,
+) -> tuple[list[dict[str, str]], str, float]:
+    batch_rows = list(batch_spec["rows"])
+    batch_start_time = time.perf_counter()
+    prompt_input_text = build_batch_prompt_input(batch_rows)
+    batch_paths["input"].write_text(prompt_input_text, encoding="utf-8")
+
+    command = [
+        sys.executable,
+        str(runner_script_path),
+        "--prompt-instructions-file",
+        str(runner_prompt_path),
+        "--prompt-input-file",
+        str(batch_paths["input"]),
+        "--temperature",
+        str(temperature),
+        "--top-p",
+        str(top_p),
+        "--output-dir",
+        str(batch_paths["input"].parent),
+        "--output-file-stem",
+        str(batch_spec["stem"]),
+        "--output-format",
+        "json",
+    ]
+    if runner_dry_run:
+        command.append("--dry-run")
+
+    print(
+        f"[batch {batch_spec['batch_number']}/{total_batches}] invoking LLM runner for {len(batch_rows)} cleaned submission(s)",
+        flush=True,
+    )
+    completed = subprocess.run(command, capture_output=True, text=True, check=False)
+    elapsed_seconds = time.perf_counter() - batch_start_time
+    if completed.returncode != 0:
+        stderr_text = completed.stderr.strip() or completed.stdout.strip()
+        return [], stderr_text or f"Runner failed for batch {batch_spec['batch_number']}.", elapsed_seconds
+
+    if runner_dry_run:
+        print(
+            f"[batch {batch_spec['batch_number']}/{total_batches}] dry-run enabled; skipping API call",
+            flush=True,
+        )
+        return [
+            {
+                "submission_id": row.get("submission_id", ""),
+                "submission_header": row.get("submission_header", ""),
+                "cleaned_response_text": row.get("cleaned_response_text", ""),
+                "llm_output_text": "",
+                "claim_1": "",
+                "claim_2": "",
+                "claim_3": "",
+                "reconstruction_check_output": "",
+                "llm_error": "",
+            }
+            for row in batch_rows
+        ], "", elapsed_seconds
+
+    if not batch_paths["output_json"].exists():
+        return [], f"Runner output file was not created: {batch_paths['output_json']}", elapsed_seconds
+
+    payload = json.loads(batch_paths["output_json"].read_text(encoding="utf-8"))
+    extracted_output_text = payload.get("extracted_output_text", "")
+    if not isinstance(extracted_output_text, str):
+        return [], (
+            f"Runner output payload is missing string extracted_output_text for batch {batch_spec['batch_number']}."
+        ), elapsed_seconds
+
+    try:
+        parsed_rows = parse_batch_llm_output(extracted_output_text, expected_rows=len(batch_rows))
+    except ValueError as exc:
+        return [], str(exc), elapsed_seconds
+
+    for row, parsed in zip(batch_rows, parsed_rows, strict=True):
+        row["llm_output_text"] = parsed["llm_output_text"]
+        row["claim_1"] = parsed["claim_1"]
+        row["claim_2"] = parsed["claim_2"]
+        row["claim_3"] = parsed["claim_3"]
+        row["reconstruction_check_output"] = build_reconstruction_check_output(
+            cleaned_response_text=row["cleaned_response_text"],
+            claim_1=row["claim_1"],
+            claim_2=row["claim_2"],
+            claim_3=row["claim_3"],
+        )
+
+    print(
+        f"[batch {batch_spec['batch_number']}/{total_batches}] received {len(batch_rows)} segmented row(s)",
+        flush=True,
+    )
+    write_segmentation_rows(batch_paths["audit_csv"], batch_rows, claim_column_names)
+    return batch_rows, "", elapsed_seconds
+
+
+def merge_batch_audit_rows(
+    batch_specs: list[dict[str, Any]],
+    batch_cache_dir: Path,
+    claim_column_names: list[str],
+) -> list[dict[str, str]]:
+    merged_rows: list[dict[str, str]] = []
+    for batch_spec in batch_specs:
+        batch_paths = build_batch_cache_paths(batch_cache_dir, batch_spec)
+        status_payload = load_batch_status(batch_paths["status_json"])
+        if status_payload is None or status_payload.get("status") != "success":
+            raise RuntimeError(
+                f"Batch {batch_spec['batch_number']} is not available as a successful cache artifact."
+            )
+        if not batch_paths["audit_csv"].exists():
+            raise RuntimeError(
+                f"Batch {batch_spec['batch_number']} is missing its audit CSV: {batch_paths['audit_csv']}"
+            )
+        merged_rows.extend(load_batch_audit_rows(batch_paths["audit_csv"], claim_column_names))
+    return merged_rows
+
+
+def seed_batch_cache_from_whole_audit(
+    whole_audit_rows: list[dict[str, str]],
+    batch_specs: list[dict[str, Any]],
+    batch_cache_dir: Path,
+    claim_column_names: list[str],
+) -> None:
+    if len(whole_audit_rows) != sum(len(batch_spec["rows"]) for batch_spec in batch_specs):
+        raise ValueError(
+            "Whole-audit cache row count does not match the current batch plan; cannot seed batch cache."
+        )
+
+    cursor = 0
+    for batch_spec in batch_specs:
+        batch_length = len(batch_spec["rows"])
+        batch_rows = whole_audit_rows[cursor:cursor + batch_length]
+        cursor += batch_length
+        batch_paths = build_batch_cache_paths(batch_cache_dir, batch_spec)
+        prompt_input_text = build_batch_prompt_input(list(batch_spec["rows"]))
+        batch_paths["input"].write_text(prompt_input_text, encoding="utf-8")
+        write_segmentation_rows(batch_paths["audit_csv"], batch_rows, claim_column_names)
+        write_batch_status(
+            batch_paths["status_json"],
+            batch_spec=batch_spec,
+            claim_column_names=claim_column_names,
+            status="success",
+            elapsed_seconds=0.0,
+            error_message="Seeded from whole-audit cache.",
+        )
+
+
+def execute_batch_cache_workflow(
+    prepared_rows: list[dict[str, str]],
+    batch_cache_dir: Path,
+    claim_column_names: list[str],
+    runner_script_path: Path,
+    runner_prompt_path: Path,
+    temperature: float,
+    top_p: float,
+    runner_dry_run: bool,
+    batch_size: int,
+    selected_batches: set[int],
+    rerun_failed_batches: bool,
+    rebuild_from_batch_cache: bool,
+) -> list[dict[str, str]]:
+    if batch_size <= 0:
+        raise ValueError(f"--batch-size must be a positive integer, received: {batch_size}")
+
+    batch_cache_dir.mkdir(parents=True, exist_ok=True)
+    batch_specs = build_batch_specs(prepared_rows, batch_size)
+    total_batches = len(batch_specs)
+    print(
+        f"[progress] batch cache directory: {batch_cache_dir}",
+        flush=True,
+    )
+    print(
+        f"[progress] planned {total_batches} batch(es) from {len(prepared_rows)} cleaned submission(s)",
+        flush=True,
+    )
+
+    for batch_spec in batch_specs:
+        batch_paths = build_batch_cache_paths(batch_cache_dir, batch_spec)
+        batch_number = int(batch_spec["batch_number"])
+        if should_run_batch(
+            batch_spec=batch_spec,
+            batch_paths=batch_paths,
+            selected_batches=selected_batches,
+            rerun_failed_batches=rerun_failed_batches,
+            rebuild_from_batch_cache=rebuild_from_batch_cache,
+        ):
+            batch_rows, batch_error, elapsed_seconds = run_one_batch(
+                batch_spec=batch_spec,
+                batch_paths=batch_paths,
+                total_batches=total_batches,
+                claim_column_names=claim_column_names,
+                runner_script_path=runner_script_path,
+                runner_prompt_path=runner_prompt_path,
+                temperature=temperature,
+                top_p=top_p,
+                runner_dry_run=runner_dry_run,
+            )
+            if batch_error:
+                write_batch_status(
+                    batch_paths["status_json"],
+                    batch_spec=batch_spec,
+                    claim_column_names=claim_column_names,
+                    status="failed",
+                    elapsed_seconds=elapsed_seconds,
+                    error_message=batch_error,
+                )
+                for row in batch_spec["rows"]:
+                    row["llm_error"] = batch_error
+                print(
+                    f"[batch {batch_number}/{total_batches}] failed: {batch_error}",
+                    flush=True,
+                )
+                print_summary(
+                    list(batch_spec["rows"]),
+                    prefix=f"batch-summary {batch_number}/{total_batches}",
+                    label=f"rows {batch_spec['start_row']}-{batch_spec['end_row']}",
+                    claim_column_names=claim_column_names,
+                    elapsed_seconds=elapsed_seconds,
+                )
+                continue
+
+            write_segmentation_rows(batch_paths["audit_csv"], batch_rows, claim_column_names)
+            write_batch_status(
+                batch_paths["status_json"],
+                batch_spec=batch_spec,
+                claim_column_names=claim_column_names,
+                status="success",
+                elapsed_seconds=elapsed_seconds,
+            )
+            print_summary(
+                batch_rows,
+                prefix=f"batch-summary {batch_number}/{total_batches}",
+                label=f"rows {batch_spec['start_row']}-{batch_spec['end_row']}",
+                claim_column_names=claim_column_names,
+                elapsed_seconds=elapsed_seconds,
+            )
+            continue
+
+        status_payload = load_batch_status(batch_paths["status_json"])
+        if status_payload is None or status_payload.get("status") != "success" or not batch_paths["audit_csv"].exists():
+            print(
+                f"[batch {batch_number}/{total_batches}] no successful cache available for rows {batch_spec['start_row']}-{batch_spec['end_row']}",
+                flush=True,
+            )
+            continue
+        batch_rows = load_batch_audit_rows(batch_paths["audit_csv"], claim_column_names)
+        print_cached_batch_summary(
+            batch_spec=batch_spec,
+            batch_rows=batch_rows,
+            claim_column_names=claim_column_names,
+            status_payload=status_payload,
+            total_batches=total_batches,
+        )
+
+    return merge_batch_audit_rows(batch_specs, batch_cache_dir, claim_column_names)
 
 
 def apply_llm_segmentation(
@@ -475,6 +911,7 @@ def apply_llm_segmentation(
     for batch_index, start_index in enumerate(range(0, total_rows, batch_size), start=1):
         end_index = min(start_index + batch_size, total_rows)
         batch_rows = prepared_rows[start_index:end_index]
+        batch_start_time = time.perf_counter()
         print(
             f"[progress] processing rows {start_index + 1}-{end_index} of {total_rows}",
             flush=True,
@@ -501,6 +938,7 @@ def apply_llm_segmentation(
                 prefix=f"batch-summary {batch_index}/{total_batches}",
                 label=f"rows {start_index + 1}-{end_index}",
                 claim_column_names=claim_column_names,
+                elapsed_seconds=time.perf_counter() - batch_start_time,
             )
             continue
 
@@ -521,6 +959,7 @@ def apply_llm_segmentation(
             prefix=f"batch-summary {batch_index}/{total_batches}",
             label=f"rows {start_index + 1}-{end_index}",
             claim_column_names=claim_column_names,
+            elapsed_seconds=time.perf_counter() - batch_start_time,
         )
 
     return prepared_rows
@@ -598,6 +1037,7 @@ def main() -> int:
     input_path = args.input_path.resolve()
     output_path = args.output_path.resolve()
     output_audit_path = args.output_audit_path.resolve()
+    batch_cache_dir = args.batch_cache_dir.resolve()
     runner_prompt_path = args.runner_prompt_path.resolve()
 
     if not input_path.exists():
@@ -607,43 +1047,54 @@ def main() -> int:
 
     claim_column_names = resolve_claim_column_names(output_path)
     runner_script_path = resolve_runner_script_path()
+    selected_batches = parse_rerun_batch_numbers(args.rerun_batch, args.rerun_batches)
     print(f"[progress] resolved claim output columns: {', '.join(claim_column_names)}", flush=True)
 
-    if output_audit_path.exists():
-        print(f"[progress] found audit CSV cache: {output_audit_path}", flush=True)
-        segmentation_rows = load_audit_rows(output_audit_path, claim_column_names)
-        print(
-            f"[progress] loaded {len(segmentation_rows)} cached audit row(s); skipping LLM runner",
-            flush=True,
-        )
-    else:
-        print(f"[progress] audit CSV not found; loading source CSV: {input_path}", flush=True)
-        physical_line_count = count_physical_lines(input_path)
-        segmentation_rows = prepare_cleaned_rows(input_path)
-        print(
-            f"[progress] source file has {physical_line_count} physical line(s); prepared {len(segmentation_rows)} non-empty submission row(s)",
-            flush=True,
-        )
-        segmentation_rows = apply_llm_segmentation(
-            prepared_rows=segmentation_rows,
-            runner_script_path=runner_script_path,
-            runner_prompt_path=runner_prompt_path,
-            temperature=args.temperature,
-            top_p=args.top_p,
-            runner_dry_run=args.runner_dry_run,
-            batch_size=args.batch_size,
+    if args.rebuild_from_batch_cache and selected_batches:
+        raise ValueError("--rebuild-from-batch-cache cannot be combined with --rerun-batch/--rerun-batches")
+
+    print(f"[progress] loading source CSV: {input_path}", flush=True)
+    physical_line_count = count_physical_lines(input_path)
+    prepared_rows = prepare_cleaned_rows(input_path)
+    print(
+        f"[progress] source file has {physical_line_count} physical line(s); prepared {len(prepared_rows)} non-empty submission row(s)",
+        flush=True,
+    )
+
+    batch_specs = build_batch_specs(prepared_rows, args.batch_size)
+    has_existing_batch_cache = batch_cache_dir.exists() and any(batch_cache_dir.iterdir())
+    if not has_existing_batch_cache and output_audit_path.exists() and not selected_batches and not args.rerun_failed_batches and not args.rebuild_from_batch_cache:
+        print(f"[progress] seeding batch cache from existing whole-audit CSV: {output_audit_path}", flush=True)
+        whole_audit_rows = load_audit_rows(output_audit_path, claim_column_names)
+        batch_cache_dir.mkdir(parents=True, exist_ok=True)
+        seed_batch_cache_from_whole_audit(
+            whole_audit_rows=whole_audit_rows,
+            batch_specs=batch_specs,
+            batch_cache_dir=batch_cache_dir,
             claim_column_names=claim_column_names,
         )
+
+    segmentation_rows = execute_batch_cache_workflow(
+        prepared_rows=prepared_rows,
+        batch_cache_dir=batch_cache_dir,
+        claim_column_names=claim_column_names,
+        runner_script_path=runner_script_path,
+        runner_prompt_path=runner_prompt_path,
+        temperature=args.temperature,
+        top_p=args.top_p,
+        runner_dry_run=args.runner_dry_run,
+        batch_size=args.batch_size,
+        selected_batches=selected_batches,
+        rerun_failed_batches=args.rerun_failed_batches,
+        rebuild_from_batch_cache=args.rebuild_from_batch_cache,
+    )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_audit_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"[progress] writing output CSV: {output_path}", flush=True)
     write_claim_expanded_rows(output_path, segmentation_rows, claim_column_names)
-    if not output_audit_path.exists():
-        print(f"[progress] writing audit CSV: {output_audit_path}", flush=True)
-        write_segmentation_rows(output_audit_path, segmentation_rows, claim_column_names)
-    else:
-        print(f"[progress] leaving existing audit CSV in place: {output_audit_path}", flush=True)
+    print(f"[progress] writing audit CSV: {output_audit_path}", flush=True)
+    write_segmentation_rows(output_audit_path, segmentation_rows, claim_column_names)
     print_summary(
         segmentation_rows,
         prefix="summary",
