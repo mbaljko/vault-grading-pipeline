@@ -5,17 +5,21 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import re
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from pathlib import Path
 
 
 RESPONSE_TEXT_COLUMN = "response_text"
 SUBMISSION_ID_COLUMN = "submission_id"
+DEFAULT_BATCH_SIZE = 20
 HEADER_BLOCK_RE = re.compile(r"\A\+\+\+(?P<header>[^\n]+)\n\+\+\+\n?", re.DOTALL)
 FOOTER_BLOCK_RE = re.compile(r"\n?\+\+\+\s*\Z", re.DOTALL)
+FENCED_BLOCK_RE = re.compile(r"(?ms)^\s*`{3,4}[^\n`]*\n(?P<body>.*?)\n\s*`{3,4}\s*$")
 
 
 def parse_args() -> argparse.Namespace:
@@ -47,6 +51,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Pass --dry-run through to the shared LLM runner instead of calling the API.",
     )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=DEFAULT_BATCH_SIZE,
+        help=f"Number of cleaned submissions to send in each LLM runner call (default: {DEFAULT_BATCH_SIZE}).",
+    )
     return parser.parse_args()
 
 
@@ -70,6 +80,8 @@ def load_csv_rows(input_path: Path) -> tuple[list[dict[str, str]], str]:
                 if key is None:
                     continue
                 normalized_row[key.strip()] = (value or "")
+            if not any(value.strip() for value in normalized_row.values()):
+                continue
             rows.append(normalized_row)
 
     return rows, response_text_key
@@ -116,23 +128,124 @@ def resolve_runner_script_path() -> Path:
     return runner_script_path
 
 
-def invoke_runner_for_row(
+def build_batch_prompt_input(batch_rows: list[dict[str, str]]) -> str:
+    blocks: list[str] = []
+    for batch_offset, row in enumerate(batch_rows, start=1):
+        submission_id = row.get("submission_id", "").strip() or f"batch_item_{batch_offset:02d}"
+        cleaned_response_text = row.get("cleaned_response_text", "")
+        blocks.append(
+            "\n".join(
+                [
+                    f"<submission index=\"{batch_offset}\" submission_id=\"{submission_id}\">",
+                    cleaned_response_text,
+                    "</submission>",
+                ]
+            )
+        )
+    return "\n\n".join(blocks)
+
+
+def extract_fenced_markdown_body(text: str) -> str:
+    stripped_text = text.strip()
+    match = FENCED_BLOCK_RE.match(stripped_text)
+    if match:
+        return match.group("body").strip()
+    return stripped_text
+
+
+def strip_outer_wrapping_quotes(text: str) -> str:
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in {'"', "'"}:
+        return text[1:-1]
+    return text
+
+
+def build_reconstruction_check_output(
+    cleaned_response_text: str,
+    claim_1: str,
+    claim_2: str,
+    claim_3: str,
+) -> str:
+    reconstructed_text = f"{claim_1}{claim_2}{claim_3}"
+    if reconstructed_text == cleaned_response_text:
+        return "ok"
+
+    normalized_cleaned = strip_outer_wrapping_quotes(cleaned_response_text)
+    normalized_reconstructed = strip_outer_wrapping_quotes(reconstructed_text)
+    if normalized_reconstructed == normalized_cleaned:
+        return "ok_after_outer_quote_normalization"
+
+    mismatch_index = 0
+    max_prefix = min(len(normalized_cleaned), len(normalized_reconstructed))
+    while (
+        mismatch_index < max_prefix
+        and normalized_cleaned[mismatch_index] == normalized_reconstructed[mismatch_index]
+    ):
+        mismatch_index += 1
+
+    expected_char = (
+        repr(normalized_cleaned[mismatch_index])
+        if mismatch_index < len(normalized_cleaned)
+        else "<end>"
+    )
+    actual_char = (
+        repr(normalized_reconstructed[mismatch_index])
+        if mismatch_index < len(normalized_reconstructed)
+        else "<end>"
+    )
+    return (
+        "mismatch"
+        f"; first_difference_index={mismatch_index}"
+        f"; expected_char={expected_char}"
+        f"; actual_char={actual_char}"
+        f"; expected_length={len(normalized_cleaned)}"
+        f"; actual_length={len(normalized_reconstructed)}"
+    )
+
+
+def parse_batch_llm_output(extracted_output_text: str, expected_rows: int) -> list[dict[str, str]]:
+    body = extract_fenced_markdown_body(extracted_output_text)
+    lines = [line.strip() for line in body.splitlines() if line.strip()]
+    if len(lines) != expected_rows:
+        raise ValueError(
+            f"Expected {expected_rows} output row(s) from batch, received {len(lines)} line(s)."
+        )
+
+    parsed_rows: list[dict[str, str]] = []
+    for row_number, line in enumerate(lines, start=1):
+        parts = [part.strip() for part in line.split("∞")]
+        if len(parts) != 3:
+            raise ValueError(
+                f"Batch output row {row_number} does not contain exactly 3 claim columns: {line}"
+            )
+        parsed_rows.append(
+            {
+                "llm_output_text": line,
+                "claim_1": parts[0],
+                "claim_2": parts[1],
+                "claim_3": parts[2],
+            }
+        )
+
+    return parsed_rows
+
+
+def invoke_runner_for_batch(
     runner_script_path: Path,
     runner_prompt_path: Path,
-    cleaned_response_text: str,
-    submission_id: str,
-    row_index: int,
+    batch_rows: list[dict[str, str]],
+    batch_number: int,
+    total_batches: int,
     temperature: float,
     top_p: float,
     runner_dry_run: bool,
-) -> tuple[str, str]:
-    file_stem_base = submission_id or f"row_{row_index:04d}"
-    file_stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", file_stem_base).strip("_") or f"row_{row_index:04d}"
+) -> tuple[list[dict[str, str]], str]:
+    file_stem = f"segmentation_batch_{batch_number:04d}"
+    prompt_input_text = build_batch_prompt_input(batch_rows)
 
     with tempfile.TemporaryDirectory(prefix=f"segment_runner_{file_stem}_") as temp_dir_str:
         temp_dir = Path(temp_dir_str)
         prompt_input_path = temp_dir / f"{file_stem}_input.txt"
-        prompt_input_path.write_text(cleaned_response_text, encoding="utf-8")
+        prompt_input_path.write_text(prompt_input_text, encoding="utf-8")
 
         command = [
             sys.executable,
@@ -155,59 +268,164 @@ def invoke_runner_for_row(
         if runner_dry_run:
             command.append("--dry-run")
 
+        print(
+            f"[batch {batch_number}/{total_batches}] invoking LLM runner for {len(batch_rows)} cleaned submission(s)",
+            flush=True,
+        )
         completed = subprocess.run(command, capture_output=True, text=True, check=False)
         if completed.returncode != 0:
             stderr_text = completed.stderr.strip() or completed.stdout.strip()
-            return "", stderr_text or f"Runner failed for row {row_index}."
+            return [], stderr_text or f"Runner failed for batch {batch_number}."
 
         if runner_dry_run:
-            return "", ""
+            print(
+                f"[batch {batch_number}/{total_batches}] dry-run enabled; skipping API call",
+                flush=True,
+            )
+            return [
+                {
+                    "llm_output_text": "",
+                    "claim_1": "",
+                    "claim_2": "",
+                    "claim_3": "",
+                }
+                for _ in batch_rows
+            ], ""
 
         extracted_json_path = temp_dir / f"{file_stem}_output.json"
         if not extracted_json_path.exists():
-            return "", f"Runner output file was not created: {extracted_json_path}"
+            return [], f"Runner output file was not created: {extracted_json_path}"
 
         payload = json.loads(extracted_json_path.read_text(encoding="utf-8"))
         extracted_output_text = payload.get("extracted_output_text", "")
         if not isinstance(extracted_output_text, str):
-            return "", f"Runner output payload is missing string extracted_output_text for row {row_index}."
+            return [], (
+                f"Runner output payload is missing string extracted_output_text for batch {batch_number}."
+            )
 
-        return extracted_output_text, ""
+        try:
+            parsed_rows = parse_batch_llm_output(extracted_output_text, expected_rows=len(batch_rows))
+        except ValueError as exc:
+            return [], str(exc)
+
+        print(
+            f"[batch {batch_number}/{total_batches}] received {len(parsed_rows)} segmented row(s)",
+            flush=True,
+        )
+        return parsed_rows, ""
 
 
-def prepare_segmentation_rows(
-    input_path: Path,
-    runner_script_path: Path,
-    runner_prompt_path: Path,
-    temperature: float,
-    top_p: float,
-    runner_dry_run: bool,
-) -> list[dict[str, str]]:
+def prepare_cleaned_rows(input_path: Path) -> list[dict[str, str]]:
     rows, response_text_key = load_csv_rows(input_path)
     prepared_rows: list[dict[str, str]] = []
 
-    for row_index, row in enumerate(rows, start=1):
+    for row in rows:
         response_text = row.get(response_text_key, "")
         header_info, cleaned_text = extract_response_payload(response_text)
         submission_id = extract_submission_id(row, header_info)
-        llm_output_text, llm_error = invoke_runner_for_row(
-            runner_script_path=runner_script_path,
-            runner_prompt_path=runner_prompt_path,
-            cleaned_response_text=cleaned_text,
-            submission_id=submission_id,
-            row_index=row_index,
-            temperature=temperature,
-            top_p=top_p,
-            runner_dry_run=runner_dry_run,
-        )
         prepared_rows.append(
             {
                 "submission_id": submission_id,
                 "submission_header": header_info,
                 "cleaned_response_text": cleaned_text,
-                "llm_output_text": llm_output_text,
-                "llm_error": llm_error,
+                "llm_output_text": "",
+                "claim_1": "",
+                "claim_2": "",
+                "claim_3": "",
+                "reconstruction_check_output": "",
+                "llm_error": "",
             }
+        )
+
+    return prepared_rows
+
+
+def count_physical_lines(input_path: Path) -> int:
+    with input_path.open("r", encoding="utf-8-sig") as handle:
+        return sum(1 for _ in handle)
+
+
+def print_summary(rows: list[dict[str, str]], prefix: str, label: str) -> None:
+    reconstruction_counter = Counter(
+        row.get("reconstruction_check_output", "") or "<empty>" for row in rows
+    )
+    llm_error_count = sum(1 for row in rows if (row.get("llm_error", "") or "").strip())
+
+    print(f"[{prefix}] {label}", flush=True)
+    print(f"[{prefix}] total_rows={len(rows)}", flush=True)
+    print(f"[{prefix}] llm_error_rows={llm_error_count}", flush=True)
+
+    for status, count in sorted(reconstruction_counter.items()):
+        print(f"[{prefix}] reconstruction[{status}]={count}", flush=True)
+
+
+def apply_llm_segmentation(
+    prepared_rows: list[dict[str, str]],
+    runner_script_path: Path,
+    runner_prompt_path: Path,
+    temperature: float,
+    top_p: float,
+    runner_dry_run: bool,
+    batch_size: int,
+) -> list[dict[str, str]]:
+    if batch_size <= 0:
+        raise ValueError(f"--batch-size must be a positive integer, received: {batch_size}")
+
+    total_rows = len(prepared_rows)
+    total_batches = math.ceil(total_rows / batch_size) if total_rows else 0
+
+    print(
+        f"[progress] submitting {total_rows} cleaned submission(s) in {total_batches} batch(es) of up to {batch_size}",
+        flush=True,
+    )
+
+    for batch_index, start_index in enumerate(range(0, total_rows, batch_size), start=1):
+        end_index = min(start_index + batch_size, total_rows)
+        batch_rows = prepared_rows[start_index:end_index]
+        print(
+            f"[progress] processing rows {start_index + 1}-{end_index} of {total_rows}",
+            flush=True,
+        )
+        parsed_rows, batch_error = invoke_runner_for_batch(
+            runner_script_path=runner_script_path,
+            runner_prompt_path=runner_prompt_path,
+            batch_rows=batch_rows,
+            batch_number=batch_index,
+            total_batches=total_batches,
+            temperature=temperature,
+            top_p=top_p,
+            runner_dry_run=runner_dry_run,
+        )
+        if batch_error:
+            for row in batch_rows:
+                row["llm_error"] = batch_error
+            print(
+                f"[batch {batch_index}/{total_batches}] failed: {batch_error}",
+                flush=True,
+            )
+            print_summary(
+                batch_rows,
+                prefix=f"batch-summary {batch_index}/{total_batches}",
+                label=f"rows {start_index + 1}-{end_index}",
+            )
+            continue
+
+        for row, parsed in zip(batch_rows, parsed_rows, strict=True):
+            row["llm_output_text"] = parsed["llm_output_text"]
+            row["claim_1"] = parsed["claim_1"]
+            row["claim_2"] = parsed["claim_2"]
+            row["claim_3"] = parsed["claim_3"]
+            row["reconstruction_check_output"] = build_reconstruction_check_output(
+                cleaned_response_text=row["cleaned_response_text"],
+                claim_1=row["claim_1"],
+                claim_2=row["claim_2"],
+                claim_3=row["claim_3"],
+            )
+
+        print_summary(
+            batch_rows,
+            prefix=f"batch-summary {batch_index}/{total_batches}",
+            label=f"rows {start_index + 1}-{end_index}",
         )
 
     return prepared_rows
@@ -219,6 +437,10 @@ def write_segmentation_rows(output_path: Path, rows: list[dict[str, str]]) -> No
         "submission_header",
         "cleaned_response_text",
         "llm_output_text",
+        "claim_1",
+        "claim_2",
+        "claim_3",
+        "reconstruction_check_output",
         "llm_error",
     ]
     with output_path.open("w", encoding="utf-8", newline="") as handle:
@@ -241,19 +463,28 @@ def main() -> int:
         raise FileNotFoundError(f"Runner prompt file not found: {runner_prompt_path}")
 
     runner_script_path = resolve_runner_script_path()
-    segmentation_rows = prepare_segmentation_rows(
-        input_path=input_path,
+    print(f"[progress] loading source CSV: {input_path}", flush=True)
+    physical_line_count = count_physical_lines(input_path)
+    segmentation_rows = prepare_cleaned_rows(input_path)
+    print(
+        f"[progress] source file has {physical_line_count} physical line(s); prepared {len(segmentation_rows)} non-empty submission row(s)",
+        flush=True,
+    )
+    segmentation_rows = apply_llm_segmentation(
+        prepared_rows=segmentation_rows,
         runner_script_path=runner_script_path,
         runner_prompt_path=runner_prompt_path,
         temperature=args.temperature,
         top_p=args.top_p,
         runner_dry_run=args.runner_dry_run,
+        batch_size=args.batch_size,
     )
-    for row in segmentation_rows:
-        print(row["cleaned_response_text"])
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"[progress] writing output CSV: {output_path}", flush=True)
     write_segmentation_rows(output_path, segmentation_rows)
+    print_summary(segmentation_rows, prefix="summary", label="run complete")
+    print("[progress] segmentation run complete", flush=True)
 
     return 0
 
