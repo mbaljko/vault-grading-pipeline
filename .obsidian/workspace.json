@@ -252,9 +252,21 @@
               "icon": "lucide-file",
               "title": "pl1B_prompt_stage11_Layer1_SBO_54"
             }
+          },
+          {
+            "id": "0455bb1b149d3c17",
+            "type": "leaf",
+            "state": {
+              "type": "release-notes",
+              "state": {
+                "currentVersion": "1.12.7"
+              },
+              "icon": "lucide-book-up",
+              "title": "Release Notes 1.12.7"
+            }
           }
         ],
-        "currentTab": 16
+        "currentTab": 17
       }
     ],
     "direction": "vertical"
@@ -322,7 +334,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 619.5
+    "width": 430.5
   },
   "right": {
     "id": "9f47bf4168842e60",
@@ -400,13 +412,12 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of pl1B_prompt_stage11_Layer1_SBO_54"
+              "title": "Outline"
             }
           },
           {
@@ -440,7 +451,7 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "8e7760f37e5cbfa1",
+  "active": "0455bb1b149d3c17",
   "lastOpenFiles": [
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
