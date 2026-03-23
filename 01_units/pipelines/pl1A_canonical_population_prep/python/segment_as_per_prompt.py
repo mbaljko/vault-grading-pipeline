@@ -20,6 +20,8 @@ DEFAULT_BATCH_SIZE = 20
 HEADER_BLOCK_RE = re.compile(r"\A\+\+\+(?P<header>[^\n]+)\n\+\+\+\n?", re.DOTALL)
 FOOTER_BLOCK_RE = re.compile(r"\n?\+\+\+\s*\Z", re.DOTALL)
 FENCED_BLOCK_RE = re.compile(r"(?ms)^\s*`{3,4}[^\n`]*\n(?P<body>.*?)\n\s*`{3,4}\s*$")
+ASSIGNMENT_SECTION_RE = re.compile(r"^(AP\d+)([A-Z])_", re.IGNORECASE)
+SECTION_COMPONENT_RE = re.compile(r"Section([A-Z])\d*Response", re.IGNORECASE)
 
 
 def parse_args() -> argparse.Namespace:
@@ -28,6 +30,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--input-path", type=Path, required=True, help="Source file for segmentation input.")
     parser.add_argument("--output-path", type=Path, required=True, help="Destination CSV file for cleaned segmentation rows.")
+    parser.add_argument(
+        "--output-audit-path",
+        type=Path,
+        required=True,
+        help="Destination CSV file for the audit copy of the cleaned segmentation rows.",
+    )
     parser.add_argument(
         "--runner-prompt-path",
         type=Path,
@@ -157,6 +165,37 @@ def strip_outer_wrapping_quotes(text: str) -> str:
     if len(text) >= 2 and text[0] == text[-1] and text[0] in {'"', "'"}:
         return text[1:-1]
     return text
+
+
+def resolve_claim_column_names(input_path: Path) -> list[str]:
+    match = ASSIGNMENT_SECTION_RE.match(input_path.name)
+    if match:
+        section_letter = match.group(2).upper()
+    else:
+        component_match = SECTION_COMPONENT_RE.search(input_path.name)
+        if not component_match:
+            raise ValueError(
+                "Input filename must include either an APXY_ prefix or SectionYResponse component, "
+                f"for example AP2B_... or ...SectionBResponse...: {input_path.name}"
+            )
+        section_letter = component_match.group(1).upper()
+
+    return [
+        f"claim_{section_letter}1",
+        f"claim_{section_letter}2",
+        f"claim_{section_letter}3",
+    ]
+
+
+def wrap_claim_response_text(submission_header: str, claim_text: str) -> str:
+    header_line = submission_header.strip() or "submission_id="
+    claim_body = claim_text.strip()
+    return f"+++{header_line}\n+++\n{claim_body}\n+++\n"
+
+
+def build_component_id_from_claim_column(claim_column_name: str) -> str:
+    suffix = claim_column_name.removeprefix("claim_")
+    return f"Section{suffix}Response"
 
 
 def build_reconstruction_check_output(
@@ -340,12 +379,64 @@ def prepare_cleaned_rows(input_path: Path) -> list[dict[str, str]]:
     return prepared_rows
 
 
+def load_audit_rows(output_audit_path: Path, claim_column_names: list[str]) -> list[dict[str, str]]:
+    if len(claim_column_names) != 3:
+        raise ValueError(f"Expected exactly 3 claim column names, received: {claim_column_names}")
+
+    with output_audit_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if not reader.fieldnames:
+            raise ValueError(f"Audit CSV has no header row: {output_audit_path}")
+
+        required_fieldnames = {
+            "submission_id",
+            "submission_header",
+            "cleaned_response_text",
+            "llm_output_text",
+            "reconstruction_check_output",
+            "llm_error",
+            *claim_column_names,
+        }
+        missing_fieldnames = required_fieldnames.difference(reader.fieldnames)
+        if missing_fieldnames:
+            missing_fields = ", ".join(sorted(missing_fieldnames))
+            raise ValueError(
+                f"Audit CSV is missing required field(s) [{missing_fields}]: {output_audit_path}"
+            )
+
+        rows: list[dict[str, str]] = []
+        for raw_row in reader:
+            normalized_row = {key.strip(): (value or "") for key, value in raw_row.items() if key is not None}
+            if not any(value.strip() for value in normalized_row.values()):
+                continue
+            rows.append(
+                {
+                    "submission_id": normalized_row.get("submission_id", ""),
+                    "submission_header": normalized_row.get("submission_header", ""),
+                    "cleaned_response_text": normalized_row.get("cleaned_response_text", ""),
+                    "llm_output_text": normalized_row.get("llm_output_text", ""),
+                    "claim_1": normalized_row.get(claim_column_names[0], ""),
+                    "claim_2": normalized_row.get(claim_column_names[1], ""),
+                    "claim_3": normalized_row.get(claim_column_names[2], ""),
+                    "reconstruction_check_output": normalized_row.get("reconstruction_check_output", ""),
+                    "llm_error": normalized_row.get("llm_error", ""),
+                }
+            )
+
+    return rows
+
+
 def count_physical_lines(input_path: Path) -> int:
     with input_path.open("r", encoding="utf-8-sig") as handle:
         return sum(1 for _ in handle)
 
 
-def print_summary(rows: list[dict[str, str]], prefix: str, label: str) -> None:
+def print_summary(
+    rows: list[dict[str, str]],
+    prefix: str,
+    label: str,
+    claim_column_names: list[str],
+) -> None:
     reconstruction_counter = Counter(
         row.get("reconstruction_check_output", "") or "<empty>" for row in rows
     )
@@ -354,6 +445,7 @@ def print_summary(rows: list[dict[str, str]], prefix: str, label: str) -> None:
     print(f"[{prefix}] {label}", flush=True)
     print(f"[{prefix}] total_rows={len(rows)}", flush=True)
     print(f"[{prefix}] llm_error_rows={llm_error_count}", flush=True)
+    print(f"[{prefix}] claim_columns={', '.join(claim_column_names)}", flush=True)
 
     for status, count in sorted(reconstruction_counter.items()):
         print(f"[{prefix}] reconstruction[{status}]={count}", flush=True)
@@ -367,6 +459,7 @@ def apply_llm_segmentation(
     top_p: float,
     runner_dry_run: bool,
     batch_size: int,
+    claim_column_names: list[str],
 ) -> list[dict[str, str]]:
     if batch_size <= 0:
         raise ValueError(f"--batch-size must be a positive integer, received: {batch_size}")
@@ -407,6 +500,7 @@ def apply_llm_segmentation(
                 batch_rows,
                 prefix=f"batch-summary {batch_index}/{total_batches}",
                 label=f"rows {start_index + 1}-{end_index}",
+                claim_column_names=claim_column_names,
             )
             continue
 
@@ -426,20 +520,26 @@ def apply_llm_segmentation(
             batch_rows,
             prefix=f"batch-summary {batch_index}/{total_batches}",
             label=f"rows {start_index + 1}-{end_index}",
+            claim_column_names=claim_column_names,
         )
 
     return prepared_rows
 
 
-def write_segmentation_rows(output_path: Path, rows: list[dict[str, str]]) -> None:
+def write_segmentation_rows(
+    output_path: Path,
+    rows: list[dict[str, str]],
+    claim_column_names: list[str],
+) -> None:
+    if len(claim_column_names) != 3:
+        raise ValueError(f"Expected exactly 3 claim column names, received: {claim_column_names}")
+
     fieldnames = [
         "submission_id",
         "submission_header",
         "cleaned_response_text",
         "llm_output_text",
-        "claim_1",
-        "claim_2",
-        "claim_3",
+        *claim_column_names,
         "reconstruction_check_output",
         "llm_error",
     ]
@@ -447,7 +547,49 @@ def write_segmentation_rows(output_path: Path, rows: list[dict[str, str]]) -> No
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         for row in rows:
-            writer.writerow({field: row.get(field, "") for field in fieldnames})
+            writer.writerow(
+                {
+                    "submission_id": row.get("submission_id", ""),
+                    "submission_header": row.get("submission_header", ""),
+                    "cleaned_response_text": row.get("cleaned_response_text", ""),
+                    "llm_output_text": row.get("llm_output_text", ""),
+                    claim_column_names[0]: row.get("claim_1", ""),
+                    claim_column_names[1]: row.get("claim_2", ""),
+                    claim_column_names[2]: row.get("claim_3", ""),
+                    "reconstruction_check_output": row.get("reconstruction_check_output", ""),
+                    "llm_error": row.get("llm_error", ""),
+                }
+            )
+
+
+def write_claim_expanded_rows(
+    output_path: Path,
+    rows: list[dict[str, str]],
+    claim_column_names: list[str],
+) -> None:
+    if len(claim_column_names) != 3:
+        raise ValueError(f"Expected exactly 3 claim column names, received: {claim_column_names}")
+
+    claim_keys = ["claim_1", "claim_2", "claim_3"]
+    fieldnames = ["submission_id", "component_id", "response_text"]
+
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            submission_id = row.get("submission_id", "")
+            submission_header = row.get("submission_header", "")
+            for claim_key, claim_column_name in zip(claim_keys, claim_column_names, strict=True):
+                writer.writerow(
+                    {
+                        "submission_id": submission_id,
+                        "component_id": build_component_id_from_claim_column(claim_column_name),
+                        "response_text": wrap_claim_response_text(
+                            submission_header=submission_header,
+                            claim_text=row.get(claim_key, ""),
+                        ),
+                    }
+                )
 
 
 def main() -> int:
@@ -455,6 +597,7 @@ def main() -> int:
 
     input_path = args.input_path.resolve()
     output_path = args.output_path.resolve()
+    output_audit_path = args.output_audit_path.resolve()
     runner_prompt_path = args.runner_prompt_path.resolve()
 
     if not input_path.exists():
@@ -462,28 +605,51 @@ def main() -> int:
     if not runner_prompt_path.exists():
         raise FileNotFoundError(f"Runner prompt file not found: {runner_prompt_path}")
 
+    claim_column_names = resolve_claim_column_names(output_path)
     runner_script_path = resolve_runner_script_path()
-    print(f"[progress] loading source CSV: {input_path}", flush=True)
-    physical_line_count = count_physical_lines(input_path)
-    segmentation_rows = prepare_cleaned_rows(input_path)
-    print(
-        f"[progress] source file has {physical_line_count} physical line(s); prepared {len(segmentation_rows)} non-empty submission row(s)",
-        flush=True,
-    )
-    segmentation_rows = apply_llm_segmentation(
-        prepared_rows=segmentation_rows,
-        runner_script_path=runner_script_path,
-        runner_prompt_path=runner_prompt_path,
-        temperature=args.temperature,
-        top_p=args.top_p,
-        runner_dry_run=args.runner_dry_run,
-        batch_size=args.batch_size,
-    )
+    print(f"[progress] resolved claim output columns: {', '.join(claim_column_names)}", flush=True)
+
+    if output_audit_path.exists():
+        print(f"[progress] found audit CSV cache: {output_audit_path}", flush=True)
+        segmentation_rows = load_audit_rows(output_audit_path, claim_column_names)
+        print(
+            f"[progress] loaded {len(segmentation_rows)} cached audit row(s); skipping LLM runner",
+            flush=True,
+        )
+    else:
+        print(f"[progress] audit CSV not found; loading source CSV: {input_path}", flush=True)
+        physical_line_count = count_physical_lines(input_path)
+        segmentation_rows = prepare_cleaned_rows(input_path)
+        print(
+            f"[progress] source file has {physical_line_count} physical line(s); prepared {len(segmentation_rows)} non-empty submission row(s)",
+            flush=True,
+        )
+        segmentation_rows = apply_llm_segmentation(
+            prepared_rows=segmentation_rows,
+            runner_script_path=runner_script_path,
+            runner_prompt_path=runner_prompt_path,
+            temperature=args.temperature,
+            top_p=args.top_p,
+            runner_dry_run=args.runner_dry_run,
+            batch_size=args.batch_size,
+            claim_column_names=claim_column_names,
+        )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_audit_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"[progress] writing output CSV: {output_path}", flush=True)
-    write_segmentation_rows(output_path, segmentation_rows)
-    print_summary(segmentation_rows, prefix="summary", label="run complete")
+    write_claim_expanded_rows(output_path, segmentation_rows, claim_column_names)
+    if not output_audit_path.exists():
+        print(f"[progress] writing audit CSV: {output_audit_path}", flush=True)
+        write_segmentation_rows(output_audit_path, segmentation_rows, claim_column_names)
+    else:
+        print(f"[progress] leaving existing audit CSV in place: {output_audit_path}", flush=True)
+    print_summary(
+        segmentation_rows,
+        prefix="summary",
+        label="run complete",
+        claim_column_names=claim_column_names,
+    )
     print("[progress] segmentation run complete", flush=True)
 
     return 0
