@@ -456,8 +456,9 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "00821057bf5dc0c3",
+  "active": "e5174a9fca7b05c1",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/python/generate_rubric_and_manifest_from_indicator_registry.py",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11+12merged_Layer1.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
@@ -490,7 +491,6 @@
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS 1 page.md",
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS 1 page 1.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_OverlapReport_singleComponent.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/prev_ver/pl1B_prompt_stage13_Layer1_Generate_OverlapReport_singleComponent - triary.md",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/run-itp-report-for-manifest.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/run-itp-report-for-manifest.py",
     "01_units/apps/prompt_runners/__pycache__/invoke_chatgpt_API.cpython-313.pyc"
