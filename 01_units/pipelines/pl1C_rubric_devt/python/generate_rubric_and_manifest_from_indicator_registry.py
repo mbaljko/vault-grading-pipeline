@@ -23,8 +23,6 @@ from pathlib import Path
 
 REQUIRED_REGISTRY_COLUMNS = {
     "indicator_id",
-    "sbo_identifier",
-    "sbo_identifier_shortid",
     "assessment_id",
     "component_id",
     "sbo_short_description",
@@ -138,10 +136,10 @@ def load_indicator_rows(registry_path: Path, include_inactive: bool) -> list[Ind
         rows.append(
             IndicatorRow(
                 indicator_id=record["indicator_id"],
-                sbo_identifier=record["sbo_identifier"],
-                sbo_identifier_shortid=record["sbo_identifier_shortid"],
                 assessment_id=record["assessment_id"],
                 component_id=record["component_id"],
+                sbo_identifier=resolve_sbo_identifier(record),
+                sbo_identifier_shortid=resolve_sbo_identifier_shortid(record),
                 sbo_short_description=record["sbo_short_description"],
                 indicator_definition=record["indicator_definition"],
                 assessment_guidance=record["assessment_guidance"],
@@ -160,6 +158,32 @@ def load_indicator_rows(registry_path: Path, include_inactive: bool) -> list[Ind
         raise ValueError(f"Expected one assessment_id in registry, found: {sorted(assessment_ids)}")
 
     return sorted(rows, key=indicator_sort_key)
+
+
+def resolve_sbo_identifier(record: dict[str, str]) -> str:
+    explicit_value = record.get("sbo_identifier", "").strip()
+    if explicit_value:
+        return explicit_value
+
+    assessment_id = record["assessment_id"].strip()
+    component_id = record["component_id"].strip()
+    indicator_id = record["indicator_id"].strip()
+    component_shortid = derive_component_shortid(component_id)
+    return f"I_{assessment_id}_{component_shortid}_{indicator_id}"
+
+
+def resolve_sbo_identifier_shortid(record: dict[str, str]) -> str:
+    explicit_value = record.get("sbo_identifier_shortid", "").strip()
+    if explicit_value:
+        return explicit_value
+    return record["indicator_id"].strip()
+
+
+def derive_component_shortid(component_id: str) -> str:
+    shortid = component_id.strip()
+    shortid = shortid.replace("Section", "Sec")
+    shortid = shortid.replace("Response", "")
+    return shortid
 
 
 def indicator_sort_key(row: IndicatorRow) -> tuple[str, int, str]:
