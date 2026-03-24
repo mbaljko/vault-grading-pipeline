@@ -30,8 +30,17 @@ REQUIRED_REGISTRY_COLUMNS = {
     "assessment_guidance",
     "evaluation_notes",
 }
+BASE_TABLE_REQUIRED_COLUMNS = {
+    "template_id",
+    "local_slot",
+    "sbo_short_description",
+    "indicator_definition",
+    "assessment_guidance",
+    "evaluation_notes",
+}
 VERSION_TOKEN_RE = re.compile(r"_(v(?:_i)?\d+)\.md$", re.IGNORECASE)
 SHORTID_NUMBER_RE = re.compile(r"(\d+)")
+HEADING_RE = re.compile(r"^\s*#{1,6}\s+(?P<title>.+?)\s*$")
 
 
 @dataclass(frozen=True)
@@ -104,35 +113,89 @@ def is_separator_row(cells: list[str]) -> bool:
     return all(re.fullmatch(r":?-{3,}:?", cell) for cell in compact)
 
 
-def load_indicator_rows(registry_path: Path, include_inactive: bool) -> list[IndicatorRow]:
+def collect_markdown_tables(registry_path: Path) -> list[dict[str, object]]:
     lines = registry_path.read_text(encoding="utf-8").splitlines()
+    tables: list[dict[str, object]] = []
+    current_heading = ""
+    index = 0
 
-    header_cells: list[str] | None = None
-    rows: list[IndicatorRow] = []
+    while index < len(lines):
+        line = lines[index]
+        heading_match = HEADING_RE.match(line)
+        if heading_match:
+            current_heading = heading_match.group("title").strip().lower()
+            index += 1
+            continue
 
-    for line in lines:
         if "|" not in line:
-            continue
-        cells = parse_markdown_row(line)
-        if not cells:
+            index += 1
             continue
 
-        if header_cells is None:
-            lowered = {cell.strip().lower() for cell in cells}
-            if REQUIRED_REGISTRY_COLUMNS.issubset(lowered):
-                header_cells = [cell.strip().lower() for cell in cells]
+        header_cells = parse_markdown_row(line)
+        if not header_cells or index + 1 >= len(lines) or "|" not in lines[index + 1]:
+            index += 1
             continue
 
-        if is_separator_row(cells):
-            continue
-        if len(cells) != len(header_cells):
+        separator_cells = parse_markdown_row(lines[index + 1])
+        if len(separator_cells) != len(header_cells) or not is_separator_row(separator_cells):
+            index += 1
             continue
 
-        record = dict(zip(header_cells, cells, strict=True))
+        headers = [cell.strip().lower() for cell in header_cells]
+        row_records: list[dict[str, str]] = []
+        index += 2
+        while index < len(lines) and "|" in lines[index]:
+            cells = parse_markdown_row(lines[index])
+            if len(cells) != len(headers):
+                break
+            row_records.append(dict(zip(headers, cells, strict=True)))
+            index += 1
+
+        tables.append(
+            {
+                "heading": current_heading,
+                "headers": headers,
+                "rows": row_records,
+            }
+        )
+
+    return tables
+
+
+def find_table_by_heading(tables: list[dict[str, object]], heading_text: str) -> dict[str, object] | None:
+    normalized_heading = heading_text.strip().lower()
+    for table in tables:
+        if str(table["heading"]).strip().lower() == normalized_heading:
+            return table
+    return None
+
+
+def extract_registry_metadata(tables: list[dict[str, object]]) -> dict[str, str]:
+    metadata_table = find_table_by_heading(tables, "registry metadata")
+    if metadata_table is None:
+        return {}
+
+    headers = list(metadata_table["headers"])
+    if headers != ["field", "value"]:
+        return {}
+
+    metadata: dict[str, str] = {}
+    for row in metadata_table["rows"]:
+        field_name = row.get("field", "").strip()
+        if field_name:
+            metadata[field_name] = row.get("value", "").strip()
+    return metadata
+
+
+def build_indicator_rows_from_explicit_table(
+    table_rows: list[dict[str, str]],
+    include_inactive: bool,
+) -> list[IndicatorRow]:
+    rows: list[IndicatorRow] = []
+    for record in table_rows:
         status = record.get("status", "").strip().lower()
         if not include_inactive and status and status != "active":
             continue
-
         rows.append(
             IndicatorRow(
                 indicator_id=record["indicator_id"],
@@ -147,9 +210,116 @@ def load_indicator_rows(registry_path: Path, include_inactive: bool) -> list[Ind
                 status=record.get("status", ""),
             )
         )
+    return rows
 
-    if header_cells is None:
-        raise ValueError(f"Could not locate a valid indicator registry table in: {registry_path}")
+
+def build_indicator_rows_from_base_and_reuse_tables(
+    base_rows: list[dict[str, str]],
+    reuse_rows: list[dict[str, str]],
+    registry_metadata: dict[str, str],
+    include_inactive: bool,
+) -> list[IndicatorRow]:
+    base_by_template_id = {
+        row.get("template_id", "").strip(): row for row in base_rows if row.get("template_id", "").strip()
+    }
+    base_by_local_slot = {
+        row.get("local_slot", "").strip(): row for row in base_rows if row.get("local_slot", "").strip()
+    }
+
+    rows: list[IndicatorRow] = []
+    for reuse_row in reuse_rows:
+        template_id = reuse_row.get("template_id", "").strip()
+        local_slot = reuse_row.get("local_slot", "").strip()
+        base_row = None
+        if template_id:
+            base_row = base_by_template_id.get(template_id)
+        if base_row is None and local_slot:
+            base_row = base_by_local_slot.get(local_slot)
+        if base_row is None:
+            raise ValueError(
+                "Reuse Rule Table row could not be joined to Base Table. "
+                f"template_id={template_id or '<empty>'} local_slot={local_slot or '<empty>'}"
+            )
+
+        assessment_id = (
+            reuse_row.get("assessment_id", "").strip()
+            or registry_metadata.get("assessment_id", "").strip()
+        )
+        if not assessment_id:
+            raise ValueError("Assessment ID is required in either registry metadata or the Reuse Rule Table.")
+
+        merged_record = dict(base_row)
+        merged_record.update(reuse_row)
+        merged_record["assessment_id"] = assessment_id
+
+        effective_status = (
+            reuse_row.get("status", "").strip()
+            or base_row.get("status", "").strip()
+        )
+        if not include_inactive and effective_status and effective_status.lower() != "active":
+            continue
+
+        rows.append(
+            IndicatorRow(
+                indicator_id=merged_record["indicator_id"],
+                assessment_id=assessment_id,
+                component_id=merged_record["component_id"],
+                sbo_identifier=resolve_sbo_identifier(merged_record),
+                sbo_identifier_shortid=resolve_sbo_identifier_shortid(merged_record),
+                sbo_short_description=merged_record["sbo_short_description"],
+                indicator_definition=merged_record["indicator_definition"],
+                assessment_guidance=merged_record["assessment_guidance"],
+                evaluation_notes=merged_record["evaluation_notes"],
+                status=effective_status,
+            )
+        )
+
+    return rows
+
+
+def load_indicator_rows(registry_path: Path, include_inactive: bool) -> list[IndicatorRow]:
+    tables = collect_markdown_tables(registry_path)
+    registry_metadata = extract_registry_metadata(tables)
+
+    explicit_table: dict[str, object] | None = None
+    base_table = find_table_by_heading(tables, "base table")
+    reuse_table = find_table_by_heading(tables, "reuse rule table")
+
+    for table in tables:
+        headers = set(table["headers"])
+        if REQUIRED_REGISTRY_COLUMNS.issubset(headers):
+            explicit_table = table
+            break
+
+    rows: list[IndicatorRow] = []
+    if base_table is not None and reuse_table is not None:
+        base_headers = set(base_table["headers"])
+        reuse_headers = set(reuse_table["headers"])
+        if not BASE_TABLE_REQUIRED_COLUMNS.issubset(base_headers):
+            missing_columns = sorted(BASE_TABLE_REQUIRED_COLUMNS.difference(base_headers))
+            raise ValueError(f"Base Table is missing required column(s): {missing_columns}")
+        if not {"indicator_id", "component_id"}.issubset(reuse_headers):
+            raise ValueError("Reuse Rule Table must include at least indicator_id and component_id columns.")
+        if "template_id" not in reuse_headers and "local_slot" not in reuse_headers:
+            raise ValueError("Reuse Rule Table must include template_id or local_slot for Base Table joins.")
+
+        rows = build_indicator_rows_from_base_and_reuse_tables(
+            base_rows=list(base_table["rows"]),
+            reuse_rows=list(reuse_table["rows"]),
+            registry_metadata=registry_metadata,
+            include_inactive=include_inactive,
+        )
+    elif explicit_table is not None:
+        rows = build_indicator_rows_from_explicit_table(
+            table_rows=list(explicit_table["rows"]),
+            include_inactive=include_inactive,
+        )
+    else:
+        raise ValueError(
+            "Could not locate a usable indicator source in the registry. Expected either a flat indicator table "
+            "or a Base Table plus Reuse Rule Table."
+        )
+
     if not rows:
         raise ValueError(f"No indicator rows were loaded from registry: {registry_path}")
 
