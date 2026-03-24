@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 import re
@@ -25,6 +26,7 @@ FOOTER_BLOCK_RE = re.compile(r"\n?\+\+\+\s*\Z", re.DOTALL)
 FENCED_BLOCK_RE = re.compile(r"(?ms)^\s*`{3,4}[^\n`]*\n(?P<body>.*?)\n\s*`{3,4}\s*$")
 ASSIGNMENT_SECTION_RE = re.compile(r"^(AP\d+)([A-Z])_", re.IGNORECASE)
 SECTION_COMPONENT_RE = re.compile(r"Section([A-Z])\d*Response", re.IGNORECASE)
+SUBMISSION_TAG_RE = re.compile(r'(?m)^<submission index="')
 
 
 def parse_args() -> argparse.Namespace:
@@ -319,6 +321,14 @@ def parse_batch_llm_output(extracted_output_text: str, expected_rows: int) -> li
     return parsed_rows
 
 
+def compute_text_sha256(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def count_submission_blocks(batch_input_text: str) -> int:
+    return len(SUBMISSION_TAG_RE.findall(batch_input_text))
+
+
 def parse_rerun_batch_numbers(rerun_batch: list[int], rerun_batches: str) -> set[int]:
     batch_numbers: set[int] = set()
     for batch_number in rerun_batch:
@@ -363,6 +373,7 @@ def build_batch_cache_paths(batch_cache_dir: Path, batch_spec: dict[str, Any]) -
     stem = str(batch_spec["stem"])
     return {
         "input": batch_cache_dir / f"{stem}_input.txt",
+        "input_meta_json": batch_cache_dir / f"{stem}_input_meta.json",
         "output_json": batch_cache_dir / f"{stem}_output.json",
         "audit_csv": batch_cache_dir / f"{stem}_audit.csv",
         "status_json": batch_cache_dir / f"{stem}_status.json",
@@ -375,6 +386,27 @@ def load_batch_status(status_path: Path) -> dict[str, Any] | None:
     return json.loads(status_path.read_text(encoding="utf-8"))
 
 
+def load_batch_input_metadata(input_meta_path: Path) -> dict[str, Any] | None:
+    if not input_meta_path.exists():
+        return None
+    return json.loads(input_meta_path.read_text(encoding="utf-8"))
+
+
+def write_batch_input_metadata(
+    input_meta_path: Path,
+    batch_spec: dict[str, Any],
+    source_input_sha256: str,
+) -> None:
+    payload = {
+        "batch_number": batch_spec["batch_number"],
+        "start_row": batch_spec["start_row"],
+        "end_row": batch_spec["end_row"],
+        "submission_ids": [row.get("submission_id", "") for row in batch_spec["rows"]],
+        "source_input_sha256": source_input_sha256,
+    }
+    input_meta_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
 def write_batch_status(
     status_path: Path,
     batch_spec: dict[str, Any],
@@ -382,6 +414,8 @@ def write_batch_status(
     status: str,
     elapsed_seconds: float,
     error_message: str = "",
+    input_sha256: str = "",
+    source_input_sha256: str = "",
 ) -> None:
     payload = {
         "batch_number": batch_spec["batch_number"],
@@ -392,8 +426,97 @@ def write_batch_status(
         "status": status,
         "elapsed_seconds": round(elapsed_seconds, 4),
         "error_message": error_message,
+        "input_sha256": input_sha256,
+        "source_input_sha256": source_input_sha256,
     }
     status_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def has_successful_current_cache(
+    batch_paths: dict[str, Path],
+    status_payload: dict[str, Any] | None,
+    current_input_sha256: str,
+) -> bool:
+    return (
+        status_payload is not None
+        and status_payload.get("status") == "success"
+        and batch_paths["audit_csv"].exists()
+        and status_payload.get("input_sha256", "") == current_input_sha256
+    )
+
+
+def synchronize_batch_input_files(
+    batch_specs: list[dict[str, Any]],
+    batch_cache_dir: Path,
+    claim_column_names: list[str],
+) -> dict[int, dict[str, Any]]:
+    batch_input_states: dict[int, dict[str, Any]] = {}
+
+    for batch_spec in batch_specs:
+        batch_paths = build_batch_cache_paths(batch_cache_dir, batch_spec)
+        canonical_input_text = build_batch_prompt_input(list(batch_spec["rows"]))
+        canonical_input_sha256 = compute_text_sha256(canonical_input_text)
+        input_metadata = load_batch_input_metadata(batch_paths["input_meta_json"])
+        status_payload = load_batch_status(batch_paths["status_json"])
+        change_reasons: list[str] = []
+
+        if not batch_paths["input"].exists():
+            batch_paths["input"].write_text(canonical_input_text, encoding="utf-8")
+            change_reasons.append("created_from_source")
+        elif input_metadata is None or input_metadata.get("source_input_sha256") != canonical_input_sha256:
+            existing_input_text = batch_paths["input"].read_text(encoding="utf-8")
+            if existing_input_text != canonical_input_text:
+                batch_paths["input"].write_text(canonical_input_text, encoding="utf-8")
+                change_reasons.append("refreshed_from_source")
+            else:
+                change_reasons.append("refreshed_source_metadata")
+
+        current_input_text = batch_paths["input"].read_text(encoding="utf-8")
+        current_input_sha256 = compute_text_sha256(current_input_text)
+        write_batch_input_metadata(
+            batch_paths["input_meta_json"],
+            batch_spec=batch_spec,
+            source_input_sha256=canonical_input_sha256,
+        )
+
+        if status_payload is not None and (
+            not status_payload.get("input_sha256") or not status_payload.get("source_input_sha256")
+        ):
+            write_batch_status(
+                batch_paths["status_json"],
+                batch_spec=batch_spec,
+                claim_column_names=claim_column_names,
+                status=status_payload.get("status", "missing"),
+                elapsed_seconds=float(status_payload.get("elapsed_seconds", 0.0) or 0.0),
+                error_message=status_payload.get("error_message", ""),
+                input_sha256=current_input_sha256,
+                source_input_sha256=canonical_input_sha256,
+            )
+            status_payload = load_batch_status(batch_paths["status_json"])
+
+        if (
+            status_payload is not None
+            and status_payload.get("input_sha256")
+            and status_payload.get("input_sha256") != current_input_sha256
+            and not any(reason.startswith("refreshed_from_source") or reason == "created_from_source" for reason in change_reasons)
+        ):
+            change_reasons.append("edited_batch_input")
+
+        if change_reasons:
+            print(
+                f"[batch-input {batch_spec['batch_number']}/{len(batch_specs)}] "
+                f"{', '.join(change_reasons)}: {batch_paths['input']}",
+                flush=True,
+            )
+
+        batch_input_states[int(batch_spec["batch_number"])] = {
+            "source_input_sha256": canonical_input_sha256,
+            "current_input_sha256": current_input_sha256,
+            "changed": any(reason != "refreshed_source_metadata" for reason in change_reasons),
+            "change_reasons": list(change_reasons),
+        }
+
+    return batch_input_states
 
 
 def summarize_batch_rows(batch_rows: list[dict[str, str]]) -> tuple[int, Counter[str]]:
@@ -623,6 +746,7 @@ def print_cached_batch_summary(
 def should_run_batch(
     batch_spec: dict[str, Any],
     batch_paths: dict[str, Path],
+    batch_input_state: dict[str, Any],
     selected_batches: set[int],
     rerun_failed_batches: bool,
     rebuild_from_batch_cache: bool,
@@ -633,7 +757,14 @@ def should_run_batch(
     batch_status = load_batch_status(batch_paths["status_json"])
     batch_number = int(batch_spec["batch_number"])
     status_value = batch_status.get("status") if batch_status else ""
-    has_success_cache = status_value == "success" and batch_paths["audit_csv"].exists()
+    has_success_cache = has_successful_current_cache(
+        batch_paths,
+        batch_status,
+        current_input_sha256=batch_input_state["current_input_sha256"],
+    )
+
+    if batch_input_state["changed"]:
+        return True
 
     if selected_batches:
         return batch_number in selected_batches
@@ -654,11 +785,23 @@ def run_one_batch(
     temperature: float,
     top_p: float,
     runner_dry_run: bool,
-) -> tuple[list[dict[str, str]], str, float]:
+) -> tuple[list[dict[str, str]], str, float, str]:
     batch_rows = list(batch_spec["rows"])
     batch_start_time = time.perf_counter()
-    prompt_input_text = build_batch_prompt_input(batch_rows)
-    batch_paths["input"].write_text(prompt_input_text, encoding="utf-8")
+    batch_input_text = batch_paths["input"].read_text(encoding="utf-8")
+    batch_input_sha256 = compute_text_sha256(batch_input_text)
+    submission_block_count = count_submission_blocks(batch_input_text)
+    if submission_block_count != len(batch_rows):
+        elapsed_seconds = time.perf_counter() - batch_start_time
+        return (
+            [],
+            (
+                f"Batch input contains {submission_block_count} submission block(s); expected {len(batch_rows)}. "
+                f"Edit {batch_paths['input']} so it preserves one <submission ...> block per source row."
+            ),
+            elapsed_seconds,
+            batch_input_sha256,
+        )
 
     command = [
         sys.executable,
@@ -689,7 +832,7 @@ def run_one_batch(
     elapsed_seconds = time.perf_counter() - batch_start_time
     if completed.returncode != 0:
         stderr_text = completed.stderr.strip() or completed.stdout.strip()
-        return [], stderr_text or f"Runner failed for batch {batch_spec['batch_number']}.", elapsed_seconds
+        return [], stderr_text or f"Runner failed for batch {batch_spec['batch_number']}.", elapsed_seconds, batch_input_sha256
 
     if runner_dry_run:
         print(
@@ -709,22 +852,22 @@ def run_one_batch(
                 "llm_error": "",
             }
             for row in batch_rows
-        ], "", elapsed_seconds
+        ], "", elapsed_seconds, batch_input_sha256
 
     if not batch_paths["output_json"].exists():
-        return [], f"Runner output file was not created: {batch_paths['output_json']}", elapsed_seconds
+        return [], f"Runner output file was not created: {batch_paths['output_json']}", elapsed_seconds, batch_input_sha256
 
     payload = json.loads(batch_paths["output_json"].read_text(encoding="utf-8"))
     extracted_output_text = payload.get("extracted_output_text", "")
     if not isinstance(extracted_output_text, str):
         return [], (
             f"Runner output payload is missing string extracted_output_text for batch {batch_spec['batch_number']}."
-        ), elapsed_seconds
+        ), elapsed_seconds, batch_input_sha256
 
     try:
         parsed_rows = parse_batch_llm_output(extracted_output_text, expected_rows=len(batch_rows))
     except ValueError as exc:
-        return [], str(exc), elapsed_seconds
+        return [], str(exc), elapsed_seconds, batch_input_sha256
 
     for row, parsed in zip(batch_rows, parsed_rows, strict=True):
         row["llm_output_text"] = parsed["llm_output_text"]
@@ -743,7 +886,7 @@ def run_one_batch(
         flush=True,
     )
     write_segmentation_rows(batch_paths["audit_csv"], batch_rows, claim_column_names)
-    return batch_rows, "", elapsed_seconds
+    return batch_rows, "", elapsed_seconds, batch_input_sha256
 
 
 def merge_batch_audit_rows(
@@ -770,15 +913,21 @@ def merge_batch_audit_rows(
 def collect_unavailable_batches(
     batch_specs: list[dict[str, Any]],
     batch_cache_dir: Path,
+    batch_input_states: dict[int, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     unavailable_batches: list[dict[str, Any]] = []
     for batch_spec in batch_specs:
         batch_paths = build_batch_cache_paths(batch_cache_dir, batch_spec)
         status_payload = load_batch_status(batch_paths["status_json"])
+        batch_input_state = batch_input_states[int(batch_spec["batch_number"])]
         status_value = status_payload.get("status") if status_payload else "missing"
         error_message = status_payload.get("error_message", "") if status_payload else ""
         has_audit_csv = batch_paths["audit_csv"].exists()
-        if status_value == "success" and has_audit_csv:
+        if has_successful_current_cache(
+            batch_paths,
+            status_payload,
+            current_input_sha256=batch_input_state["current_input_sha256"],
+        ):
             continue
         unavailable_batches.append(
             {
@@ -788,6 +937,8 @@ def collect_unavailable_batches(
                 "status": status_value,
                 "has_audit_csv": has_audit_csv,
                 "error_message": error_message,
+                "input_changed": batch_input_state["changed"],
+                "change_reasons": batch_input_state["change_reasons"],
             }
         )
     return unavailable_batches
@@ -805,6 +956,8 @@ def format_unavailable_batches_error(unavailable_batches: list[dict[str, Any]]) 
             f"- batch {item['batch_number']} rows {item['start_row']}-{item['end_row']} "
             f"status={item['status']} audit_csv={'present' if item['has_audit_csv'] else 'missing'}"
         )
+        if item["input_changed"]:
+            line += f" input_changed={'|'.join(item['change_reasons'])}"
         if item["error_message"]:
             line += f" error={item['error_message']}"
         summary_lines.append(line)
@@ -830,6 +983,12 @@ def seed_batch_cache_from_whole_audit(
         batch_paths = build_batch_cache_paths(batch_cache_dir, batch_spec)
         prompt_input_text = build_batch_prompt_input(list(batch_spec["rows"]))
         batch_paths["input"].write_text(prompt_input_text, encoding="utf-8")
+        source_input_sha256 = compute_text_sha256(prompt_input_text)
+        write_batch_input_metadata(
+            batch_paths["input_meta_json"],
+            batch_spec=batch_spec,
+            source_input_sha256=source_input_sha256,
+        )
         write_segmentation_rows(batch_paths["audit_csv"], batch_rows, claim_column_names)
         write_batch_status(
             batch_paths["status_json"],
@@ -838,6 +997,8 @@ def seed_batch_cache_from_whole_audit(
             status="success",
             elapsed_seconds=0.0,
             error_message="Seeded from whole-audit cache.",
+            input_sha256=source_input_sha256,
+            source_input_sha256=source_input_sha256,
         )
 
 
@@ -870,17 +1031,25 @@ def execute_batch_cache_workflow(
         flush=True,
     )
 
+    batch_input_states = synchronize_batch_input_files(
+        batch_specs=batch_specs,
+        batch_cache_dir=batch_cache_dir,
+        claim_column_names=claim_column_names,
+    )
+
     for batch_spec in batch_specs:
         batch_paths = build_batch_cache_paths(batch_cache_dir, batch_spec)
         batch_number = int(batch_spec["batch_number"])
+        batch_input_state = batch_input_states[batch_number]
         if should_run_batch(
             batch_spec=batch_spec,
             batch_paths=batch_paths,
+            batch_input_state=batch_input_state,
             selected_batches=selected_batches,
             rerun_failed_batches=rerun_failed_batches,
             rebuild_from_batch_cache=rebuild_from_batch_cache,
         ):
-            batch_rows, batch_error, elapsed_seconds = run_one_batch(
+            batch_rows, batch_error, elapsed_seconds, batch_input_sha256 = run_one_batch(
                 batch_spec=batch_spec,
                 batch_paths=batch_paths,
                 total_batches=total_batches,
@@ -899,6 +1068,8 @@ def execute_batch_cache_workflow(
                     status="failed",
                     elapsed_seconds=elapsed_seconds,
                     error_message=batch_error,
+                    input_sha256=batch_input_sha256,
+                    source_input_sha256=batch_input_state["source_input_sha256"],
                 )
                 for row in batch_spec["rows"]:
                     row["llm_error"] = batch_error
@@ -922,6 +1093,8 @@ def execute_batch_cache_workflow(
                 claim_column_names=claim_column_names,
                 status="success",
                 elapsed_seconds=elapsed_seconds,
+                input_sha256=batch_input_sha256,
+                source_input_sha256=batch_input_state["source_input_sha256"],
             )
             print_summary(
                 batch_rows,
@@ -933,7 +1106,11 @@ def execute_batch_cache_workflow(
             continue
 
         status_payload = load_batch_status(batch_paths["status_json"])
-        if status_payload is None or status_payload.get("status") != "success" or not batch_paths["audit_csv"].exists():
+        if not has_successful_current_cache(
+            batch_paths,
+            status_payload,
+            current_input_sha256=batch_input_state["current_input_sha256"],
+        ):
             print(
                 f"[batch {batch_number}/{total_batches}] no successful cache available for rows {batch_spec['start_row']}-{batch_spec['end_row']}",
                 flush=True,
@@ -948,7 +1125,7 @@ def execute_batch_cache_workflow(
             total_batches=total_batches,
         )
 
-    unavailable_batches = collect_unavailable_batches(batch_specs, batch_cache_dir)
+    unavailable_batches = collect_unavailable_batches(batch_specs, batch_cache_dir, batch_input_states)
     if unavailable_batches:
         raise RuntimeError(format_unavailable_batches_error(unavailable_batches))
 
