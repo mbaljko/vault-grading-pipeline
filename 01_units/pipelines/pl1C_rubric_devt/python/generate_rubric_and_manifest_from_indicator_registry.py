@@ -18,6 +18,7 @@ import argparse
 import re
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -528,6 +529,20 @@ def render_markdown_table(headers: list[str], rows: list[list[str]]) -> str:
     return "\n".join([header_line, separator_line, *body_lines])
 
 
+def format_timestamp(timestamp_seconds: float) -> str:
+    return datetime.fromtimestamp(timestamp_seconds, tz=timezone.utc).isoformat(timespec="seconds")
+
+
+def render_derived_file_header(source_path: Path) -> str:
+    source_stat = source_path.stat()
+    source_timestamp = format_timestamp(source_stat.st_mtime)
+    generated_timestamp = format_timestamp(datetime.now(tz=timezone.utc).timestamp())
+    return (
+        "<!-- DO NOT EDIT DIRECTLY. THIS IS A DERIVED FILE. "
+        f"SOURCE: {source_path} | SOURCE_TIMESTAMP_UTC: {source_timestamp} | GENERATED_AT_UTC: {generated_timestamp} -->"
+    )
+
+
 def render_rubric_document(title_stem: str, assessment_id: str, rows: list[IndicatorRow]) -> str:
     component_rows = group_rows_by_component(rows)
 
@@ -839,6 +854,22 @@ def render_manifest_document(title_stem: str, assessment_id: str, rows: list[Ind
     return "\n".join(parts)
 
 
+def write_text_if_stale(output_path: Path, content: str, source_path: Path) -> str:
+    """Write output_path only when it is missing or older than source_path."""
+    if output_path.exists():
+        output_stat = output_path.stat()
+        source_stat = source_path.stat()
+        if output_stat.st_mtime_ns >= source_stat.st_mtime_ns:
+            return "skipped"
+
+    output_path.write_text(content, encoding="utf-8")
+    return "written"
+
+
+def prepend_derived_file_header(content: str, source_path: Path) -> str:
+    return f"{render_derived_file_header(source_path)}\n\n{content}"
+
+
 def main() -> int:
     args = parse_args()
 
@@ -859,15 +890,21 @@ def main() -> int:
         manifest_output=args.manifest_output,
     )
 
-    rubric_text = render_rubric_document(rubric_path.stem, assessment_id, rows)
-    manifest_text = render_manifest_document(manifest_path.stem, assessment_id, rows)
+    rubric_text = prepend_derived_file_header(
+        render_rubric_document(rubric_path.stem, assessment_id, rows),
+        registry_path,
+    )
+    manifest_text = prepend_derived_file_header(
+        render_manifest_document(manifest_path.stem, assessment_id, rows),
+        registry_path,
+    )
 
-    rubric_path.write_text(rubric_text, encoding="utf-8")
-    manifest_path.write_text(manifest_text, encoding="utf-8")
+    rubric_status = write_text_if_stale(rubric_path, rubric_text, registry_path)
+    manifest_status = write_text_if_stale(manifest_path, manifest_text, registry_path)
 
     print(f"Indicator registry: {registry_path}")
-    print(f"Rubric output: {rubric_path}")
-    print(f"Manifest output: {manifest_path}")
+    print(f"Rubric output: {rubric_path} ({rubric_status})")
+    print(f"Manifest output: {manifest_path} ({manifest_status})")
     print(f"Assessment: {assessment_id}")
     print(f"Indicators written: {len(rows)}")
     print(f"Components written: {len(group_rows_by_component(rows))}")
