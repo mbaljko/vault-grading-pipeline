@@ -19,6 +19,7 @@ from typing import Any
 RESPONSE_TEXT_COLUMN = "response_text"
 SUBMISSION_ID_COLUMN = "submission_id"
 DEFAULT_BATCH_SIZE = 20
+LEADING_TICKED_HEADER_RE = re.compile(r"\A`+\s*(?=\+\+\+)", re.DOTALL)
 HEADER_BLOCK_RE = re.compile(r"\A\+\+\+(?P<header>[^\n]+)\n\+\+\+\n?", re.DOTALL)
 FOOTER_BLOCK_RE = re.compile(r"\n?\+\+\+\s*\Z", re.DOTALL)
 FENCED_BLOCK_RE = re.compile(r"(?ms)^\s*`{3,4}[^\n`]*\n(?P<body>.*?)\n\s*`{3,4}\s*$")
@@ -130,6 +131,9 @@ def extract_response_payload(response_text: str) -> tuple[str, str]:
     stripped_text = response_text.strip()
     header_info = ""
 
+    # Some source rows carry a stray leading backtick before the submission header.
+    stripped_text = LEADING_TICKED_HEADER_RE.sub("", stripped_text)
+
     header_match = HEADER_BLOCK_RE.match(stripped_text)
     if header_match:
         header_info = header_match.group("header").strip()
@@ -137,6 +141,18 @@ def extract_response_payload(response_text: str) -> tuple[str, str]:
 
     stripped_text = FOOTER_BLOCK_RE.sub("", stripped_text).strip()
     return header_info, stripped_text
+
+
+def is_metadata_only_output_line(line: str) -> bool:
+    stripped_line = line.strip()
+    if not stripped_line:
+        return True
+    return (
+        stripped_line == "+++"
+        or stripped_line.startswith("+++submission_id=")
+        or stripped_line.startswith("<submission ")
+        or stripped_line == "</submission>"
+    )
 
 
 def extract_submission_id(row: dict[str, str], header_info: str) -> str:
@@ -274,7 +290,11 @@ def build_reconstruction_check_output(
 
 def parse_batch_llm_output(extracted_output_text: str, expected_rows: int) -> list[dict[str, str]]:
     body = extract_fenced_markdown_body(extracted_output_text)
-    lines = [line.strip() for line in body.splitlines() if line.strip()]
+    lines = [
+        line.strip()
+        for line in body.splitlines()
+        if line.strip() and not is_metadata_only_output_line(line)
+    ]
     if len(lines) != expected_rows:
         raise ValueError(
             f"Expected {expected_rows} output row(s) from batch, received {len(lines)} line(s)."
