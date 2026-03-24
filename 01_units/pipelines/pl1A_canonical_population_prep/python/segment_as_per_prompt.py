@@ -1276,6 +1276,16 @@ def write_claim_expanded_rows(
                 )
 
 
+def print_run_incomplete_summary(error_message: str) -> None:
+    print("[summary] run incomplete", flush=True)
+    print(
+        "[summary] final outputs were not written because one or more required batch artifacts are unavailable.",
+        flush=True,
+    )
+    for line in error_message.splitlines():
+        print(f"[summary] {line}", flush=True)
+
+
 def main() -> int:
     args = parse_args()
 
@@ -1319,20 +1329,24 @@ def main() -> int:
             claim_column_names=claim_column_names,
         )
 
-    segmentation_rows = execute_batch_cache_workflow(
-        prepared_rows=prepared_rows,
-        batch_cache_dir=batch_cache_dir,
-        claim_column_names=claim_column_names,
-        runner_script_path=runner_script_path,
-        runner_prompt_path=runner_prompt_path,
-        temperature=args.temperature,
-        top_p=args.top_p,
-        runner_dry_run=args.runner_dry_run,
-        batch_size=args.batch_size,
-        selected_batches=selected_batches,
-        rerun_failed_batches=args.rerun_failed_batches,
-        rebuild_from_batch_cache=args.rebuild_from_batch_cache,
-    )
+    try:
+        segmentation_rows = execute_batch_cache_workflow(
+            prepared_rows=prepared_rows,
+            batch_cache_dir=batch_cache_dir,
+            claim_column_names=claim_column_names,
+            runner_script_path=runner_script_path,
+            runner_prompt_path=runner_prompt_path,
+            temperature=args.temperature,
+            top_p=args.top_p,
+            runner_dry_run=args.runner_dry_run,
+            batch_size=args.batch_size,
+            selected_batches=selected_batches,
+            rerun_failed_batches=args.rerun_failed_batches,
+            rebuild_from_batch_cache=args.rebuild_from_batch_cache,
+        )
+    except RuntimeError as exc:
+        print_run_incomplete_summary(str(exc))
+        return 1
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_audit_path.parent.mkdir(parents=True, exist_ok=True)
