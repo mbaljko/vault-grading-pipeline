@@ -93,7 +93,7 @@ def parse_args() -> argparse.Namespace:
 
 def normalize_markdown_cell(value: str) -> str:
     stripped = value.strip()
-    if len(stripped) >= 2 and stripped.startswith("`") and stripped.endswith("`"):
+    if re.fullmatch(r"`[^`]*`", stripped):
         return stripped[1:-1].strip()
     return stripped
 
