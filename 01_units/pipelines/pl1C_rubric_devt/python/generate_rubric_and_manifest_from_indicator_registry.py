@@ -187,18 +187,26 @@ def resolve_output_paths(
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
 
     rubric_path = (
-        rubric_output.resolve()
+        with_registry_version_suffix(rubric_output.resolve(), version_token)
         if rubric_output
         else resolved_output_dir / f"RUBRIC_{assessment_id}_CAL_payload_{version_token}.md"
     )
     manifest_path = (
-        manifest_output.resolve()
+        with_registry_version_suffix(manifest_output.resolve(), version_token)
         if manifest_output
         else resolved_output_dir / f"{assessment_id}_Layer1_ScoringManifest_{version_token}.md"
     )
     rubric_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     return rubric_path, manifest_path
+
+
+def with_registry_version_suffix(output_path: Path, version_token: str) -> Path:
+    match = VERSION_TOKEN_RE.search(output_path.name)
+    if match:
+        updated_name = VERSION_TOKEN_RE.sub(f"_{version_token}.md", output_path.name)
+        return output_path.with_name(updated_name)
+    return output_path
 
 
 def group_rows_by_component(rows: list[IndicatorRow]) -> dict[str, list[IndicatorRow]]:
