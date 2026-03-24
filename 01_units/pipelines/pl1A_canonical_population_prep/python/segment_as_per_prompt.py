@@ -747,6 +747,50 @@ def merge_batch_audit_rows(
     return merged_rows
 
 
+def collect_unavailable_batches(
+    batch_specs: list[dict[str, Any]],
+    batch_cache_dir: Path,
+) -> list[dict[str, Any]]:
+    unavailable_batches: list[dict[str, Any]] = []
+    for batch_spec in batch_specs:
+        batch_paths = build_batch_cache_paths(batch_cache_dir, batch_spec)
+        status_payload = load_batch_status(batch_paths["status_json"])
+        status_value = status_payload.get("status") if status_payload else "missing"
+        error_message = status_payload.get("error_message", "") if status_payload else ""
+        has_audit_csv = batch_paths["audit_csv"].exists()
+        if status_value == "success" and has_audit_csv:
+            continue
+        unavailable_batches.append(
+            {
+                "batch_number": batch_spec["batch_number"],
+                "start_row": batch_spec["start_row"],
+                "end_row": batch_spec["end_row"],
+                "status": status_value,
+                "has_audit_csv": has_audit_csv,
+                "error_message": error_message,
+            }
+        )
+    return unavailable_batches
+
+
+def format_unavailable_batches_error(unavailable_batches: list[dict[str, Any]]) -> str:
+    batch_numbers = ",".join(str(item["batch_number"]) for item in unavailable_batches)
+    summary_lines = [
+        "One or more batches are not available as successful cache artifacts.",
+        f"Rerun suggestion: just l0-segment AP2B RERUN_BATCHES=\"{batch_numbers}\"",
+        "Unavailable batches:",
+    ]
+    for item in unavailable_batches:
+        line = (
+            f"- batch {item['batch_number']} rows {item['start_row']}-{item['end_row']} "
+            f"status={item['status']} audit_csv={'present' if item['has_audit_csv'] else 'missing'}"
+        )
+        if item["error_message"]:
+            line += f" error={item['error_message']}"
+        summary_lines.append(line)
+    return "\n".join(summary_lines)
+
+
 def seed_batch_cache_from_whole_audit(
     whole_audit_rows: list[dict[str, str]],
     batch_specs: list[dict[str, Any]],
@@ -883,6 +927,10 @@ def execute_batch_cache_workflow(
             status_payload=status_payload,
             total_batches=total_batches,
         )
+
+    unavailable_batches = collect_unavailable_batches(batch_specs, batch_cache_dir)
+    if unavailable_batches:
+        raise RuntimeError(format_unavailable_batches_error(unavailable_batches))
 
     return merge_batch_audit_rows(batch_specs, batch_cache_dir, claim_column_names)
 
