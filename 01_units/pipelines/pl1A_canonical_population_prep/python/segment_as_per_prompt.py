@@ -777,7 +777,7 @@ def format_unavailable_batches_error(unavailable_batches: list[dict[str, Any]]) 
     batch_numbers = ",".join(str(item["batch_number"]) for item in unavailable_batches)
     summary_lines = [
         "One or more batches are not available as successful cache artifacts.",
-        f"Rerun suggestion: just l0-segment AP2B RERUN_BATCHES=\"{batch_numbers}\"",
+        f"Rerun suggestion: just RERUN_BATCHES=\"{batch_numbers}\" l0-segment <ASSIGNMENT>",
         "Unavailable batches:",
     ]
     for item in unavailable_batches:
