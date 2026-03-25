@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from datetime import datetime, timezone
 import re
 import sys
 from pathlib import Path
@@ -150,6 +151,43 @@ def derive_output_filename(component_ids: list[str], manifest_path: Path, iterat
 	if len(component_ids) == 1:
 		return f"{prefix}_{component_ids[0]}_output_scoring_stats_report_{iteration_label}.md"
 	return f"{prefix}_all_components_output_scoring_stats_report_{iteration_label}.md"
+
+
+def quote_yaml_string(value: str) -> str:
+	escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+	return f'"{escaped}"'
+
+
+def render_yaml_frontmatter(
+	output_path: Path,
+	iteration_label: str,
+	manifest_path: Path,
+	registry_path: Path,
+	component_ids: list[str],
+	scored_csv_paths: list[Path],
+) -> str:
+	lines = [
+		"---\n",
+		f"generated_at_utc: {quote_yaml_string(datetime.now(timezone.utc).isoformat(timespec='seconds'))}\n",
+		"generator:\n",
+		f"  script: {quote_yaml_string(str(Path(__file__).resolve()))}\n",
+		"output_file:\n",
+		f"  path: {quote_yaml_string(str(output_path))}\n",
+		f"  name: {quote_yaml_string(output_path.name)}\n",
+		f"iteration_label: {quote_yaml_string(iteration_label)}\n",
+		"manifest_input:\n",
+		f"  path: {quote_yaml_string(str(manifest_path))}\n",
+		"indicator_registry:\n",
+		f"  path: {quote_yaml_string(str(registry_path))}\n",
+		"component_ids:\n",
+	]
+	for component_id in component_ids:
+		lines.append(f"  - {quote_yaml_string(component_id)}\n")
+	lines.append("scored_csv_paths:\n")
+	for scored_csv_path in scored_csv_paths:
+		lines.append(f"  - {quote_yaml_string(str(scored_csv_path))}\n")
+	lines.append("---\n")
+	return "".join(lines)
 
 
 def build_base_row_reverse_lookup(registry_path: Path) -> dict[tuple[str, str], dict[str, str]]:
@@ -421,6 +459,8 @@ def is_positive_scored_row(row: dict[str, str]) -> bool:
 
 
 def render_consolidated_scoring_stats_document(
+	output_path: Path,
+	registry_path: Path,
 	component_ids: list[str],
 	manifest_path: Path,
 	iteration_label: str,
@@ -444,6 +484,7 @@ def render_consolidated_scoring_stats_document(
 		*[f"saturation_rate_{component_id}" for component_id in component_ids],
 	]
 	parts = [
+		render_yaml_frontmatter(output_path, iteration_label, manifest_path, registry_path, component_ids, scored_csv_paths),
 		f"## {derive_output_filename(component_ids, manifest_path, iteration_label).removesuffix('.md')}",
 		"",
 		"Saturation rate is defined here as number_scored_positive divided by number_scored for each indicator.",
@@ -669,6 +710,8 @@ def main() -> int:
 	consolidated_output_path = output_dir / derive_output_filename(component_ids, manifest_path, iteration_label)
 	consolidated_output_path.write_text(
 		render_consolidated_scoring_stats_document(
+			output_path=consolidated_output_path,
+			registry_path=registry_path,
 			component_ids=component_ids,
 			manifest_path=manifest_path,
 			iteration_label=iteration_label,

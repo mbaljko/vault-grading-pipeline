@@ -25,6 +25,7 @@ Use `--iteration-label` to override it explicitly.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import re
 import sys
 from pathlib import Path
@@ -120,6 +121,47 @@ def escape_markdown_cell(value: str) -> str:
 
 def format_markdown_row(cells: list[str]) -> str:
 	return "| " + " | ".join(escape_markdown_cell(cell) for cell in cells) + " |\n"
+
+
+def quote_yaml_string(value: str) -> str:
+	escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+	return f'"{escaped}"'
+
+
+def render_yaml_frontmatter(
+	output_path: Path,
+	iteration_label: str,
+	source_paths: list[Path],
+	primary_count: int,
+	secondary_count: int,
+	registry_path: Path | None,
+) -> str:
+	lines = [
+		"---\n",
+		f"generated_at_utc: {quote_yaml_string(datetime.now(timezone.utc).isoformat(timespec='seconds'))}\n",
+		"generator:\n",
+		f"  script: {quote_yaml_string(str(Path(__file__).resolve()))}\n",
+		"output_file:\n",
+		f"  path: {quote_yaml_string(str(output_path))}\n",
+		f"  name: {quote_yaml_string(output_path.name)}\n",
+		f"iteration_label: {quote_yaml_string(iteration_label)}\n",
+		"source_files:\n",
+		f"  scanned: {len(source_paths)}\n",
+		f"  primary_aggregate_count: {primary_count}\n",
+		f"  secondary_stitched_count: {secondary_count}\n",
+		"  paths:\n",
+	]
+	for source_path in source_paths:
+		lines.append(f"    - {quote_yaml_string(str(source_path))}\n")
+	if registry_path is not None:
+		lines.extend(
+			[
+				"indicator_registry:\n",
+				f"  path: {quote_yaml_string(str(registry_path))}\n",
+			]
+		)
+	lines.append("---\n\n")
+	return "".join(lines)
 
 
 def collect_markdown_tables(markdown_text: str) -> list[list[list[str]]]:
@@ -486,12 +528,16 @@ def merge_records(source_paths: list[Path]) -> list[dict[str, str]]:
 
 
 def render_output_report(
-	source_paths: list[Path], iteration_label: str, output_filename: str, records: list[dict[str, str]]
+	source_paths: list[Path],
+	iteration_label: str,
+	output_path: Path,
+	registry_path: Path | None,
+	records: list[dict[str, str]],
 ) -> str:
 	score_column = f"{iteration_label}-score"
 	validation_column = f"{iteration_label}-validation"
 	false_score_column = "false_score"
-	report_heading = build_report_heading(output_filename, iteration_label)
+	report_heading = build_report_heading(output_path.name, iteration_label)
 	sorted_records = sorted(
 		records,
 		key=lambda record: (
@@ -523,6 +569,7 @@ def render_output_report(
 			]
 		)
 	lines = [
+		render_yaml_frontmatter(output_path, iteration_label, source_paths, primary_count, secondary_count, registry_path),
 		f"## {report_heading}\n",
 		"\n",
 		f"- Source files scanned: {len(source_paths)}\n",
@@ -675,7 +722,7 @@ def main() -> int:
 		print(f"Error: {exc}", file=sys.stderr)
 		return 1
 
-	output_text = render_output_report(source_paths, iteration_label, output_path.name, records)
+	output_text = render_output_report(source_paths, iteration_label, output_path, registry_path, records)
 	output_path.parent.mkdir(parents=True, exist_ok=True)
 	output_path.write_text(output_text, encoding="utf-8")
 	print(output_path)
