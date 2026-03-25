@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Summarize scored CSV rows for manifest entries matching a component ID.
+"""Generate scoring-stats markdown files for manifest entries matching a component ID.
 
 This script mirrors the manifest iteration behavior of
 run-itp-report-for-manifest.py, but instead of invoking the LLM runner it
-produces a markdown summary file for each matching SBO row.
+produces a markdown scoring-stats file for each matching SBO row.
 
 Arguments:
 - --sbo-manifest-file: markdown manifest file to parse.
@@ -15,10 +15,9 @@ Arguments:
 Per matching row behavior:
 1. Extract the manifest row into a components dict.
 2. Filter scored CSV rows matching the manifest row's indicator_id.
-3. Compute summary statistics for evidence_status, confidence, flags, and
-   evaluation_notes coverage.
-4. Write a markdown summary file named
-   <sbo_identifier>_output_summary.md in the output directory.
+3. Compute indicator-level scoring stats.
+4. Write one consolidated markdown scoring-stats report named
+	<component_id>_output_scoring_stats_report.md in the output directory.
 """
 
 from __future__ import annotations
@@ -27,18 +26,25 @@ import argparse
 import csv
 import re
 import sys
-from collections import Counter
 from pathlib import Path
 
 
-SBO_IDENTIFIER_RE = re.compile(r"\bI_[A-Za-z0-9_]+\b")
 SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
 RUNNER_OUTPUT_SUBDIR = "Level1-CalibrationTesting-Outputs"
+POSITIVE_EVIDENCE_STATUS_VALUES = {
+	"positive",
+	"present",
+	"yes",
+	"true",
+	"1",
+	"supported",
+	"met",
+}
 
 
 def parse_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(
-		description="Summarize scored CSV rows for manifest entries matching a component ID."
+		description="Generate scoring-stats markdown files for manifest entries matching a component ID."
 	)
 	parser.add_argument(
 		"--sbo-manifest-file",
@@ -62,16 +68,9 @@ def parse_args() -> argparse.Namespace:
 		"--output-dir",
 		type=Path,
 		required=False,
-		help="Output directory for summary files. Defaults to <manifest_dir>/Level1-CalibrationTesting-Outputs.",
+		help="Output directory for scoring-stats files. Defaults to <manifest_dir>/Level1-CalibrationTesting-Outputs.",
 	)
 	return parser.parse_args()
-
-
-def extract_sbo_identifier(line: str) -> str:
-	match = SBO_IDENTIFIER_RE.search(line)
-	if match:
-		return match.group(0)
-	return "UNKNOWN_SBO_IDENTIFIER"
 
 
 def normalize_markdown_cell(value: str) -> str:
@@ -128,14 +127,6 @@ def find_matching_scored_rows(
 	return matches
 
 
-def count_values(rows: list[dict[str, str]], field_name: str) -> Counter[str]:
-	counter: Counter[str] = Counter()
-	for row in rows:
-		value = (row.get(field_name) or "").strip() or "<blank>"
-		counter[value] += 1
-	return counter
-
-
 def render_markdown_table(headers: list[str], rows: list[list[str]]) -> str:
 	header_line = "| " + " | ".join(headers) + " |"
 	separator_line = "| " + " | ".join("---" for _ in headers) + " |"
@@ -143,65 +134,44 @@ def render_markdown_table(headers: list[str], rows: list[list[str]]) -> str:
 	return "\n".join([header_line, separator_line, *body_lines])
 
 
-def render_counter_table(counter: Counter[str], total_rows: int) -> str:
-	rows: list[list[str]] = []
-	for value, count in sorted(counter.items(), key=lambda item: (-item[1], item[0])):
-		percentage = f"{(count / total_rows * 100):.1f}%" if total_rows else "0.0%"
-		rows.append([value, str(count), percentage])
-	return render_markdown_table(["value", "count", "percent"], rows)
+def format_rate(numerator: int, denominator: int) -> str:
+	if denominator <= 0:
+		return "0.0%"
+	return f"{(numerator / denominator * 100):.1f}%"
 
 
-def render_summary_document(
-	sbo_identifier: str,
-	components: dict[str, str],
-	matching_rows: list[dict[str, str]],
+def is_positive_scored_row(row: dict[str, str]) -> bool:
+	status = (row.get("evidence_status") or "").strip().lower()
+	return status in POSITIVE_EVIDENCE_STATUS_VALUES
+
+
+def render_consolidated_scoring_stats_document(
+	component_id: str,
 	scored_csv_path: Path,
+	total_scored_rows: int,
+	indicator_rows: list[list[str]],
 ) -> str:
-	total_rows = len(matching_rows)
-	unique_submission_ids = len(
-		{(row.get("submission_id") or "").strip() for row in matching_rows if (row.get("submission_id") or "").strip()}
-	)
-	non_empty_notes = sum(1 for row in matching_rows if (row.get("evaluation_notes") or "").strip())
-	blank_notes = total_rows - non_empty_notes
-
-	evidence_status_counts = count_values(matching_rows, "evidence_status")
-	confidence_counts = count_values(matching_rows, "confidence")
-	flags_counts = count_values(matching_rows, "flags")
-
 	parts = [
-		f"## {sbo_identifier}_output_summary",
+		f"## {component_id}_output_scoring_stats_report",
 		"",
-		"### 1. Manifest row",
-		"",
-		render_markdown_table(
-			["field", "value"],
-			[[key, value] for key, value in components.items()],
-		),
-		"",
-		"### 2. Scoring coverage summary",
+		"Saturation rate is defined here as number_scored_positive divided by number_scored for each indicator.",
 		"",
 		render_markdown_table(
 			["metric", "value"],
 			[
+				["component_id", component_id],
 				["source_scored_csv", str(scored_csv_path)],
-				["matched_rows", str(total_rows)],
-				["unique_submission_ids", str(unique_submission_ids)],
-				["rows_with_evaluation_notes", str(non_empty_notes)],
-				["rows_with_blank_evaluation_notes", str(blank_notes)],
+				["total_scored_rows", str(total_scored_rows)],
+				["positive_evidence_status_values", ", ".join(sorted(POSITIVE_EVIDENCE_STATUS_VALUES))],
 			],
 		),
 		"",
-		"### 3. Evidence status distribution",
+		"### Indicator saturation",
 		"",
-		render_counter_table(evidence_status_counts, total_rows),
-		"",
-		"### 4. Confidence distribution",
-		"",
-		render_counter_table(confidence_counts, total_rows),
-		"",
-		"### 5. Flags distribution",
-		"",
-		render_counter_table(flags_counts, total_rows),
+		render_markdown_table(
+			["indicator_id", "saturation_rate", "number_scored", "number_scored_positive"],
+			indicator_rows,
+		),
 		"",
 	]
 	return "\n".join(parts)
@@ -223,7 +193,9 @@ def main() -> int:
 
 	output_dir.mkdir(parents=True, exist_ok=True)
 	scored_rows = load_scored_rows(scored_csv_path)
+	total_scored_rows = len(scored_rows)
 	lines = manifest_path.read_text(encoding="utf-8").splitlines()
+	indicator_summary_rows: dict[str, list[str]] = {}
 
 	i = 0
 	while i < len(lines):
@@ -253,18 +225,30 @@ def main() -> int:
 			if component_id in row_line:
 				padded = row_cells + [""] * (len(header_cells) - len(row_cells))
 				components = {header_cells[idx]: padded[idx] for idx in range(len(header_cells))}
-				sbo_identifier = extract_sbo_identifier(row_line)
+				indicator_id = (components.get("indicator_id") or "").strip() or "<missing>"
 				matching_scored_rows = find_matching_scored_rows(components, scored_rows)
-				summary_text = render_summary_document(
-					sbo_identifier=sbo_identifier,
-					components=components,
-					matching_rows=matching_scored_rows,
-					scored_csv_path=scored_csv_path,
-				)
-				output_path = output_dir / f"{sbo_identifier}_output_summary.md"
-				output_path.write_text(summary_text, encoding="utf-8")
-				print(output_path)
+				number_scored = len(matching_scored_rows)
+				number_scored_positive = sum(1 for row in matching_scored_rows if is_positive_scored_row(row))
+				indicator_summary_rows[indicator_id] = [
+					indicator_id,
+					format_rate(number_scored_positive, number_scored),
+					str(number_scored),
+					str(number_scored_positive),
+				]
 			i += 1
+
+	consolidated_indicator_rows = [indicator_summary_rows[key] for key in sorted(indicator_summary_rows)]
+	consolidated_output_path = output_dir / f"{component_id}_output_scoring_stats_report.md"
+	consolidated_output_path.write_text(
+		render_consolidated_scoring_stats_document(
+			component_id=component_id,
+			scored_csv_path=scored_csv_path,
+			total_scored_rows=total_scored_rows,
+			indicator_rows=consolidated_indicator_rows,
+		),
+		encoding="utf-8",
+	)
+	print(consolidated_output_path)
 	return 0
 
 
