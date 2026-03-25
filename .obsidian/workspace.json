@@ -456,8 +456,9 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "00821057bf5dc0c3",
+  "active": "e5174a9fca7b05c1",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/python/summarize-scoring-for-manifest.py",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - engagement - signal prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification.md",
@@ -492,7 +493,6 @@
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS.md",
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS 1 page.md",
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS 1 page 1.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_OverlapReport_singleComponent.md",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/run-itp-report-for-manifest.cpython-313.pyc"
   ]
 }
