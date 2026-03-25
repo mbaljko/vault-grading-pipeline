@@ -458,6 +458,7 @@
   },
   "active": "e5174a9fca7b05c1",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/python/collect-panel-c-questionable-cases.py",
     "01_units/pipelines/pl1C_rubric_devt/python/generate-scoring-stats-for-manifest.py",
     "01_units/pipelines/pl1C_rubric_devt/python/summarize-scoring-for-manifest.py",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
@@ -486,7 +487,6 @@
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage12b_DeriveLayer1ScoringManifest.md",
     "01_units/pipelines/pl3_production_scoring/python/stitch_scored_csv_with_response_text.py",
-    "01_units/pipelines/pl3_production_scoring/python",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
     "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification v2.md",
     "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification v1.md",

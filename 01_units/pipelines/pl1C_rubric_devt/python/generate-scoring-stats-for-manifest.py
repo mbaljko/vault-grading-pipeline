@@ -29,15 +29,18 @@ Report contents:
 	 - number_scored_positive
 3. A Base Table aggregation that reverses reuse expansion back to registry
 	 template rows and reports the same stats at the base-row level.
+4. A co-incidence matrix over Base Table `template_id` values, where each
+	upper-triangular cell contains the count of positive scored submissions that
+	appear in both the row and column template sets.
 
 Saturation rate definition:
 - saturation_rate = number_scored_positive / number_scored
 
 Output naming:
 - Single-component run:
-	<component_id>_output_scoring_stats_report.md
+	I_<assignment>_<component_id>_output_scoring_stats_report.md
 - Multi-component run:
-	all_components_output_scoring_stats_report.md
+	I_<assignment>_all_components_output_scoring_stats_report.md
 """
 
 from __future__ import annotations
@@ -112,10 +115,18 @@ def parse_args() -> argparse.Namespace:
 	return parser.parse_args()
 
 
-def derive_output_filename(component_ids: list[str]) -> str:
+def derive_assignment_output_prefix(manifest_path: Path) -> str:
+	match = re.match(r"^([A-Za-z0-9]+)_Layer1_", manifest_path.name)
+	if not match:
+		return "I"
+	return f"I_{match.group(1)}"
+
+
+def derive_output_filename(component_ids: list[str], manifest_path: Path) -> str:
+	prefix = derive_assignment_output_prefix(manifest_path)
 	if len(component_ids) == 1:
-		return f"{component_ids[0]}_output_scoring_stats_report.md"
-	return "all_components_output_scoring_stats_report.md"
+		return f"{prefix}_{component_ids[0]}_output_scoring_stats_report.md"
+	return f"{prefix}_all_components_output_scoring_stats_report.md"
 
 
 def build_base_row_reverse_lookup(registry_path: Path) -> dict[tuple[str, str], dict[str, str]]:
@@ -274,6 +285,22 @@ def render_markdown_table(headers: list[str], rows: list[list[str]]) -> str:
 	return "\n".join([header_line, separator_line, *body_lines])
 
 
+def render_coincidence_matrix(template_ids: list[str], positive_submission_ids_by_template: dict[str, set[str]]) -> str:
+	headers = ["template_id", *template_ids]
+	rows: list[list[str]] = []
+	for row_index, row_template_id in enumerate(template_ids):
+		row_values = [row_template_id]
+		row_submission_ids = positive_submission_ids_by_template.get(row_template_id, set())
+		for column_index, column_template_id in enumerate(template_ids):
+			if column_index < row_index:
+				row_values.append("")
+				continue
+			column_submission_ids = positive_submission_ids_by_template.get(column_template_id, set())
+			row_values.append(str(len(row_submission_ids & column_submission_ids)))
+		rows.append(row_values)
+	return render_markdown_table(headers, rows)
+
+
 def format_rate(numerator: int, denominator: int) -> str:
 	if denominator <= 0:
 		return "0.0%"
@@ -299,10 +326,12 @@ def is_positive_scored_row(row: dict[str, str]) -> bool:
 
 def render_consolidated_scoring_stats_document(
 	component_ids: list[str],
+	manifest_path: Path,
 	scored_csv_paths: list[Path],
 	total_scored_rows: int,
 	indicator_rows: list[list[str]],
 	base_rows: list[list[str]],
+	coincidence_matrix: str,
 ) -> str:
 	component_label = component_ids[0] if len(component_ids) == 1 else ", ".join(component_ids)
 	source_csv_label = "\n".join(str(path) for path in scored_csv_paths)
@@ -311,14 +340,13 @@ def render_consolidated_scoring_stats_document(
 		"local_slot",
 		"expanded_indicator_ids",
 		"sbo_short_description",
-		"expansion_mode",
 		"saturation_rate",
 		"number_scored",
 		"number_scored_positive",
 		*[f"saturation_rate_{component_id}" for component_id in component_ids],
 	]
 	parts = [
-		f"## {derive_output_filename(component_ids).removesuffix('.md')}",
+		f"## {derive_output_filename(component_ids, manifest_path).removesuffix('.md')}",
 		"",
 		"Saturation rate is defined here as number_scored_positive divided by number_scored for each indicator.",
 		"",
@@ -349,6 +377,10 @@ def render_consolidated_scoring_stats_document(
 		"### Indicator saturation, base",
 		"",
 		render_markdown_table(base_table_headers, base_rows),
+		"",
+		"### Co-incidence matrix",
+		"",
+		coincidence_matrix,
 		"",
 	]
 	return "\n".join(parts)
@@ -393,6 +425,7 @@ def main() -> int:
 	lines = manifest_path.read_text(encoding="utf-8").splitlines()
 	indicator_summary_rows: dict[str, list[str]] = {}
 	base_summary_rows: dict[str, dict[str, object]] = {}
+	positive_submission_ids_by_template: dict[str, set[str]] = {}
 
 	i = 0
 	while i < len(lines):
@@ -455,12 +488,19 @@ def main() -> int:
 								for component_id in component_ids
 							},
 						}
+						positive_submission_ids_by_template[base_key] = set()
 					base_summary_rows[base_key]["expanded_indicator_ids"].add(indicator_id)
 					base_summary_rows[base_key]["number_scored"] = int(base_summary_rows[base_key]["number_scored"]) + number_scored
 					base_summary_rows[base_key]["number_scored_positive"] = int(base_summary_rows[base_key]["number_scored_positive"]) + number_scored_positive
 					component_counts = base_summary_rows[base_key]["per_component_counts"]
 					component_counts[matching_component_id]["number_scored"] += number_scored
 					component_counts[matching_component_id]["number_scored_positive"] += number_scored_positive
+					for row in matching_scored_rows:
+						if not is_positive_scored_row(row):
+							continue
+						submission_id = (row.get("submission_id") or "").strip()
+						if submission_id:
+							positive_submission_ids_by_template[base_key].add(submission_id)
 			i += 1
 
 	consolidated_indicator_rows = [indicator_summary_rows[key] for key in sorted(indicator_summary_rows)]
@@ -471,7 +511,6 @@ def main() -> int:
 		local_slot = str(base_row["local_slot"])
 		expanded_indicator_ids = ", ".join(sorted(base_row["expanded_indicator_ids"]))
 		description = str(base_row["sbo_short_description"])
-		expansion_mode = str(base_row["expansion_mode"])
 		number_scored = int(base_row["number_scored"])
 		number_scored_positive = int(base_row["number_scored_positive"])
 		component_rate_columns = []
@@ -486,7 +525,6 @@ def main() -> int:
 				local_slot,
 				expanded_indicator_ids,
 				description,
-				expansion_mode,
 				format_rate(number_scored_positive, number_scored),
 				str(number_scored),
 				str(number_scored_positive),
@@ -494,14 +532,18 @@ def main() -> int:
 			]
 		)
 	consolidated_base_rows.sort(key=base_table_sort_key)
-	consolidated_output_path = output_dir / derive_output_filename(component_ids)
+	ordered_template_ids = [row[0] for row in consolidated_base_rows]
+	coincidence_matrix = render_coincidence_matrix(ordered_template_ids, positive_submission_ids_by_template)
+	consolidated_output_path = output_dir / derive_output_filename(component_ids, manifest_path)
 	consolidated_output_path.write_text(
 		render_consolidated_scoring_stats_document(
 			component_ids=component_ids,
+			manifest_path=manifest_path,
 			scored_csv_paths=scored_csv_paths,
 			total_scored_rows=total_scored_rows,
 			indicator_rows=consolidated_indicator_rows,
 			base_rows=consolidated_base_rows,
+			coincidence_matrix=coincidence_matrix,
 		),
 		encoding="utf-8",
 	)

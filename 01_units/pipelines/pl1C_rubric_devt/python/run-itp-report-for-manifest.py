@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Run L1 CT prompt runner for manifest rows that match a component ID, then stitch response texts.
+"""Run L1 CT prompt runner for manifest rows that match a component ID, then post-process outputs.
 
 This script scans markdown table rows in `--sbo-manifest-file`, selects rows
 whose raw row line contains `--component-id`, and for each matching row:
 invokes `invoke_chatgpt_API.py` to produce an LLM output markdown
 file, then stitches response texts from `--file-with-response-texts` into
-Panel A/B/C tables in that output.
+Panel A/B/C tables in that output. After all stitched worksheets are written,
+the script also collects all `##### Panel C — Questionable cases` sections into
+one combined markdown file in the runner output directory.
 
 Arguments:
 - `--sbo-manifest-file`: markdown manifest file to parse.
@@ -48,11 +50,16 @@ Per matching row behavior:
 	- Replaces each Panel A/B/C table with an augmented version that adds
 	  a `response_text` column populated by submission_id lookup.
 	- Writes output to `<llm_output_stem>_stitched_worksheet.md` in the same directory.
+7. After all matching rows are processed, collect all
+	`##### Panel C — Questionable cases` sections from stitched worksheets into
+	`all_components_panel_c_questionable_cases.md` in the runner output directory.
 
 Exit behavior:
 - Returns 1 with stderr message when required input files are missing.
-- Returns 0 with a console message when target output files already exist
-	and `--overwrite` was not supplied.
+- Returns 0 with a console message when individual ITP report outputs already
+	exist and `--overwrite` was not supplied. In that case, the script skips the
+	ITP generation portion but still builds the combined Panel C report if that
+	aggregate file is missing.
 
 Example:
 	python run-itp-report-for-manifest.py \
@@ -83,6 +90,9 @@ REPO_ROOT: Path | None = next(
 	None,
 )
 RUNNER_SCRIPT_RELATIVE = Path("01_units/apps/prompt_runners/invoke_chatgpt_API.py")
+PANEL_C_COLLECTOR_SCRIPT_RELATIVE = Path(
+	"01_units/pipelines/pl1C_rubric_devt/python/collect-panel-c-questionable-cases.py"
+)
 L1_ITP_PROMPT_FILE_RELATIVE = Path(
 	"01_units/pipelines/pl1B_rubric_devt/llm_prompt/"
 	"pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md"
@@ -92,7 +102,7 @@ RUNNER_OUTPUT_SUBDIR = "Level1-CalibrationTesting-Outputs"
 
 def parse_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(
-		description="Print markdown lines that contain the specified component ID."
+		description="Run ITP reports for manifest rows matching a component ID and post-process the outputs."
 	)
 	parser.add_argument(
 		"--sbo-manifest-file",
@@ -315,6 +325,30 @@ def run_l1_itp_for_payload(
 	subprocess.run(cmd, check=True)
 	
 	return runner_output_file
+
+
+def collect_panel_c_questionable_cases(output_dir: Path) -> Path:
+	"""Collect Panel C questionable-case sections across stitched worksheets."""
+	if REPO_ROOT is None:
+		raise RuntimeError("Could not locate repository root from script path.")
+
+	collector_script = REPO_ROOT / PANEL_C_COLLECTOR_SCRIPT_RELATIVE
+	output_file = output_dir / "all_components_panel_c_questionable_cases.md"
+	cmd = [
+		sys.executable,
+		str(collector_script),
+		"--input-dir",
+		str(output_dir),
+		"--output-file",
+		str(output_file),
+	]
+	subprocess.run(cmd, check=True)
+	return output_file
+
+
+def resolve_panel_c_collection_output_path(output_dir: Path) -> Path:
+	"""Return the aggregate Panel C collection file path for an output directory."""
+	return output_dir / "all_components_panel_c_questionable_cases.md"
 
 
 def apply_response_text_stitcher(
@@ -559,7 +593,14 @@ def main() -> int:
 				matching_manifest_rows.append((components, sbo_identifier, scored_payload))
 			i += 1
 
-	existing_outputs: list[Path] = []
+	if not matching_manifest_rows:
+		print(f"No manifest rows matched component_id={component_id}")
+		return 0
+
+	runner_output_dir = output_dir if output_dir else (payload_dir / RUNNER_OUTPUT_SUBDIR)
+	panel_c_collection_output = resolve_panel_c_collection_output_path(runner_output_dir)
+	existing_itp_reports: list[Path] = []
+	existing_stitched_reports: list[Path] = []
 	for _, sbo_identifier, _ in matching_manifest_rows:
 		_, payload_file, runner_output_file, stitched_output_file = resolve_runner_output_paths(
 			payload_dir,
@@ -571,26 +612,39 @@ def main() -> int:
 			sbo_identifier,
 			output_dir,
 		)
-		candidate_paths = [payload_file]
 		if not runner_dry_run:
-			candidate_paths.extend([
-				runner_output_file,
-				stitched_output_file,
-				legacy_stitched_output_file,
-			])
-		existing_outputs.extend(path for path in candidate_paths if path.exists())
+			for candidate_path in [runner_output_file, stitched_output_file, legacy_stitched_output_file]:
+				if candidate_path.exists():
+					existing_itp_reports.append(candidate_path)
+					if candidate_path in [stitched_output_file, legacy_stitched_output_file]:
+						existing_stitched_reports.append(candidate_path)
 
-	if existing_outputs and not overwrite:
+	if existing_itp_reports and not overwrite:
 		print(
-			"Existing ITP outputs detected. "
+			"Existing ITP report outputs detected. "
 			"This usually means the iteration field was not advanced. "
-			"Stopping without changes. Re-run with --overwrite to replace them:"
+			"Skipping the ITP generation portion. Re-run with --overwrite to replace them:"
 		)
-		for path in existing_outputs:
+		for path in existing_itp_reports:
 			print(f"- {path}")
+
+		if runner_dry_run:
+			print("Skipping Panel C collection in runner dry-run mode.")
+			return 0
+
+		if panel_c_collection_output.exists():
+			print(f"Panel C collection already exists: {panel_c_collection_output}")
+			return 0
+
+		if not existing_stitched_reports:
+			print("Panel C collection was not created because no stitched worksheets were found.")
+			return 0
+
+		combined_panel_c_output = collect_panel_c_questionable_cases(runner_output_dir)
+		print(f"Collected Panel C questionable cases: {combined_panel_c_output}")
 		return 0
 
-	if existing_outputs and overwrite:
+	if existing_itp_reports and overwrite:
 		print("Overwriting existing ITP outputs because --overwrite was supplied.")
 
 	for components, sbo_identifier, scored_payload in matching_manifest_rows:
@@ -614,6 +668,10 @@ def main() -> int:
 			response_texts_path,
 			components,
 		)
+
+	if not runner_dry_run:
+		combined_panel_c_output = collect_panel_c_questionable_cases(runner_output_dir)
+		print(f"Collected Panel C questionable cases: {combined_panel_c_output}")
 	return 0
 
 
