@@ -8,12 +8,14 @@ so the stitched files act as a backfill source if rows are missing from the
 aggregate panel reports.
 
 Output columns:
-- `block_rule_id`
+- `source_panel`
+- `component_id`
 - `indicator_id`
 - `submission_id`
 - `<iteration>-score`: `P` for `present`, `N` for `not_present`
 - `<iteration>-validation`: `TP`, `FP`, `TN`, or `FN` parsed from
   `human_judge_notes`
+- `false_score`: echoes `FP` or `FN` when validation surfaced a false score
 
 The iteration label is inferred from the input path when possible, e.g. `iter01`.
 Use `--iteration-label` to override it explicitly.
@@ -41,6 +43,7 @@ ITERATION_RE = re.compile(r"\b(iter\d+)\b", re.IGNORECASE)
 SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
 VALIDATION_LABEL_RE = re.compile(r"\b(TP|FP|TN|FN)\b", re.IGNORECASE)
 SOURCE_FILE_RE = re.compile(r"^\s*-\s+Source file:\s+(.+?)\s*$")
+PANEL_HEADING_RE = re.compile(r"^\s*#{1,6}\s*Panel\s+([ABC])\b", re.IGNORECASE)
 
 
 def parse_args() -> argparse.Namespace:
@@ -180,6 +183,13 @@ def parse_validation_label(human_judge_notes: str) -> str:
 	return next(iter(matches))
 
 
+def derive_false_score_flag(validation_label: str) -> str:
+	normalized = validation_label.strip().upper()
+	if normalized in {"FP", "FN"}:
+		return normalized
+	return ""
+
+
 def build_indicator_reverse_lookup(registry_path: Path) -> dict[tuple[str, str], dict[str, str]]:
 	tables = collect_registry_markdown_tables(registry_path)
 	base_table = find_table_by_heading(tables, "base table")
@@ -203,6 +213,7 @@ def build_indicator_reverse_lookup(registry_path: Path) -> dict[tuple[str, str],
 		reverse_lookup[(component_id, indicator_id)] = {
 			"block_rule_id": block_rule_id,
 			"template_id": base_row.get("template_id", "").strip(),
+			"sbo_short_description": base_row.get("sbo_short_description", "").strip(),
 		}
 
 	if {"indicator_id", "component_id"}.issubset(reuse_headers):
@@ -288,6 +299,7 @@ def enrich_records_with_block_rule(
 		lookup = indicator_lookup.get((record["component_id"], record["indicator_id"]))
 		record["block_rule_id"] = lookup.get("block_rule_id", "") if lookup else ""
 		record["template_id"] = lookup.get("template_id", "") if lookup else ""
+		record["sbo_short_description"] = lookup.get("sbo_short_description", "") if lookup else ""
 	return records
 
 
@@ -313,12 +325,24 @@ def template_sort_key(template_id: str) -> tuple[int, str]:
 	return (2, normalized)
 
 
+def source_panel_sort_key(source_panel: str) -> tuple[int, str]:
+	normalized = source_panel.strip().lower()
+	if normalized == "panel_a":
+		return (0, normalized)
+	if normalized == "panel_b":
+		return (1, normalized)
+	if normalized == "panel_c":
+		return (2, normalized)
+	return (3, normalized)
+
+
 def extract_submission_rows(markdown_text: str, input_path: Path) -> list[dict[str, str]]:
 	lines = markdown_text.splitlines()
 	records: list[dict[str, str]] = []
 	current_report_key = input_path.name
 	current_component_id = ""
 	current_indicator_id = ""
+	current_source_panel = ""
 	index = 0
 	while index < len(lines):
 		source_match = SOURCE_FILE_RE.match(lines[index])
@@ -326,6 +350,12 @@ def extract_submission_rows(markdown_text: str, input_path: Path) -> list[dict[s
 			current_report_key = Path(source_match.group(1).strip()).name
 			current_component_id = ""
 			current_indicator_id = ""
+			current_source_panel = ""
+			index += 1
+			continue
+		panel_match = PANEL_HEADING_RE.match(lines[index])
+		if panel_match:
+			current_source_panel = f"panel_{panel_match.group(1).lower()}"
 			index += 1
 			continue
 		if not lines[index].lstrip().startswith("|"):
@@ -370,6 +400,7 @@ def extract_submission_rows(markdown_text: str, input_path: Path) -> list[dict[s
 					"report_key": current_report_key,
 					"component_id": current_component_id,
 					"block_rule_id": "",
+						"source_panel": current_source_panel,
 					"indicator_id": current_indicator_id,
 					"submission_id": submission_id,
 					"score": map_score_label(row[header_index["evidence_status"]].strip()),
@@ -433,14 +464,18 @@ def merge_records(source_paths: list[Path]) -> list[dict[str, str]]:
 	return records
 
 
-def render_output_report(source_paths: list[Path], iteration_label: str, records: list[dict[str, str]]) -> str:
+def render_output_report(
+	source_paths: list[Path], iteration_label: str, output_filename: str, records: list[dict[str, str]]
+) -> str:
 	score_column = f"{iteration_label}-score"
 	validation_column = f"{iteration_label}-validation"
+	false_score_column = "false_score"
 	sorted_records = sorted(
 		records,
 		key=lambda record: (
 			template_sort_key(record.get("template_id", "")),
-			block_rule_sort_key(record.get("block_rule_id", "")),
+			source_panel_sort_key(record.get("source_panel", "")),
+			record.get("component_id", ""),
 			record.get("indicator_id", ""),
 			record.get("submission_id", ""),
 		),
@@ -451,8 +486,22 @@ def render_output_report(source_paths: list[Path], iteration_label: str, records
 	for record in sorted_records:
 		group_key = record.get("template_id", "") or "ungrouped"
 		grouped_rows.setdefault(group_key, []).append(record)
+	template_summary_rows: list[list[str]] = []
+	for template_id, group_records in grouped_rows.items():
+		template_description = group_records[0].get("sbo_short_description", "").strip()
+		component_ids = sorted({record.get("component_id", "") for record in group_records if record.get("component_id", "")})
+		indicator_ids = sorted({record.get("indicator_id", "") for record in group_records if record.get("indicator_id", "")})
+		template_summary_rows.append(
+			[
+				template_id,
+				template_description,
+				", ".join(component_ids),
+				str(len(indicator_ids)),
+				str(len(group_records)),
+			]
+		)
 	lines = [
-		"# Human judge notes summary\n",
+		f"## {output_filename}\n",
 		"\n",
 		f"- Source files scanned: {len(source_paths)}\n",
 		f"- Primary aggregate files scanned: {primary_count}\n",
@@ -461,25 +510,49 @@ def render_output_report(source_paths: list[Path], iteration_label: str, records
 		f"- Rows extracted: {len(records)}\n",
 		f"- Template groups: {len(grouped_rows)}\n",
 	]
-	for template_id, group_records in grouped_rows.items():
+	if template_summary_rows:
 		lines.extend(
 			[
 				"\n",
-				f"## {template_id}\n",
+				"### Template Summary\n",
 				"\n",
-				format_markdown_row(["block_rule_id", "indicator_id", "submission_id", score_column, validation_column]),
+				format_markdown_row(["template_id", "sbo_short_description", "component_ids", "indicator_count", "row_count"]),
 				format_markdown_row(["---", "---", "---", "---", "---"]),
 			]
 		)
+		for summary_row in template_summary_rows:
+			lines.append(format_markdown_row(summary_row))
+	if grouped_rows:
+		lines.extend(
+			[
+				"\n",
+				"### Indicator Validation Reports\n",
+			]
+		)
+	for template_id, group_records in grouped_rows.items():
+		template_description = group_records[0].get("sbo_short_description", "").strip()
+		heading = f"{template_id} — {template_description}" if template_description else template_id
+		lines.extend(
+			[
+				"\n",
+				f"#### {heading}\n",
+				"\n",
+				format_markdown_row(["source_panel", "component_id", "indicator_id", "submission_id", score_column, validation_column, false_score_column]),
+				format_markdown_row(["---", "---", "---", "---", "---", "---", "---"]),
+			]
+		)
 		for record in group_records:
+			validation_label = record["validation"]
 			lines.append(
 				format_markdown_row(
 					[
-						record["block_rule_id"],
+						record.get("source_panel", ""),
+						record.get("component_id", ""),
 						record["indicator_id"],
 						record["submission_id"],
 						record["score"],
-						record["validation"],
+						validation_label,
+						derive_false_score_flag(validation_label),
 					]
 				)
 			)
@@ -525,7 +598,7 @@ def main() -> int:
 		print(f"Error: {exc}", file=sys.stderr)
 		return 1
 
-	output_text = render_output_report(source_paths, iteration_label, records)
+	output_text = render_output_report(source_paths, iteration_label, output_path.name, records)
 	output_path.parent.mkdir(parents=True, exist_ok=True)
 	output_path.write_text(output_text, encoding="utf-8")
 	print(output_path)
