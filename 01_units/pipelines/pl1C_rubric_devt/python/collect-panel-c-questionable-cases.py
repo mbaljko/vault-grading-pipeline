@@ -12,6 +12,8 @@ Arguments:
 - `--output-file`: optional explicit output file path. Defaults to
 	`<input-dir>/I_<assessment>_all_panel_c.md` when the assessment token can be
 	inferred from stitched filenames, otherwise `<input-dir>/I_all_panel_c.md`.
+- `--sbo-manifest-file`: optional scoring manifest path used to resolve the
+	matching indicator registry and group collected sections by Base Table rows.
 
 Output behavior:
 - Writes one combined markdown document.
@@ -32,6 +34,17 @@ import re
 import sys
 from pathlib import Path
 
+from generate_rubric_and_manifest_from_indicator_registry import (
+	apply_expression_template,
+	apply_token_template,
+	collect_markdown_tables,
+	expand_component_pattern,
+	extract_rule_template,
+	find_table_by_heading,
+	resolve_component_block_lookup,
+	resolve_local_slot_values,
+)
+
 
 STITCHED_REPORT_GLOBS = ["*_output_stitched_worksheet.md", "*_output_stitched.md"]
 TARGET_HEADING = "##### Panel C — Questionable cases"
@@ -49,6 +62,12 @@ def parse_args() -> argparse.Namespace:
 		type=Path,
 		required=True,
 		help="Directory containing stitched worksheet markdown files.",
+	)
+	parser.add_argument(
+		"--sbo-manifest-file",
+		type=Path,
+		required=False,
+		help="Optional scoring manifest path used to resolve Base Table grouping.",
 	)
 	parser.add_argument(
 		"--output-file",
@@ -85,6 +104,133 @@ def derive_assessment_id_from_stitched_reports(stitched_paths: list[Path]) -> st
 	return None
 
 
+def resolve_indicator_registry_path(manifest_path: Path | None) -> Path | None:
+	if manifest_path is None:
+		return None
+	candidate = manifest_path.parent / manifest_path.name.replace("ScoringManifest", "IndicatorRegistry")
+	if candidate.exists() and candidate.is_file():
+		return candidate
+	return None
+
+
+def build_base_row_reverse_lookup(registry_path: Path) -> tuple[dict[tuple[str, str], dict[str, str]], list[tuple[str, str]]]:
+	tables = collect_markdown_tables(registry_path)
+	base_table = find_table_by_heading(tables, "base table")
+	reuse_table = find_table_by_heading(tables, "reuse rule table")
+	component_block_rule_table = find_table_by_heading(tables, "component block rule table")
+	if base_table is None or reuse_table is None:
+		return {}, []
+
+	base_rows = list(base_table["rows"])
+	reuse_rows = list(reuse_table["rows"])
+	reuse_headers = set(reuse_table["headers"])
+	base_by_template_id = {
+		row.get("template_id", "").strip(): row for row in base_rows if row.get("template_id", "").strip()
+	}
+	base_by_local_slot = {
+		row.get("local_slot", "").strip(): row for row in base_rows if row.get("local_slot", "").strip()
+	}
+	reverse_lookup: dict[tuple[str, str], dict[str, str]] = {}
+	base_order = [
+		(row.get("template_id", "").strip(), row.get("sbo_short_description", "").strip())
+		for row in base_rows
+		if row.get("template_id", "").strip()
+	]
+
+	def register_mapping(component_id: str, indicator_id: str, base_row: dict[str, str]) -> None:
+		reverse_lookup[(component_id, indicator_id)] = {
+			"template_id": base_row.get("template_id", "").strip() or "<missing_template_id>",
+			"local_slot": base_row.get("local_slot", "").strip(),
+			"sbo_short_description": base_row.get("sbo_short_description", "").strip(),
+		}
+
+	if {"indicator_id", "component_id"}.issubset(reuse_headers):
+		for reuse_row in reuse_rows:
+			template_id = reuse_row.get("template_id", "").strip()
+			local_slot = reuse_row.get("local_slot", "").strip()
+			base_row = base_by_template_id.get(template_id) if template_id else None
+			if base_row is None and local_slot:
+				base_row = base_by_local_slot.get(local_slot)
+			if base_row is None:
+				continue
+			component_id = reuse_row.get("component_id", "").strip()
+			indicator_id = reuse_row.get("indicator_id", "").strip()
+			if component_id and indicator_id:
+				register_mapping(component_id, indicator_id, base_row)
+		return reverse_lookup, base_order
+
+	if {
+		"template_group",
+		"applies_to_component_pattern",
+		"component_block_rule",
+		"local_slot_source",
+		"indicator_id_format",
+	}.issubset(reuse_headers):
+		if component_block_rule_table is None:
+			return reverse_lookup, base_order
+		component_block_lookup = resolve_component_block_lookup(list(component_block_rule_table["rows"]))
+		for reuse_row in reuse_rows:
+			template_group = reuse_row.get("template_group", "").strip()
+			component_pattern = reuse_row.get("applies_to_component_pattern", "").strip()
+			block_rule_id = reuse_row.get("component_block_rule", "").strip()
+			local_slot_source = reuse_row.get("local_slot_source", "").strip()
+			indicator_id_format = reuse_row.get("indicator_id_format", "").strip()
+			matching_base_rows = [
+				row for row in base_rows if row.get("template_id", "").strip().startswith(f"{template_group}_")
+			]
+			for component_id, template_values in expand_component_pattern(component_pattern):
+				component_block = component_block_lookup.get((block_rule_id, component_id))
+				if component_block is None:
+					continue
+				for base_row in matching_base_rows:
+					expression_values = {
+						**template_values,
+						**resolve_local_slot_values(base_row, local_slot_source),
+						"component_block": component_block,
+					}
+					indicator_id = apply_expression_template(indicator_id_format, expression_values)
+					register_mapping(component_id, indicator_id, base_row)
+		return reverse_lookup, base_order
+
+	if {"template_group", "applies_to_component_pattern", "indicator_id_rule"}.issubset(reuse_headers):
+		for reuse_row in reuse_rows:
+			template_group = reuse_row.get("template_group", "").strip()
+			component_pattern = reuse_row.get("applies_to_component_pattern", "").strip()
+			indicator_id_template = extract_rule_template(reuse_row.get("indicator_id_rule", "").strip())
+			matching_base_rows = [
+				row for row in base_rows if row.get("template_id", "").strip().startswith(f"{template_group}_")
+			]
+			for component_id, template_values in expand_component_pattern(component_pattern):
+				for base_row in matching_base_rows:
+					indicator_id = apply_token_template(
+						indicator_id_template,
+						{**template_values, "local_slot": base_row.get("local_slot", "").strip()},
+					)
+					register_mapping(component_id, indicator_id, base_row)
+	return reverse_lookup, base_order
+
+
+def parse_first_markdown_table(markdown_text: str) -> dict[str, str]:
+	lines = markdown_text.splitlines()
+	for index, line in enumerate(lines):
+		if not line.lstrip().startswith("|"):
+			continue
+		if index + 2 >= len(lines):
+			continue
+		header_cells = [part.strip() for part in line.strip().strip("|").split("|")]
+		separator_line = lines[index + 1].strip()
+		if not separator_line.startswith("|"):
+			continue
+		value_line = lines[index + 2]
+		if not value_line.lstrip().startswith("|"):
+			continue
+		value_cells = [part.strip() for part in value_line.strip().strip("|").split("|")]
+		if len(header_cells) != len(value_cells):
+			continue
+		return {header_cells[cell_index]: value_cells[cell_index] for cell_index in range(len(header_cells))}
+	return {}
+
+
 def extract_target_section(markdown_text: str) -> str | None:
 	lines = markdown_text.splitlines(keepends=True)
 	search_start_index = 0
@@ -116,7 +262,11 @@ def extract_target_section(markdown_text: str) -> str | None:
 	return section_text + "\n"
 
 
-def render_combined_report(input_dir: Path, stitched_paths: list[Path]) -> str:
+def render_combined_report(input_dir: Path, stitched_paths: list[Path], manifest_path: Path | None = None) -> str:
+	registry_path = resolve_indicator_registry_path(manifest_path)
+	base_row_reverse_lookup, base_order = build_base_row_reverse_lookup(registry_path) if registry_path else ({}, [])
+	grouped_sections: dict[str, list[tuple[str, Path, str]]] = {}
+	ungrouped_sections: list[tuple[str, Path, str]] = []
 	output_lines = [
 		"# Panel C — Questionable cases\n",
 		"\n",
@@ -131,16 +281,51 @@ def render_combined_report(input_dir: Path, stitched_paths: list[Path]) -> str:
 			continue
 
 		matched_count += 1
-		output_lines.extend(
-			[
-				"\n",
-				f"## {stitched_path.stem}\n",
-				"\n",
-				f"- Source file: {stitched_path}\n",
-				"\n",
-				section_text,
-			]
-		)
+		metadata = parse_first_markdown_table(section_text)
+		component_id = (metadata.get("component_id") or "").strip()
+		indicator_id = (metadata.get("indicator_id") or "").strip()
+		sbo_short_description = (metadata.get("sbo_short_description") or stitched_path.stem).strip()
+		indicator_heading = f"{indicator_id} — {sbo_short_description}" if indicator_id else stitched_path.stem
+		group_info = base_row_reverse_lookup.get((component_id, indicator_id)) if component_id and indicator_id else None
+		if group_info is None:
+			ungrouped_sections.append((indicator_heading, stitched_path, section_text))
+			continue
+		group_key = group_info["template_id"]
+		grouped_sections.setdefault(group_key, []).append((indicator_heading, stitched_path, section_text))
+
+	for template_id, template_description in base_order:
+		sections = grouped_sections.get(template_id)
+		if not sections:
+			continue
+		output_lines.extend([
+			"\n",
+			f"## {template_id} — {template_description}\n",
+		])
+		for indicator_heading, stitched_path, section_text in sections:
+			output_lines.extend(
+				[
+					"\n",
+					f"### {indicator_heading}\n",
+					"\n",
+					f"- Source file: {stitched_path}\n",
+					"\n",
+					section_text,
+				]
+			)
+
+	if ungrouped_sections:
+		output_lines.extend(["\n", "## Ungrouped\n"])
+		for indicator_heading, stitched_path, section_text in ungrouped_sections:
+			output_lines.extend(
+				[
+					"\n",
+					f"### {indicator_heading}\n",
+					"\n",
+					f"- Source file: {stitched_path}\n",
+					"\n",
+					section_text,
+				]
+			)
 
 	if matched_count == 0:
 		output_lines.extend(
@@ -156,14 +341,18 @@ def render_combined_report(input_dir: Path, stitched_paths: list[Path]) -> str:
 def main() -> int:
 	args = parse_args()
 	input_dir = args.input_dir
+	manifest_path = args.sbo_manifest_file.resolve() if args.sbo_manifest_file else None
 	output_file = args.output_file or default_output_path(input_dir)
 
 	if not input_dir.exists() or not input_dir.is_dir():
 		print(f"Error: input directory not found: {input_dir}", file=sys.stderr)
 		return 1
+	if manifest_path is not None and (not manifest_path.exists() or not manifest_path.is_file()):
+		print(f"Error: scoring manifest file not found: {manifest_path}", file=sys.stderr)
+		return 1
 
 	stitched_paths = find_stitched_report_paths(input_dir)
-	output_text = render_combined_report(input_dir, stitched_paths)
+	output_text = render_combined_report(input_dir, stitched_paths, manifest_path)
 	output_file.parent.mkdir(parents=True, exist_ok=True)
 	output_file.write_text(output_text, encoding="utf-8")
 	print(output_file)

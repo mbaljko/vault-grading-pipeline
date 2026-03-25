@@ -347,6 +347,8 @@ def collect_panel_c_questionable_cases(output_dir: Path, manifest_path: Path) ->
 		str(collector_script),
 		"--input-dir",
 		str(output_dir),
+		"--sbo-manifest-file",
+		str(manifest_path),
 		"--output-file",
 		str(output_file),
 	]
