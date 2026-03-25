@@ -47,11 +47,11 @@ Per matching row behavior:
 	  before the closing `---`).
 	- Replaces each Panel A/B/C table with an augmented version that adds
 	  a `response_text` column populated by submission_id lookup.
-	- Writes output to `<llm_output_stem>_stitched.md` in the same directory.
+	- Writes output to `<llm_output_stem>_stitched_worksheet.md` in the same directory.
 
 Exit behavior:
 - Returns 1 with stderr message when required input files are missing.
-- Returns 1 with stderr message when any target output file already exists
+- Returns 0 with a console message when target output files already exist
 	and `--overwrite` was not supplied.
 
 Example:
@@ -237,8 +237,18 @@ def resolve_runner_output_paths(
 	runner_output_dir = output_dir if output_dir else (payload_dir / RUNNER_OUTPUT_SUBDIR)
 	payload_file = runner_output_dir / f"{output_file_stem}_payload.json"
 	runner_output_file = runner_output_dir / f"{output_file_stem}_output.md"
-	stitched_output_file = runner_output_dir / f"{output_file_stem}_output_stitched.md"
+	stitched_output_file = runner_output_dir / f"{output_file_stem}_output_stitched_worksheet.md"
 	return runner_output_dir, payload_file, runner_output_file, stitched_output_file
+
+
+def resolve_legacy_stitched_output_path(
+	payload_dir: Path,
+	output_file_stem: str,
+	output_dir: Path | None = None,
+) -> Path:
+	"""Return the legacy stitched output path used before the worksheet rename."""
+	runner_output_dir = output_dir if output_dir else (payload_dir / RUNNER_OUTPUT_SUBDIR)
+	return runner_output_dir / f"{output_file_stem}_output_stitched.md"
 
 
 def run_l1_itp_for_payload(
@@ -388,9 +398,9 @@ def apply_response_text_stitcher(
 		augmented_lines.append(line)
 		i += 1
 	
-	# Derive output filename from runner output file stem + "_stitched"
+	# Derive output filename from runner output file stem + "_stitched_worksheet"
 	output_text = "".join(augmented_lines)
-	output_path = runner_output_file.parent / f"{runner_output_file.stem}_stitched{runner_output_file.suffix}"
+	output_path = runner_output_file.parent / f"{runner_output_file.stem}_stitched_worksheet{runner_output_file.suffix}"
 	output_path.write_text(output_text, encoding="utf-8")
 	return output_path
 
@@ -556,21 +566,29 @@ def main() -> int:
 			sbo_identifier,
 			output_dir,
 		)
+		legacy_stitched_output_file = resolve_legacy_stitched_output_path(
+			payload_dir,
+			sbo_identifier,
+			output_dir,
+		)
 		candidate_paths = [payload_file]
 		if not runner_dry_run:
-			candidate_paths.extend([runner_output_file, stitched_output_file])
+			candidate_paths.extend([
+				runner_output_file,
+				stitched_output_file,
+				legacy_stitched_output_file,
+			])
 		existing_outputs.extend(path for path in candidate_paths if path.exists())
 
 	if existing_outputs and not overwrite:
 		print(
-			"Refusing to overwrite existing ITP outputs. "
+			"Existing ITP outputs detected. "
 			"This usually means the iteration field was not advanced. "
-			"Re-run with --overwrite to replace them:",
-			file=sys.stderr,
+			"Stopping without changes. Re-run with --overwrite to replace them:"
 		)
 		for path in existing_outputs:
-			print(f"- {path}", file=sys.stderr)
-		return 1
+			print(f"- {path}")
+		return 0
 
 	if existing_outputs and overwrite:
 		print("Overwriting existing ITP outputs because --overwrite was supplied.")
