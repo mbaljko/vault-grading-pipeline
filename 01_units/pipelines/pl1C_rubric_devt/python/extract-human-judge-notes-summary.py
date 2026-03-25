@@ -16,6 +16,7 @@ Output columns:
 - `<iteration>-validation`: `TP`, `FP`, `TN`, or `FN` parsed from
   `human_judge_notes`
 - `false_score`: echoes `FP` or `FN` when validation surfaced a false score
+- `human_judge_notes_detail`: explanatory note text with the validation label removed
 
 The iteration label is inferred from the input path when possible, e.g. `iter01`.
 Use `--iteration-label` to override it explicitly.
@@ -155,12 +156,12 @@ def derive_iteration_label(input_path: Path, explicit_label: str | None) -> str:
 	return "iteration"
 
 
-def default_output_path(input_path: Path) -> Path:
-	return input_path.with_name(f"{input_path.stem}_human_judge_notes_summary.md")
+def default_output_path(input_path: Path, iteration_label: str) -> Path:
+	return input_path.with_name(f"{input_path.stem}_human_judge_notes_summary_{iteration_label}.md")
 
 
-def default_output_path_for_dir(input_dir: Path) -> Path:
-	return input_dir / "human_judge_notes_summary.md"
+def default_output_path_for_dir(input_dir: Path, iteration_label: str) -> Path:
+	return input_dir / f"human_judge_notes_summary_{iteration_label}.md"
 
 
 def map_score_label(evidence_status: str) -> str:
@@ -183,11 +184,27 @@ def parse_validation_label(human_judge_notes: str) -> str:
 	return next(iter(matches))
 
 
+def parse_human_judge_notes_detail(human_judge_notes: str) -> str:
+	validation_label = parse_validation_label(human_judge_notes)
+	if not validation_label:
+		return human_judge_notes.strip()
+	detail = VALIDATION_LABEL_RE.sub("", human_judge_notes, count=1).strip()
+	detail = re.sub(r"^[\s:;,.\-]+", "", detail)
+	detail = re.sub(r"\s+", " ", detail)
+	return detail.strip()
+
+
 def derive_false_score_flag(validation_label: str) -> str:
 	normalized = validation_label.strip().upper()
 	if normalized in {"FP", "FN"}:
 		return normalized
 	return ""
+
+
+def build_report_heading(output_filename: str, iteration_label: str) -> str:
+	if iteration_label and iteration_label.lower() not in output_filename.lower():
+		return f"{output_filename} ({iteration_label})"
+	return output_filename
 
 
 def build_indicator_reverse_lookup(registry_path: Path) -> dict[tuple[str, str], dict[str, str]]:
@@ -395,6 +412,7 @@ def extract_submission_rows(markdown_text: str, input_path: Path) -> list[dict[s
 			submission_id = row[header_index["submission_id"]].strip()
 			if not submission_id:
 				continue
+			human_judge_notes = row[header_index["human_judge_notes"]].strip()
 			records.append(
 				{
 					"report_key": current_report_key,
@@ -404,7 +422,8 @@ def extract_submission_rows(markdown_text: str, input_path: Path) -> list[dict[s
 					"indicator_id": current_indicator_id,
 					"submission_id": submission_id,
 					"score": map_score_label(row[header_index["evidence_status"]].strip()),
-					"validation": parse_validation_label(row[header_index["human_judge_notes"]].strip()),
+					"validation": parse_validation_label(human_judge_notes),
+					"human_judge_notes_detail": parse_human_judge_notes_detail(human_judge_notes),
 				}
 			)
 	return records
@@ -447,6 +466,8 @@ def merge_records(source_paths: list[Path]) -> list[dict[str, str]]:
 					existing_submission["score"] = record["score"]
 				if not existing_submission["validation"] and record["validation"]:
 					existing_submission["validation"] = record["validation"]
+				if not existing_submission.get("human_judge_notes_detail", "") and record.get("human_judge_notes_detail", ""):
+					existing_submission["human_judge_notes_detail"] = record["human_judge_notes_detail"]
 				continue
 			record_key = (
 				record["report_key"],
@@ -470,6 +491,7 @@ def render_output_report(
 	score_column = f"{iteration_label}-score"
 	validation_column = f"{iteration_label}-validation"
 	false_score_column = "false_score"
+	report_heading = build_report_heading(output_filename, iteration_label)
 	sorted_records = sorted(
 		records,
 		key=lambda record: (
@@ -501,7 +523,7 @@ def render_output_report(
 			]
 		)
 	lines = [
-		f"## {output_filename}\n",
+		f"## {report_heading}\n",
 		"\n",
 		f"- Source files scanned: {len(source_paths)}\n",
 		f"- Primary aggregate files scanned: {primary_count}\n",
@@ -556,6 +578,59 @@ def render_output_report(
 					]
 				)
 			)
+	false_score_groups = {
+		template_id: [record for record in group_records if derive_false_score_flag(record.get("validation", ""))]
+		for template_id, group_records in grouped_rows.items()
+	}
+	false_score_groups = {
+		template_id: group_records for template_id, group_records in false_score_groups.items() if group_records
+	}
+	if false_score_groups:
+		lines.extend(
+			[
+				"\n",
+				"### False Scores\n",
+			]
+		)
+		for template_id, group_records in false_score_groups.items():
+			template_description = group_records[0].get("sbo_short_description", "").strip()
+			heading = f"{template_id} — {template_description}" if template_description else template_id
+			lines.extend(
+				[
+					"\n",
+					f"#### {heading}\n",
+					"\n",
+					format_markdown_row(
+						[
+							"source_panel",
+							"component_id",
+							"indicator_id",
+							"submission_id",
+							score_column,
+							validation_column,
+							false_score_column,
+							"human_judge_notes_detail",
+						]
+					),
+					format_markdown_row(["---", "---", "---", "---", "---", "---", "---", "---"]),
+				]
+			)
+			for record in group_records:
+				validation_label = record["validation"]
+				lines.append(
+					format_markdown_row(
+						[
+							record.get("source_panel", ""),
+							record.get("component_id", ""),
+							record["indicator_id"],
+							record["submission_id"],
+							record["score"],
+							validation_label,
+							derive_false_score_flag(validation_label),
+							record.get("human_judge_notes_detail", ""),
+						]
+					)
+				)
 	return "".join(lines)
 
 
@@ -567,7 +642,6 @@ def main() -> int:
 			print(f"Error: panel report file not found: {input_path}", file=sys.stderr)
 			return 1
 		source_paths = [input_path]
-		output_path = args.output_file.resolve() if args.output_file else default_output_path(input_path)
 		iteration_source = input_path
 	else:
 		input_dir = args.input_dir.resolve()
@@ -582,10 +656,13 @@ def main() -> int:
 				file=sys.stderr,
 			)
 			return 1
-		output_path = args.output_file.resolve() if args.output_file else default_output_path_for_dir(input_dir)
 		iteration_source = input_dir
 
 	iteration_label = derive_iteration_label(iteration_source, args.iteration_label)
+	if args.panel_report_file is not None:
+		output_path = args.output_file.resolve() if args.output_file else default_output_path(input_path, iteration_label)
+	else:
+		output_path = args.output_file.resolve() if args.output_file else default_output_path_for_dir(input_dir, iteration_label)
 	registry_path = args.indicator_registry.resolve() if args.indicator_registry else None
 	if registry_path is not None and (not registry_path.exists() or not registry_path.is_file()):
 		print(f"Error: indicator registry file not found: {registry_path}", file=sys.stderr)

@@ -41,9 +41,9 @@ Saturation rate definition:
 
 Output naming:
 - Single-component run:
-	I_<assignment>_<component_id>_output_scoring_stats_report.md
+	I_<assignment>_<component_id>_output_scoring_stats_report_<iteration>.md
 - Multi-component run:
-	I_<assignment>_all_components_output_scoring_stats_report.md
+	I_<assignment>_all_components_output_scoring_stats_report_<iteration>.md
 """
 
 from __future__ import annotations
@@ -67,6 +67,7 @@ from generate_rubric_and_manifest_from_indicator_registry import (
 
 
 SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
+ITERATION_RE = re.compile(r"\b(iter\d+)\b", re.IGNORECASE)
 RUNNER_OUTPUT_SUBDIR = "Level1-CalibrationTesting-Outputs"
 POSITIVE_EVIDENCE_STATUS_VALUES = {
 	"positive",
@@ -115,6 +116,12 @@ def parse_args() -> argparse.Namespace:
 		required=False,
 		help="Output directory for scoring-stats files. Defaults to <manifest_dir>/Level1-CalibrationTesting-Outputs.",
 	)
+	parser.add_argument(
+		"--iteration-label",
+		type=str,
+		required=False,
+		help="Optional iteration label override, e.g. iter02.",
+	)
 	return parser.parse_args()
 
 
@@ -125,11 +132,24 @@ def derive_assignment_output_prefix(manifest_path: Path) -> str:
 	return f"I_{match.group(1)}"
 
 
-def derive_output_filename(component_ids: list[str], manifest_path: Path) -> str:
+def derive_iteration_label(input_path: Path, explicit_label: str | None) -> str:
+	if explicit_label:
+		return explicit_label.strip()
+	for part in input_path.parts:
+		match = ITERATION_RE.search(part)
+		if match:
+			return match.group(1).lower()
+	match = ITERATION_RE.search(str(input_path))
+	if match:
+		return match.group(1).lower()
+	return "iteration"
+
+
+def derive_output_filename(component_ids: list[str], manifest_path: Path, iteration_label: str) -> str:
 	prefix = derive_assignment_output_prefix(manifest_path)
 	if len(component_ids) == 1:
-		return f"{prefix}_{component_ids[0]}_output_scoring_stats_report.md"
-	return f"{prefix}_all_components_output_scoring_stats_report.md"
+		return f"{prefix}_{component_ids[0]}_output_scoring_stats_report_{iteration_label}.md"
+	return f"{prefix}_all_components_output_scoring_stats_report_{iteration_label}.md"
 
 
 def build_base_row_reverse_lookup(registry_path: Path) -> dict[tuple[str, str], dict[str, str]]:
@@ -403,6 +423,7 @@ def is_positive_scored_row(row: dict[str, str]) -> bool:
 def render_consolidated_scoring_stats_document(
 	component_ids: list[str],
 	manifest_path: Path,
+	iteration_label: str,
 	scored_csv_paths: list[Path],
 	total_scored_rows: int,
 	indicator_rows: list[list[str]],
@@ -423,7 +444,7 @@ def render_consolidated_scoring_stats_document(
 		*[f"saturation_rate_{component_id}" for component_id in component_ids],
 	]
 	parts = [
-		f"## {derive_output_filename(component_ids, manifest_path).removesuffix('.md')}",
+		f"## {derive_output_filename(component_ids, manifest_path, iteration_label).removesuffix('.md')}",
 		"",
 		"Saturation rate is defined here as number_scored_positive divided by number_scored for each indicator.",
 		"Percent co-incidence values are row-conditional: each populated cell shows the share of positive samples for the row template that were also positive for the column template.",
@@ -488,6 +509,7 @@ def main() -> int:
 	component_ids = [component_id.strip() for component_id in args.component_id if component_id.strip()]
 	scored_csv_paths = [path.resolve() for path in args.file_with_scored_texts]
 	output_dir = args.output_dir.resolve() if args.output_dir else manifest_path.parent / RUNNER_OUTPUT_SUBDIR
+	iteration_label = derive_iteration_label(manifest_path, args.iteration_label)
 
 	if not component_ids:
 		print("Error: at least one --component-id value is required.", file=sys.stderr)
@@ -644,11 +666,12 @@ def main() -> int:
 		positive_submission_ids_by_template,
 		True,
 	)
-	consolidated_output_path = output_dir / derive_output_filename(component_ids, manifest_path)
+	consolidated_output_path = output_dir / derive_output_filename(component_ids, manifest_path, iteration_label)
 	consolidated_output_path.write_text(
 		render_consolidated_scoring_stats_document(
 			component_ids=component_ids,
 			manifest_path=manifest_path,
+			iteration_label=iteration_label,
 			scored_csv_paths=scored_csv_paths,
 			total_scored_rows=total_scored_rows,
 			indicator_rows=consolidated_indicator_rows,
