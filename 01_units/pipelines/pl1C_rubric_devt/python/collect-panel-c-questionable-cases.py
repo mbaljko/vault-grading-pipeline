@@ -15,6 +15,7 @@ Arguments:
 	matching indicator registry and group collected sections by Base Table rows.
 - `--panel`: optional repeatable panel selector. Supported values are `A`, `B`,
 	and `C`. When omitted, the script writes all three aggregate reports.
+- `--overwrite`: allow existing aggregate report files to be replaced.
 
 Output behavior:
 - Writes one combined markdown document per selected panel.
@@ -98,6 +99,11 @@ def parse_args() -> argparse.Namespace:
 		type=Path,
 		required=False,
 		help="Optional explicit output markdown file path.",
+	)
+	parser.add_argument(
+		"--overwrite",
+		action="store_true",
+		help="Allow existing aggregate report files to be replaced.",
 	)
 	return parser.parse_args()
 
@@ -374,6 +380,7 @@ def main() -> int:
 	input_dir = args.input_dir
 	manifest_path = args.sbo_manifest_file.resolve() if args.sbo_manifest_file else None
 	selected_panels = args.panel or ["A", "B", "C"]
+	overwrite = args.overwrite
 
 	if not input_dir.exists() or not input_dir.is_dir():
 		print(f"Error: input directory not found: {input_dir}", file=sys.stderr)
@@ -389,6 +396,10 @@ def main() -> int:
 	output_paths: list[Path] = []
 	for panel_key in selected_panels:
 		output_file = args.output_file if args.output_file is not None else default_output_path(input_dir, panel_key)
+		if output_file.exists() and not overwrite:
+			print(f"Skipping existing panel aggregate (use --overwrite to replace): {output_file}")
+			output_paths.append(output_file)
+			continue
 		output_text = render_combined_report(input_dir, stitched_paths, panel_key, manifest_path)
 		output_file.parent.mkdir(parents=True, exist_ok=True)
 		output_file.write_text(output_text, encoding="utf-8")

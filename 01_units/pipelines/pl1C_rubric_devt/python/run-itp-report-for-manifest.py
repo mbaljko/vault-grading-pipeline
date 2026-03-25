@@ -336,7 +336,7 @@ def derive_assignment_output_prefix(manifest_path: Path) -> str:
 	return f"I_{match.group(1)}"
 
 
-def collect_panel_reports(output_dir: Path, manifest_path: Path) -> list[Path]:
+def collect_panel_reports(output_dir: Path, manifest_path: Path, overwrite: bool = False) -> list[Path]:
 	"""Collect Panel A/B/C sections across stitched worksheets."""
 	if REPO_ROOT is None:
 		raise RuntimeError("Could not locate repository root from script path.")
@@ -348,6 +348,8 @@ def collect_panel_reports(output_dir: Path, manifest_path: Path) -> list[Path]:
 		output_dir / f"{derive_assignment_output_prefix(manifest_path)}_all_panel_c.md",
 	]
 	for panel_key, output_path in zip(["A", "B", "C"], output_paths):
+		if output_path.exists() and not overwrite:
+			continue
 		cmd = [
 			sys.executable,
 			str(collector_script),
@@ -360,6 +362,8 @@ def collect_panel_reports(output_dir: Path, manifest_path: Path) -> list[Path]:
 			"--output-file",
 			str(output_path),
 		]
+		if overwrite:
+			cmd.append("--overwrite")
 		subprocess.run(cmd, check=True)
 	return output_paths
 
@@ -666,9 +670,9 @@ def main() -> int:
 			print("Panel aggregation reports were not created because no stitched worksheets were found.")
 			return 0
 
-		collected_panel_outputs = collect_panel_reports(runner_output_dir, markdown_path)
+		collected_panel_outputs = collect_panel_reports(runner_output_dir, markdown_path, False)
 		print("Collected panel aggregation reports:")
-		for path in collected_panel_outputs:
+		for path in missing_panel_outputs:
 			print(f"- {path}")
 		return 0
 
@@ -698,7 +702,7 @@ def main() -> int:
 		)
 
 	if not runner_dry_run:
-		collected_panel_outputs = collect_panel_reports(runner_output_dir, markdown_path)
+		collected_panel_outputs = collect_panel_reports(runner_output_dir, markdown_path, overwrite)
 		print("Collected panel aggregation reports:")
 		for path in collected_panel_outputs:
 			print(f"- {path}")
