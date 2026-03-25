@@ -206,6 +206,44 @@ def summarize_score_value(evidence_status: str) -> str:
 	return evidence_status.strip()
 
 
+def build_variance_bucket_cells(delta: int, variance_rate: float) -> list[str]:
+	formatted_rate = f"{variance_rate:.3f}"
+	buckets = {
+		"-high": "",
+		"-med": "",
+		"-low": "",
+		"stable": "",
+		"+low": "",
+		"+mod": "",
+		"+high": "",
+	}
+	if delta == 0:
+		buckets["stable"] = formatted_rate
+	elif delta < 0:
+		if variance_rate <= 0.05:
+			buckets["-low"] = formatted_rate
+		elif variance_rate <= 0.10:
+			buckets["-med"] = formatted_rate
+		else:
+			buckets["-high"] = formatted_rate
+	else:
+		if variance_rate <= 0.05:
+			buckets["+low"] = formatted_rate
+		elif variance_rate <= 0.10:
+			buckets["+mod"] = formatted_rate
+		else:
+			buckets["+high"] = formatted_rate
+	return [
+		buckets["-high"],
+		buckets["-med"],
+		buckets["-low"],
+		buckets["stable"],
+		buckets["+low"],
+		buckets["+mod"],
+		buckets["+high"],
+	]
+
+
 def quote_yaml_string(value: str) -> str:
 	escaped = value.replace("\\", "\\\\").replace('"', '\\"')
 	return f'"{escaped}"'
@@ -421,6 +459,56 @@ def build_score_diff_rows(
 	return sorted(diff_rows, key=lambda row: (row[0], row[1], row[2], row[3], row[4]))
 
 
+def build_indicator_delta_rows(
+	component_ids: list[str],
+	current_rows_by_component: dict[str, list[dict[str, str]]],
+	previous_rows_by_component: dict[str, list[dict[str, str]]],
+) -> list[list[str]]:
+	counts_by_indicator: dict[str, dict[str, int]] = {}
+	for component_id in component_ids:
+		for row in previous_rows_by_component.get(component_id, []):
+			indicator_id = (row.get("indicator_id") or "").strip()
+			if not indicator_id:
+				continue
+			counts_by_indicator.setdefault(indicator_id, {"previous": 0, "current": 0, "number_scored": 0})
+			if is_positive_scored_row(row):
+				counts_by_indicator[indicator_id]["previous"] += 1
+		for row in current_rows_by_component.get(component_id, []):
+			indicator_id = (row.get("indicator_id") or "").strip()
+			if not indicator_id:
+				continue
+			counts_by_indicator.setdefault(indicator_id, {"previous": 0, "current": 0, "number_scored": 0})
+			counts_by_indicator[indicator_id]["number_scored"] += 1
+			if is_positive_scored_row(row):
+				counts_by_indicator[indicator_id]["current"] += 1
+
+	def indicator_sort_key(indicator_id: str) -> tuple[int, str]:
+		match = re.fullmatch(r"[A-Za-z]+(\d+)", indicator_id)
+		if match:
+			return (int(match.group(1)), indicator_id)
+		return (10**9, indicator_id)
+
+	rows: list[list[str]] = []
+	for indicator_id in sorted(counts_by_indicator, key=indicator_sort_key):
+		previous_count = counts_by_indicator[indicator_id]["previous"]
+		current_count = counts_by_indicator[indicator_id]["current"]
+		number_scored = counts_by_indicator[indicator_id]["number_scored"]
+		delta = current_count - previous_count
+		absolute_delta = abs(delta)
+		variance_rate = absolute_delta / number_scored if number_scored > 0 else 0.0
+		rows.append(
+			[
+				indicator_id,
+				str(previous_count),
+				str(current_count),
+				f"{delta:+d}",
+				str(number_scored),
+				*build_variance_bucket_cells(delta, variance_rate),
+			]
+		)
+	return rows
+
+
 def find_matching_scored_rows(
 	manifest_components: dict[str, str],
 	scored_rows: list[dict[str, str]],
@@ -564,6 +652,7 @@ def render_consolidated_scoring_stats_document(
 	previous_iteration_label: str | None,
 	scored_csv_paths: list[Path],
 	total_scored_rows: int,
+	indicator_delta_rows: list[list[str]],
 	diff_rows: list[list[str]],
 	missing_previous_components: list[str],
 	indicator_rows: list[list[str]],
@@ -603,8 +692,6 @@ def render_consolidated_scoring_stats_document(
 			],
 		),
 		"",
-		"### Diff Report",
-		"",
 		"### Indicator saturation, all",
 		"",
 		render_markdown_table(
@@ -642,20 +729,49 @@ def render_consolidated_scoring_stats_document(
 		coincidence_percent_matrix,
 		"",
 	]
+	diff_report_parts = ["### Diff Report", ""]
 	if previous_iteration_label is None:
-		parts[11:11] = ["Previous iteration could not be derived from the current iteration label.", ""]
+		diff_report_parts.extend(["Previous iteration could not be derived from the current iteration label.", ""])
 	else:
-		diff_report_parts = [
+		diff_report_parts.extend(
+			[
 			f"Current iteration: {iteration_label}",
 			f"Previous iteration: {previous_iteration_label}",
-		]
+			]
+		)
 		if missing_previous_components:
 			diff_report_parts.append(
 				"Previous iteration scored CSVs were not found for: " + ", ".join(sorted(missing_previous_components))
 			)
+		diff_report_parts.extend(
+			[
+				"",
+				"#### Delta Table",
+				"",
+				render_markdown_table(
+					[
+						"indicator",
+						previous_iteration_label,
+						iteration_label,
+						"delta",
+						"number_scored",
+						"-high",
+						"-med",
+						"-low",
+						"stable",
+						"+low",
+						"+mod",
+						"+high",
+					],
+					indicator_delta_rows,
+				),
+			]
+		)
 		if diff_rows:
 			diff_report_parts.extend(
 				[
+					"",
+					"#### Diff Table",
 					"",
 					render_markdown_table(
 						[
@@ -671,7 +787,8 @@ def render_consolidated_scoring_stats_document(
 			)
 		else:
 			diff_report_parts.extend(["", "No score differences found between the current and previous iteration."])
-		parts[11:11] = [*diff_report_parts, ""]
+	diff_report_parts.append("")
+	parts.extend(diff_report_parts)
 	return "\n".join(parts)
 
 
@@ -726,6 +843,7 @@ def main() -> int:
 				missing_previous_components.append(component_id)
 				continue
 			previous_rows_by_component[component_id] = load_scored_rows(previous_scored_csv_path)
+	indicator_delta_rows = build_indicator_delta_rows(component_ids, scored_rows_by_component, previous_rows_by_component)
 	diff_rows = build_score_diff_rows(
 		component_ids,
 		scored_rows_by_component,
@@ -872,6 +990,7 @@ def main() -> int:
 			previous_iteration_label=previous_iteration_label,
 			scored_csv_paths=scored_csv_paths,
 			total_scored_rows=total_scored_rows,
+				indicator_delta_rows=indicator_delta_rows,
 			diff_rows=diff_rows,
 			missing_previous_components=missing_previous_components,
 			indicator_rows=consolidated_indicator_rows,
