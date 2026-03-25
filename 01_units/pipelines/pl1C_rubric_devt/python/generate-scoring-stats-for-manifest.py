@@ -30,8 +30,11 @@ Report contents:
 3. A Base Table aggregation that reverses reuse expansion back to registry
 	 template rows and reports the same stats at the base-row level.
 4. A co-incidence matrix over Base Table `template_id` values, where each
-	upper-triangular cell contains the count of positive scored submissions that
+	cell contains the count of positive scored submissions that
 	appear in both the row and column template sets.
+5. A second co-incidence matrix with the same structure, but each populated
+	cell is expressed as a row-conditional percentage: the share of positive
+	samples for the row template that were also positive for the column template.
 
 Saturation rate definition:
 - saturation_rate = number_scored_positive / number_scored
@@ -285,19 +288,96 @@ def render_markdown_table(headers: list[str], rows: list[list[str]]) -> str:
 	return "\n".join([header_line, separator_line, *body_lines])
 
 
-def render_coincidence_matrix(template_ids: list[str], positive_submission_ids_by_template: dict[str, set[str]]) -> str:
-	headers = ["template_id", *template_ids]
-	rows: list[list[str]] = []
-	for row_index, row_template_id in enumerate(template_ids):
-		row_values = [row_template_id]
-		row_submission_ids = positive_submission_ids_by_template.get(row_template_id, set())
-		for column_index, column_template_id in enumerate(template_ids):
-			if column_index < row_index:
-				row_values.append("")
+def derive_unique_template_labels(template_ids: list[str]) -> dict[str, str]:
+	tokenized_template_ids = {template_id: template_id.split("_") for template_id in template_ids}
+	preferred_labels: dict[str, str] = {}
+	preferred_counts: dict[str, int] = {}
+	for template_id, tokens in tokenized_template_ids.items():
+		if len(tokens) >= 2 and tokens[-2] in {"core", "adv"}:
+			preferred_label = f"{tokens[-2]}_{tokens[-1]}"
+			preferred_labels[template_id] = preferred_label
+			preferred_counts[preferred_label] = preferred_counts.get(preferred_label, 0) + 1
+
+	labels_by_template: dict[str, str] = {}
+	for template_id, preferred_label in preferred_labels.items():
+		if preferred_counts[preferred_label] == 1:
+			labels_by_template[template_id] = preferred_label
+
+	for width in range(1, max((len(tokens) for tokens in tokenized_template_ids.values()), default=0) + 1):
+		candidate_labels: dict[str, str] = {}
+		candidate_counts: dict[str, int] = {}
+		for template_id, tokens in tokenized_template_ids.items():
+			if template_id in labels_by_template:
 				continue
+			candidate_label = "_".join(tokens[-width:])
+			candidate_labels[template_id] = candidate_label
+			candidate_counts[candidate_label] = candidate_counts.get(candidate_label, 0) + 1
+		for template_id, candidate_label in candidate_labels.items():
+			if candidate_counts[candidate_label] == 1:
+				labels_by_template[template_id] = candidate_label
+	for template_id in template_ids:
+		labels_by_template.setdefault(template_id, template_id)
+	return labels_by_template
+
+
+def build_coincidence_count_matrix(
+	template_ids: list[str],
+	positive_submission_ids_by_template: dict[str, set[str]],
+) -> dict[str, dict[str, int]]:
+	count_matrix: dict[str, dict[str, int]] = {}
+	for row_template_id in template_ids:
+		count_matrix[row_template_id] = {}
+		row_submission_ids = positive_submission_ids_by_template.get(row_template_id, set())
+		for column_template_id in template_ids:
 			column_submission_ids = positive_submission_ids_by_template.get(column_template_id, set())
-			row_values.append(str(len(row_submission_ids & column_submission_ids)))
+			count_matrix[row_template_id][column_template_id] = len(row_submission_ids & column_submission_ids)
+	return count_matrix
+
+
+def render_coincidence_matrix(
+	template_ids: list[str],
+	positive_submission_ids_by_template: dict[str, set[str]],
+	as_percentage: bool,
+) -> str:
+	labels_by_template = derive_unique_template_labels(template_ids)
+	count_matrix = build_coincidence_count_matrix(template_ids, positive_submission_ids_by_template)
+	headers = ["template", *[labels_by_template[template_id] for template_id in template_ids], "total"]
+	rows: list[list[str]] = []
+	column_totals = {template_id: 0 for template_id in template_ids}
+
+	for row_template_id in template_ids:
+		row_values = [labels_by_template[row_template_id]]
+		row_total = 0
+		row_denominator = len(positive_submission_ids_by_template.get(row_template_id, set()))
+		for column_template_id in template_ids:
+			cell_count = count_matrix[row_template_id][column_template_id]
+			row_total += cell_count
+			column_totals[column_template_id] += cell_count
+			if as_percentage:
+				row_values.append(format_rate(cell_count, row_denominator))
+			else:
+				row_values.append(str(cell_count))
+		if as_percentage:
+			row_values.append(format_rate(row_denominator, row_denominator))
+		else:
+			row_values.append(str(row_total))
 		rows.append(row_values)
+
+	total_row = ["total"]
+	grand_total = 0
+	for template_id in template_ids:
+		column_total = column_totals[template_id]
+		grand_total += column_total
+		if as_percentage:
+			column_denominator = len(positive_submission_ids_by_template.get(template_id, set()))
+			total_row.append(format_rate(column_denominator, column_denominator))
+		else:
+			total_row.append(str(column_total))
+	if as_percentage:
+		total_row.append("100.0%")
+	else:
+		total_row.append(str(grand_total))
+	rows.append(total_row)
 	return render_markdown_table(headers, rows)
 
 
@@ -331,7 +411,8 @@ def render_consolidated_scoring_stats_document(
 	total_scored_rows: int,
 	indicator_rows: list[list[str]],
 	base_rows: list[list[str]],
-	coincidence_matrix: str,
+	coincidence_count_matrix: str,
+	coincidence_percent_matrix: str,
 ) -> str:
 	component_label = component_ids[0] if len(component_ids) == 1 else ", ".join(component_ids)
 	source_csv_label = "\n".join(str(path) for path in scored_csv_paths)
@@ -349,6 +430,7 @@ def render_consolidated_scoring_stats_document(
 		f"## {derive_output_filename(component_ids, manifest_path).removesuffix('.md')}",
 		"",
 		"Saturation rate is defined here as number_scored_positive divided by number_scored for each indicator.",
+		"Percent co-incidence values are row-conditional: each populated cell shows the share of positive samples for the row template that were also positive for the column template.",
 		"",
 		render_markdown_table(
 			["metric", "value"],
@@ -380,7 +462,21 @@ def render_consolidated_scoring_stats_document(
 		"",
 		"### Co-incidence matrix",
 		"",
-		coincidence_matrix,
+		"Interpretation: each cell is a raw overlap count. For row template R and column template C, the number is the count of positive submissions that appear in both R and C.",
+		"This count matrix is symmetric, so the value at (R, C) matches the value at (C, R).",
+		"Diagonal cells are self-overlap counts, so they equal the number of positive submissions for that template.",
+		"Row and column totals are sums of the displayed overlap counts across the full row or column.",
+		"",
+		coincidence_count_matrix,
+		"",
+		"### Co-incidence matrix, row-conditional percent",
+		"",
+		"Interpretation: each cell is directional. For a row template R and column template C, the value is the percentage of positive samples for R that were also positive for C.",
+		"This percent matrix is not generally symmetric: the value at (R, C) need not match the value at (C, R).",
+		"Diagonal cells are 100% when the row template has at least one positive sample, because every positive sample for R overlaps with itself.",
+		"Row totals are 100% by construction when the row template has at least one positive sample. Column totals summarize the displayed directional percentages in that column, and the lower-right corner is 100%.",
+		"",
+		coincidence_percent_matrix,
 		"",
 	]
 	return "\n".join(parts)
@@ -533,7 +629,16 @@ def main() -> int:
 		)
 	consolidated_base_rows.sort(key=base_table_sort_key)
 	ordered_template_ids = [row[0] for row in consolidated_base_rows]
-	coincidence_matrix = render_coincidence_matrix(ordered_template_ids, positive_submission_ids_by_template)
+	coincidence_count_matrix = render_coincidence_matrix(
+		ordered_template_ids,
+		positive_submission_ids_by_template,
+		False,
+	)
+	coincidence_percent_matrix = render_coincidence_matrix(
+		ordered_template_ids,
+		positive_submission_ids_by_template,
+		True,
+	)
 	consolidated_output_path = output_dir / derive_output_filename(component_ids, manifest_path)
 	consolidated_output_path.write_text(
 		render_consolidated_scoring_stats_document(
@@ -543,7 +648,8 @@ def main() -> int:
 			total_scored_rows=total_scored_rows,
 			indicator_rows=consolidated_indicator_rows,
 			base_rows=consolidated_base_rows,
-			coincidence_matrix=coincidence_matrix,
+			coincidence_count_matrix=coincidence_count_matrix,
+			coincidence_percent_matrix=coincidence_percent_matrix,
 		),
 		encoding="utf-8",
 	)
