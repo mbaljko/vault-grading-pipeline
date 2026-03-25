@@ -163,38 +163,59 @@ def derive_previous_iteration_label(iteration_label: str) -> str | None:
 	return f"iter{iteration_number - 1:0{len(match.group(1))}d}"
 
 
-def derive_previous_scored_csv_path(
-	current_path: Path, component_id: str, current_iteration_label: str, previous_iteration_label: str
+def derive_iteration_history_labels(iteration_label: str) -> list[str]:
+	match = re.fullmatch(r"iter(\d+)", iteration_label.strip().lower())
+	if not match:
+		return [iteration_label]
+	iteration_digits = match.group(1)
+	iteration_number = int(iteration_digits)
+	if iteration_number <= 0:
+		return [iteration_label]
+	return [f"iter{index:0{len(iteration_digits)}d}" for index in range(iteration_number, 0, -1)]
+
+
+def derive_scored_csv_path_for_iteration(
+	current_path: Path, component_id: str, current_iteration_label: str, target_iteration_label: str
 ) -> Path | None:
+	if target_iteration_label == current_iteration_label:
+		return current_path if current_path.exists() and current_path.is_file() else None
+
 	path_parts = list(current_path.parts)
+	target_dir = current_path.parent
 	if current_iteration_label in path_parts:
-		candidate_parts = [previous_iteration_label if part == current_iteration_label else part for part in path_parts]
-		candidate_path = Path(*candidate_parts)
-		if candidate_path.exists() and candidate_path.is_file():
-			return candidate_path
+		target_dir = Path(
+			*[target_iteration_label if part == current_iteration_label else part for part in path_parts[:-1]]
+		)
 
+	search_names: list[str] = []
 	current_name = current_path.name
+	iteration_match = re.fullmatch(r"iter(\d+)", target_iteration_label.strip().lower())
 	version_match = re.search(r"_v(\d+)_output\.csv$", current_name)
-	search_names = [current_name]
-	if version_match:
+	if version_match and iteration_match:
 		version_digits = version_match.group(1)
-		version_number = int(version_digits)
-		if version_number > 0:
-			previous_version = f"{version_number - 1:0{len(version_digits)}d}"
-			search_names.append(current_name.replace(f"_v{version_digits}_output.csv", f"_v{previous_version}_output.csv"))
+		target_version = f"{int(iteration_match.group(1)):0{len(version_digits)}d}"
+		search_names.append(current_name.replace(f"_v{version_digits}_output.csv", f"_v{target_version}_output.csv"))
+	search_names.append(current_name)
 
-	if current_iteration_label in path_parts:
-		previous_dir = Path(*[previous_iteration_label if part == current_iteration_label else part for part in path_parts[:-1]])
-	else:
-		previous_dir = current_path.parent
-	for search_name in search_names:
-		candidate_path = previous_dir / search_name
+	for search_name in dict.fromkeys(search_names):
+		candidate_path = target_dir / search_name
 		if candidate_path.exists() and candidate_path.is_file():
 			return candidate_path
-	for candidate_path in sorted(previous_dir.glob(f"*{component_id}*_output.csv")):
+	for candidate_path in sorted(target_dir.glob(f"*{component_id}*_output.csv")):
 		if candidate_path.is_file():
 			return candidate_path
 	return None
+
+
+def derive_previous_scored_csv_path(
+	current_path: Path, component_id: str, current_iteration_label: str, previous_iteration_label: str
+) -> Path | None:
+	return derive_scored_csv_path_for_iteration(
+		current_path,
+		component_id,
+		current_iteration_label,
+		previous_iteration_label,
+	)
 
 
 def summarize_score_value(evidence_status: str) -> str:
@@ -416,17 +437,27 @@ def load_scored_rows(input_path: Path) -> list[dict[str, str]]:
 	return rows
 
 
-def build_score_diff_rows(
+def build_iteration_diff_rows(
 	component_ids: list[str],
 	current_rows_by_component: dict[str, list[dict[str, str]]],
 	previous_rows_by_component: dict[str, list[dict[str, str]]],
 	previous_iteration_label: str,
 	current_iteration_label: str,
-) -> list[list[str]]:
-	diff_rows: list[list[str]] = []
+) -> tuple[list[list[str]], list[list[str]], list[list[str]]]:
+	added_rows: list[list[str]] = []
+	removed_rows: list[list[str]] = []
+	changed_rows: list[list[str]] = []
 	for component_id in component_ids:
 		current_rows = current_rows_by_component.get(component_id, [])
 		previous_rows = previous_rows_by_component.get(component_id, [])
+		current_index = {
+			(
+				(row.get("indicator_id") or "").strip(),
+				(row.get("submission_id") or "").strip(),
+			): row
+			for row in current_rows
+			if (row.get("indicator_id") or "").strip() and (row.get("submission_id") or "").strip()
+		}
 		previous_index = {
 			(
 				(row.get("indicator_id") or "").strip(),
@@ -442,12 +473,20 @@ def build_score_diff_rows(
 				continue
 			previous_row = previous_index.get((indicator_id, submission_id))
 			if previous_row is None:
+				added_rows.append(
+					[
+						component_id,
+						indicator_id,
+						submission_id,
+						summarize_score_value(row.get("evidence_status") or ""),
+					]
+				)
 				continue
 			current_score = summarize_score_value(row.get("evidence_status") or "")
 			previous_score = summarize_score_value(previous_row.get("evidence_status") or "")
 			if current_score == previous_score:
 				continue
-			diff_rows.append(
+			changed_rows.append(
 				[
 					component_id,
 					indicator_id,
@@ -456,7 +495,56 @@ def build_score_diff_rows(
 					current_score,
 				]
 			)
-	return sorted(diff_rows, key=lambda row: (row[0], row[1], row[2], row[3], row[4]))
+		for row in previous_rows:
+			indicator_id = (row.get("indicator_id") or "").strip()
+			submission_id = (row.get("submission_id") or "").strip()
+			if not indicator_id or not submission_id:
+				continue
+			if (indicator_id, submission_id) in current_index:
+				continue
+			removed_rows.append(
+				[
+					component_id,
+					indicator_id,
+					submission_id,
+					summarize_score_value(row.get("evidence_status") or ""),
+				]
+			)
+	return (
+		sorted(added_rows, key=lambda row: (row[0], row[1], row[2], row[3])),
+		sorted(removed_rows, key=lambda row: (row[0], row[1], row[2], row[3])),
+		sorted(changed_rows, key=lambda row: (row[0], row[1], row[2], row[3], row[4])),
+	)
+
+
+def build_changed_score_history_rows(
+	changed_diff_rows: list[list[str]],
+	iteration_history_labels: list[str],
+	historical_rows_by_iteration: dict[str, dict[str, list[dict[str, str]]]],
+) -> list[list[str]]:
+	indexes_by_iteration: dict[str, dict[str, dict[tuple[str, str], dict[str, str]]]] = {}
+	for iteration_label in iteration_history_labels:
+		component_indexes: dict[str, dict[tuple[str, str], dict[str, str]]] = {}
+		for component_id, rows in historical_rows_by_iteration.get(iteration_label, {}).items():
+			component_indexes[component_id] = {
+				(
+					(row.get("indicator_id") or "").strip(),
+					(row.get("submission_id") or "").strip(),
+				): row
+				for row in rows
+				if (row.get("indicator_id") or "").strip() and (row.get("submission_id") or "").strip()
+			}
+		indexes_by_iteration[iteration_label] = component_indexes
+
+	history_rows: list[list[str]] = []
+	for changed_row in changed_diff_rows:
+		component_id, indicator_id, submission_id = changed_row[:3]
+		row_values = [component_id, indicator_id, submission_id]
+		for iteration_label in iteration_history_labels:
+			row = indexes_by_iteration.get(iteration_label, {}).get(component_id, {}).get((indicator_id, submission_id))
+			row_values.append(summarize_score_value(row.get("evidence_status") or "") if row is not None else "")
+		history_rows.append(row_values)
+	return history_rows
 
 
 def build_indicator_delta_rows(
@@ -502,7 +590,6 @@ def build_indicator_delta_rows(
 				str(previous_count),
 				str(current_count),
 				f"{delta:+d}",
-				str(number_scored),
 				*build_variance_bucket_cells(delta, variance_rate),
 			]
 		)
@@ -649,11 +736,14 @@ def render_consolidated_scoring_stats_document(
 	component_ids: list[str],
 	manifest_path: Path,
 	iteration_label: str,
+	iteration_history_labels: list[str],
 	previous_iteration_label: str | None,
 	scored_csv_paths: list[Path],
 	total_scored_rows: int,
 	indicator_delta_rows: list[list[str]],
-	diff_rows: list[list[str]],
+	added_diff_rows: list[list[str]],
+	removed_diff_rows: list[list[str]],
+	changed_score_history_rows: list[list[str]],
 	missing_previous_components: list[str],
 	indicator_rows: list[list[str]],
 	base_rows: list[list[str]],
@@ -754,7 +844,6 @@ def render_consolidated_scoring_stats_document(
 						previous_iteration_label,
 						iteration_label,
 						"delta",
-						"number_scored",
 						"-high",
 						"-med",
 						"-low",
@@ -767,11 +856,30 @@ def render_consolidated_scoring_stats_document(
 				),
 			]
 		)
-		if diff_rows:
+		if added_diff_rows:
 			diff_report_parts.extend(
 				[
 					"",
-					"#### Diff Table",
+					"#### Added Rows",
+					"",
+					render_markdown_table(
+						[
+							"component_id",
+							"indicator_id",
+							"submission_id",
+							f"{iteration_label}-score",
+						],
+						added_diff_rows,
+					),
+				]
+			)
+		else:
+			diff_report_parts.extend(["", "#### Added Rows", "", "No added rows found relative to the previous iteration."])
+		if removed_diff_rows:
+			diff_report_parts.extend(
+				[
+					"",
+					"#### Removed Rows",
 					"",
 					render_markdown_table(
 						[
@@ -779,14 +887,32 @@ def render_consolidated_scoring_stats_document(
 							"indicator_id",
 							"submission_id",
 							f"{previous_iteration_label}-score",
-							f"{iteration_label}-score",
 						],
-						diff_rows,
+						removed_diff_rows,
 					),
 				]
 			)
 		else:
-			diff_report_parts.extend(["", "No score differences found between the current and previous iteration."])
+			diff_report_parts.extend(["", "#### Removed Rows", "", "No removed rows found relative to the previous iteration."])
+		if changed_score_history_rows:
+			diff_report_parts.extend(
+				[
+					"",
+					"#### Changed Scores",
+					"",
+					render_markdown_table(
+						[
+							"component_id",
+							"indicator_id",
+							"submission_id",
+							*[f"{history_iteration_label}-score" for history_iteration_label in iteration_history_labels],
+						],
+						changed_score_history_rows,
+					),
+				]
+			)
+		else:
+			diff_report_parts.extend(["", "#### Changed Scores", "", "No score changes found between the current and previous iteration."])
 	diff_report_parts.append("")
 	parts.extend(diff_report_parts)
 	return "\n".join(parts)
@@ -828,6 +954,22 @@ def main() -> int:
 		component_id: load_scored_rows(scored_csv_path)
 		for component_id, scored_csv_path in zip(component_ids, scored_csv_paths)
 	}
+	iteration_history_labels = derive_iteration_history_labels(iteration_label)
+	historical_rows_by_iteration: dict[str, dict[str, list[dict[str, str]]]] = {
+		iteration_label: dict(scored_rows_by_component)
+	}
+	for history_iteration_label in iteration_history_labels[1:]:
+		historical_rows_by_iteration[history_iteration_label] = {}
+		for component_id, scored_csv_path in zip(component_ids, scored_csv_paths):
+			history_scored_csv_path = derive_scored_csv_path_for_iteration(
+				scored_csv_path,
+				component_id,
+				iteration_label,
+				history_iteration_label,
+			)
+			if history_scored_csv_path is None:
+				continue
+			historical_rows_by_iteration[history_iteration_label][component_id] = load_scored_rows(history_scored_csv_path)
 	previous_iteration_label = derive_previous_iteration_label(iteration_label)
 	previous_rows_by_component: dict[str, list[dict[str, str]]] = {}
 	missing_previous_components: list[str] = []
@@ -844,12 +986,17 @@ def main() -> int:
 				continue
 			previous_rows_by_component[component_id] = load_scored_rows(previous_scored_csv_path)
 	indicator_delta_rows = build_indicator_delta_rows(component_ids, scored_rows_by_component, previous_rows_by_component)
-	diff_rows = build_score_diff_rows(
+	added_diff_rows, removed_diff_rows, changed_diff_rows = build_iteration_diff_rows(
 		component_ids,
 		scored_rows_by_component,
 		previous_rows_by_component,
 		previous_iteration_label or "previous_iteration",
 		iteration_label,
+	)
+	changed_score_history_rows = build_changed_score_history_rows(
+		changed_diff_rows,
+		iteration_history_labels,
+		historical_rows_by_iteration,
 	)
 	total_scored_rows = sum(len(rows) for rows in scored_rows_by_component.values())
 	lines = manifest_path.read_text(encoding="utf-8").splitlines()
@@ -987,11 +1134,14 @@ def main() -> int:
 			component_ids=component_ids,
 			manifest_path=manifest_path,
 			iteration_label=iteration_label,
+			iteration_history_labels=iteration_history_labels,
 			previous_iteration_label=previous_iteration_label,
 			scored_csv_paths=scored_csv_paths,
 			total_scored_rows=total_scored_rows,
 				indicator_delta_rows=indicator_delta_rows,
-			diff_rows=diff_rows,
+			added_diff_rows=added_diff_rows,
+			removed_diff_rows=removed_diff_rows,
+			changed_score_history_rows=changed_score_history_rows,
 			missing_previous_components=missing_previous_components,
 			indicator_rows=consolidated_indicator_rows,
 			base_rows=consolidated_base_rows,
