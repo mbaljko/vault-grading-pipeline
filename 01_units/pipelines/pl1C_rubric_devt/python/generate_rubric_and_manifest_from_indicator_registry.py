@@ -308,6 +308,59 @@ def apply_token_template(template: str, values: dict[str, str]) -> str:
     return result
 
 
+def resolve_component_block_lookup(component_block_rows: list[dict[str, str]]) -> dict[tuple[str, str], str]:
+    lookup: dict[tuple[str, str], str] = {}
+    for row in component_block_rows:
+        block_rule_id = row.get("block_rule_id", "").strip()
+        component_id = row.get("component_id", "").strip()
+        component_block = row.get("component_block", "").strip()
+        if block_rule_id and component_id and component_block:
+            lookup[(block_rule_id, component_id)] = component_block
+    return lookup
+
+
+def resolve_local_slot_values(base_row: dict[str, str], local_slot_source: str) -> dict[str, str]:
+    local_slot = base_row.get("local_slot", "").strip()
+    if not local_slot:
+        raise ValueError("Base Table row is missing local_slot.")
+
+    if local_slot_source and local_slot_source != "template.local_slot":
+        raise ValueError(f"Unsupported local_slot_source: {local_slot_source}")
+
+    return {
+        "local_slot": local_slot,
+        "local_slot_int": str(int(local_slot)),
+    }
+
+
+def evaluate_placeholder_expression(expression: str, values: dict[str, str]) -> str:
+    tokens = [token.strip() for token in expression.split("+")]
+    if not tokens:
+        return ""
+
+    resolved_terms: list[str] = []
+    all_numeric = True
+    for token in tokens:
+        if not token:
+            continue
+        value = values.get(token, token)
+        resolved_terms.append(value)
+        if not re.fullmatch(r"-?\d+", value):
+            all_numeric = False
+
+    if all_numeric and resolved_terms:
+        return str(sum(int(term) for term in resolved_terms))
+    return "".join(resolved_terms)
+
+
+def apply_expression_template(template: str, values: dict[str, str]) -> str:
+    return re.sub(
+        r"\{([^{}]+)\}",
+        lambda match: evaluate_placeholder_expression(match.group(1).strip(), values),
+        template,
+    )
+
+
 def build_indicator_rows_from_rule_based_reuse_table(
     base_rows: list[dict[str, str]],
     reuse_rows: list[dict[str, str]],
@@ -379,6 +432,90 @@ def build_indicator_rows_from_rule_based_reuse_table(
     return rows
 
 
+def build_indicator_rows_from_component_block_reuse_table(
+    base_rows: list[dict[str, str]],
+    reuse_rows: list[dict[str, str]],
+    component_block_rows: list[dict[str, str]],
+    registry_metadata: dict[str, str],
+    include_inactive: bool,
+) -> list[IndicatorRow]:
+    rows: list[IndicatorRow] = []
+    component_block_lookup = resolve_component_block_lookup(component_block_rows)
+
+    for reuse_row in reuse_rows:
+        template_group = reuse_row.get("template_group", "").strip()
+        if not template_group:
+            raise ValueError("Reuse Rule Table must include template_group for rule-based expansion.")
+
+        matching_base_rows = [
+            row for row in base_rows if row.get("template_id", "").strip().startswith(f"{template_group}_")
+        ]
+        if not matching_base_rows:
+            raise ValueError(f"No Base Table rows matched template_group={template_group!r}.")
+
+        assessment_id = reuse_row.get("assessment_id", "").strip() or registry_metadata.get("assessment_id", "").strip()
+        if not assessment_id:
+            raise ValueError("Assessment ID is required in either registry metadata or the Reuse Rule Table.")
+
+        component_pattern = reuse_row.get("applies_to_component_pattern", "").strip()
+        if not component_pattern:
+            raise ValueError("Reuse Rule Table must include applies_to_component_pattern for rule-based expansion.")
+
+        component_block_rule = reuse_row.get("component_block_rule", "").strip()
+        if not component_block_rule:
+            raise ValueError("Reuse Rule Table must include component_block_rule for component-block expansion.")
+
+        indicator_id_format = reuse_row.get("indicator_id_format", "").strip()
+        if not indicator_id_format:
+            raise ValueError("Reuse Rule Table must include indicator_id_format for component-block expansion.")
+
+        local_slot_source = reuse_row.get("local_slot_source", "").strip()
+        reuse_status = reuse_row.get("status", "").strip()
+
+        for component_id, template_values in expand_component_pattern(component_pattern):
+            component_block = component_block_lookup.get((component_block_rule, component_id))
+            if component_block is None:
+                raise ValueError(
+                    "Component block rule table could not resolve component_block for "
+                    f"block_rule_id={component_block_rule!r}, component_id={component_id!r}"
+                )
+
+            for base_row in matching_base_rows:
+                effective_status = reuse_status or base_row.get("status", "").strip()
+                if not include_inactive and effective_status and effective_status.lower() != "active":
+                    continue
+
+                expression_values = {
+                    **template_values,
+                    **resolve_local_slot_values(base_row, local_slot_source),
+                    "component_block": component_block,
+                }
+                indicator_id = apply_expression_template(indicator_id_format, expression_values)
+
+                merged_record = dict(base_row)
+                merged_record.update(reuse_row)
+                merged_record["assessment_id"] = assessment_id
+                merged_record["component_id"] = component_id
+                merged_record["indicator_id"] = indicator_id
+
+                rows.append(
+                    IndicatorRow(
+                        indicator_id=indicator_id,
+                        assessment_id=assessment_id,
+                        component_id=component_id,
+                        sbo_identifier=resolve_sbo_identifier(merged_record),
+                        sbo_identifier_shortid=resolve_sbo_identifier_shortid(merged_record),
+                        sbo_short_description=base_row["sbo_short_description"],
+                        indicator_definition=base_row["indicator_definition"],
+                        assessment_guidance=base_row["assessment_guidance"],
+                        evaluation_notes=base_row["evaluation_notes"],
+                        status=effective_status,
+                    )
+                )
+
+    return rows
+
+
 def load_indicator_rows(registry_path: Path, include_inactive: bool) -> list[IndicatorRow]:
     tables = collect_markdown_tables(registry_path)
     registry_metadata = extract_registry_metadata(tables)
@@ -386,6 +523,7 @@ def load_indicator_rows(registry_path: Path, include_inactive: bool) -> list[Ind
     explicit_table: dict[str, object] | None = None
     base_table = find_table_by_heading(tables, "base table")
     reuse_table = find_table_by_heading(tables, "reuse rule table")
+    component_block_rule_table = find_table_by_heading(tables, "component block rule table")
 
     for table in tables:
         headers = set(table["headers"])
@@ -409,6 +547,25 @@ def load_indicator_rows(registry_path: Path, include_inactive: bool) -> list[Ind
                 registry_metadata=registry_metadata,
                 include_inactive=include_inactive,
             )
+        elif {
+            "template_group",
+            "applies_to_component_pattern",
+            "component_block_rule",
+            "local_slot_source",
+            "indicator_id_format",
+        }.issubset(reuse_headers):
+            if component_block_rule_table is None:
+                raise ValueError(
+                    "Component block rule table is required when Reuse Rule Table uses component_block_rule, "
+                    "local_slot_source, and indicator_id_format columns."
+                )
+            rows = build_indicator_rows_from_component_block_reuse_table(
+                base_rows=list(base_table["rows"]),
+                reuse_rows=list(reuse_table["rows"]),
+                component_block_rows=list(component_block_rule_table["rows"]),
+                registry_metadata=registry_metadata,
+                include_inactive=include_inactive,
+            )
         elif {"template_group", "applies_to_component_pattern", "indicator_id_rule"}.issubset(reuse_headers):
             rows = build_indicator_rows_from_rule_based_reuse_table(
                 base_rows=list(base_table["rows"]),
@@ -419,7 +576,7 @@ def load_indicator_rows(registry_path: Path, include_inactive: bool) -> list[Ind
         else:
             raise ValueError(
                 "Reuse Rule Table must either provide indicator_id/component_id rows or rule-based columns "
-                "template_group, applies_to_component_pattern, and indicator_id_rule."
+                "template_group, applies_to_component_pattern, and indicator_id_rule, or the component-block rule set."
             )
     elif explicit_table is not None:
         rows = build_indicator_rows_from_explicit_table(
