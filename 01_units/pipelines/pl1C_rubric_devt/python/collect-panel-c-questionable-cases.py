@@ -10,7 +10,8 @@ combined markdown report.
 Arguments:
 - `--input-dir`: directory containing stitched worksheet markdown files.
 - `--output-file`: optional explicit output file path. Defaults to
-  `<input-dir>/all_components_panel_c_questionable_cases.md`.
+	`<input-dir>/I_<assessment>_all_panel_c.md` when the assessment token can be
+	inferred from stitched filenames, otherwise `<input-dir>/I_all_panel_c.md`.
 
 Output behavior:
 - Writes one combined markdown document.
@@ -36,6 +37,7 @@ STITCHED_REPORT_GLOBS = ["*_output_stitched_worksheet.md", "*_output_stitched.md
 TARGET_HEADING = "##### Panel C — Questionable cases"
 TARGET_HEADING_RE = re.compile(r"^\s*#####\s*Panel\s+C\s+—\s+Questionable\s+cases\s*$")
 STOP_HEADING_RE = re.compile(r"^\s*#{1,5}\s+")
+ASSESSMENT_FROM_STITCHED_RE = re.compile(r"^I_([A-Za-z0-9]+)_")
 
 
 def parse_args() -> argparse.Namespace:
@@ -58,7 +60,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def default_output_path(input_dir: Path) -> Path:
-	return input_dir / "all_components_panel_c_questionable_cases.md"
+	assessment_id = derive_assessment_id_from_stitched_reports(find_stitched_report_paths(input_dir))
+	prefix = f"I_{assessment_id}" if assessment_id else "I"
+	return input_dir / f"{prefix}_all_panel_c.md"
 
 
 def find_stitched_report_paths(input_dir: Path) -> list[Path]:
@@ -73,11 +77,26 @@ def find_stitched_report_paths(input_dir: Path) -> list[Path]:
 	return stitched_paths
 
 
+def derive_assessment_id_from_stitched_reports(stitched_paths: list[Path]) -> str | None:
+	for path in stitched_paths:
+		match = ASSESSMENT_FROM_STITCHED_RE.match(path.stem)
+		if match:
+			return match.group(1)
+	return None
+
+
 def extract_target_section(markdown_text: str) -> str | None:
 	lines = markdown_text.splitlines(keepends=True)
+	search_start_index = 0
+	if lines and lines[0].strip() == "---":
+		for index in range(1, len(lines)):
+			if lines[index].strip() == "---":
+				search_start_index = index + 1
+				break
 	start_index: int | None = None
 
-	for index, line in enumerate(lines):
+	for index in range(search_start_index, len(lines)):
+		line = lines[index]
 		if TARGET_HEADING_RE.match(line.strip()):
 			start_index = index
 			break

@@ -52,7 +52,7 @@ Per matching row behavior:
 	- Writes output to `<llm_output_stem>_stitched_worksheet.md` in the same directory.
 7. After all matching rows are processed, collect all
 	`##### Panel C — Questionable cases` sections from stitched worksheets into
-	`all_components_panel_c_questionable_cases.md` in the runner output directory.
+	`I_<assessment>_all_panel_c.md` in the runner output directory.
 
 Exit behavior:
 - Returns 1 with stderr message when required input files are missing.
@@ -327,13 +327,21 @@ def run_l1_itp_for_payload(
 	return runner_output_file
 
 
-def collect_panel_c_questionable_cases(output_dir: Path) -> Path:
+def derive_assignment_output_prefix(manifest_path: Path) -> str:
+	"""Return the I_<assessment> prefix derived from a Layer1 manifest filename."""
+	match = re.match(r"^([A-Za-z0-9]+)_Layer1_", manifest_path.name)
+	if not match:
+		return "I"
+	return f"I_{match.group(1)}"
+
+
+def collect_panel_c_questionable_cases(output_dir: Path, manifest_path: Path) -> Path:
 	"""Collect Panel C questionable-case sections across stitched worksheets."""
 	if REPO_ROOT is None:
 		raise RuntimeError("Could not locate repository root from script path.")
 
 	collector_script = REPO_ROOT / PANEL_C_COLLECTOR_SCRIPT_RELATIVE
-	output_file = output_dir / "all_components_panel_c_questionable_cases.md"
+	output_file = output_dir / f"{derive_assignment_output_prefix(manifest_path)}_all_panel_c.md"
 	cmd = [
 		sys.executable,
 		str(collector_script),
@@ -346,9 +354,9 @@ def collect_panel_c_questionable_cases(output_dir: Path) -> Path:
 	return output_file
 
 
-def resolve_panel_c_collection_output_path(output_dir: Path) -> Path:
+def resolve_panel_c_collection_output_path(output_dir: Path, manifest_path: Path) -> Path:
 	"""Return the aggregate Panel C collection file path for an output directory."""
-	return output_dir / "all_components_panel_c_questionable_cases.md"
+	return output_dir / f"{derive_assignment_output_prefix(manifest_path)}_all_panel_c.md"
 
 
 def apply_response_text_stitcher(
@@ -598,7 +606,7 @@ def main() -> int:
 		return 0
 
 	runner_output_dir = output_dir if output_dir else (payload_dir / RUNNER_OUTPUT_SUBDIR)
-	panel_c_collection_output = resolve_panel_c_collection_output_path(runner_output_dir)
+	panel_c_collection_output = resolve_panel_c_collection_output_path(runner_output_dir, markdown_path)
 	existing_itp_reports: list[Path] = []
 	existing_stitched_reports: list[Path] = []
 	for _, sbo_identifier, _ in matching_manifest_rows:
@@ -640,7 +648,7 @@ def main() -> int:
 			print("Panel C collection was not created because no stitched worksheets were found.")
 			return 0
 
-		combined_panel_c_output = collect_panel_c_questionable_cases(runner_output_dir)
+		combined_panel_c_output = collect_panel_c_questionable_cases(runner_output_dir, markdown_path)
 		print(f"Collected Panel C questionable cases: {combined_panel_c_output}")
 		return 0
 
@@ -670,7 +678,7 @@ def main() -> int:
 		)
 
 	if not runner_dry_run:
-		combined_panel_c_output = collect_panel_c_questionable_cases(runner_output_dir)
+		combined_panel_c_output = collect_panel_c_questionable_cases(runner_output_dir, markdown_path)
 		print(f"Collected Panel C questionable cases: {combined_panel_c_output}")
 	return 0
 
