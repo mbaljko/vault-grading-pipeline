@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Extract submission-level score and validation labels from a stitched panel report.
+"""Extract submission-level score and validation labels from panel reports.
 
-The script reads a single stitched panel-report markdown file, finds all panel
-tables that include `submission_id`, `evidence_status`, and `human_judge_notes`,
-and writes a compact markdown report with one row per scored submission.
+The script can either read a single panel-report markdown file or scan a
+diagnostics directory. When scanning a directory, it reads `I_<assessment>_all_panel_*`
+reports first and then `I_<assessment>_Sec*_*_output_stitched.md` reports second,
+so the stitched files act as a backfill source if rows are missing from the
+aggregate panel reports.
 
 Output columns:
+- `indicator_id`
 - `submission_id`
 - `<iteration>-score`: `P` for `present`, `N` for `not_present`
 - `<iteration>-validation`: `TP`, `FP`, `TN`, or `FN` parsed from
@@ -26,17 +29,39 @@ from pathlib import Path
 ITERATION_RE = re.compile(r"\b(iter\d+)\b", re.IGNORECASE)
 SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
 VALIDATION_LABEL_RE = re.compile(r"\b(TP|FP|TN|FN)\b", re.IGNORECASE)
+SOURCE_FILE_RE = re.compile(r"^\s*-\s+Source file:\s+(.+?)\s*$")
 
 
 def parse_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(
-		description="Extract submission-level validation labels from a stitched panel report."
+		description="Extract submission-level validation labels from panel reports."
 	)
-	parser.add_argument(
+	input_group = parser.add_mutually_exclusive_group(required=True)
+	input_group.add_argument(
 		"--panel-report-file",
 		type=Path,
-		required=True,
-		help="Path to a stitched panel report markdown file.",
+		required=False,
+		help="Path to a single panel report markdown file.",
+	)
+	input_group.add_argument(
+		"--input-dir",
+		type=Path,
+		required=False,
+		help="Directory containing aggregate and stitched panel reports.",
+	)
+	parser.add_argument(
+		"--primary-glob",
+		type=str,
+		required=False,
+		default="I_*_all_panel_*.md",
+		help="Primary file glob used when scanning --input-dir.",
+	)
+	parser.add_argument(
+		"--secondary-glob",
+		type=str,
+		required=False,
+		default="I_*_Sec*_*_output_stitched.md",
+		help="Secondary file glob used when scanning --input-dir.",
 	)
 	parser.add_argument(
 		"--output-file",
@@ -114,6 +139,10 @@ def default_output_path(input_path: Path) -> Path:
 	return input_path.with_name(f"{input_path.stem}_human_judge_notes_summary.md")
 
 
+def default_output_path_for_dir(input_dir: Path) -> Path:
+	return input_dir / "human_judge_notes_summary.md"
+
+
 def map_score_label(evidence_status: str) -> str:
 	normalized = evidence_status.strip().lower()
 	if normalized == "present":
@@ -134,22 +163,47 @@ def parse_validation_label(human_judge_notes: str) -> str:
 	return next(iter(matches))
 
 
-def extract_submission_rows(markdown_text: str) -> list[dict[str, str]]:
-	records_by_submission_id: dict[str, dict[str, str]] = {}
-	ordered_submission_ids: list[str] = []
-
-	for table in collect_markdown_tables(markdown_text):
-		if not table:
+def extract_submission_rows(markdown_text: str, input_path: Path) -> list[dict[str, str]]:
+	lines = markdown_text.splitlines()
+	records: list[dict[str, str]] = []
+	current_report_key = input_path.name
+	current_indicator_id = ""
+	index = 0
+	while index < len(lines):
+		source_match = SOURCE_FILE_RE.match(lines[index])
+		if source_match:
+			current_report_key = Path(source_match.group(1).strip()).name
+			current_indicator_id = ""
+			index += 1
 			continue
-		headers = [normalize_header_name(cell) for cell in table[0]]
+		if not lines[index].lstrip().startswith("|"):
+			index += 1
+			continue
+		table_lines: list[list[str]] = []
+		while index < len(lines) and lines[index].lstrip().startswith("|"):
+			table_lines.append(parse_markdown_cells(lines[index]))
+			index += 1
+		if not table_lines:
+			continue
+		headers = [normalize_header_name(cell) for cell in table_lines[0]]
+		if "indicator_id" in headers:
+			header_index = {header: idx for idx, header in enumerate(headers)}
+			data_start = 1
+			if len(table_lines) > 1 and is_markdown_separator_row(table_lines[1]):
+				data_start = 2
+			if data_start < len(table_lines):
+				row = table_lines[data_start]
+				if len(row) < len(headers):
+					row = row + [""] * (len(headers) - len(row))
+				current_indicator_id = row[header_index["indicator_id"]].strip()
+			continue
 		if not {"submission_id", "evidence_status", "human_judge_notes"}.issubset(headers):
 			continue
 		header_index = {header: idx for idx, header in enumerate(headers)}
 		data_start = 1
-		if len(table) > 1 and is_markdown_separator_row(table[1]):
+		if len(table_lines) > 1 and is_markdown_separator_row(table_lines[1]):
 			data_start = 2
-
-		for row in table[data_start:]:
+		for row in table_lines[data_start:]:
 			if is_markdown_separator_row(row):
 				continue
 			if len(row) < len(headers):
@@ -157,42 +211,92 @@ def extract_submission_rows(markdown_text: str) -> list[dict[str, str]]:
 			submission_id = row[header_index["submission_id"]].strip()
 			if not submission_id:
 				continue
-			evidence_status = row[header_index["evidence_status"]].strip()
-			validation = parse_validation_label(row[header_index["human_judge_notes"]].strip())
-			record = {
-				"submission_id": submission_id,
-				"score": map_score_label(evidence_status),
-				"validation": validation,
-			}
-			existing = records_by_submission_id.get(submission_id)
-			if existing is not None and existing != record:
-				raise ValueError(
-					"Found conflicting rows for submission_id "
-					f"{submission_id}: existing={existing}, new={record}"
-				)
-			if existing is None:
-				ordered_submission_ids.append(submission_id)
-				records_by_submission_id[submission_id] = record
-
-	return [records_by_submission_id[submission_id] for submission_id in ordered_submission_ids]
+			records.append(
+				{
+					"report_key": current_report_key,
+					"indicator_id": current_indicator_id,
+					"submission_id": submission_id,
+					"score": map_score_label(row[header_index["evidence_status"]].strip()),
+					"validation": parse_validation_label(row[header_index["human_judge_notes"]].strip()),
+				}
+			)
+	return records
 
 
-def render_output_report(input_path: Path, iteration_label: str, records: list[dict[str, str]]) -> str:
+def collect_input_paths(input_dir: Path, primary_glob: str, secondary_glob: str) -> list[Path]:
+	primary_paths = sorted(path for path in input_dir.glob(primary_glob) if path.is_file())
+	secondary_paths = sorted(path for path in input_dir.glob(secondary_glob) if path.is_file())
+	return primary_paths + secondary_paths
+
+
+def merge_records(source_paths: list[Path]) -> list[dict[str, str]]:
+	records: list[dict[str, str]] = []
+	seen_record_keys: set[tuple[str, str, str, str, str]] = set()
+	seen_submission_keys: dict[tuple[str, str, str], dict[str, str]] = {}
+	for input_path in source_paths:
+		for record in extract_submission_rows(input_path.read_text(encoding="utf-8"), input_path):
+			submission_key = (record["report_key"], record["indicator_id"], record["submission_id"])
+			existing_submission = seen_submission_keys.get(submission_key)
+			if existing_submission is not None:
+				if (
+					existing_submission["score"]
+					and record["score"]
+					and existing_submission["score"] != record["score"]
+				):
+					raise ValueError(
+						"Found conflicting rows for report/submission key "
+						f"{submission_key}: existing={existing_submission}, new={record}"
+					)
+				if (
+					existing_submission["validation"]
+					and record["validation"]
+					and existing_submission["validation"] != record["validation"]
+				):
+					raise ValueError(
+						"Found conflicting rows for report/submission key "
+						f"{submission_key}: existing={existing_submission}, new={record}"
+					)
+				if not existing_submission["score"] and record["score"]:
+					existing_submission["score"] = record["score"]
+				if not existing_submission["validation"] and record["validation"]:
+					existing_submission["validation"] = record["validation"]
+				continue
+			record_key = (
+				record["report_key"],
+				record["indicator_id"],
+				record["submission_id"],
+				record["score"],
+				record["validation"],
+			)
+			if record_key in seen_record_keys:
+				continue
+			seen_record_keys.add(record_key)
+			seen_submission_keys[submission_key] = record
+			records.append(record)
+	return records
+
+
+def render_output_report(source_paths: list[Path], iteration_label: str, records: list[dict[str, str]]) -> str:
 	score_column = f"{iteration_label}-score"
 	validation_column = f"{iteration_label}-validation"
+	primary_count = sum(1 for path in source_paths if "_all_panel_" in path.name)
+	secondary_count = len(source_paths) - primary_count
 	lines = [
 		"# Human judge notes summary\n",
 		"\n",
-		f"- Source panel report: {input_path}\n",
+		f"- Source files scanned: {len(source_paths)}\n",
+		f"- Primary aggregate files scanned: {primary_count}\n",
+		f"- Secondary stitched files scanned: {secondary_count}\n",
 		f"- Rows extracted: {len(records)}\n",
 		"\n",
-		format_markdown_row(["submission_id", score_column, validation_column]),
-		format_markdown_row(["---", "---", "---"]),
+		format_markdown_row(["indicator_id", "submission_id", score_column, validation_column]),
+		format_markdown_row(["---", "---", "---", "---"]),
 	]
 	for record in records:
 		lines.append(
 			format_markdown_row(
 				[
+					record["indicator_id"],
 					record["submission_id"],
 					record["score"],
 					record["validation"],
@@ -204,21 +308,38 @@ def render_output_report(input_path: Path, iteration_label: str, records: list[d
 
 def main() -> int:
 	args = parse_args()
-	input_path = args.panel_report_file.resolve()
-	output_path = args.output_file.resolve() if args.output_file else default_output_path(input_path)
+	if args.panel_report_file is not None:
+		input_path = args.panel_report_file.resolve()
+		if not input_path.exists() or not input_path.is_file():
+			print(f"Error: panel report file not found: {input_path}", file=sys.stderr)
+			return 1
+		source_paths = [input_path]
+		output_path = args.output_file.resolve() if args.output_file else default_output_path(input_path)
+		iteration_source = input_path
+	else:
+		input_dir = args.input_dir.resolve()
+		if not input_dir.exists() or not input_dir.is_dir():
+			print(f"Error: input directory not found: {input_dir}", file=sys.stderr)
+			return 1
+		source_paths = collect_input_paths(input_dir, args.primary_glob, args.secondary_glob)
+		if not source_paths:
+			print(
+				f"Error: no panel reports matched in {input_dir} for primary glob {args.primary_glob!r} "
+				f"or secondary glob {args.secondary_glob!r}",
+				file=sys.stderr,
+			)
+			return 1
+		output_path = args.output_file.resolve() if args.output_file else default_output_path_for_dir(input_dir)
+		iteration_source = input_dir
 
-	if not input_path.exists() or not input_path.is_file():
-		print(f"Error: panel report file not found: {input_path}", file=sys.stderr)
-		return 1
-
-	iteration_label = derive_iteration_label(input_path, args.iteration_label)
+	iteration_label = derive_iteration_label(iteration_source, args.iteration_label)
 	try:
-		records = extract_submission_rows(input_path.read_text(encoding="utf-8"))
+		records = merge_records(source_paths)
 	except ValueError as exc:
 		print(f"Error: {exc}", file=sys.stderr)
 		return 1
 
-	output_text = render_output_report(input_path, iteration_label, records)
+	output_text = render_output_report(source_paths, iteration_label, records)
 	output_path.parent.mkdir(parents=True, exist_ok=True)
 	output_path.write_text(output_text, encoding="utf-8")
 	print(output_path)
