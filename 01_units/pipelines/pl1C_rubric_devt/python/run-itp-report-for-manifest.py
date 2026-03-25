@@ -91,8 +91,8 @@ REPO_ROOT: Path | None = next(
 	None,
 )
 RUNNER_SCRIPT_RELATIVE = Path("01_units/apps/prompt_runners/invoke_chatgpt_API.py")
-PANEL_C_COLLECTOR_SCRIPT_RELATIVE = Path(
-	"01_units/pipelines/pl1C_rubric_devt/python/collect-panel-c-questionable-cases.py"
+PANEL_REPORT_COLLECTOR_SCRIPT_RELATIVE = Path(
+	"01_units/pipelines/pl1C_rubric_devt/python/collect-itp-panel-reports.py"
 )
 L1_ITP_PROMPT_FILE_RELATIVE = Path(
 	"01_units/pipelines/pl1B_rubric_devt/llm_prompt/"
@@ -341,7 +341,7 @@ def collect_panel_reports(output_dir: Path, manifest_path: Path, overwrite: bool
 	if REPO_ROOT is None:
 		raise RuntimeError("Could not locate repository root from script path.")
 
-	collector_script = REPO_ROOT / PANEL_C_COLLECTOR_SCRIPT_RELATIVE
+	collector_script = REPO_ROOT / PANEL_REPORT_COLLECTOR_SCRIPT_RELATIVE
 	output_paths = [
 		output_dir / f"{derive_assignment_output_prefix(manifest_path)}_all_panel_a.md",
 		output_dir / f"{derive_assignment_output_prefix(manifest_path)}_all_panel_b.md",
