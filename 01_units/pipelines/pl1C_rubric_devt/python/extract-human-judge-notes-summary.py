@@ -8,6 +8,7 @@ so the stitched files act as a backfill source if rows are missing from the
 aggregate panel reports.
 
 Output columns:
+- `block_rule_id`
 - `indicator_id`
 - `submission_id`
 - `<iteration>-score`: `P` for `present`, `N` for `not_present`
@@ -24,6 +25,16 @@ import argparse
 import re
 import sys
 from pathlib import Path
+from generate_rubric_and_manifest_from_indicator_registry import (
+	apply_expression_template,
+	apply_token_template,
+	collect_markdown_tables as collect_registry_markdown_tables,
+	expand_component_pattern,
+	extract_rule_template,
+	find_table_by_heading,
+	resolve_component_block_lookup,
+	resolve_local_slot_values,
+)
 
 
 ITERATION_RE = re.compile(r"\b(iter\d+)\b", re.IGNORECASE)
@@ -68,6 +79,12 @@ def parse_args() -> argparse.Namespace:
 		type=Path,
 		required=False,
 		help="Optional output markdown path. Defaults beside the input report.",
+	)
+	parser.add_argument(
+		"--indicator-registry",
+		type=Path,
+		required=False,
+		help="Optional indicator registry used to map indicators back to block_rule_id groups.",
 	)
 	parser.add_argument(
 		"--iteration-label",
@@ -163,16 +180,151 @@ def parse_validation_label(human_judge_notes: str) -> str:
 	return next(iter(matches))
 
 
+def build_indicator_reverse_lookup(registry_path: Path) -> dict[tuple[str, str], dict[str, str]]:
+	tables = collect_registry_markdown_tables(registry_path)
+	base_table = find_table_by_heading(tables, "base table")
+	reuse_table = find_table_by_heading(tables, "reuse rule table")
+	component_block_rule_table = find_table_by_heading(tables, "component block rule table")
+	if base_table is None or reuse_table is None:
+		return {}
+
+	base_rows = list(base_table["rows"])
+	reuse_rows = list(reuse_table["rows"])
+	reuse_headers = set(reuse_table["headers"])
+	base_by_template_id = {
+		row.get("template_id", "").strip(): row for row in base_rows if row.get("template_id", "").strip()
+	}
+	base_by_local_slot = {
+		row.get("local_slot", "").strip(): row for row in base_rows if row.get("local_slot", "").strip()
+	}
+	reverse_lookup: dict[tuple[str, str], dict[str, str]] = {}
+
+	def register_mapping(component_id: str, indicator_id: str, block_rule_id: str, base_row: dict[str, str]) -> None:
+		reverse_lookup[(component_id, indicator_id)] = {
+			"block_rule_id": block_rule_id,
+			"template_id": base_row.get("template_id", "").strip(),
+		}
+
+	if {"indicator_id", "component_id"}.issubset(reuse_headers):
+		for reuse_row in reuse_rows:
+			template_id = reuse_row.get("template_id", "").strip()
+			local_slot = reuse_row.get("local_slot", "").strip()
+			base_row = base_by_template_id.get(template_id) if template_id else None
+			if base_row is None and local_slot:
+				base_row = base_by_local_slot.get(local_slot)
+			if base_row is None:
+				continue
+			component_id = reuse_row.get("component_id", "").strip()
+			indicator_id = reuse_row.get("indicator_id", "").strip()
+			if component_id and indicator_id:
+				register_mapping(
+					component_id,
+					indicator_id,
+					reuse_row.get("rule_id", "").strip() or template_id or local_slot,
+					base_row,
+				)
+		return reverse_lookup
+
+	if {
+		"template_group",
+		"applies_to_component_pattern",
+		"component_block_rule",
+		"local_slot_source",
+		"indicator_id_format",
+	}.issubset(reuse_headers):
+		if component_block_rule_table is None:
+			return reverse_lookup
+		component_block_lookup = resolve_component_block_lookup(list(component_block_rule_table["rows"]))
+		for reuse_row in reuse_rows:
+			template_group = reuse_row.get("template_group", "").strip()
+			component_pattern = reuse_row.get("applies_to_component_pattern", "").strip()
+			block_rule_id = reuse_row.get("component_block_rule", "").strip()
+			local_slot_source = reuse_row.get("local_slot_source", "").strip()
+			indicator_id_format = reuse_row.get("indicator_id_format", "").strip()
+			matching_base_rows = [
+				row for row in base_rows if row.get("template_id", "").strip().startswith(f"{template_group}_")
+			]
+			for component_id, template_values in expand_component_pattern(component_pattern):
+				component_block = component_block_lookup.get((block_rule_id, component_id))
+				if component_block is None:
+					continue
+				for base_row in matching_base_rows:
+					expression_values = {
+						**template_values,
+						**resolve_local_slot_values(base_row, local_slot_source),
+						"component_block": component_block,
+					}
+					indicator_id = apply_expression_template(indicator_id_format, expression_values)
+					register_mapping(component_id, indicator_id, f"{block_rule_id}_{component_block}", base_row)
+		return reverse_lookup
+
+	if {"template_group", "applies_to_component_pattern", "indicator_id_rule"}.issubset(reuse_headers):
+		for reuse_row in reuse_rows:
+			template_group = reuse_row.get("template_group", "").strip()
+			component_pattern = reuse_row.get("applies_to_component_pattern", "").strip()
+			indicator_id_template = extract_rule_template(reuse_row.get("indicator_id_rule", "").strip())
+			matching_base_rows = [
+				row for row in base_rows if row.get("template_id", "").strip().startswith(f"{template_group}_")
+			]
+			for component_id, template_values in expand_component_pattern(component_pattern):
+				for base_row in matching_base_rows:
+					indicator_id = apply_token_template(
+						indicator_id_template,
+						{**template_values, "local_slot": base_row.get("local_slot", "").strip()},
+					)
+					register_mapping(
+						component_id,
+						indicator_id,
+						reuse_row.get("rule_id", "").strip() or template_group,
+						base_row,
+					)
+	return reverse_lookup
+
+
+def enrich_records_with_block_rule(
+	records: list[dict[str, str]], indicator_lookup: dict[tuple[str, str], dict[str, str]]
+) -> list[dict[str, str]]:
+	for record in records:
+		lookup = indicator_lookup.get((record["component_id"], record["indicator_id"]))
+		record["block_rule_id"] = lookup.get("block_rule_id", "") if lookup else ""
+		record["template_id"] = lookup.get("template_id", "") if lookup else ""
+	return records
+
+
+def block_rule_sort_key(block_rule_id: str) -> tuple[int, str]:
+	normalized = block_rule_id.strip().lower()
+	if normalized.startswith("core"):
+		return (0, normalized)
+	if normalized.startswith("adv"):
+		return (1, normalized)
+	if "_core_" in normalized:
+		return (0, normalized)
+	if "_adv_" in normalized:
+		return (1, normalized)
+	return (2, normalized)
+
+
+def template_sort_key(template_id: str) -> tuple[int, str]:
+	normalized = template_id.strip().lower()
+	if "_core_" in normalized:
+		return (0, normalized)
+	if "_adv_" in normalized:
+		return (1, normalized)
+	return (2, normalized)
+
+
 def extract_submission_rows(markdown_text: str, input_path: Path) -> list[dict[str, str]]:
 	lines = markdown_text.splitlines()
 	records: list[dict[str, str]] = []
 	current_report_key = input_path.name
+	current_component_id = ""
 	current_indicator_id = ""
 	index = 0
 	while index < len(lines):
 		source_match = SOURCE_FILE_RE.match(lines[index])
 		if source_match:
 			current_report_key = Path(source_match.group(1).strip()).name
+			current_component_id = ""
 			current_indicator_id = ""
 			index += 1
 			continue
@@ -195,6 +347,8 @@ def extract_submission_rows(markdown_text: str, input_path: Path) -> list[dict[s
 				row = table_lines[data_start]
 				if len(row) < len(headers):
 					row = row + [""] * (len(headers) - len(row))
+				if "component_id" in header_index:
+					current_component_id = row[header_index["component_id"]].strip()
 				current_indicator_id = row[header_index["indicator_id"]].strip()
 			continue
 		if not {"submission_id", "evidence_status", "human_judge_notes"}.issubset(headers):
@@ -214,6 +368,8 @@ def extract_submission_rows(markdown_text: str, input_path: Path) -> list[dict[s
 			records.append(
 				{
 					"report_key": current_report_key,
+					"component_id": current_component_id,
+					"block_rule_id": "",
 					"indicator_id": current_indicator_id,
 					"submission_id": submission_id,
 					"score": map_score_label(row[header_index["evidence_status"]].strip()),
@@ -231,7 +387,7 @@ def collect_input_paths(input_dir: Path, primary_glob: str, secondary_glob: str)
 
 def merge_records(source_paths: list[Path]) -> list[dict[str, str]]:
 	records: list[dict[str, str]] = []
-	seen_record_keys: set[tuple[str, str, str, str, str]] = set()
+	seen_record_keys: set[tuple[str, str, str, str, str, str]] = set()
 	seen_submission_keys: dict[tuple[str, str, str], dict[str, str]] = {}
 	for input_path in source_paths:
 		for record in extract_submission_rows(input_path.read_text(encoding="utf-8"), input_path):
@@ -263,6 +419,7 @@ def merge_records(source_paths: list[Path]) -> list[dict[str, str]]:
 				continue
 			record_key = (
 				record["report_key"],
+				record["component_id"],
 				record["indicator_id"],
 				record["submission_id"],
 				record["score"],
@@ -279,30 +436,53 @@ def merge_records(source_paths: list[Path]) -> list[dict[str, str]]:
 def render_output_report(source_paths: list[Path], iteration_label: str, records: list[dict[str, str]]) -> str:
 	score_column = f"{iteration_label}-score"
 	validation_column = f"{iteration_label}-validation"
+	sorted_records = sorted(
+		records,
+		key=lambda record: (
+			template_sort_key(record.get("template_id", "")),
+			block_rule_sort_key(record.get("block_rule_id", "")),
+			record.get("indicator_id", ""),
+			record.get("submission_id", ""),
+		),
+	)
 	primary_count = sum(1 for path in source_paths if "_all_panel_" in path.name)
 	secondary_count = len(source_paths) - primary_count
+	grouped_rows: dict[str, list[dict[str, str]]] = {}
+	for record in sorted_records:
+		group_key = record.get("template_id", "") or "ungrouped"
+		grouped_rows.setdefault(group_key, []).append(record)
 	lines = [
 		"# Human judge notes summary\n",
 		"\n",
 		f"- Source files scanned: {len(source_paths)}\n",
 		f"- Primary aggregate files scanned: {primary_count}\n",
 		f"- Secondary stitched files scanned: {secondary_count}\n",
+		"- Rows are grouped into separate tables by template_id.\n",
 		f"- Rows extracted: {len(records)}\n",
-		"\n",
-		format_markdown_row(["indicator_id", "submission_id", score_column, validation_column]),
-		format_markdown_row(["---", "---", "---", "---"]),
+		f"- Template groups: {len(grouped_rows)}\n",
 	]
-	for record in records:
-		lines.append(
-			format_markdown_row(
-				[
-					record["indicator_id"],
-					record["submission_id"],
-					record["score"],
-					record["validation"],
-				]
-			)
+	for template_id, group_records in grouped_rows.items():
+		lines.extend(
+			[
+				"\n",
+				f"## {template_id}\n",
+				"\n",
+				format_markdown_row(["block_rule_id", "indicator_id", "submission_id", score_column, validation_column]),
+				format_markdown_row(["---", "---", "---", "---", "---"]),
+			]
 		)
+		for record in group_records:
+			lines.append(
+				format_markdown_row(
+					[
+						record["block_rule_id"],
+						record["indicator_id"],
+						record["submission_id"],
+						record["score"],
+						record["validation"],
+					]
+				)
+			)
 	return "".join(lines)
 
 
@@ -333,8 +513,14 @@ def main() -> int:
 		iteration_source = input_dir
 
 	iteration_label = derive_iteration_label(iteration_source, args.iteration_label)
+	registry_path = args.indicator_registry.resolve() if args.indicator_registry else None
+	if registry_path is not None and (not registry_path.exists() or not registry_path.is_file()):
+		print(f"Error: indicator registry file not found: {registry_path}", file=sys.stderr)
+		return 1
 	try:
 		records = merge_records(source_paths)
+		if registry_path is not None:
+			records = enrich_records_with_block_rule(records, build_indicator_reverse_lookup(registry_path))
 	except ValueError as exc:
 		print(f"Error: {exc}", file=sys.stderr)
 		return 1
