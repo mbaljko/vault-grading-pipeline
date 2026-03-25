@@ -16,6 +16,7 @@ Arguments:
 - `--prompt-instructions-file`: optional explicit prompt file path for the ITP runner.
 - `--temperature`: optional sampling temperature forwarded to `invoke_chatgpt_API.py`.
 - `--top-p`: optional nucleus sampling value forwarded to `invoke_chatgpt_API.py`.
+- `--overwrite`: allow existing generated files to be replaced.
 - `--runner-dry-run`: when set, forwards `--dry-run` to
 	`invoke_chatgpt_API.py`.
 
@@ -50,6 +51,8 @@ Per matching row behavior:
 
 Exit behavior:
 - Returns 1 with stderr message when required input files are missing.
+- Returns 1 with stderr message when any target output file already exists
+	and `--overwrite` was not supplied.
 
 Example:
 	python run-itp-report-for-manifest.py \
@@ -136,6 +139,11 @@ def parse_args() -> argparse.Namespace:
 		help="Top-p value forwarded to invoke_chatgpt_API.py.",
 	)
 	parser.add_argument(
+		"--overwrite",
+		action="store_true",
+		help="Allow existing generated files to be replaced.",
+	)
+	parser.add_argument(
 		"--runner-dry-run",
 		action="store_true",
 		help="Forward --dry-run to invoke_chatgpt_API.py.",
@@ -220,6 +228,19 @@ def find_matching_scored_rows(
 	return matches
 
 
+def resolve_runner_output_paths(
+	payload_dir: Path,
+	output_file_stem: str,
+	output_dir: Path | None = None,
+) -> tuple[Path, Path, Path, Path]:
+	"""Resolve the output directory and generated file paths for one SBO run."""
+	runner_output_dir = output_dir if output_dir else (payload_dir / RUNNER_OUTPUT_SUBDIR)
+	payload_file = runner_output_dir / f"{output_file_stem}_payload.json"
+	runner_output_file = runner_output_dir / f"{output_file_stem}_output.md"
+	stitched_output_file = runner_output_dir / f"{output_file_stem}_output_stitched.md"
+	return runner_output_dir, payload_file, runner_output_file, stitched_output_file
+
+
 def run_l1_itp_for_payload(
 	payload_dir: Path,
 	components: dict[str, str],
@@ -243,10 +264,12 @@ def run_l1_itp_for_payload(
 		raise RuntimeError("Could not locate repository root from script path.")
 
 	runner_script = REPO_ROOT / RUNNER_SCRIPT_RELATIVE
-	runner_output_dir = output_dir if output_dir else (payload_dir / RUNNER_OUTPUT_SUBDIR)
+	runner_output_dir, payload_file, runner_output_file, _ = resolve_runner_output_paths(
+		payload_dir,
+		output_file_stem,
+		output_dir,
+	)
 	runner_output_dir.mkdir(parents=True, exist_ok=True)
-	payload_file = runner_output_dir / f"{output_file_stem}_payload.json"
-	runner_output_file = runner_output_dir / f"{output_file_stem}_output.md"
 
 	components_json = json.dumps(components, indent=2, ensure_ascii=False)
 	scored_payload_json = json.dumps(scored_payload, indent=2, ensure_ascii=False)
@@ -463,6 +486,7 @@ def main() -> int:
 	temperature = args.temperature
 	top_p = args.top_p
 	runner_dry_run = args.runner_dry_run
+	overwrite = args.overwrite
 	output_dir = args.output_dir
 	prompt_file = prompt_instructions_file or (REPO_ROOT / L1_ITP_PROMPT_FILE_RELATIVE if REPO_ROOT else None)
 
@@ -485,6 +509,8 @@ def main() -> int:
 
 	with markdown_path.open("r", encoding="utf-8") as f:
 		lines = f.readlines()
+
+	matching_manifest_rows: list[tuple[dict[str, str], str, dict[str, object]]] = []
 
 	i = 0
 	while i < len(lines):
@@ -520,32 +546,56 @@ def main() -> int:
 				sbo_identifier = extract_sbo_identifier(row_line)
 				matching_scored_rows = find_matching_scored_rows(components, scored_rows)
 				scored_payload = {"matching_scored_rows": matching_scored_rows}
-				print(sbo_identifier)
-				#print(json.dumps(components, ensure_ascii=False))
-				#print(json.dumps(scored_payload, ensure_ascii=False))
-				runner_output_file = run_l1_itp_for_payload(
-					payload_dir,
-					components,
-					scored_payload,
-					sbo_identifier,
-					prompt_file,
-					temperature,
-					top_p,
-					runner_dry_run,
-					output_dir,
-				)
-				if runner_dry_run:
-					print(f"Skipping response_text stitching in runner dry-run mode for {sbo_identifier}")
-					i += 1
-					continue
-				# Apply response text stitching to the runner output
-				stitched_output_file = apply_response_text_stitcher(
-					runner_output_file,
-					response_texts_path,
-					components,
-				)
-				# TODO: process stitched_output_file for further downstream handling
+				matching_manifest_rows.append((components, sbo_identifier, scored_payload))
 			i += 1
+
+	existing_outputs: list[Path] = []
+	for _, sbo_identifier, _ in matching_manifest_rows:
+		_, payload_file, runner_output_file, stitched_output_file = resolve_runner_output_paths(
+			payload_dir,
+			sbo_identifier,
+			output_dir,
+		)
+		candidate_paths = [payload_file]
+		if not runner_dry_run:
+			candidate_paths.extend([runner_output_file, stitched_output_file])
+		existing_outputs.extend(path for path in candidate_paths if path.exists())
+
+	if existing_outputs and not overwrite:
+		print(
+			"Refusing to overwrite existing ITP outputs. "
+			"This usually means the iteration field was not advanced. "
+			"Re-run with --overwrite to replace them:",
+			file=sys.stderr,
+		)
+		for path in existing_outputs:
+			print(f"- {path}", file=sys.stderr)
+		return 1
+
+	if existing_outputs and overwrite:
+		print("Overwriting existing ITP outputs because --overwrite was supplied.")
+
+	for components, sbo_identifier, scored_payload in matching_manifest_rows:
+		print(sbo_identifier)
+		runner_output_file = run_l1_itp_for_payload(
+			payload_dir,
+			components,
+			scored_payload,
+			sbo_identifier,
+			prompt_file,
+			temperature,
+			top_p,
+			runner_dry_run,
+			output_dir,
+		)
+		if runner_dry_run:
+			print(f"Skipping response_text stitching in runner dry-run mode for {sbo_identifier}")
+			continue
+		apply_response_text_stitcher(
+			runner_output_file,
+			response_texts_path,
+			components,
+		)
 	return 0
 
 
