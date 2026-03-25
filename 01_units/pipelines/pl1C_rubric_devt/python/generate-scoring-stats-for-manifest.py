@@ -306,6 +306,17 @@ def render_consolidated_scoring_stats_document(
 ) -> str:
 	component_label = component_ids[0] if len(component_ids) == 1 else ", ".join(component_ids)
 	source_csv_label = "\n".join(str(path) for path in scored_csv_paths)
+	base_table_headers = [
+		"template_id",
+		"local_slot",
+		"expanded_indicator_ids",
+		"sbo_short_description",
+		"expansion_mode",
+		"saturation_rate",
+		"number_scored",
+		"number_scored_positive",
+		*[f"saturation_rate_{component_id}" for component_id in component_ids],
+	]
 	parts = [
 		f"## {derive_output_filename(component_ids).removesuffix('.md')}",
 		"",
@@ -337,18 +348,7 @@ def render_consolidated_scoring_stats_document(
 		"",
 		"### Indicator saturation, base",
 		"",
-		render_markdown_table(
-			[
-				"template_id",
-				"local_slot",
-				"sbo_short_description",
-				"expansion_mode",
-				"saturation_rate",
-				"number_scored",
-				"number_scored_positive",
-			],
-			base_rows,
-		),
+		render_markdown_table(base_table_headers, base_rows),
 		"",
 	]
 	return "\n".join(parts)
@@ -392,7 +392,7 @@ def main() -> int:
 	total_scored_rows = sum(len(rows) for rows in scored_rows_by_component.values())
 	lines = manifest_path.read_text(encoding="utf-8").splitlines()
 	indicator_summary_rows: dict[str, list[str]] = {}
-	base_summary_rows: dict[str, list[str | int]] = {}
+	base_summary_rows: dict[str, dict[str, object]] = {}
 
 	i = 0
 	while i < len(lines):
@@ -442,31 +442,55 @@ def main() -> int:
 				if base_row_info is not None:
 					base_key = base_row_info["template_id"]
 					if base_key not in base_summary_rows:
-						base_summary_rows[base_key] = [
-							base_row_info["template_id"],
-							base_row_info["local_slot"],
-							base_row_info["sbo_short_description"],
-							base_row_info["expansion_mode"],
-							0,
-							0,
-						]
-					base_summary_rows[base_key][4] = int(base_summary_rows[base_key][4]) + number_scored
-					base_summary_rows[base_key][5] = int(base_summary_rows[base_key][5]) + number_scored_positive
+						base_summary_rows[base_key] = {
+							"template_id": base_row_info["template_id"],
+							"local_slot": base_row_info["local_slot"],
+							"expanded_indicator_ids": set(),
+							"sbo_short_description": base_row_info["sbo_short_description"],
+							"expansion_mode": base_row_info["expansion_mode"],
+							"number_scored": 0,
+							"number_scored_positive": 0,
+							"per_component_counts": {
+								component_id: {"number_scored": 0, "number_scored_positive": 0}
+								for component_id in component_ids
+							},
+						}
+					base_summary_rows[base_key]["expanded_indicator_ids"].add(indicator_id)
+					base_summary_rows[base_key]["number_scored"] = int(base_summary_rows[base_key]["number_scored"]) + number_scored
+					base_summary_rows[base_key]["number_scored_positive"] = int(base_summary_rows[base_key]["number_scored_positive"]) + number_scored_positive
+					component_counts = base_summary_rows[base_key]["per_component_counts"]
+					component_counts[matching_component_id]["number_scored"] += number_scored
+					component_counts[matching_component_id]["number_scored_positive"] += number_scored_positive
 			i += 1
 
 	consolidated_indicator_rows = [indicator_summary_rows[key] for key in sorted(indicator_summary_rows)]
 	consolidated_base_rows: list[list[str]] = []
 	for key in sorted(base_summary_rows):
-		template_id, local_slot, description, expansion_mode, number_scored, number_scored_positive = base_summary_rows[key]
+		base_row = base_summary_rows[key]
+		template_id = str(base_row["template_id"])
+		local_slot = str(base_row["local_slot"])
+		expanded_indicator_ids = ", ".join(sorted(base_row["expanded_indicator_ids"]))
+		description = str(base_row["sbo_short_description"])
+		expansion_mode = str(base_row["expansion_mode"])
+		number_scored = int(base_row["number_scored"])
+		number_scored_positive = int(base_row["number_scored_positive"])
+		component_rate_columns = []
+		for component_id in component_ids:
+			component_counts = base_row["per_component_counts"][component_id]
+			component_rate_columns.append(
+				format_rate(component_counts["number_scored_positive"], component_counts["number_scored"])
+			)
 		consolidated_base_rows.append(
 			[
-				str(template_id),
-				str(local_slot),
-				str(description),
-				str(expansion_mode),
-				format_rate(int(number_scored_positive), int(number_scored)),
+				template_id,
+				local_slot,
+				expanded_indicator_ids,
+				description,
+				expansion_mode,
+				format_rate(number_scored_positive, number_scored),
 				str(number_scored),
 				str(number_scored_positive),
+				*component_rate_columns,
 			]
 		)
 	consolidated_base_rows.sort(key=base_table_sort_key)
