@@ -280,6 +280,18 @@ def format_rate(numerator: int, denominator: int) -> str:
 	return f"{(numerator / denominator * 100):.1f}%"
 
 
+def base_table_sort_key(row: list[str]) -> tuple[int, str, str]:
+	template_id = row[0]
+	template_id_lower = template_id.lower()
+	if "_core_" in template_id_lower:
+		group_rank = 0
+	elif "_adv_" in template_id_lower:
+		group_rank = 1
+	else:
+		group_rank = 2
+	return (group_rank, template_id_lower, row[1].lower())
+
+
 def is_positive_scored_row(row: dict[str, str]) -> bool:
 	status = (row.get("evidence_status") or "").strip().lower()
 	return status in POSITIVE_EVIDENCE_STATUS_VALUES
@@ -312,14 +324,29 @@ def render_consolidated_scoring_stats_document(
 		"### Indicator saturation, all",
 		"",
 		render_markdown_table(
-			["component_id", "indicator_id", "saturation_rate", "number_scored", "number_scored_positive"],
+			[
+				"component_id",
+				"indicator_id",
+				"sbo_short_description",
+				"saturation_rate",
+				"number_scored",
+				"number_scored_positive",
+			],
 			indicator_rows,
 		),
 		"",
 		"### Indicator saturation, base",
 		"",
 		render_markdown_table(
-			["template_id", "local_slot", "sbo_short_description", "expansion_mode", "saturation_rate", "number_scored", "number_scored_positive"],
+			[
+				"template_id",
+				"local_slot",
+				"sbo_short_description",
+				"expansion_mode",
+				"saturation_rate",
+				"number_scored",
+				"number_scored_positive",
+			],
 			base_rows,
 		),
 		"",
@@ -406,6 +433,7 @@ def main() -> int:
 				indicator_summary_rows[f"{matching_component_id}::{indicator_id}"] = [
 					matching_component_id,
 					indicator_id,
+					(components.get("sbo_short_description") or "").strip(),
 					format_rate(number_scored_positive, number_scored),
 					str(number_scored),
 					str(number_scored_positive),
@@ -441,6 +469,7 @@ def main() -> int:
 				str(number_scored_positive),
 			]
 		)
+	consolidated_base_rows.sort(key=base_table_sort_key)
 	consolidated_output_path = output_dir / derive_output_filename(component_ids)
 	consolidated_output_path.write_text(
 		render_consolidated_scoring_stats_document(
