@@ -137,14 +137,18 @@ Artefacts must be separated using the delimiter:
 
 ===
 {content}
+
 ===
 
 Artefacts must appear in the following order:
 
 ===
 Rubric_SpecificationGuide_v*
+
 ===
-{ASSESSMENT_ID}_SubmissionAnalyticBrief_v*
+
+{ASSESSMENT\_ID}\_SubmissionAnalyticBrief_v*
+
 ===
 
 If any artefact is missing, malformed, or inconsistent, the prompt must produce **no output**.
