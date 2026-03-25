@@ -51,7 +51,8 @@ Per matching row behavior:
 	  a `response_text` column populated by submission_id lookup.
 	- Writes output to `<llm_output_stem>_stitched_worksheet.md` in the same directory.
 7. After all matching rows are processed, collect all
-	`##### Panel C — Questionable cases` sections from stitched worksheets into
+	Panel A/B/C sections from stitched worksheets into
+	`I_<assessment>_all_panel_a.md`, `I_<assessment>_all_panel_b.md`, and
 	`I_<assessment>_all_panel_c.md` in the runner output directory.
 
 Exit behavior:
@@ -335,30 +336,42 @@ def derive_assignment_output_prefix(manifest_path: Path) -> str:
 	return f"I_{match.group(1)}"
 
 
-def collect_panel_c_questionable_cases(output_dir: Path, manifest_path: Path) -> Path:
-	"""Collect Panel C questionable-case sections across stitched worksheets."""
+def collect_panel_reports(output_dir: Path, manifest_path: Path) -> list[Path]:
+	"""Collect Panel A/B/C sections across stitched worksheets."""
 	if REPO_ROOT is None:
 		raise RuntimeError("Could not locate repository root from script path.")
 
 	collector_script = REPO_ROOT / PANEL_C_COLLECTOR_SCRIPT_RELATIVE
-	output_file = output_dir / f"{derive_assignment_output_prefix(manifest_path)}_all_panel_c.md"
-	cmd = [
-		sys.executable,
-		str(collector_script),
-		"--input-dir",
-		str(output_dir),
-		"--sbo-manifest-file",
-		str(manifest_path),
-		"--output-file",
-		str(output_file),
+	output_paths = [
+		output_dir / f"{derive_assignment_output_prefix(manifest_path)}_all_panel_a.md",
+		output_dir / f"{derive_assignment_output_prefix(manifest_path)}_all_panel_b.md",
+		output_dir / f"{derive_assignment_output_prefix(manifest_path)}_all_panel_c.md",
 	]
-	subprocess.run(cmd, check=True)
-	return output_file
+	for panel_key, output_path in zip(["A", "B", "C"], output_paths):
+		cmd = [
+			sys.executable,
+			str(collector_script),
+			"--input-dir",
+			str(output_dir),
+			"--sbo-manifest-file",
+			str(manifest_path),
+			"--panel",
+			panel_key,
+			"--output-file",
+			str(output_path),
+		]
+		subprocess.run(cmd, check=True)
+	return output_paths
 
 
-def resolve_panel_c_collection_output_path(output_dir: Path, manifest_path: Path) -> Path:
-	"""Return the aggregate Panel C collection file path for an output directory."""
-	return output_dir / f"{derive_assignment_output_prefix(manifest_path)}_all_panel_c.md"
+def resolve_panel_collection_output_paths(output_dir: Path, manifest_path: Path) -> list[Path]:
+	"""Return aggregate Panel A/B/C collection file paths for an output directory."""
+	prefix = derive_assignment_output_prefix(manifest_path)
+	return [
+		output_dir / f"{prefix}_all_panel_a.md",
+		output_dir / f"{prefix}_all_panel_b.md",
+		output_dir / f"{prefix}_all_panel_c.md",
+	]
 
 
 def apply_response_text_stitcher(
@@ -608,7 +621,7 @@ def main() -> int:
 		return 0
 
 	runner_output_dir = output_dir if output_dir else (payload_dir / RUNNER_OUTPUT_SUBDIR)
-	panel_c_collection_output = resolve_panel_c_collection_output_path(runner_output_dir, markdown_path)
+	panel_collection_outputs = resolve_panel_collection_output_paths(runner_output_dir, markdown_path)
 	existing_itp_reports: list[Path] = []
 	existing_stitched_reports: list[Path] = []
 	for _, sbo_identifier, _ in matching_manifest_rows:
@@ -639,19 +652,24 @@ def main() -> int:
 			print(f"- {path}")
 
 		if runner_dry_run:
-			print("Skipping Panel C collection in runner dry-run mode.")
+			print("Skipping panel aggregation in runner dry-run mode.")
 			return 0
 
-		if panel_c_collection_output.exists():
-			print(f"Panel C collection already exists: {panel_c_collection_output}")
+		missing_panel_outputs = [path for path in panel_collection_outputs if not path.exists()]
+		if not missing_panel_outputs:
+			print("Panel aggregation reports already exist:")
+			for path in panel_collection_outputs:
+				print(f"- {path}")
 			return 0
 
 		if not existing_stitched_reports:
-			print("Panel C collection was not created because no stitched worksheets were found.")
+			print("Panel aggregation reports were not created because no stitched worksheets were found.")
 			return 0
 
-		combined_panel_c_output = collect_panel_c_questionable_cases(runner_output_dir, markdown_path)
-		print(f"Collected Panel C questionable cases: {combined_panel_c_output}")
+		collected_panel_outputs = collect_panel_reports(runner_output_dir, markdown_path)
+		print("Collected panel aggregation reports:")
+		for path in collected_panel_outputs:
+			print(f"- {path}")
 		return 0
 
 	if existing_itp_reports and overwrite:
@@ -680,8 +698,10 @@ def main() -> int:
 		)
 
 	if not runner_dry_run:
-		combined_panel_c_output = collect_panel_c_questionable_cases(runner_output_dir, markdown_path)
-		print(f"Collected Panel C questionable cases: {combined_panel_c_output}")
+		collected_panel_outputs = collect_panel_reports(runner_output_dir, markdown_path)
+		print("Collected panel aggregation reports:")
+		for path in collected_panel_outputs:
+			print(f"- {path}")
 	return 0
 
 

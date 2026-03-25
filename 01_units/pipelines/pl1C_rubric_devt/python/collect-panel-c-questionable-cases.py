@@ -1,28 +1,29 @@
 #!/usr/bin/env python3
-"""Collect Panel C questionable-case sections from stitched ITP worksheets.
+"""Collect Panel A/B/C sections from stitched ITP worksheets.
 
 This script scans a directory for stitched ITP worksheet markdown files,
 including both current `*_output_stitched_worksheet.md` files and legacy
-`*_output_stitched.md` files, extracts the section headed
-`##### Panel C — Questionable cases` from each file, and writes a single
-combined markdown report.
+`*_output_stitched.md` files, extracts one or more Panel A/B/C sections from
+each file, and writes combined markdown reports.
 
 Arguments:
 - `--input-dir`: directory containing stitched worksheet markdown files.
 - `--output-file`: optional explicit output file path. Defaults to
-	`<input-dir>/I_<assessment>_all_panel_c.md` when the assessment token can be
-	inferred from stitched filenames, otherwise `<input-dir>/I_all_panel_c.md`.
+	`<input-dir>/I_<assessment>_all_panel_<panel>.md` when the assessment token can be
+	inferred from stitched filenames, otherwise `<input-dir>/I_all_panel_<panel>.md`.
 - `--sbo-manifest-file`: optional scoring manifest path used to resolve the
 	matching indicator registry and group collected sections by Base Table rows.
+- `--panel`: optional repeatable panel selector. Supported values are `A`, `B`,
+	and `C`. When omitted, the script writes all three aggregate reports.
 
 Output behavior:
-- Writes one combined markdown document.
-- Includes one section per stitched worksheet that contains the target Panel C
-  subsection.
+- Writes one combined markdown document per selected panel.
+- Includes one section per stitched worksheet that contains the target panel
+	 subsection.
 - Skips files that do not contain the target subsection.
 
 Section-boundary behavior:
-- Extraction starts at the exact heading `##### Panel C — Questionable cases`.
+- Extraction starts at the exact panel heading for the selected panel.
 - Extraction stops at the next heading with level 1 through 5, so nested level 6
   headings remain part of the captured section.
 """
@@ -47,15 +48,30 @@ from generate_rubric_and_manifest_from_indicator_registry import (
 
 
 STITCHED_REPORT_GLOBS = ["*_output_stitched_worksheet.md", "*_output_stitched.md"]
-TARGET_HEADING = "##### Panel C — Questionable cases"
-TARGET_HEADING_RE = re.compile(r"^\s*#####\s*Panel\s+C\s+—\s+Questionable\s+cases\s*$")
 STOP_HEADING_RE = re.compile(r"^\s*#{1,5}\s+")
 ASSESSMENT_FROM_STITCHED_RE = re.compile(r"^I_([A-Za-z0-9]+)_")
+PANEL_SPECS = {
+	"A": {
+		"slug": "panel_a",
+		"title": "Panel A — Clear positives",
+		"heading_re": re.compile(r"^\s*#####\s*Panel\s+A\s+—\s+Clear\s+positives\s*$"),
+	},
+	"B": {
+		"slug": "panel_b",
+		"title": "Panel B — Borderline cases",
+		"heading_re": re.compile(r"^\s*#####\s*Panel\s+B\s+—\s+Borderline\s+cases\s*$"),
+	},
+	"C": {
+		"slug": "panel_c",
+		"title": "Panel C — Questionable cases",
+		"heading_re": re.compile(r"^\s*#####\s*Panel\s+C\s+—\s+Questionable\s+cases\s*$"),
+	},
+}
 
 
 def parse_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(
-		description="Collect Panel C questionable-case sections from stitched ITP reports."
+		description="Collect Panel A/B/C sections from stitched ITP reports."
 	)
 	parser.add_argument(
 		"--input-dir",
@@ -70,6 +86,14 @@ def parse_args() -> argparse.Namespace:
 		help="Optional scoring manifest path used to resolve Base Table grouping.",
 	)
 	parser.add_argument(
+		"--panel",
+		type=str,
+		required=False,
+		action="append",
+		choices=sorted(PANEL_SPECS.keys()),
+		help="Panel selector to aggregate. Repeat to write multiple reports; defaults to A, B, and C.",
+	)
+	parser.add_argument(
 		"--output-file",
 		type=Path,
 		required=False,
@@ -78,10 +102,10 @@ def parse_args() -> argparse.Namespace:
 	return parser.parse_args()
 
 
-def default_output_path(input_dir: Path) -> Path:
+def default_output_path(input_dir: Path, panel_key: str) -> Path:
 	assessment_id = derive_assessment_id_from_stitched_reports(find_stitched_report_paths(input_dir))
 	prefix = f"I_{assessment_id}" if assessment_id else "I"
-	return input_dir / f"{prefix}_all_panel_c.md"
+	return input_dir / f"{prefix}_all_{PANEL_SPECS[panel_key]['slug']}.md"
 
 
 def find_stitched_report_paths(input_dir: Path) -> list[Path]:
@@ -231,7 +255,8 @@ def parse_first_markdown_table(markdown_text: str) -> dict[str, str]:
 	return {}
 
 
-def extract_target_section(markdown_text: str) -> str | None:
+def extract_target_section(markdown_text: str, panel_key: str) -> str | None:
+	target_heading_re = PANEL_SPECS[panel_key]["heading_re"]
 	lines = markdown_text.splitlines(keepends=True)
 	search_start_index = 0
 	if lines and lines[0].strip() == "---":
@@ -243,7 +268,7 @@ def extract_target_section(markdown_text: str) -> str | None:
 
 	for index in range(search_start_index, len(lines)):
 		line = lines[index]
-		if TARGET_HEADING_RE.match(line.strip()):
+		if target_heading_re.match(line.strip()):
 			start_index = index
 			break
 
@@ -252,7 +277,7 @@ def extract_target_section(markdown_text: str) -> str | None:
 
 	end_index = len(lines)
 	for index in range(start_index + 1, len(lines)):
-		if STOP_HEADING_RE.match(lines[index]) and not TARGET_HEADING_RE.match(lines[index].strip()):
+		if STOP_HEADING_RE.match(lines[index]) and not target_heading_re.match(lines[index].strip()):
 			end_index = index
 			break
 
@@ -262,13 +287,19 @@ def extract_target_section(markdown_text: str) -> str | None:
 	return section_text + "\n"
 
 
-def render_combined_report(input_dir: Path, stitched_paths: list[Path], manifest_path: Path | None = None) -> str:
+def render_combined_report(
+	input_dir: Path,
+	stitched_paths: list[Path],
+	panel_key: str,
+	manifest_path: Path | None = None,
+) -> str:
 	registry_path = resolve_indicator_registry_path(manifest_path)
 	base_row_reverse_lookup, base_order = build_base_row_reverse_lookup(registry_path) if registry_path else ({}, [])
 	grouped_sections: dict[str, list[tuple[str, Path, str]]] = {}
 	ungrouped_sections: list[tuple[str, Path, str]] = []
+	panel_title = PANEL_SPECS[panel_key]["title"]
 	output_lines = [
-		"# Panel C — Questionable cases\n",
+		f"# {panel_title}\n",
 		"\n",
 		f"- Input directory: {input_dir}\n",
 		f"- Stitched reports scanned: {len(stitched_paths)}\n",
@@ -276,7 +307,7 @@ def render_combined_report(input_dir: Path, stitched_paths: list[Path], manifest
 
 	matched_count = 0
 	for stitched_path in stitched_paths:
-		section_text = extract_target_section(stitched_path.read_text(encoding="utf-8"))
+		section_text = extract_target_section(stitched_path.read_text(encoding="utf-8"), panel_key)
 		if section_text is None:
 			continue
 
@@ -331,7 +362,7 @@ def render_combined_report(input_dir: Path, stitched_paths: list[Path], manifest
 		output_lines.extend(
 			[
 				"\n",
-				f"No `{TARGET_HEADING}` sections were found.\n",
+				f"No `{PANEL_SPECS[panel_key]['title']}` sections were found.\n",
 			]
 		)
 
@@ -342,7 +373,7 @@ def main() -> int:
 	args = parse_args()
 	input_dir = args.input_dir
 	manifest_path = args.sbo_manifest_file.resolve() if args.sbo_manifest_file else None
-	output_file = args.output_file or default_output_path(input_dir)
+	selected_panels = args.panel or ["A", "B", "C"]
 
 	if not input_dir.exists() or not input_dir.is_dir():
 		print(f"Error: input directory not found: {input_dir}", file=sys.stderr)
@@ -350,12 +381,20 @@ def main() -> int:
 	if manifest_path is not None and (not manifest_path.exists() or not manifest_path.is_file()):
 		print(f"Error: scoring manifest file not found: {manifest_path}", file=sys.stderr)
 		return 1
+	if args.output_file is not None and len(selected_panels) != 1:
+		print("Error: --output-file can only be used when exactly one --panel is selected.", file=sys.stderr)
+		return 1
 
 	stitched_paths = find_stitched_report_paths(input_dir)
-	output_text = render_combined_report(input_dir, stitched_paths, manifest_path)
-	output_file.parent.mkdir(parents=True, exist_ok=True)
-	output_file.write_text(output_text, encoding="utf-8")
-	print(output_file)
+	output_paths: list[Path] = []
+	for panel_key in selected_panels:
+		output_file = args.output_file if args.output_file is not None else default_output_path(input_dir, panel_key)
+		output_text = render_combined_report(input_dir, stitched_paths, panel_key, manifest_path)
+		output_file.parent.mkdir(parents=True, exist_ok=True)
+		output_file.write_text(output_text, encoding="utf-8")
+		output_paths.append(output_file)
+	for output_path in output_paths:
+		print(output_path)
 	return 0
 
 
