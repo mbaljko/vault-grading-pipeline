@@ -261,12 +261,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - single indicator.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt"
+              "title": "pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - single indicator"
             }
           }
         ],
@@ -416,13 +416,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - single indicator.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt"
+              "title": "Outline of pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - single indicator"
             }
           },
           {
@@ -456,11 +456,12 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "00821057bf5dc0c3",
+  "active": "eda405ac25d37010",
   "lastOpenFiles": [
-    "01_units/pipelines/pl1C_rubric_devt/python/generate-layer1-indicator-scoring-prompt.py",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage12b_DeriveLayer1ScoringManifest.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - single indicator.md",
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage12b_DeriveLayer1ScoringManifest.md",
+    "01_units/pipelines/pl1C_rubric_devt/python/generate-layer1-indicator-scoring-prompt.py",
     "05_docs/01_design/pl1B_rubric_devt/__NOTE - Stabilising indicators.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11+12merged_Layer1.md",
     "01_units/pipelines/pl1C_rubric_devt/python/extract-human-judge-notes-summary.py",
@@ -486,7 +487,6 @@
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP1B.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
-    "01_units/pipelines/pl1A_canonical_population_prep/python/segment_as_per_prompt.py",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Stage 1.3 — Layer 1 SBO Iterative Development - BREAKOUT INSTRUCTIONS.md",
     "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification v2.md",

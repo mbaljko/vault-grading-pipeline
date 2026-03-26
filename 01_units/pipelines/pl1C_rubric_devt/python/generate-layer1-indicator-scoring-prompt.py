@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministically render [[EMBEDDED_INDICATOR_TABLE_ROWS]] from runner-style inputs.
+"""Deterministically render scaffold token assignments from runner-style inputs.
 
 This script accepts the same core file inputs as the prompt runner:
 - --prompt-instructions-file
@@ -9,8 +9,8 @@ This script accepts the same core file inputs as the prompt runner:
 - --output-format
 
 It validates the three-block payload grammar, extracts PARAM_TARGET_COMPONENT_ID,
-filters the Layer 1 scoring manifest to that component, and writes only the
-rendered embedded indicator table body rows to the output file.
+filters the Layer 1 scoring manifest to that component, and writes one output
+file per indicator row containing token assignments for scaffold substitution.
 """
 
 from __future__ import annotations
@@ -57,8 +57,8 @@ def read_text_file(path: Path) -> str:
 	return path.read_text(encoding="utf-8")
 
 
-def resolve_output_path(output_dir: Path, output_file_stem: str, output_format: str) -> Path:
-	return output_dir / f"{output_file_stem}.{output_format.lstrip('.')}"
+def resolve_output_path(output_dir: Path, output_file_stem: str, output_format: str, indicator_id: str) -> Path:
+	return output_dir / f"{output_file_stem}_{indicator_id}.{output_format.lstrip('.')}"
 
 
 def split_payload_blocks(payload_text: str) -> tuple[str, str, str]:
@@ -114,13 +114,51 @@ def validate_assignment_payload_block(assignment_payload_block: str) -> None:
 			raise ValueError(f"Assignment payload block is missing required token: {required_token}")
 
 
+def parse_assignment_payload_metadata(assignment_payload_block: str) -> dict[str, str]:
+	assessment_id = extract_single_fenced_value(assignment_payload_block, "assessment_id")
+	submission_identifier_field = extract_single_fenced_value(
+		assignment_payload_block,
+		"canonical_submission_level_identifier_field",
+	)
+	wrapper_handling_rule_bullets = extract_wrapper_handling_rule_bullets(assignment_payload_block)
+	return {
+		"assessment_id": assessment_id,
+		"submission_identifier_field": submission_identifier_field,
+		"wrapper_handling_rule_bullets": wrapper_handling_rule_bullets,
+	}
+
+
+def extract_wrapper_handling_rule_bullets(assignment_payload_block: str) -> str:
+	heading = "### Wrapper Handling Rules for response_text"
+	start_index = assignment_payload_block.find(heading)
+	if start_index == -1:
+		raise ValueError("Assignment payload block is missing the wrapper handling rules section.")
+	section_lines = assignment_payload_block[start_index:].splitlines()[1:]
+	bullet_lines: list[str] = []
+	for line in section_lines:
+		if line.startswith("### "):
+			break
+		if line.startswith("- "):
+			bullet_lines.append(line.rstrip())
+	if not bullet_lines:
+		raise ValueError("Wrapper handling rules section does not contain bullet lines.")
+	return "\n".join(bullet_lines)
+
+
 def parse_markdown_cells(line: str) -> list[str]:
 	parts = [part.strip() for part in line.strip().split("|")]
 	if parts and parts[0] == "":
 		parts = parts[1:]
 	if parts and parts[-1] == "":
 		parts = parts[:-1]
-	return parts
+	return [normalize_markdown_cell(part) for part in parts]
+
+
+def normalize_markdown_cell(value: str) -> str:
+	normalized = value.strip()
+	if len(normalized) >= 2 and normalized.startswith("`") and normalized.endswith("`"):
+		return normalized[1:-1].strip()
+	return normalized
 
 
 def find_manifest_table_lines(manifest_block: str) -> tuple[list[str], list[str]]:
@@ -174,19 +212,39 @@ def format_manifest_value(value: str) -> str:
 	return normalized.replace("|", r"\|")
 
 
-def render_embedded_indicator_table_rows(filtered_rows: list[dict[str, str]]) -> str:
-	rendered_rows = []
-	for row in filtered_rows:
-		rendered_rows.append(
-			"| {} | {} | {} | {} | {} |".format(
-				format_manifest_value(row.get("indicator_id", "")),
-				format_manifest_value(row.get("sbo_short_description", "")),
-				format_manifest_value(row.get("indicator_definition", "")),
-				format_manifest_value(row.get("assessment_guidance", "")),
-				format_manifest_value(row.get("evaluation_notes", "")),
-			)
+def render_token_assignment(token: str, value: str) -> str:
+	return f"{token}\n{value}" if value else f"{token}\n"
+
+
+def build_token_assignments(
+	assignment_payload_metadata: dict[str, str],
+	target_component_id: str,
+	row: dict[str, str],
+) -> str:
+	token_blocks = [
+		render_token_assignment("[[ASSESSMENT_ID]]", assignment_payload_metadata["assessment_id"]),
+		render_token_assignment("[[TARGET_COMPONENT_ID]]", target_component_id),
+		render_token_assignment("[[TARGET_INDICATOR_ID]]", row["indicator_id"]),
+		render_token_assignment(
+			"[[SUBMISSION_IDENTIFIER_FIELD]]",
+			assignment_payload_metadata["submission_identifier_field"],
+		),
+		render_token_assignment(
+			"[[WRAPPER_HANDLING_RULE_BULLETS]]",
+			assignment_payload_metadata["wrapper_handling_rule_bullets"],
+		),
+		render_token_assignment("[[INDICATOR_ID]]", row["indicator_id"]),
+		render_token_assignment("[[SBO_SHORT_DESCRIPTION]]", row["sbo_short_description"]),
+		render_token_assignment("[[INDICATOR_DEFINITION]]", row["indicator_definition"]),
+		render_token_assignment("[[ASSESSMENT_GUIDANCE]]", row["assessment_guidance"]),
+		render_token_assignment("[[EMBEDDED_EVALUATOR_GUIDANCE]]", row["evaluation_notes"]),
+	]
+	decision_procedure_block = row.get("embedded_decision_procedure_block", "").strip()
+	if decision_procedure_block:
+		token_blocks.append(
+			render_token_assignment("[[EMBEDDED_DECISION_PROCEDURE_BLOCK]]", decision_procedure_block)
 		)
-	return "\n".join(rendered_rows) + "\n"
+	return "\n\n".join(token_blocks) + "\n"
 
 
 def main() -> int:
@@ -198,16 +256,23 @@ def main() -> int:
 		parameter_block, assignment_payload_block, manifest_block = split_payload_blocks(prompt_input_text)
 		target_component_id = parse_target_component_id(parameter_block)
 		validate_assignment_payload_block(assignment_payload_block)
+		assignment_payload_metadata = parse_assignment_payload_metadata(assignment_payload_block)
 		manifest_rows = parse_manifest_rows(manifest_block)
 		filtered_rows = filter_manifest_rows(manifest_rows, target_component_id)
-		rendered_rows = render_embedded_indicator_table_rows(filtered_rows)
-		output_path = resolve_output_path(args.output_dir.resolve(), args.output_file_stem, args.output_format)
-		output_path.parent.mkdir(parents=True, exist_ok=True)
-		output_path.write_text(rendered_rows, encoding="utf-8")
+		output_dir = args.output_dir.resolve()
+		output_dir.mkdir(parents=True, exist_ok=True)
+		output_paths: list[Path] = []
+		for row in filtered_rows:
+			indicator_id = row["indicator_id"].strip()
+			output_path = resolve_output_path(output_dir, args.output_file_stem, args.output_format, indicator_id)
+			output_text = build_token_assignments(assignment_payload_metadata, target_component_id, row)
+			output_path.write_text(output_text, encoding="utf-8")
+			output_paths.append(output_path)
 	except (FileNotFoundError, ValueError) as exc:
 		print(f"Error: {exc}", file=sys.stderr)
 		return 1
-	print(output_path)
+	for output_path in output_paths:
+		print(output_path)
 	return 0
 
 
