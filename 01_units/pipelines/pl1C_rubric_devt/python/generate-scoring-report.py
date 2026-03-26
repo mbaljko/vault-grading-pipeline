@@ -1130,6 +1130,20 @@ def render_markdown_table(headers: list[str], rows: list[list[str]]) -> str:
 	return "\n".join([header_line, separator_line, *body_lines])
 
 
+def insert_blank_rows_between_groups(rows: list[list[str]], group_keys: list[object]) -> list[list[str]]:
+	if not rows:
+		return rows
+	grouped_rows: list[list[str]] = []
+	previous_group_key = None
+	column_count = len(rows[0])
+	for row, group_key in zip(rows, group_keys):
+		if previous_group_key is not None and group_key != previous_group_key:
+			grouped_rows.append([""] * column_count)
+		grouped_rows.append(row)
+		previous_group_key = group_key
+	return grouped_rows
+
+
 def derive_unique_template_labels(template_ids: list[str]) -> dict[str, str]:
 	tokenized_template_ids = {template_id: template_id.split("_") for template_id in template_ids}
 	preferred_labels: dict[str, str] = {}
@@ -1312,6 +1326,32 @@ def diff_row_sort_key(
 	return (*indicator_key, submission_id.lower(), *extra)
 
 
+def component_indicator_group_key(
+	row: list[str],
+	component_indicator_order: dict[tuple[str, str], tuple[int, int, int, str, str]],
+) -> tuple[int, int]:
+	component_id = row[0]
+	indicator_id = row[1]
+	order = component_indicator_order.get(
+		(component_id, indicator_id),
+		(10**9, 10**9, 10**9, indicator_id.lower(), component_id.lower()),
+	)
+	return (order[0], order[1])
+
+
+def component_template_group_key(
+	row: list[str],
+	component_indicator_order: dict[tuple[str, str], tuple[int, int, int, str, str]],
+) -> int:
+	component_id = row[0]
+	indicator_id = row[1]
+	order = component_indicator_order.get(
+		(component_id, indicator_id),
+		(10**9, 10**9, 10**9, indicator_id.lower(), component_id.lower()),
+	)
+	return order[0]
+
+
 def is_positive_scored_row(row: dict[str, str]) -> bool:
 	status = (row.get("evidence_status") or "").strip().lower()
 	return status in POSITIVE_EVIDENCE_STATUS_VALUES
@@ -1338,6 +1378,7 @@ def render_consolidated_scoring_stats_document(
 	missing_previous_components: list[str],
 	indicator_rows: list[list[str]],
 	base_rows: list[list[str]],
+	component_indicator_order: dict[tuple[str, str], tuple[int, int, int, str, str]],
 	coincidence_count_matrix: str,
 	coincidence_percent_matrix: str,
 ) -> str:
@@ -1401,7 +1442,13 @@ def render_consolidated_scoring_stats_document(
 				"number_scored",
 				"number_scored_positive",
 			],
-			indicator_rows,
+			insert_blank_rows_between_groups(
+				indicator_rows,
+				[
+					component_template_group_key(row, component_indicator_order)
+					for row in indicator_rows
+				],
+			),
 		),
 		"",
 		"### Indicator saturation, base",
@@ -1454,7 +1501,13 @@ def render_consolidated_scoring_stats_document(
 							"submission_id",
 							f"{current_label}-score",
 						],
-						added_diff_rows,
+							insert_blank_rows_between_groups(
+								added_diff_rows,
+								[
+									component_template_group_key(row, component_indicator_order)
+									for row in added_diff_rows
+								],
+							),
 					),
 				]
 			)
@@ -1473,7 +1526,13 @@ def render_consolidated_scoring_stats_document(
 							"submission_id",
 							f"{previous_label}-score",
 						],
-						removed_diff_rows,
+							insert_blank_rows_between_groups(
+								removed_diff_rows,
+								[
+									component_template_group_key(row, component_indicator_order)
+									for row in removed_diff_rows
+								],
+							),
 					),
 				]
 			)
@@ -1492,7 +1551,13 @@ def render_consolidated_scoring_stats_document(
 							"submission_id",
 							*[f"{history_label}-score" for history_label in history_labels],
 						],
-						changed_score_history_rows,
+							insert_blank_rows_between_groups(
+								changed_score_history_rows,
+								[
+									component_template_group_key(row, component_indicator_order)
+									for row in changed_score_history_rows
+								],
+							),
 					),
 				]
 			)
@@ -1871,6 +1936,7 @@ def main() -> int:
 			missing_previous_components=missing_previous_components,
 			indicator_rows=consolidated_indicator_rows,
 			base_rows=consolidated_base_rows,
+			component_indicator_order=component_indicator_order,
 			coincidence_count_matrix=coincidence_count_matrix,
 			coincidence_percent_matrix=coincidence_percent_matrix,
 		),
