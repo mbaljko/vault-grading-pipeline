@@ -1237,6 +1237,81 @@ def base_table_sort_key(row: list[str]) -> tuple[int, str, str]:
 	return (group_rank, template_id_lower, row[1].lower())
 
 
+def base_summary_sort_key(base_row: dict[str, object]) -> tuple[int, str, str]:
+	return base_table_sort_key([
+		str(base_row["template_id"]),
+		str(base_row["local_slot"]),
+	])
+
+
+def build_indicator_order_maps(
+	component_ids: list[str],
+	base_summary_rows: dict[str, dict[str, object]],
+	base_row_reverse_lookup: dict[tuple[str, str], dict[str, str]],
+) -> tuple[dict[str, tuple[int, int, str]], dict[tuple[str, str], tuple[int, int, int, str, str]]]:
+	template_indicator_order: dict[tuple[str, str], int] = {}
+	indicator_order: dict[str, tuple[int, int, str]] = {}
+	for template_rank, base_key in enumerate(sorted(base_summary_rows, key=lambda key: base_summary_sort_key(base_summary_rows[key]))):
+		base_row = base_summary_rows[base_key]
+		for indicator_rank, indicator_id in enumerate(sorted(base_row["expanded_indicator_ids"])):
+			template_indicator_order[(str(base_row["template_id"]), indicator_id)] = indicator_rank
+			indicator_order.setdefault(indicator_id, (template_rank, indicator_rank, indicator_id.lower()))
+
+	component_position = {component_id: index for index, component_id in enumerate(component_ids)}
+	component_indicator_order: dict[tuple[str, str], tuple[int, int, int, str, str]] = {}
+	for component_indicator_key, base_row_info in base_row_reverse_lookup.items():
+		component_id, indicator_id = component_indicator_key
+		template_id = base_row_info.get("template_id", "")
+		default_indicator_order = indicator_order.get(
+			indicator_id,
+			(10**9, 10**9, indicator_id.lower()),
+		)
+		component_indicator_order[component_indicator_key] = (
+			default_indicator_order[0],
+			template_indicator_order.get((template_id, indicator_id), default_indicator_order[1]),
+			component_position.get(component_id, 10**9),
+			indicator_id.lower(),
+			component_id.lower(),
+		)
+
+	return indicator_order, component_indicator_order
+
+
+def indicator_row_sort_key(
+	row: list[str],
+	component_indicator_order: dict[tuple[str, str], tuple[int, int, int, str, str]],
+) -> tuple[int, int, int, str, str]:
+	component_id = row[0]
+	indicator_id = row[1]
+	return component_indicator_order.get(
+		(component_id, indicator_id),
+		(10**9, 10**9, 10**9, indicator_id.lower(), component_id.lower()),
+	)
+
+
+def indicator_only_row_sort_key(
+	row: list[str],
+	indicator_order: dict[str, tuple[int, int, str]],
+) -> tuple[int, int, str]:
+	indicator_id = row[0]
+	return indicator_order.get(indicator_id, (10**9, 10**9, indicator_id.lower()))
+
+
+def diff_row_sort_key(
+	row: list[str],
+	component_indicator_order: dict[tuple[str, str], tuple[int, int, int, str, str]],
+) -> tuple[int, int, int, str, str, str, str]:
+	component_id = row[0]
+	indicator_id = row[1]
+	submission_id = row[2]
+	indicator_key = component_indicator_order.get(
+		(component_id, indicator_id),
+		(10**9, 10**9, 10**9, indicator_id.lower(), component_id.lower()),
+	)
+	extra = tuple(cell.lower() for cell in row[3:])
+	return (*indicator_key, submission_id.lower(), *extra)
+
+
 def is_positive_scored_row(row: dict[str, str]) -> bool:
 	status = (row.get("evidence_status") or "").strip().lower()
 	return status in POSITIVE_EVIDENCE_STATUS_VALUES
@@ -1736,6 +1811,20 @@ def main() -> int:
 			]
 		)
 	consolidated_base_rows.sort(key=base_table_sort_key)
+	indicator_order, component_indicator_order = build_indicator_order_maps(
+		component_ids,
+		base_summary_rows,
+		base_row_reverse_lookup,
+	)
+	consolidated_indicator_rows.sort(
+		key=lambda row: indicator_row_sort_key(row, component_indicator_order)
+	)
+	added_diff_rows.sort(key=lambda row: diff_row_sort_key(row, component_indicator_order))
+	removed_diff_rows.sort(key=lambda row: diff_row_sort_key(row, component_indicator_order))
+	changed_score_history_rows.sort(key=lambda row: diff_row_sort_key(row, component_indicator_order))
+	indicator_delta_rows.sort(key=lambda row: indicator_only_row_sort_key(row, indicator_order))
+	for classification_rows in stability_sections.values():
+		classification_rows.sort(key=lambda row: indicator_only_row_sort_key(row, indicator_order))
 	ordered_template_ids = [row[0] for row in consolidated_base_rows]
 	positive_submission_ids_by_template = collapse_template_positive_submission_ids(
 		positive_submission_ids_by_template_indicator,
