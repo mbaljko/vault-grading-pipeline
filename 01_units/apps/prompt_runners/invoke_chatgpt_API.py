@@ -36,6 +36,7 @@ Inputs:
 Outputs:
 - The full API response object is always captured in memory.
 - `extracted_output_text` is derived from that full API response object.
+- A runner metadata sidecar JSON is always written alongside outputs.
 - `--output-format <json|csv|md>` (repeatable) selects which artifacts are written:
     - `json`: writes JSON containing `extracted_output_text`.
     - `csv`: writes CSV derived from `extracted_output_text`.
@@ -46,6 +47,7 @@ Outputs:
 - `--save-full-api-response` controls whether a separate raw API response JSON file is written.
 - Output filename patterns:
     - Extracted JSON: `<stem>_output.json`
+    - Runner metadata JSON: `<stem>_run_metadata.json`
     - Full API response JSON (only when `--save-full-api-response` is set): `<stem>_api_response.json`
     - CSV: `<stem>_output.csv`
     - Markdown: `<stem>_output.md`
@@ -412,8 +414,8 @@ def build_request_body(
     return body
 
 
-def resolve_output_file_paths(args: argparse.Namespace) -> tuple[Path, Path, Path, Path]:
-    """Resolve output file paths for extracted JSON, full JSON, CSV, and Markdown."""
+def resolve_output_file_paths(args: argparse.Namespace) -> tuple[Path, Path, Path, Path, Path]:
+    """Resolve output file paths for extracted JSON, metadata JSON, full JSON, CSV, and Markdown."""
     prompt_instructions_source = args.prompt_instructions_file
     stem = (
         args.output_file_stem
@@ -429,25 +431,88 @@ def resolve_output_file_paths(args: argparse.Namespace) -> tuple[Path, Path, Pat
         output_dir = args.output_dir.resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
         extracted_json_path = output_dir / f"{stem}_output.json"
+        metadata_json_path = output_dir / f"{stem}_run_metadata.json"
         full_api_json_path = output_dir / f"{stem}_api_response.json"
         csv_path = output_dir / f"{stem}_output.csv"
         md_path = output_dir / f"{stem}_output.md"
-        return extracted_json_path, full_api_json_path, csv_path, md_path
+        return extracted_json_path, metadata_json_path, full_api_json_path, csv_path, md_path
 
     if prompt_instructions_source:
         prompt_dir = prompt_instructions_source.resolve().parent
         extracted_json_path = prompt_dir / f"{stem}_output.json"
+        metadata_json_path = prompt_dir / f"{stem}_run_metadata.json"
         full_api_json_path = prompt_dir / f"{stem}_api_response.json"
         csv_path = prompt_dir / f"{stem}_output.csv"
         md_path = prompt_dir / f"{stem}_output.md"
-        return extracted_json_path, full_api_json_path, csv_path, md_path
+        return extracted_json_path, metadata_json_path, full_api_json_path, csv_path, md_path
 
     script_dir = Path(__file__).resolve().parent
     extracted_json_path = script_dir / f"{stem}_output.json"
+    metadata_json_path = script_dir / f"{stem}_run_metadata.json"
     full_api_json_path = script_dir / f"{stem}_api_response.json"
     csv_path = script_dir / f"{stem}_output.csv"
     md_path = script_dir / f"{stem}_output.md"
-    return extracted_json_path, full_api_json_path, csv_path, md_path
+    return extracted_json_path, metadata_json_path, full_api_json_path, csv_path, md_path
+
+
+def build_run_metadata_payload(
+    args: argparse.Namespace,
+    body: dict[str, Any],
+    response_obj: dict[str, Any] | None,
+    generated_at_utc: str,
+    elapsed_s: float,
+    written_files: dict[str, Path],
+) -> dict[str, Any]:
+    response_model = response_obj.get("model") if isinstance(response_obj, dict) else None
+    usage = response_obj.get("usage") if isinstance(response_obj, dict) else None
+    response_id = response_obj.get("id") if isinstance(response_obj, dict) else None
+    incomplete_details = response_obj.get("incomplete_details") if isinstance(response_obj, dict) else None
+    output_count = len(response_obj.get("output") or []) if isinstance(response_obj, dict) else None
+    metadata: dict[str, Any] = {
+        "generated_at_utc": generated_at_utc,
+        "runner": {
+            "script_path": str(Path(__file__).resolve()),
+            "api_base_url": API_BASE_URL,
+            "timeout_seconds": args.timeout_seconds,
+            "elapsed_seconds": round(elapsed_s, 3),
+            "dry_run": bool(args.dry_run),
+            "save_full_api_response": bool(args.save_full_api_response),
+        },
+        "request": {
+            "model_requested": body.get("model"),
+            "temperature": body.get("temperature"),
+            "top_p": body.get("top_p"),
+            "max_output_tokens": body.get("max_output_tokens"),
+            "prompt_instructions_source": _prompt_instructions_source_label(args),
+            "prompt_input_source": _prompt_input_source_label(args),
+            "prompt_instructions_path": (
+                str(args.prompt_instructions_file.resolve()) if args.prompt_instructions_file else None
+            ),
+            "prompt_input_path": str(args.prompt_input_file.resolve()) if args.prompt_input_file else None,
+            "use_first_fenced_block": bool(args.use_first_fenced_block),
+        },
+        "response": {
+            "id": response_id,
+            "model_reported": response_model,
+            "usage": usage,
+            "incomplete_details": incomplete_details,
+            "output_item_count": output_count,
+        },
+        "artifacts": {name: str(path) for name, path in written_files.items()},
+    }
+    if ORGANIZATION_ID and not ORGANIZATION_ID.startswith("YOUR_"):
+        metadata["runner"]["organization_id"] = ORGANIZATION_ID
+    if PROJECT_ID and not PROJECT_ID.startswith("YOUR_"):
+        metadata["runner"]["project_id"] = PROJECT_ID
+    return metadata
+
+
+def write_run_metadata_output_file(metadata_output_path: Path, metadata: dict[str, Any]) -> None:
+    """Write execution metadata sidecar for the current runner invocation."""
+    metadata_output_path.write_text(
+        json.dumps(metadata, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
 
 
 def write_extracted_json_output_file(json_output_path: Path, text: str) -> None:
@@ -753,6 +818,7 @@ def main() -> int:
 
         (
             extracted_json_output_path,
+            metadata_json_output_path,
             full_api_json_output_path,
             csv_output_path,
             markdown_output_path,
@@ -768,9 +834,21 @@ def main() -> int:
             prompt_input=prompt_input,
             generated_at_utc=generated_at_utc,
         )
+        elapsed_s = time.perf_counter() - start_ts
+        run_metadata = build_run_metadata_payload(
+            args=args,
+            body=body,
+            response_obj=response_obj,
+            generated_at_utc=generated_at_utc,
+            elapsed_s=elapsed_s,
+            written_files=written_files,
+        )
+        write_run_metadata_output_file(metadata_json_output_path, run_metadata)
+        written_files["run_metadata"] = metadata_json_output_path
 
         if args.save_full_api_response:
             write_full_api_response_json_output_file(full_api_json_output_path, response_obj)
+            written_files["full_api_response"] = full_api_json_output_path
 
         if "json" in written_files:
             print(f"Extracted output JSON written to: {written_files['json']}")
@@ -778,6 +856,8 @@ def main() -> int:
             print(f"CSV output written to: {written_files['csv']}")
         if "md" in written_files:
             print(f"Markdown output written to: {written_files['md']}")
+        if "run_metadata" in written_files:
+            print(f"Run metadata JSON written to: {written_files['run_metadata']}")
         if args.save_full_api_response:
             print(f"Full API response JSON written to: {full_api_json_output_path}")
         if is_platform_limit_reason(incomplete_reason):
@@ -785,7 +865,6 @@ def main() -> int:
                 "Notice: response is incomplete due to a platform/model token limit "
                 f"(reason: {incomplete_reason})."
             )
-        elapsed_s = time.perf_counter() - start_ts
         print(f"Total running time: {elapsed_s:.2f} seconds")
         return 0
     except Exception as exc:  # noqa: BLE001
