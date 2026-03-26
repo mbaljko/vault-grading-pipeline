@@ -474,6 +474,7 @@
   },
   "active": "30b7ed3094eafc89",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate-scoring-report.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/generate-scoring-report.py",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/materialize-component-scored-csv.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/component_scored_texts.cpython-313.pyc",
@@ -493,7 +494,6 @@
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11+12merged_Layer1.md",
     "01_units/pipelines/pl1C_rubric_devt/python/extract-human-judge-notes-summary.py",
     "01_units/pipelines/pl1C_rubric_devt/python/collect-itp-panel-reports.py",
-    "01_units/pipelines/pl1C_rubric_devt/python/collect-panel-c-questionable-cases.py",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - engagement - signal prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification.md",

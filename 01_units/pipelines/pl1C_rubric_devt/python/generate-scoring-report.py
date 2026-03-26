@@ -77,6 +77,7 @@ ITERATION_RE = re.compile(r"\b(iter\d+)\b", re.IGNORECASE)
 RUN_RE = re.compile(r"\b(run\d+)\b", re.IGNORECASE)
 RUNNER_OUTPUT_SUBDIR = "Level1-CalibrationTesting-Outputs"
 SCORING_OUTPUT_VERSION_RE = re.compile(r"_v(\d+)(?=_)")
+REGISTRY_VERSION_PATH_RE = re.compile(r"(/registry_v)(\d+)(/)", re.IGNORECASE)
 POSITIVE_EVIDENCE_STATUS_VALUES = {
 	"positive",
 	"present",
@@ -336,9 +337,15 @@ def remap_scored_input_ref_for_iteration(
 	current_label = current_iteration_label.strip().lower()
 	target_label = target_iteration_label.strip().lower()
 	current_text = str(input_ref)
-	target_text = current_text.replace(f"/{current_label}/", f"/{target_label}/")
-	target_ref = Path(target_text)
+	target_text = re.sub(
+		rf"/{re.escape(current_label)}(?=/|$)",
+		f"/{target_label}",
+		current_text,
+	)
 	target_version = derive_target_version_label(current_iteration_label, target_iteration_label)
+	if target_version is not None:
+		target_text = REGISTRY_VERSION_PATH_RE.sub(rf"\g<1>{target_version}\g<3>", target_text)
+	target_ref = Path(target_text)
 	if target_version is None:
 		return target_ref
 	updated_name = SCORING_OUTPUT_VERSION_RE.sub(f"_v{target_version}", target_ref.name, count=1)
@@ -355,7 +362,15 @@ def remap_scored_input_ref_for_run(
 	if target_run_label == current_run_label:
 		return input_ref
 	current_text = str(input_ref)
-	return Path(current_text.replace(f"/{current_run_label.strip().lower()}/", f"/{target_run_label.strip().lower()}/"))
+	current_label = current_run_label.strip().lower()
+	target_label = target_run_label.strip().lower()
+	return Path(
+		re.sub(
+			rf"/{re.escape(current_label)}(?=/|$)",
+			f"/{target_label}",
+			current_text,
+		)
+	)
 
 
 def derive_expected_version_label(input_ref: Path, iteration_label: str | None = None) -> str | None:
@@ -701,13 +716,12 @@ def classify_variance_rate(variance_rate: float) -> str:
 
 
 def build_indicator_stability_sections(
-	history_labels: list[str],
+	stability_labels: list[str],
 	counts_by_indicator: dict[str, dict[str, dict[str, int]]],
 	sample_size: int,
 ) -> tuple[list[str], dict[str, list[list[str]]]]:
-	if len(history_labels) < 3:
+	if len(stability_labels) < 3:
 		return ([], {})
-	stability_labels = history_labels[-3:]
 	classification_rows: dict[str, list[list[str]]] = {
 		"stable": [],
 		"low_variance": [],
@@ -716,37 +730,61 @@ def build_indicator_stability_sections(
 	}
 	denominator = sample_size if sample_size > 0 else 1
 	for indicator_id in sorted(counts_by_indicator, key=indicator_sort_key):
-		iteration_counts = [
-			counts_by_indicator[indicator_id].get(iteration_label, {}).get("positive", 0)
-			for iteration_label in stability_labels
+		positive_counts = [
+			counts_by_indicator[indicator_id].get(label, {}).get("positive", 0)
+			for label in stability_labels
 		]
-		iter01_count, iter02_count, iter03_count = iteration_counts
-		delta_12 = abs(iter02_count - iter01_count)
-		delta_23 = abs(iter03_count - iter02_count)
-		max_delta = max(delta_12, delta_23)
+		absolute_deltas = [
+			abs(current_count - previous_count)
+			for previous_count, current_count in zip(positive_counts, positive_counts[1:])
+		]
+		signed_deltas = [
+			current_count - previous_count
+			for previous_count, current_count in zip(positive_counts, positive_counts[1:])
+		]
+		max_delta = max(absolute_deltas) if absolute_deltas else 0
 		variance_rate = max_delta / denominator
-		signed_delta_12 = iter02_count - iter01_count
-		signed_delta_23 = iter03_count - iter02_count
-		range_delta = max(iter01_count, iter02_count, iter03_count) - min(iter01_count, iter02_count, iter03_count)
+		range_delta = max(positive_counts) - min(positive_counts)
 		range_rate = range_delta / denominator
 		classification = classify_variance_rate(variance_rate)
-		classification_rows[classification].append(
-			[
-				indicator_id,
-				str(iter01_count),
-				str(iter02_count),
-				str(iter03_count),
-				str(delta_12),
-				str(delta_23),
-				str(max_delta),
-				f"{variance_rate:.3f}",
-				f"{signed_delta_12:+d}",
-				f"{signed_delta_23:+d}",
-				str(range_delta),
-				f"{range_rate:.3f}",
-			]
-		)
+		row = [indicator_id]
+		row.extend(str(count) for count in positive_counts)
+		row.extend(str(delta) for delta in absolute_deltas)
+		row.append(str(max_delta))
+		row.append(f"{variance_rate:.3f}")
+		row.extend(f"{delta:+d}" for delta in signed_deltas)
+		row.append(str(range_delta))
+		row.append(f"{range_rate:.3f}")
+		classification_rows[classification].append(row)
 	return (stability_labels, classification_rows)
+
+
+def build_stability_table_headers(stability_labels: list[str]) -> list[str]:
+	headers = ["indicator", *stability_labels]
+	for previous_label, current_label in zip(stability_labels, stability_labels[1:]):
+		headers.append(f"delta {previous_label}-{current_label}")
+	headers.extend(["max_delta", "variance_rate"])
+	for previous_label, current_label in zip(stability_labels, stability_labels[1:]):
+		headers.append(f"signed_delta {previous_label}-{current_label}")
+	headers.extend(["range_delta", "range_rate"])
+	return headers
+
+
+def build_iteration_stability_entries(
+	current_iteration_label: str,
+	current_run_label: str | None,
+	component_ids: list[str],
+	current_input_refs: list[Path],
+) -> list[ComparisonEntry]:
+	entries = build_iteration_comparison_entries(
+		current_iteration_label=current_iteration_label,
+		current_run_label=current_run_label,
+		baseline_iteration_label=None,
+		baseline_run_label=None,
+		component_ids=component_ids,
+		current_input_refs=current_input_refs,
+	)
+	return entries[-3:]
 
 
 def quote_yaml_string(value: str) -> str:
@@ -1232,6 +1270,16 @@ def render_consolidated_scoring_stats_document(
 	source_csv_label = "\n".join(str(path) for path in scored_csv_paths)
 	comparison_axis_label = "run" if comparison_scope == "run" else "iteration endpoint"
 	stability_title = "Run Repeatability Flags" if comparison_scope == "run" else "Stability Flags"
+	if comparison_scope == "run":
+		stability_description_lines = [
+			"Run-scope repeatability flags are computed across all resolved runs for the current iteration.",
+			"Each consecutive run-to-run delta contributes to the summary metrics, and `max_delta` / `range_delta` summarize the full run history rather than only the most recent pair.",
+		]
+	else:
+		stability_description_lines = [
+			"Iteration-scope stability flags are computed from exactly two consecutive iteration-endpoint comparisons.",
+			"The section uses the latest three resolvable iteration endpoints ending at the current run, so the stability signal stays anchored to recent iteration-to-iteration movement even when the diff report baseline is set explicitly.",
+		]
 	base_table_headers = [
 		"template_id",
 		"local_slot",
@@ -1387,27 +1435,16 @@ def render_consolidated_scoring_stats_document(
 			]
 		)
 		diff_report_parts.extend(["", f"#### {stability_title}", ""])
+		diff_report_parts.extend(stability_description_lines)
+		diff_report_parts.append("")
 		if len(stability_labels) < 3:
 			diff_report_parts.extend(
 				[
-					f"At least three {comparison_axis_label}s are required to compute {stability_title.lower()}; available labels: {', '.join(history_labels)}.",
+					f"At least three labels are required to compute {stability_title.lower()}; available labels: {', '.join(stability_labels or history_labels)}.",
 				]
 			)
 		else:
-			stability_headers = [
-				"indicator",
-				stability_labels[0],
-				stability_labels[1],
-				stability_labels[2],
-				"delta_12",
-				"delta_23",
-				"max_delta",
-				"variance_rate",
-				"signed_delta_12",
-				"signed_delta_23",
-				"range_delta",
-				"range_rate",
-			]
+			stability_headers = build_stability_table_headers(stability_labels)
 			diff_report_parts.extend(
 				[
 					f"sample_size: {sample_size}",
@@ -1495,6 +1532,7 @@ def main() -> int:
 	}
 	if comparison_scope == "run":
 		comparison_entries = build_run_comparison_entries(iteration_label, run_label)
+		stability_entries = comparison_entries
 		current_label = run_label
 	else:
 		comparison_entries = build_iteration_comparison_entries(
@@ -1505,12 +1543,23 @@ def main() -> int:
 			component_ids=component_ids,
 			current_input_refs=scored_csv_input_refs,
 		)
+		stability_entries = build_iteration_stability_entries(
+			current_iteration_label=iteration_label,
+			current_run_label=run_label,
+			component_ids=component_ids,
+			current_input_refs=scored_csv_input_refs,
+		)
 		current_label = format_iteration_run_label(iteration_label, run_label)
 	history_labels = [entry.label for entry in comparison_entries]
+	stability_labels_for_loading = [entry.label for entry in stability_entries]
+	labels_for_count_loading = list(dict.fromkeys([*history_labels, *stability_labels_for_loading]))
+	all_comparison_entries: dict[str, ComparisonEntry] = {
+		entry.label: entry for entry in [*comparison_entries, *stability_entries]
+	}
 	historical_rows_by_label: dict[str, dict[str, list[dict[str, str]]]] = {
 		current_label: dict(scored_rows_by_component)
 	}
-	for comparison_entry in comparison_entries:
+	for comparison_entry in all_comparison_entries.values():
 		if comparison_entry.label == current_label:
 			continue
 		historical_rows_by_label[comparison_entry.label] = {}
@@ -1556,11 +1605,11 @@ def main() -> int:
 	)
 	counts_by_indicator = build_indicator_counts_by_label(
 		component_ids,
-		history_labels,
+		labels_for_count_loading,
 		historical_rows_by_label,
 	)
 	stability_labels, stability_sections = build_indicator_stability_sections(
-		history_labels,
+		stability_labels_for_loading,
 		counts_by_indicator,
 		sample_size,
 	)
