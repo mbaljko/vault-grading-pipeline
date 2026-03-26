@@ -55,6 +55,7 @@ class IndicatorRow:
     indicator_definition: str
     assessment_guidance: str
     evaluation_notes: str
+    decision_procedure: str
     status: str
 
 
@@ -208,10 +209,15 @@ def build_indicator_rows_from_explicit_table(
                 indicator_definition=record["indicator_definition"],
                 assessment_guidance=record["assessment_guidance"],
                 evaluation_notes=record["evaluation_notes"],
+                decision_procedure=resolve_decision_procedure(record),
                 status=record.get("status", ""),
             )
         )
     return rows
+
+
+def resolve_decision_procedure(record: dict[str, str]) -> str:
+    return record.get("decision_procedure", "").strip()
 
 
 def build_indicator_rows_from_base_and_reuse_tables(
@@ -271,6 +277,7 @@ def build_indicator_rows_from_base_and_reuse_tables(
                 indicator_definition=merged_record["indicator_definition"],
                 assessment_guidance=merged_record["assessment_guidance"],
                 evaluation_notes=merged_record["evaluation_notes"],
+                decision_procedure=resolve_decision_procedure(merged_record),
                 status=effective_status,
             )
         )
@@ -425,6 +432,7 @@ def build_indicator_rows_from_rule_based_reuse_table(
                         indicator_definition=base_row["indicator_definition"],
                         assessment_guidance=base_row["assessment_guidance"],
                         evaluation_notes=base_row["evaluation_notes"],
+                        decision_procedure=resolve_decision_procedure(base_row),
                         status=effective_status,
                     )
                 )
@@ -509,6 +517,7 @@ def build_indicator_rows_from_component_block_reuse_table(
                         indicator_definition=base_row["indicator_definition"],
                         assessment_guidance=base_row["assessment_guidance"],
                         evaluation_notes=base_row["evaluation_notes"],
+                        decision_procedure=resolve_decision_procedure(base_row),
                         status=effective_status,
                     )
                 )
@@ -862,6 +871,7 @@ def render_rubric_document(title_stem: str, assessment_id: str, rows: list[Indic
                         "indicator_definition",
                         "assessment_guidance",
                         "evaluation_notes",
+                        "decision_procedure",
                     ],
                     [
                         [
@@ -870,6 +880,7 @@ def render_rubric_document(title_stem: str, assessment_id: str, rows: list[Indic
                             row.indicator_definition,
                             row.assessment_guidance,
                             row.evaluation_notes,
+                            row.decision_procedure,
                         ]
                         for row in component_indicator_rows
                     ],
@@ -955,6 +966,7 @@ def render_manifest_document(title_stem: str, assessment_id: str, rows: list[Ind
             row.indicator_definition,
             row.assessment_guidance,
             row.evaluation_notes,
+            row.decision_procedure,
         ]
         for row in rows
     ]
@@ -1003,6 +1015,7 @@ def render_manifest_document(title_stem: str, assessment_id: str, rows: list[Ind
                 "indicator_definition",
                 "assessment_guidance",
                 "evaluation_notes",
+                "decision_procedure",
             ],
             manifest_rows,
         ),

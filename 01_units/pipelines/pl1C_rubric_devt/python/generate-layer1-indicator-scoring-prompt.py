@@ -25,7 +25,7 @@ PAYLOAD_DELIMITER = "§§§"
 EMBEDDED_ROWS_TOKEN = "[[EMBEDDED_INDICATOR_TABLE_ROWS]]"
 PARAMETER_RE = re.compile(r"^PARAM_TARGET_COMPONENT_ID\s*=\s*(\S.*?)\s*$")
 FENCED_VALUE_TEMPLATE = r"(?ms)^{}\s*$\n```(?:text)?\n(.*?)\n```"
-MANIFEST_HEADERS = [
+MANIFEST_REQUIRED_HEADERS = [
 	"component_id",
 	"sbo_identifier",
 	"indicator_id",
@@ -165,7 +165,7 @@ def find_manifest_table_lines(manifest_block: str) -> tuple[list[str], list[str]
 	lines = manifest_block.splitlines()
 	for index, line in enumerate(lines[:-1]):
 		headers = parse_markdown_cells(line)
-		if headers != MANIFEST_HEADERS:
+		if not manifest_headers_are_supported(headers):
 			continue
 		separator = parse_markdown_cells(lines[index + 1])
 		if not separator or not all(set(cell.replace(" ", "")) <= {"-", ":"} for cell in separator):
@@ -177,6 +177,10 @@ def find_manifest_table_lines(manifest_block: str) -> tuple[list[str], list[str]
 			cursor += 1
 		return (headers, row_lines)
 	raise ValueError("Layer 1 scoring manifest table was not found.")
+
+
+def manifest_headers_are_supported(headers: list[str]) -> bool:
+	return all(required_header in headers for required_header in MANIFEST_REQUIRED_HEADERS)
 
 
 def parse_manifest_rows(manifest_block: str) -> list[dict[str, str]]:
@@ -239,7 +243,7 @@ def build_token_assignments(
 		render_token_assignment("[[ASSESSMENT_GUIDANCE]]", row["assessment_guidance"]),
 		render_token_assignment("[[EMBEDDED_EVALUATOR_GUIDANCE]]", row["evaluation_notes"]),
 	]
-	decision_procedure_block = row.get("embedded_decision_procedure_block", "").strip()
+	decision_procedure_block = row.get("decision_procedure", "").strip()
 	if decision_procedure_block:
 		token_blocks.append(
 			render_token_assignment("[[EMBEDDED_DECISION_PROCEDURE_BLOCK]]", decision_procedure_block)
