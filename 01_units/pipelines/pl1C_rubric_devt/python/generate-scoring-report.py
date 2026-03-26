@@ -45,9 +45,9 @@ Saturation rate definition:
 
 Output naming:
 - Run-scope report:
-	I_<assignment>_<component>_output_scoring_report_run-deltas_<iteration>_<run>.md
+	I_<assignment>_scoring_report_intra_<iteration>_<run>.md
 - Iteration-scope report:
-	I_<assignment>_<component>_output_scoring_report_iteration-compare_<baseline>_vs_<current>.md
+	I_<assignment>_scoring_report_inter_<iteration>_<run>.md
 """
 
 from __future__ import annotations
@@ -237,19 +237,20 @@ def derive_output_filename(
 	previous_label: str | None,
 ) -> str:
 	prefix = derive_assignment_output_prefix(manifest_path)
-	component_label = component_ids[0] if len(component_ids) == 1 else "all_components"
+	component_label = component_ids[0] if len(component_ids) == 1 else None
 	if comparison_scope == "run":
-		suffix = f"run-deltas_{sanitize_label_for_filename(current_iteration_label)}_{sanitize_label_for_filename(current_run_label or current_label)}"
-	elif previous_label:
 		suffix = (
-			"iteration-compare_"
-			f"{sanitize_label_for_filename(previous_label)}_vs_{sanitize_label_for_filename(current_label)}"
+			f"intra_{sanitize_label_for_filename(current_iteration_label)}"
+			f"_{sanitize_label_for_filename(current_run_label or current_label)}"
 		)
 	else:
-		suffix = sanitize_label_for_filename(current_label)
+		suffix = (
+			f"inter_{sanitize_label_for_filename(current_iteration_label)}"
+			f"_{sanitize_label_for_filename(current_run_label or current_label)}"
+		)
 	if len(component_ids) == 1:
-		return f"{prefix}_{component_label}_output_scoring_report_{suffix}.md"
-	return f"{prefix}_{component_label}_output_scoring_report_{suffix}.md"
+		return f"{prefix}_{component_label}_scoring_report_{suffix}.md"
+	return f"{prefix}_scoring_report_{suffix}.md"
 
 
 def derive_previous_iteration_label(iteration_label: str) -> str | None:
