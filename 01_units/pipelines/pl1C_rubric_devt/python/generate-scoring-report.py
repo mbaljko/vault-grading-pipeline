@@ -1352,6 +1352,15 @@ def component_template_group_key(
 	return order[0]
 
 
+def indicator_template_group_key(
+	row: list[str],
+	indicator_order: dict[str, tuple[int, int, str]],
+) -> int:
+	indicator_id = row[0]
+	order = indicator_order.get(indicator_id, (10**9, 10**9, indicator_id.lower()))
+	return order[0]
+
+
 def is_positive_scored_row(row: dict[str, str]) -> bool:
 	status = (row.get("evidence_status") or "").strip().lower()
 	return status in POSITIVE_EVIDENCE_STATUS_VALUES
@@ -1378,6 +1387,7 @@ def render_consolidated_scoring_stats_document(
 	missing_previous_components: list[str],
 	indicator_rows: list[list[str]],
 	base_rows: list[list[str]],
+	indicator_order: dict[str, tuple[int, int, str]],
 	component_indicator_order: dict[tuple[str, str], tuple[int, int, int, str, str]],
 	coincidence_count_matrix: str,
 	coincidence_percent_matrix: str,
@@ -1570,7 +1580,13 @@ def render_consolidated_scoring_stats_document(
 				"",
 				render_markdown_table(
 					delta_table_headers,
-					indicator_delta_rows,
+					insert_blank_rows_between_groups(
+						indicator_delta_rows,
+						[
+							indicator_template_group_key(row, indicator_order)
+							for row in indicator_delta_rows
+						],
+					),
 				),
 			]
 		)
@@ -1595,7 +1611,18 @@ def render_consolidated_scoring_stats_document(
 				diff_report_parts.extend(["", f"##### {classification}", ""])
 				rows = stability_sections.get(classification, [])
 				if rows:
-					diff_report_parts.append(render_markdown_table(stability_headers, rows))
+					diff_report_parts.append(
+						render_markdown_table(
+							stability_headers,
+							insert_blank_rows_between_groups(
+								rows,
+								[
+									indicator_template_group_key(row, indicator_order)
+									for row in rows
+								],
+							),
+						)
+					)
 				else:
 					diff_report_parts.append("No indicators.")
 	diff_report_parts.append("")
@@ -1936,6 +1963,7 @@ def main() -> int:
 			missing_previous_components=missing_previous_components,
 			indicator_rows=consolidated_indicator_rows,
 			base_rows=consolidated_base_rows,
+			indicator_order=indicator_order,
 			component_indicator_order=component_indicator_order,
 			coincidence_count_matrix=coincidence_count_matrix,
 			coincidence_percent_matrix=coincidence_percent_matrix,
