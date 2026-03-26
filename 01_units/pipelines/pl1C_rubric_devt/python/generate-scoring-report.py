@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a consolidated scoring-stats markdown report for one or more components.
+"""Generate a consolidated scoring markdown report for one or more components.
 
 This script mirrors the manifest iteration behavior of
 run-itp-report-for-manifest.py, but instead of invoking the LLM runner it
@@ -16,6 +16,10 @@ Arguments:
 	with --component-id. Each CSV is only used for its paired component.
 - --output-dir: optional explicit output directory. Defaults to
 	<manifest_dir>/Level1-CalibrationTesting-Outputs.
+- --comparison-scope: either `iteration` or `run`.
+- --run-label: optional explicit current run label.
+- --baseline-iteration-label / --baseline-run-label: optional explicit
+	baseline endpoint when comparing iteration outputs.
 
 Report contents:
 1. A metadata table showing the included component IDs, source scored CSVs,
@@ -40,16 +44,17 @@ Saturation rate definition:
 - saturation_rate = number_scored_positive / number_scored
 
 Output naming:
-- Single-component run:
-	I_<assignment>_<component_id>_output_scoring_stats_report_<iteration>.md
-- Multi-component run:
-	I_<assignment>_all_components_output_scoring_stats_report_<iteration>.md
+- Run-scope report:
+	I_<assignment>_<component>_output_scoring_report_run-deltas_<iteration>_<run>.md
+- Iteration-scope report:
+	I_<assignment>_<component>_output_scoring_report_iteration-compare_<baseline>_vs_<current>.md
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import re
 import sys
@@ -69,6 +74,7 @@ from generate_rubric_and_manifest_from_indicator_registry import (
 
 SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
 ITERATION_RE = re.compile(r"\b(iter\d+)\b", re.IGNORECASE)
+RUN_RE = re.compile(r"\b(run\d+)\b", re.IGNORECASE)
 RUNNER_OUTPUT_SUBDIR = "Level1-CalibrationTesting-Outputs"
 SCORING_OUTPUT_VERSION_RE = re.compile(r"_v(\d+)(?=_)")
 POSITIVE_EVIDENCE_STATUS_VALUES = {
@@ -82,9 +88,16 @@ POSITIVE_EVIDENCE_STATUS_VALUES = {
 }
 
 
+@dataclass(frozen=True)
+class ComparisonEntry:
+	label: str
+	iteration_label: str
+	run_label: str | None
+
+
 def parse_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(
-		description="Generate scoring-stats markdown files for manifest entries matching a component ID."
+		description="Generate scoring markdown files for manifest entries matching a component ID."
 	)
 	parser.add_argument(
 		"--indicator-registry",
@@ -116,13 +129,38 @@ def parse_args() -> argparse.Namespace:
 		"--output-dir",
 		type=Path,
 		required=False,
-		help="Output directory for scoring-stats files. Defaults to <manifest_dir>/Level1-CalibrationTesting-Outputs.",
+		help="Output directory for scoring report files. Defaults to <manifest_dir>/Level1-CalibrationTesting-Outputs.",
+	)
+	parser.add_argument(
+		"--comparison-scope",
+		type=str,
+		choices=["iteration", "run"],
+		default="iteration",
+		help="Comparison scope: compare across iteration endpoints or across runs within a single iteration.",
 	)
 	parser.add_argument(
 		"--iteration-label",
 		type=str,
 		required=False,
 		help="Optional iteration label override, e.g. iter02.",
+	)
+	parser.add_argument(
+		"--run-label",
+		type=str,
+		required=False,
+		help="Optional run label override, e.g. run02.",
+	)
+	parser.add_argument(
+		"--baseline-iteration-label",
+		type=str,
+		required=False,
+		help="Optional baseline iteration label for iteration-scope comparisons, e.g. iter05.",
+	)
+	parser.add_argument(
+		"--baseline-run-label",
+		type=str,
+		required=False,
+		help="Optional baseline run label for iteration-scope comparisons, e.g. run01.",
 	)
 	parser.add_argument(
 		"--sample-size",
@@ -154,49 +192,117 @@ def derive_iteration_label(input_path: Path, explicit_label: str | None) -> str:
 	return "iteration"
 
 
-def derive_output_filename(component_ids: list[str], manifest_path: Path, iteration_label: str) -> str:
+def derive_run_label(input_path: Path, explicit_label: str | None) -> str | None:
+	if explicit_label:
+		return explicit_label.strip()
+	for part in input_path.parts:
+		match = RUN_RE.search(part)
+		if match:
+			return match.group(1).lower()
+	match = RUN_RE.search(str(input_path))
+	if match:
+		return match.group(1).lower()
+	return None
+
+
+def format_numeric_label(prefix: str, number: int, width: int) -> str:
+	return f"{prefix}{number:0{width}d}"
+
+
+def parse_numeric_label(label: str, prefix: str) -> tuple[int, int] | None:
+	match = re.fullmatch(rf"{prefix}(\d+)", label.strip().lower())
+	if match is None:
+		return None
+	digits = match.group(1)
+	return (int(digits), len(digits))
+
+
+def sanitize_label_for_filename(label: str) -> str:
+	return re.sub(r"[^A-Za-z0-9._-]+", "-", label.strip()).strip("-") or "report"
+
+
+def format_iteration_run_label(iteration_label: str, run_label: str | None) -> str:
+	if run_label:
+		return f"{iteration_label}-{run_label}"
+	return iteration_label
+
+
+def derive_output_filename(
+	component_ids: list[str],
+	manifest_path: Path,
+	comparison_scope: str,
+	current_label: str,
+	current_iteration_label: str,
+	current_run_label: str | None,
+	previous_label: str | None,
+) -> str:
 	prefix = derive_assignment_output_prefix(manifest_path)
+	component_label = component_ids[0] if len(component_ids) == 1 else "all_components"
+	if comparison_scope == "run":
+		suffix = f"run-deltas_{sanitize_label_for_filename(current_iteration_label)}_{sanitize_label_for_filename(current_run_label or current_label)}"
+	elif previous_label:
+		suffix = (
+			"iteration-compare_"
+			f"{sanitize_label_for_filename(previous_label)}_vs_{sanitize_label_for_filename(current_label)}"
+		)
+	else:
+		suffix = sanitize_label_for_filename(current_label)
 	if len(component_ids) == 1:
-		return f"{prefix}_{component_ids[0]}_output_scoring_stats_report_{iteration_label}.md"
-	return f"{prefix}_all_components_output_scoring_stats_report_{iteration_label}.md"
+		return f"{prefix}_{component_label}_output_scoring_report_{suffix}.md"
+	return f"{prefix}_{component_label}_output_scoring_report_{suffix}.md"
 
 
 def derive_previous_iteration_label(iteration_label: str) -> str | None:
-	match = re.fullmatch(r"iter(\d+)", iteration_label.strip().lower())
-	if not match:
+	parsed = parse_numeric_label(iteration_label, "iter")
+	if parsed is None:
 		return None
-	iteration_number = int(match.group(1))
+	iteration_number, width = parsed
 	if iteration_number <= 0:
 		return None
-	return f"iter{iteration_number - 1:0{len(match.group(1))}d}"
+	return format_numeric_label("iter", iteration_number - 1, width)
+
+
+def derive_previous_run_label(run_label: str) -> str | None:
+	parsed = parse_numeric_label(run_label, "run")
+	if parsed is None:
+		return None
+	run_number, width = parsed
+	if run_number <= 0:
+		return None
+	return format_numeric_label("run", run_number - 1, width)
 
 
 def derive_iteration_history_labels(iteration_label: str) -> list[str]:
-	match = re.fullmatch(r"iter(\d+)", iteration_label.strip().lower())
-	if not match:
+	parsed = parse_numeric_label(iteration_label, "iter")
+	if parsed is None:
 		return [iteration_label]
-	iteration_digits = match.group(1)
-	iteration_number = int(iteration_digits)
+	iteration_number, width = parsed
 	if iteration_number <= 0:
 		return [iteration_label]
-	return [f"iter{index:0{len(iteration_digits)}d}" for index in range(1, iteration_number + 1)]
+	return [format_numeric_label("iter", index, width) for index in range(1, iteration_number + 1)]
 
 
-def derive_delta_column_label(previous_iteration_label: str, current_iteration_label: str) -> str:
-	previous_match = re.fullmatch(r"iter(\d+)", previous_iteration_label.strip().lower())
-	current_match = re.fullmatch(r"iter(\d+)", current_iteration_label.strip().lower())
-	if previous_match and current_match:
-		return f"delta{previous_match.group(1)}-{current_match.group(1)}"
-	return f"delta {previous_iteration_label}-{current_iteration_label}"
+def derive_run_history_labels(run_label: str) -> list[str]:
+	parsed = parse_numeric_label(run_label, "run")
+	if parsed is None:
+		return [run_label]
+	run_number, width = parsed
+	if run_number <= 0:
+		return [run_label]
+	return [format_numeric_label("run", index, width) for index in range(1, run_number + 1)]
 
 
-def build_delta_table_headers(iteration_history_labels: list[str]) -> list[str]:
-	headers = ["indicator", *iteration_history_labels]
-	for previous_iteration_label, current_iteration_label in zip(iteration_history_labels, iteration_history_labels[1:]):
+def derive_delta_column_label(previous_label: str, current_label: str) -> str:
+	return f"delta {previous_label}-{current_label}"
+
+
+def build_delta_table_headers(history_labels: list[str]) -> list[str]:
+	headers = ["indicator", *history_labels]
+	for previous_label, current_label in zip(history_labels, history_labels[1:]):
 		headers.extend(
 			[
 				".",
-				derive_delta_column_label(previous_iteration_label, current_iteration_label),
+				derive_delta_column_label(previous_label, current_label),
 				"-high",
 				"-med",
 				"-low",
@@ -210,11 +316,13 @@ def build_delta_table_headers(iteration_history_labels: list[str]) -> list[str]:
 
 
 def derive_target_version_label(current_iteration_label: str, target_iteration_label: str) -> str | None:
-	current_match = re.fullmatch(r"iter(\d+)", current_iteration_label.strip().lower())
-	target_match = re.fullmatch(r"iter(\d+)", target_iteration_label.strip().lower())
-	if current_match is None or target_match is None:
+	current_parsed = parse_numeric_label(current_iteration_label, "iter")
+	target_parsed = parse_numeric_label(target_iteration_label, "iter")
+	if current_parsed is None or target_parsed is None:
 		return None
-	return f"{int(target_match.group(1)):0{len(current_match.group(1))}d}"
+	_, current_width = current_parsed
+	target_number, _ = target_parsed
+	return f"{target_number:0{current_width}d}"
 
 
 def remap_scored_input_ref_for_iteration(
@@ -238,16 +346,28 @@ def remap_scored_input_ref_for_iteration(
 	return target_ref.with_name(updated_name)
 
 
+def remap_scored_input_ref_for_run(
+	input_ref: Path,
+	current_run_label: str,
+	target_run_label: str,
+) -> Path:
+	if target_run_label == current_run_label:
+		return input_ref
+	current_text = str(input_ref)
+	return Path(current_text.replace(f"/{current_run_label.strip().lower()}/", f"/{target_run_label.strip().lower()}/"))
+
+
 def derive_expected_version_label(input_ref: Path, iteration_label: str | None = None) -> str | None:
 	version_match = SCORING_OUTPUT_VERSION_RE.search(input_ref.name)
 	if version_match is not None:
 		return version_match.group(1)
 	if iteration_label is None:
 		return None
-	iteration_match = re.fullmatch(r"iter(\d+)", iteration_label.strip().lower())
-	if iteration_match is None:
+	iteration_parsed = parse_numeric_label(iteration_label, "iter")
+	if iteration_parsed is None:
 		return None
-	return iteration_match.group(1)
+	iteration_number, width = iteration_parsed
+	return f"{iteration_number:0{width}d}"
 
 
 def discover_component_py_scored_csv_paths_in_dir(
@@ -338,17 +458,151 @@ def derive_scored_csv_paths_for_iteration(
 	component_id: str,
 	current_iteration_label: str,
 	target_iteration_label: str,
+	current_run_label: str | None = None,
+	target_run_label: str | None = None,
 ) -> list[Path]:
 	target_input_ref = remap_scored_input_ref_for_iteration(
 		current_input_ref,
 		current_iteration_label,
 		target_iteration_label,
 	)
+	if current_run_label and target_run_label:
+		target_input_ref = remap_scored_input_ref_for_run(target_input_ref, current_run_label, target_run_label)
 	return resolve_component_scored_csv_paths(
 		target_input_ref,
 		component_id,
 		derive_expected_version_label(target_input_ref, target_iteration_label),
 	)
+
+
+def find_numeric_label_container(input_ref: Path, prefix: str) -> Path | None:
+	search_roots = [input_ref]
+	search_roots.extend(input_ref.parents)
+	for candidate in search_roots:
+		if parse_numeric_label(candidate.name, prefix) is not None:
+			return candidate
+	return None
+
+
+def list_numeric_child_labels(parent_dir: Path, prefix: str) -> list[str]:
+	if not parent_dir.exists() or not parent_dir.is_dir():
+		return []
+	labels = [
+		child.name.lower()
+		for child in parent_dir.iterdir()
+		if child.is_dir() and parse_numeric_label(child.name, prefix) is not None
+	]
+	return sorted(labels, key=lambda label: parse_numeric_label(label, prefix) or (0, 0))
+
+
+def discover_resolvable_run_labels_for_iteration(
+	current_input_refs: list[Path],
+	component_ids: list[str],
+	current_iteration_label: str,
+	target_iteration_label: str,
+) -> list[str]:
+	if not current_input_refs:
+		return []
+	first_target_ref = remap_scored_input_ref_for_iteration(
+		current_input_refs[0],
+		current_iteration_label,
+		target_iteration_label,
+	)
+	run_container = find_numeric_label_container(first_target_ref, "run")
+	if run_container is None:
+		return []
+	candidate_labels = list_numeric_child_labels(run_container.parent, "run")
+	resolvable_labels: list[str] = []
+	for candidate_label in candidate_labels:
+		all_components_resolved = True
+		for component_id, current_input_ref in zip(component_ids, current_input_refs):
+			target_ref = remap_scored_input_ref_for_iteration(
+				current_input_ref,
+				current_iteration_label,
+				target_iteration_label,
+			)
+			target_ref = remap_scored_input_ref_for_run(target_ref, run_container.name.lower(), candidate_label)
+			resolved_paths = resolve_component_scored_csv_paths(
+				target_ref,
+				component_id,
+				derive_expected_version_label(target_ref, target_iteration_label),
+			)
+			if not resolved_paths:
+				all_components_resolved = False
+				break
+		if all_components_resolved:
+			resolvable_labels.append(candidate_label)
+	return resolvable_labels
+
+
+def resolve_target_run_label(
+	current_input_refs: list[Path],
+	component_ids: list[str],
+	current_iteration_label: str,
+	target_iteration_label: str,
+	explicit_run_label: str | None,
+	fallback_run_label: str | None,
+) -> str | None:
+	if explicit_run_label:
+		return explicit_run_label.strip().lower()
+	if target_iteration_label == current_iteration_label and fallback_run_label:
+		return fallback_run_label.strip().lower()
+	resolvable_labels = discover_resolvable_run_labels_for_iteration(
+		current_input_refs,
+		component_ids,
+		current_iteration_label,
+		target_iteration_label,
+	)
+	if resolvable_labels:
+		return resolvable_labels[-1]
+	return fallback_run_label.strip().lower() if fallback_run_label else None
+
+
+def build_iteration_comparison_entries(
+	current_iteration_label: str,
+	current_run_label: str | None,
+	baseline_iteration_label: str | None,
+	baseline_run_label: str | None,
+	component_ids: list[str],
+	current_input_refs: list[Path],
+) -> list[ComparisonEntry]:
+	iteration_labels = [baseline_iteration_label] if baseline_iteration_label else derive_iteration_history_labels(current_iteration_label)
+	entries: list[ComparisonEntry] = []
+	for iteration_label in iteration_labels:
+		if iteration_label is None:
+			continue
+		target_run_label = resolve_target_run_label(
+			current_input_refs,
+			component_ids,
+			current_iteration_label,
+			iteration_label,
+			baseline_run_label if iteration_label == baseline_iteration_label else None,
+			current_run_label,
+		)
+		entries.append(
+			ComparisonEntry(
+				label=format_iteration_run_label(iteration_label, target_run_label),
+				iteration_label=iteration_label,
+				run_label=target_run_label,
+			)
+		)
+	current_label = format_iteration_run_label(current_iteration_label, current_run_label)
+	if not entries or entries[-1].label != current_label:
+		entries.append(
+			ComparisonEntry(
+				label=current_label,
+				iteration_label=current_iteration_label,
+				run_label=current_run_label,
+			)
+		)
+	return entries
+
+
+def build_run_comparison_entries(current_iteration_label: str, current_run_label: str) -> list[ComparisonEntry]:
+	return [
+		ComparisonEntry(label=run_label, iteration_label=current_iteration_label, run_label=run_label)
+		for run_label in derive_run_history_labels(current_run_label)
+	]
 
 
 def load_scored_rows_from_paths(input_paths: list[Path]) -> list[dict[str, str]]:
@@ -412,26 +666,26 @@ def indicator_sort_key(indicator_id: str) -> tuple[int, str]:
 	return (10**9, indicator_id)
 
 
-def build_indicator_counts_by_iteration(
+def build_indicator_counts_by_label(
 	component_ids: list[str],
-	iteration_history_labels: list[str],
-	historical_rows_by_iteration: dict[str, dict[str, list[dict[str, str]]]],
+	history_labels: list[str],
+	historical_rows_by_label: dict[str, dict[str, list[dict[str, str]]]],
 ) -> dict[str, dict[str, dict[str, int]]]:
 	counts_by_indicator: dict[str, dict[str, dict[str, int]]] = {}
-	for iteration_history_label in iteration_history_labels:
+	for history_label in history_labels:
 		for component_id in component_ids:
-			for row in historical_rows_by_iteration.get(iteration_history_label, {}).get(component_id, []):
+			for row in historical_rows_by_label.get(history_label, {}).get(component_id, []):
 				indicator_id = (row.get("indicator_id") or "").strip()
 				if not indicator_id:
 					continue
 				counts_by_indicator.setdefault(indicator_id, {})
 				counts_by_indicator[indicator_id].setdefault(
-					iteration_history_label,
+					history_label,
 					{"positive": 0, "number_scored": 0},
 				)
-				counts_by_indicator[indicator_id][iteration_history_label]["number_scored"] += 1
+				counts_by_indicator[indicator_id][history_label]["number_scored"] += 1
 				if is_positive_scored_row(row):
-					counts_by_indicator[indicator_id][iteration_history_label]["positive"] += 1
+					counts_by_indicator[indicator_id][history_label]["positive"] += 1
 	return counts_by_indicator
 
 
@@ -446,13 +700,13 @@ def classify_variance_rate(variance_rate: float) -> str:
 
 
 def build_indicator_stability_sections(
-	iteration_history_labels: list[str],
+	history_labels: list[str],
 	counts_by_indicator: dict[str, dict[str, dict[str, int]]],
 	sample_size: int,
 ) -> tuple[list[str], dict[str, list[list[str]]]]:
-	if len(iteration_history_labels) < 3:
+	if len(history_labels) < 3:
 		return ([], {})
-	stability_iteration_labels = iteration_history_labels[-3:]
+	stability_labels = history_labels[-3:]
 	classification_rows: dict[str, list[list[str]]] = {
 		"stable": [],
 		"low_variance": [],
@@ -463,7 +717,7 @@ def build_indicator_stability_sections(
 	for indicator_id in sorted(counts_by_indicator, key=indicator_sort_key):
 		iteration_counts = [
 			counts_by_indicator[indicator_id].get(iteration_label, {}).get("positive", 0)
-			for iteration_label in stability_iteration_labels
+			for iteration_label in stability_labels
 		]
 		iter01_count, iter02_count, iter03_count = iteration_counts
 		delta_12 = abs(iter02_count - iter01_count)
@@ -491,7 +745,7 @@ def build_indicator_stability_sections(
 				f"{range_rate:.3f}",
 			]
 		)
-	return (stability_iteration_labels, classification_rows)
+	return (stability_labels, classification_rows)
 
 
 def quote_yaml_string(value: str) -> str:
@@ -501,7 +755,9 @@ def quote_yaml_string(value: str) -> str:
 
 def render_yaml_frontmatter(
 	output_path: Path,
-	iteration_label: str,
+	comparison_scope: str,
+	current_label: str,
+	history_labels: list[str],
 	manifest_path: Path,
 	registry_path: Path,
 	component_ids: list[str],
@@ -515,13 +771,17 @@ def render_yaml_frontmatter(
 		"output_file:\n",
 		f"  path: {quote_yaml_string(str(output_path))}\n",
 		f"  name: {quote_yaml_string(output_path.name)}\n",
-		f"iteration_label: {quote_yaml_string(iteration_label)}\n",
+		f"comparison_scope: {quote_yaml_string(comparison_scope)}\n",
+		f"current_label: {quote_yaml_string(current_label)}\n",
 		"manifest_input:\n",
 		f"  path: {quote_yaml_string(str(manifest_path))}\n",
 		"indicator_registry:\n",
 		f"  path: {quote_yaml_string(str(registry_path))}\n",
-		"component_ids:\n",
+		"history_labels:\n",
 	]
+	for history_label in history_labels:
+		lines.append(f"  - {quote_yaml_string(history_label)}\n")
+	lines.append("component_ids:\n")
 	for component_id in component_ids:
 		lines.append(f"  - {quote_yaml_string(component_id)}\n")
 	lines.append("scored_csv_paths:\n")
@@ -666,12 +926,10 @@ def load_scored_rows(input_path: Path) -> list[dict[str, str]]:
 	return rows
 
 
-def build_iteration_diff_rows(
+def build_comparison_diff_rows(
 	component_ids: list[str],
 	current_rows_by_component: dict[str, list[dict[str, str]]],
 	previous_rows_by_component: dict[str, list[dict[str, str]]],
-	previous_iteration_label: str,
-	current_iteration_label: str,
 ) -> tuple[list[list[str]], list[list[str]], list[list[str]]]:
 	added_rows: list[list[str]] = []
 	removed_rows: list[list[str]] = []
@@ -748,13 +1006,13 @@ def build_iteration_diff_rows(
 
 def build_changed_score_history_rows(
 	changed_diff_rows: list[list[str]],
-	iteration_history_labels: list[str],
-	historical_rows_by_iteration: dict[str, dict[str, list[dict[str, str]]]],
+	history_labels: list[str],
+	historical_rows_by_label: dict[str, dict[str, list[dict[str, str]]]],
 ) -> list[list[str]]:
-	indexes_by_iteration: dict[str, dict[str, dict[tuple[str, str], dict[str, str]]]] = {}
-	for iteration_label in iteration_history_labels:
+	indexes_by_label: dict[str, dict[str, dict[tuple[str, str], dict[str, str]]]] = {}
+	for history_label in history_labels:
 		component_indexes: dict[str, dict[tuple[str, str], dict[str, str]]] = {}
-		for component_id, rows in historical_rows_by_iteration.get(iteration_label, {}).items():
+		for component_id, rows in historical_rows_by_label.get(history_label, {}).items():
 			component_indexes[component_id] = {
 				(
 					(row.get("indicator_id") or "").strip(),
@@ -763,14 +1021,14 @@ def build_changed_score_history_rows(
 				for row in rows
 				if (row.get("indicator_id") or "").strip() and (row.get("submission_id") or "").strip()
 			}
-		indexes_by_iteration[iteration_label] = component_indexes
+		indexes_by_label[history_label] = component_indexes
 
 	history_rows: list[list[str]] = []
 	for changed_row in changed_diff_rows:
 		component_id, indicator_id, submission_id = changed_row[:3]
 		row_values = [component_id, indicator_id, submission_id]
-		for iteration_label in iteration_history_labels:
-			row = indexes_by_iteration.get(iteration_label, {}).get(component_id, {}).get((indicator_id, submission_id))
+		for history_label in history_labels:
+			row = indexes_by_label.get(history_label, {}).get(component_id, {}).get((indicator_id, submission_id))
 			row_values.append(summarize_score_value(row.get("evidence_status") or "") if row is not None else "")
 		history_rows.append(row_values)
 	return history_rows
@@ -778,27 +1036,27 @@ def build_changed_score_history_rows(
 
 def build_indicator_delta_rows(
 	component_ids: list[str],
-	iteration_history_labels: list[str],
-	historical_rows_by_iteration: dict[str, dict[str, list[dict[str, str]]]],
+	history_labels: list[str],
+	historical_rows_by_label: dict[str, dict[str, list[dict[str, str]]]],
 ) -> list[list[str]]:
-	counts_by_indicator = build_indicator_counts_by_iteration(
+	counts_by_indicator = build_indicator_counts_by_label(
 		component_ids,
-		iteration_history_labels,
-		historical_rows_by_iteration,
+		history_labels,
+		historical_rows_by_label,
 	)
 
 	rows: list[list[str]] = []
 	for indicator_id in sorted(counts_by_indicator, key=indicator_sort_key):
 		row = [indicator_id]
 		positive_counts_by_iteration = {
-			iteration_history_label: counts_by_indicator[indicator_id].get(iteration_history_label, {}).get("positive", 0)
-			for iteration_history_label in iteration_history_labels
+			history_label: counts_by_indicator[indicator_id].get(history_label, {}).get("positive", 0)
+			for history_label in history_labels
 		}
-		row.extend(str(positive_counts_by_iteration[iteration_history_label]) for iteration_history_label in iteration_history_labels)
-		for previous_iteration_label, current_iteration_label in zip(iteration_history_labels, iteration_history_labels[1:]):
-			previous_count = positive_counts_by_iteration[previous_iteration_label]
-			current_count = positive_counts_by_iteration[current_iteration_label]
-			number_scored = counts_by_indicator[indicator_id].get(current_iteration_label, {}).get("number_scored", 0)
+		row.extend(str(positive_counts_by_iteration[history_label]) for history_label in history_labels)
+		for previous_label, current_label in zip(history_labels, history_labels[1:]):
+			previous_count = positive_counts_by_iteration[previous_label]
+			current_count = positive_counts_by_iteration[current_label]
+			number_scored = counts_by_indicator[indicator_id].get(current_label, {}).get("number_scored", 0)
 			delta = current_count - previous_count
 			absolute_delta = abs(delta)
 			variance_rate = absolute_delta / number_scored if number_scored > 0 else 0.0
@@ -950,14 +1208,15 @@ def render_consolidated_scoring_stats_document(
 	registry_path: Path,
 	component_ids: list[str],
 	manifest_path: Path,
-	iteration_label: str,
-	iteration_history_labels: list[str],
-	previous_iteration_label: str | None,
+	comparison_scope: str,
+	current_label: str,
+	history_labels: list[str],
+	previous_label: str | None,
 	sample_size: int,
 	scored_csv_paths: list[Path],
 	total_scored_rows: int,
 	indicator_delta_rows: list[list[str]],
-	stability_iteration_labels: list[str],
+	stability_labels: list[str],
 	stability_sections: dict[str, list[list[str]]],
 	added_diff_rows: list[list[str]],
 	removed_diff_rows: list[list[str]],
@@ -970,6 +1229,8 @@ def render_consolidated_scoring_stats_document(
 ) -> str:
 	component_label = component_ids[0] if len(component_ids) == 1 else ", ".join(component_ids)
 	source_csv_label = "\n".join(str(path) for path in scored_csv_paths)
+	comparison_axis_label = "run" if comparison_scope == "run" else "iteration endpoint"
+	stability_title = "Run Repeatability Flags" if comparison_scope == "run" else "Stability Flags"
 	base_table_headers = [
 		"template_id",
 		"local_slot",
@@ -980,10 +1241,10 @@ def render_consolidated_scoring_stats_document(
 		"number_scored_positive",
 		*[f"saturation_rate_{component_id}" for component_id in component_ids],
 	]
-	delta_table_headers = build_delta_table_headers(iteration_history_labels)
+	delta_table_headers = build_delta_table_headers(history_labels)
 	parts = [
-		render_yaml_frontmatter(output_path, iteration_label, manifest_path, registry_path, component_ids, scored_csv_paths),
-		f"## {derive_output_filename(component_ids, manifest_path, iteration_label).removesuffix('.md')}",
+		render_yaml_frontmatter(output_path, comparison_scope, current_label, history_labels, manifest_path, registry_path, component_ids, scored_csv_paths),
+		f"## {output_path.name.removesuffix('.md')}",
 		"",
 		"Saturation rate is defined here as number_scored_positive divided by number_scored for each indicator.",
 		"Percent co-incidence values are row-conditional: each populated cell shows the share of positive samples for the row template that were also positive for the column template.",
@@ -994,6 +1255,10 @@ def render_consolidated_scoring_stats_document(
 		render_markdown_table(
 			["metric", "value"],
 			[
+				["comparison_scope", comparison_scope],
+				["current_label", current_label],
+				["comparison_axis", comparison_axis_label],
+				["history_labels", ", ".join(history_labels)],
 				["component_ids", component_label],
 				["source_scored_csvs", source_csv_label],
 				["total_scored_rows", str(total_scored_rows)],
@@ -1039,18 +1304,18 @@ def render_consolidated_scoring_stats_document(
 		"",
 	]
 	diff_report_parts = ["### Diff Report", ""]
-	if previous_iteration_label is None:
-		diff_report_parts.extend(["Previous iteration could not be derived from the current iteration label.", ""])
+	if previous_label is None:
+		diff_report_parts.extend([f"Previous {comparison_axis_label} could not be derived from the current inputs.", ""])
 	else:
 		diff_report_parts.extend(
 			[
-			f"Current iteration: {iteration_label}",
-			f"Previous iteration: {previous_iteration_label}",
+			f"Current {comparison_axis_label}: {current_label}",
+			f"Previous {comparison_axis_label}: {previous_label}",
 			]
 		)
 		if missing_previous_components:
 			diff_report_parts.append(
-				"Previous iteration scored CSVs were not found for: " + ", ".join(sorted(missing_previous_components))
+				f"Previous {comparison_axis_label} scored CSVs were not found for: " + ", ".join(sorted(missing_previous_components))
 			)
 		if added_diff_rows:
 			diff_report_parts.extend(
@@ -1063,14 +1328,14 @@ def render_consolidated_scoring_stats_document(
 							"component_id",
 							"indicator_id",
 							"submission_id",
-							f"{iteration_label}-score",
+							f"{current_label}-score",
 						],
 						added_diff_rows,
 					),
 				]
 			)
 		else:
-			diff_report_parts.extend(["", "#### Added Rows", "", "No added rows found relative to the previous iteration."])
+			diff_report_parts.extend(["", "#### Added Rows", "", f"No added rows found relative to the previous {comparison_axis_label}."])
 		if removed_diff_rows:
 			diff_report_parts.extend(
 				[
@@ -1082,14 +1347,14 @@ def render_consolidated_scoring_stats_document(
 							"component_id",
 							"indicator_id",
 							"submission_id",
-							f"{previous_iteration_label}-score",
+							f"{previous_label}-score",
 						],
 						removed_diff_rows,
 					),
 				]
 			)
 		else:
-			diff_report_parts.extend(["", "#### Removed Rows", "", "No removed rows found relative to the previous iteration."])
+			diff_report_parts.extend(["", "#### Removed Rows", "", f"No removed rows found relative to the previous {comparison_axis_label}."])
 		if changed_score_history_rows:
 			diff_report_parts.extend(
 				[
@@ -1101,14 +1366,14 @@ def render_consolidated_scoring_stats_document(
 							"component_id",
 							"indicator_id",
 							"submission_id",
-							*[f"{history_iteration_label}-score" for history_iteration_label in iteration_history_labels],
+							*[f"{history_label}-score" for history_label in history_labels],
 						],
 						changed_score_history_rows,
 					),
 				]
 			)
 		else:
-			diff_report_parts.extend(["", "#### Changed Scores", "", "No score changes found between the current and previous iteration."])
+			diff_report_parts.extend(["", "#### Changed Scores", "", f"No score changes found between the current and previous {comparison_axis_label}."])
 		diff_report_parts.extend(
 			[
 				"",
@@ -1120,19 +1385,19 @@ def render_consolidated_scoring_stats_document(
 				),
 			]
 		)
-		diff_report_parts.extend(["", "#### Stability Flags", ""])
-		if len(stability_iteration_labels) < 3:
+		diff_report_parts.extend(["", f"#### {stability_title}", ""])
+		if len(stability_labels) < 3:
 			diff_report_parts.extend(
 				[
-					f"At least three iterations are required to compute stability flags; available iterations: {', '.join(iteration_history_labels)}.",
+					f"At least three {comparison_axis_label}s are required to compute {stability_title.lower()}; available labels: {', '.join(history_labels)}.",
 				]
 			)
 		else:
 			stability_headers = [
 				"indicator",
-				stability_iteration_labels[0],
-				stability_iteration_labels[1],
-				stability_iteration_labels[2],
+				stability_labels[0],
+				stability_labels[1],
+				stability_labels[2],
 				"delta_12",
 				"delta_23",
 				"max_delta",
@@ -1145,7 +1410,7 @@ def render_consolidated_scoring_stats_document(
 			diff_report_parts.extend(
 				[
 					f"sample_size: {sample_size}",
-					f"Iterations used: {', '.join(stability_iteration_labels)}",
+					f"Labels used: {', '.join(stability_labels)}",
 				]
 			)
 			for classification in ["stable", "low_variance", "borderline_unstable", "unstable"]:
@@ -1167,7 +1432,11 @@ def main() -> int:
 	component_ids = [component_id.strip() for component_id in args.component_id if component_id.strip()]
 	scored_csv_input_refs = [path.resolve(strict=False) for path in args.file_with_scored_texts]
 	output_dir = args.output_dir.resolve() if args.output_dir else manifest_path.parent / RUNNER_OUTPUT_SUBDIR
+	comparison_scope = args.comparison_scope
 	iteration_label = derive_iteration_label(manifest_path, args.iteration_label)
+	run_label = derive_run_label(scored_csv_input_refs[0] if scored_csv_input_refs else manifest_path, args.run_label)
+	baseline_iteration_label = args.baseline_iteration_label.strip().lower() if args.baseline_iteration_label else None
+	baseline_run_label = args.baseline_run_label.strip().lower() if args.baseline_run_label else None
 	sample_size = args.sample_size
 
 	if not component_ids:
@@ -1176,6 +1445,12 @@ def main() -> int:
 	if len(component_ids) != len(scored_csv_input_refs):
 		print(
 			"Error: --component-id and --file-with-scored-texts must be provided the same number of times.",
+			file=sys.stderr,
+		)
+		return 1
+	if comparison_scope == "run" and run_label is None:
+		print(
+			"Error: run-scope comparisons require a run label derivable from --run-label or the scored input paths.",
 			file=sys.stderr,
 		)
 		return 1
@@ -1217,36 +1492,57 @@ def main() -> int:
 		component_id: load_scored_rows_from_paths(component_scored_csv_paths[component_id])
 		for component_id in component_ids
 	}
-	iteration_history_labels = derive_iteration_history_labels(iteration_label)
-	historical_rows_by_iteration: dict[str, dict[str, list[dict[str, str]]]] = {
-		iteration_label: dict(scored_rows_by_component)
+	if comparison_scope == "run":
+		comparison_entries = build_run_comparison_entries(iteration_label, run_label)
+		current_label = run_label
+	else:
+		comparison_entries = build_iteration_comparison_entries(
+			current_iteration_label=iteration_label,
+			current_run_label=run_label,
+			baseline_iteration_label=baseline_iteration_label,
+			baseline_run_label=baseline_run_label,
+			component_ids=component_ids,
+			current_input_refs=scored_csv_input_refs,
+		)
+		current_label = format_iteration_run_label(iteration_label, run_label)
+	history_labels = [entry.label for entry in comparison_entries]
+	historical_rows_by_label: dict[str, dict[str, list[dict[str, str]]]] = {
+		current_label: dict(scored_rows_by_component)
 	}
-	for history_iteration_label in iteration_history_labels:
-		if history_iteration_label == iteration_label:
+	for comparison_entry in comparison_entries:
+		if comparison_entry.label == current_label:
 			continue
-		historical_rows_by_iteration[history_iteration_label] = {}
+		historical_rows_by_label[comparison_entry.label] = {}
 		for component_id, scored_csv_input_ref in zip(component_ids, scored_csv_input_refs):
 			history_scored_csv_paths = derive_scored_csv_paths_for_iteration(
 				scored_csv_input_ref,
 				component_id,
 				iteration_label,
-				history_iteration_label,
+				comparison_entry.iteration_label,
+				run_label,
+				comparison_entry.run_label,
 			)
 			if not history_scored_csv_paths:
 				continue
-			historical_rows_by_iteration[history_iteration_label][component_id] = load_scored_rows_from_paths(
+			historical_rows_by_label[comparison_entry.label][component_id] = load_scored_rows_from_paths(
 				history_scored_csv_paths
 			)
-	previous_iteration_label = derive_previous_iteration_label(iteration_label)
+	previous_label = history_labels[-2] if len(history_labels) >= 2 else None
 	previous_rows_by_component: dict[str, list[dict[str, str]]] = {}
 	missing_previous_components: list[str] = []
-	if previous_iteration_label is not None:
+	if previous_label is not None:
+		previous_entry = next((entry for entry in comparison_entries if entry.label == previous_label), None)
 		for component_id, scored_csv_input_ref in zip(component_ids, scored_csv_input_refs):
+			if previous_entry is None:
+				missing_previous_components.append(component_id)
+				continue
 			previous_scored_csv_paths = derive_scored_csv_paths_for_iteration(
 				scored_csv_input_ref,
 				component_id,
 				iteration_label,
-				previous_iteration_label,
+				previous_entry.iteration_label,
+				run_label,
+				previous_entry.run_label,
 			)
 			if not previous_scored_csv_paths:
 				missing_previous_components.append(component_id)
@@ -1254,30 +1550,28 @@ def main() -> int:
 			previous_rows_by_component[component_id] = load_scored_rows_from_paths(previous_scored_csv_paths)
 	indicator_delta_rows = build_indicator_delta_rows(
 		component_ids,
-		iteration_history_labels,
-		historical_rows_by_iteration,
+		history_labels,
+		historical_rows_by_label,
 	)
-	counts_by_indicator = build_indicator_counts_by_iteration(
+	counts_by_indicator = build_indicator_counts_by_label(
 		component_ids,
-		iteration_history_labels,
-		historical_rows_by_iteration,
+		history_labels,
+		historical_rows_by_label,
 	)
-	stability_iteration_labels, stability_sections = build_indicator_stability_sections(
-		iteration_history_labels,
+	stability_labels, stability_sections = build_indicator_stability_sections(
+		history_labels,
 		counts_by_indicator,
 		sample_size,
 	)
-	added_diff_rows, removed_diff_rows, changed_diff_rows = build_iteration_diff_rows(
+	added_diff_rows, removed_diff_rows, changed_diff_rows = build_comparison_diff_rows(
 		component_ids,
 		scored_rows_by_component,
 		previous_rows_by_component,
-		previous_iteration_label or "previous_iteration",
-		iteration_label,
 	)
 	changed_score_history_rows = build_changed_score_history_rows(
 		changed_diff_rows,
-		iteration_history_labels,
-		historical_rows_by_iteration,
+		history_labels,
+		historical_rows_by_label,
 	)
 	total_scored_rows = sum(len(rows) for rows in scored_rows_by_component.values())
 	lines = manifest_path.read_text(encoding="utf-8").splitlines()
@@ -1407,21 +1701,30 @@ def main() -> int:
 		positive_submission_ids_by_template,
 		True,
 	)
-	consolidated_output_path = output_dir / derive_output_filename(component_ids, manifest_path, iteration_label)
+	consolidated_output_path = output_dir / derive_output_filename(
+		component_ids,
+		manifest_path,
+		comparison_scope,
+		current_label,
+		iteration_label,
+		run_label,
+		previous_label,
+	)
 	consolidated_output_path.write_text(
 		render_consolidated_scoring_stats_document(
 			output_path=consolidated_output_path,
 			registry_path=registry_path,
 			component_ids=component_ids,
 			manifest_path=manifest_path,
-			iteration_label=iteration_label,
-			iteration_history_labels=iteration_history_labels,
-			previous_iteration_label=previous_iteration_label,
+			comparison_scope=comparison_scope,
+			current_label=current_label,
+			history_labels=history_labels,
+			previous_label=previous_label,
 			sample_size=sample_size,
 			scored_csv_paths=scored_csv_paths,
 			total_scored_rows=total_scored_rows,
-				indicator_delta_rows=indicator_delta_rows,
-			stability_iteration_labels=stability_iteration_labels,
+			indicator_delta_rows=indicator_delta_rows,
+			stability_labels=stability_labels,
 			stability_sections=stability_sections,
 			added_diff_rows=added_diff_rows,
 			removed_diff_rows=removed_diff_rows,
