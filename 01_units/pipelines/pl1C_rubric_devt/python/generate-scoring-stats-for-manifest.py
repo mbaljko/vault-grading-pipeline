@@ -171,7 +171,34 @@ def derive_iteration_history_labels(iteration_label: str) -> list[str]:
 	iteration_number = int(iteration_digits)
 	if iteration_number <= 0:
 		return [iteration_label]
-	return [f"iter{index:0{len(iteration_digits)}d}" for index in range(iteration_number, 0, -1)]
+	return [f"iter{index:0{len(iteration_digits)}d}" for index in range(1, iteration_number + 1)]
+
+
+def derive_delta_column_label(previous_iteration_label: str, current_iteration_label: str) -> str:
+	previous_match = re.fullmatch(r"iter(\d+)", previous_iteration_label.strip().lower())
+	current_match = re.fullmatch(r"iter(\d+)", current_iteration_label.strip().lower())
+	if previous_match and current_match:
+		return f"delta{previous_match.group(1)}-{current_match.group(1)}"
+	return f"delta {previous_iteration_label}-{current_iteration_label}"
+
+
+def build_delta_table_headers(iteration_history_labels: list[str]) -> list[str]:
+	headers = ["indicator", *iteration_history_labels]
+	for previous_iteration_label, current_iteration_label in zip(iteration_history_labels, iteration_history_labels[1:]):
+		headers.extend(
+			[
+				".",
+				derive_delta_column_label(previous_iteration_label, current_iteration_label),
+				"-high",
+				"-med",
+				"-low",
+				"stable",
+				"+low",
+				"+mod",
+				"+high",
+			]
+		)
+	return headers
 
 
 def derive_scored_csv_path_for_iteration(
@@ -549,26 +576,24 @@ def build_changed_score_history_rows(
 
 def build_indicator_delta_rows(
 	component_ids: list[str],
-	current_rows_by_component: dict[str, list[dict[str, str]]],
-	previous_rows_by_component: dict[str, list[dict[str, str]]],
+	iteration_history_labels: list[str],
+	historical_rows_by_iteration: dict[str, dict[str, list[dict[str, str]]]],
 ) -> list[list[str]]:
-	counts_by_indicator: dict[str, dict[str, int]] = {}
-	for component_id in component_ids:
-		for row in previous_rows_by_component.get(component_id, []):
-			indicator_id = (row.get("indicator_id") or "").strip()
-			if not indicator_id:
-				continue
-			counts_by_indicator.setdefault(indicator_id, {"previous": 0, "current": 0, "number_scored": 0})
-			if is_positive_scored_row(row):
-				counts_by_indicator[indicator_id]["previous"] += 1
-		for row in current_rows_by_component.get(component_id, []):
-			indicator_id = (row.get("indicator_id") or "").strip()
-			if not indicator_id:
-				continue
-			counts_by_indicator.setdefault(indicator_id, {"previous": 0, "current": 0, "number_scored": 0})
-			counts_by_indicator[indicator_id]["number_scored"] += 1
-			if is_positive_scored_row(row):
-				counts_by_indicator[indicator_id]["current"] += 1
+	counts_by_indicator: dict[str, dict[str, dict[str, int]]] = {}
+	for iteration_history_label in iteration_history_labels:
+		for component_id in component_ids:
+			for row in historical_rows_by_iteration.get(iteration_history_label, {}).get(component_id, []):
+				indicator_id = (row.get("indicator_id") or "").strip()
+				if not indicator_id:
+					continue
+				counts_by_indicator.setdefault(indicator_id, {})
+				counts_by_indicator[indicator_id].setdefault(
+					iteration_history_label,
+					{"positive": 0, "number_scored": 0},
+				)
+				counts_by_indicator[indicator_id][iteration_history_label]["number_scored"] += 1
+				if is_positive_scored_row(row):
+					counts_by_indicator[indicator_id][iteration_history_label]["positive"] += 1
 
 	def indicator_sort_key(indicator_id: str) -> tuple[int, str]:
 		match = re.fullmatch(r"[A-Za-z]+(\d+)", indicator_id)
@@ -578,21 +603,25 @@ def build_indicator_delta_rows(
 
 	rows: list[list[str]] = []
 	for indicator_id in sorted(counts_by_indicator, key=indicator_sort_key):
-		previous_count = counts_by_indicator[indicator_id]["previous"]
-		current_count = counts_by_indicator[indicator_id]["current"]
-		number_scored = counts_by_indicator[indicator_id]["number_scored"]
-		delta = current_count - previous_count
-		absolute_delta = abs(delta)
-		variance_rate = absolute_delta / number_scored if number_scored > 0 else 0.0
-		rows.append(
-			[
-				indicator_id,
-				str(previous_count),
-				str(current_count),
+		row = [indicator_id]
+		positive_counts_by_iteration = {
+			iteration_history_label: counts_by_indicator[indicator_id].get(iteration_history_label, {}).get("positive", 0)
+			for iteration_history_label in iteration_history_labels
+		}
+		row.extend(str(positive_counts_by_iteration[iteration_history_label]) for iteration_history_label in iteration_history_labels)
+		for previous_iteration_label, current_iteration_label in zip(iteration_history_labels, iteration_history_labels[1:]):
+			previous_count = positive_counts_by_iteration[previous_iteration_label]
+			current_count = positive_counts_by_iteration[current_iteration_label]
+			number_scored = counts_by_indicator[indicator_id].get(current_iteration_label, {}).get("number_scored", 0)
+			delta = current_count - previous_count
+			absolute_delta = abs(delta)
+			variance_rate = absolute_delta / number_scored if number_scored > 0 else 0.0
+			row.extend([
+				"",
 				f"{delta:+d}",
 				*build_variance_bucket_cells(delta, variance_rate),
-			]
-		)
+			])
+		rows.append(row)
 	return rows
 
 
@@ -762,6 +791,7 @@ def render_consolidated_scoring_stats_document(
 		"number_scored_positive",
 		*[f"saturation_rate_{component_id}" for component_id in component_ids],
 	]
+	delta_table_headers = build_delta_table_headers(iteration_history_labels)
 	parts = [
 		render_yaml_frontmatter(output_path, iteration_label, manifest_path, registry_path, component_ids, scored_csv_paths),
 		f"## {derive_output_filename(component_ids, manifest_path, iteration_label).removesuffix('.md')}",
@@ -839,19 +869,7 @@ def render_consolidated_scoring_stats_document(
 				"#### Delta Table",
 				"",
 				render_markdown_table(
-					[
-						"indicator",
-						previous_iteration_label,
-						iteration_label,
-						"delta",
-						"-high",
-						"-med",
-						"-low",
-						"stable",
-						"+low",
-						"+mod",
-						"+high",
-					],
+					delta_table_headers,
 					indicator_delta_rows,
 				),
 			]
@@ -958,7 +976,9 @@ def main() -> int:
 	historical_rows_by_iteration: dict[str, dict[str, list[dict[str, str]]]] = {
 		iteration_label: dict(scored_rows_by_component)
 	}
-	for history_iteration_label in iteration_history_labels[1:]:
+	for history_iteration_label in iteration_history_labels:
+		if history_iteration_label == iteration_label:
+			continue
 		historical_rows_by_iteration[history_iteration_label] = {}
 		for component_id, scored_csv_path in zip(component_ids, scored_csv_paths):
 			history_scored_csv_path = derive_scored_csv_path_for_iteration(
@@ -985,7 +1005,11 @@ def main() -> int:
 				missing_previous_components.append(component_id)
 				continue
 			previous_rows_by_component[component_id] = load_scored_rows(previous_scored_csv_path)
-	indicator_delta_rows = build_indicator_delta_rows(component_ids, scored_rows_by_component, previous_rows_by_component)
+	indicator_delta_rows = build_indicator_delta_rows(
+		component_ids,
+		iteration_history_labels,
+		historical_rows_by_iteration,
+	)
 	added_diff_rows, removed_diff_rows, changed_diff_rows = build_iteration_diff_rows(
 		component_ids,
 		scored_rows_by_component,
