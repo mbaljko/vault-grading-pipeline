@@ -123,6 +123,13 @@ def parse_args() -> argparse.Namespace:
 		required=False,
 		help="Optional iteration label override, e.g. iter02.",
 	)
+	parser.add_argument(
+		"--sample-size",
+		type=int,
+		required=False,
+		default=30,
+		help="Sample size denominator used for stability diagnostics. Defaults to 30.",
+	)
 	return parser.parse_args()
 
 
@@ -290,6 +297,95 @@ def build_variance_bucket_cells(delta: int, variance_rate: float) -> list[str]:
 		buckets["+mod"],
 		buckets["+high"],
 	]
+
+
+def indicator_sort_key(indicator_id: str) -> tuple[int, str]:
+	match = re.fullmatch(r"[A-Za-z]+(\d+)", indicator_id)
+	if match:
+		return (int(match.group(1)), indicator_id)
+	return (10**9, indicator_id)
+
+
+def build_indicator_counts_by_iteration(
+	component_ids: list[str],
+	iteration_history_labels: list[str],
+	historical_rows_by_iteration: dict[str, dict[str, list[dict[str, str]]]],
+) -> dict[str, dict[str, dict[str, int]]]:
+	counts_by_indicator: dict[str, dict[str, dict[str, int]]] = {}
+	for iteration_history_label in iteration_history_labels:
+		for component_id in component_ids:
+			for row in historical_rows_by_iteration.get(iteration_history_label, {}).get(component_id, []):
+				indicator_id = (row.get("indicator_id") or "").strip()
+				if not indicator_id:
+					continue
+				counts_by_indicator.setdefault(indicator_id, {})
+				counts_by_indicator[indicator_id].setdefault(
+					iteration_history_label,
+					{"positive": 0, "number_scored": 0},
+				)
+				counts_by_indicator[indicator_id][iteration_history_label]["number_scored"] += 1
+				if is_positive_scored_row(row):
+					counts_by_indicator[indicator_id][iteration_history_label]["positive"] += 1
+	return counts_by_indicator
+
+
+def classify_variance_rate(variance_rate: float) -> str:
+	if variance_rate == 0:
+		return "stable"
+	if variance_rate > 0 and variance_rate < 0.05:
+		return "low_variance"
+	if variance_rate >= 0.05 and variance_rate <= 0.10:
+		return "borderline_unstable"
+	return "unstable"
+
+
+def build_indicator_stability_sections(
+	iteration_history_labels: list[str],
+	counts_by_indicator: dict[str, dict[str, dict[str, int]]],
+	sample_size: int,
+) -> tuple[list[str], dict[str, list[list[str]]]]:
+	if len(iteration_history_labels) < 3:
+		return ([], {})
+	stability_iteration_labels = iteration_history_labels[-3:]
+	classification_rows: dict[str, list[list[str]]] = {
+		"stable": [],
+		"low_variance": [],
+		"borderline_unstable": [],
+		"unstable": [],
+	}
+	denominator = sample_size if sample_size > 0 else 1
+	for indicator_id in sorted(counts_by_indicator, key=indicator_sort_key):
+		iteration_counts = [
+			counts_by_indicator[indicator_id].get(iteration_label, {}).get("positive", 0)
+			for iteration_label in stability_iteration_labels
+		]
+		iter01_count, iter02_count, iter03_count = iteration_counts
+		delta_12 = abs(iter02_count - iter01_count)
+		delta_23 = abs(iter03_count - iter02_count)
+		max_delta = max(delta_12, delta_23)
+		variance_rate = max_delta / denominator
+		signed_delta_12 = iter02_count - iter01_count
+		signed_delta_23 = iter03_count - iter02_count
+		range_delta = max(iter01_count, iter02_count, iter03_count) - min(iter01_count, iter02_count, iter03_count)
+		range_rate = range_delta / denominator
+		classification = classify_variance_rate(variance_rate)
+		classification_rows[classification].append(
+			[
+				indicator_id,
+				str(iter01_count),
+				str(iter02_count),
+				str(iter03_count),
+				str(delta_12),
+				str(delta_23),
+				str(max_delta),
+				f"{variance_rate:.3f}",
+				f"{signed_delta_12:+d}",
+				f"{signed_delta_23:+d}",
+				str(range_delta),
+				f"{range_rate:.3f}",
+			]
+		)
+	return (stability_iteration_labels, classification_rows)
 
 
 def quote_yaml_string(value: str) -> str:
@@ -579,27 +675,11 @@ def build_indicator_delta_rows(
 	iteration_history_labels: list[str],
 	historical_rows_by_iteration: dict[str, dict[str, list[dict[str, str]]]],
 ) -> list[list[str]]:
-	counts_by_indicator: dict[str, dict[str, dict[str, int]]] = {}
-	for iteration_history_label in iteration_history_labels:
-		for component_id in component_ids:
-			for row in historical_rows_by_iteration.get(iteration_history_label, {}).get(component_id, []):
-				indicator_id = (row.get("indicator_id") or "").strip()
-				if not indicator_id:
-					continue
-				counts_by_indicator.setdefault(indicator_id, {})
-				counts_by_indicator[indicator_id].setdefault(
-					iteration_history_label,
-					{"positive": 0, "number_scored": 0},
-				)
-				counts_by_indicator[indicator_id][iteration_history_label]["number_scored"] += 1
-				if is_positive_scored_row(row):
-					counts_by_indicator[indicator_id][iteration_history_label]["positive"] += 1
-
-	def indicator_sort_key(indicator_id: str) -> tuple[int, str]:
-		match = re.fullmatch(r"[A-Za-z]+(\d+)", indicator_id)
-		if match:
-			return (int(match.group(1)), indicator_id)
-		return (10**9, indicator_id)
+	counts_by_indicator = build_indicator_counts_by_iteration(
+		component_ids,
+		iteration_history_labels,
+		historical_rows_by_iteration,
+	)
 
 	rows: list[list[str]] = []
 	for indicator_id in sorted(counts_by_indicator, key=indicator_sort_key):
@@ -767,9 +847,12 @@ def render_consolidated_scoring_stats_document(
 	iteration_label: str,
 	iteration_history_labels: list[str],
 	previous_iteration_label: str | None,
+	sample_size: int,
 	scored_csv_paths: list[Path],
 	total_scored_rows: int,
 	indicator_delta_rows: list[list[str]],
+	stability_iteration_labels: list[str],
+	stability_sections: dict[str, list[list[str]]],
 	added_diff_rows: list[list[str]],
 	removed_diff_rows: list[list[str]],
 	changed_score_history_rows: list[list[str]],
@@ -863,17 +946,6 @@ def render_consolidated_scoring_stats_document(
 			diff_report_parts.append(
 				"Previous iteration scored CSVs were not found for: " + ", ".join(sorted(missing_previous_components))
 			)
-		diff_report_parts.extend(
-			[
-				"",
-				"#### Delta Table",
-				"",
-				render_markdown_table(
-					delta_table_headers,
-					indicator_delta_rows,
-				),
-			]
-		)
 		if added_diff_rows:
 			diff_report_parts.extend(
 				[
@@ -931,6 +1003,52 @@ def render_consolidated_scoring_stats_document(
 			)
 		else:
 			diff_report_parts.extend(["", "#### Changed Scores", "", "No score changes found between the current and previous iteration."])
+		diff_report_parts.extend(
+			[
+				"",
+				"#### Delta Table",
+				"",
+				render_markdown_table(
+					delta_table_headers,
+					indicator_delta_rows,
+				),
+			]
+		)
+		diff_report_parts.extend(["", "#### Stability Flags", ""])
+		if len(stability_iteration_labels) < 3:
+			diff_report_parts.extend(
+				[
+					f"At least three iterations are required to compute stability flags; available iterations: {', '.join(iteration_history_labels)}.",
+				]
+			)
+		else:
+			stability_headers = [
+				"indicator",
+				stability_iteration_labels[0],
+				stability_iteration_labels[1],
+				stability_iteration_labels[2],
+				"delta_12",
+				"delta_23",
+				"max_delta",
+				"variance_rate",
+				"signed_delta_12",
+				"signed_delta_23",
+				"range_delta",
+				"range_rate",
+			]
+			diff_report_parts.extend(
+				[
+					f"sample_size: {sample_size}",
+					f"Iterations used: {', '.join(stability_iteration_labels)}",
+				]
+			)
+			for classification in ["stable", "low_variance", "borderline_unstable", "unstable"]:
+				diff_report_parts.extend(["", f"##### {classification}", ""])
+				rows = stability_sections.get(classification, [])
+				if rows:
+					diff_report_parts.append(render_markdown_table(stability_headers, rows))
+				else:
+					diff_report_parts.append("No indicators.")
 	diff_report_parts.append("")
 	parts.extend(diff_report_parts)
 	return "\n".join(parts)
@@ -944,6 +1062,7 @@ def main() -> int:
 	scored_csv_paths = [path.resolve() for path in args.file_with_scored_texts]
 	output_dir = args.output_dir.resolve() if args.output_dir else manifest_path.parent / RUNNER_OUTPUT_SUBDIR
 	iteration_label = derive_iteration_label(manifest_path, args.iteration_label)
+	sample_size = args.sample_size
 
 	if not component_ids:
 		print("Error: at least one --component-id value is required.", file=sys.stderr)
@@ -1009,6 +1128,16 @@ def main() -> int:
 		component_ids,
 		iteration_history_labels,
 		historical_rows_by_iteration,
+	)
+	counts_by_indicator = build_indicator_counts_by_iteration(
+		component_ids,
+		iteration_history_labels,
+		historical_rows_by_iteration,
+	)
+	stability_iteration_labels, stability_sections = build_indicator_stability_sections(
+		iteration_history_labels,
+		counts_by_indicator,
+		sample_size,
 	)
 	added_diff_rows, removed_diff_rows, changed_diff_rows = build_iteration_diff_rows(
 		component_ids,
@@ -1160,9 +1289,12 @@ def main() -> int:
 			iteration_label=iteration_label,
 			iteration_history_labels=iteration_history_labels,
 			previous_iteration_label=previous_iteration_label,
+			sample_size=sample_size,
 			scored_csv_paths=scored_csv_paths,
 			total_scored_rows=total_scored_rows,
 				indicator_delta_rows=indicator_delta_rows,
+			stability_iteration_labels=stability_iteration_labels,
+			stability_sections=stability_sections,
 			added_diff_rows=added_diff_rows,
 			removed_diff_rows=removed_diff_rows,
 			changed_score_history_rows=changed_score_history_rows,
