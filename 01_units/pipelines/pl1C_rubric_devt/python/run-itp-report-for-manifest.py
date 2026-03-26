@@ -80,6 +80,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from component_scored_texts import load_scored_rows_from_paths, resolve_component_scored_csv_paths
+
 
 SBO_IDENTIFIER_RE = re.compile(r"\bI_[A-Za-z0-9_]+\b")
 SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
@@ -127,7 +129,13 @@ def parse_args() -> argparse.Namespace:
 		"--file-with-scored-texts",
 		type=Path,
 		required=True,
-		help="Path to scored-texts input file for payload augmentation.",
+		help="Path to scored-texts input file or scoring-output directory for payload augmentation.",
+	)
+	parser.add_argument(
+		"--expected-version-label",
+		type=str,
+		required=False,
+		help="Optional version label used to filter per-indicator scored outputs, e.g. 05.",
 	)
 	parser.add_argument(
 		"--prompt-instructions-file",
@@ -201,25 +209,6 @@ def is_separator_row(cells: list[str]) -> bool:
 	if not cells:
 		return False
 	return all(bool(SEPARATOR_CELL_RE.match(cell.replace(" ", ""))) for cell in cells)
-
-
-def load_scored_rows(input_path: Path) -> list[dict[str, str]]:
-	"""Load scored-text rows from CSV as normalized dictionaries."""
-	rows: list[dict[str, str]] = []
-	with input_path.open("r", encoding="utf-8-sig", newline="") as f:
-		reader = csv.DictReader(f)
-		if not reader.fieldnames:
-			return rows
-
-		for raw_row in reader:
-			normalized_row: dict[str, str] = {}
-			for key, value in raw_row.items():
-				if key is None:
-					continue
-				normalized_row[key.strip()] = (value or "").strip()
-			rows.append(normalized_row)
-
-	return rows
 
 
 def find_matching_scored_rows(
@@ -553,6 +542,7 @@ def main() -> int:
 	component_id = args.component_id
 	response_texts_path = args.file_with_response_texts
 	scored_texts_path = args.file_with_scored_texts
+	expected_version_label = args.expected_version_label
 	prompt_instructions_file = args.prompt_instructions_file
 	temperature = args.temperature
 	top_p = args.top_p
@@ -567,16 +557,27 @@ def main() -> int:
 	if not response_texts_path.exists() or not response_texts_path.is_file():
 		print(f"Error: response-texts file not found: {response_texts_path}", file=sys.stderr)
 		return 1
-	if not scored_texts_path.exists() or not scored_texts_path.is_file():
-		print(f"Error: scored-texts file not found: {scored_texts_path}", file=sys.stderr)
+	if not scored_texts_path.exists():
+		print(f"Error: scored-texts input not found: {scored_texts_path}", file=sys.stderr)
 		return 1
 	if prompt_file is None or not prompt_file.exists() or not prompt_file.is_file():
 		print(f"Error: prompt instructions file not found: {prompt_file}", file=sys.stderr)
 		return 1
 
 	payload_dir = markdown_path.resolve().parent
+	scored_input_paths = resolve_component_scored_csv_paths(
+		scored_texts_path.resolve(strict=False),
+		component_id,
+		expected_version_label,
+	)
+	if not scored_input_paths:
+		print(
+			f"Error: no scored-text CSV inputs matched component_id={component_id} under {scored_texts_path}",
+			file=sys.stderr,
+		)
+		return 1
 
-	scored_rows = load_scored_rows(scored_texts_path)
+	scored_rows = load_scored_rows_from_paths(scored_input_paths)
 
 	with markdown_path.open("r", encoding="utf-8") as f:
 		lines = f.readlines()
