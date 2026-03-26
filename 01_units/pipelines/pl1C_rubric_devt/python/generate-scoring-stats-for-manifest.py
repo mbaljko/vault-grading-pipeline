@@ -238,12 +238,32 @@ def remap_scored_input_ref_for_iteration(
 	return target_ref.with_name(updated_name)
 
 
-def discover_component_py_scored_csv_paths_in_dir(directory: Path, component_id: str) -> list[Path]:
+def derive_expected_version_label(input_ref: Path, iteration_label: str | None = None) -> str | None:
+	version_match = SCORING_OUTPUT_VERSION_RE.search(input_ref.name)
+	if version_match is not None:
+		return version_match.group(1)
+	if iteration_label is None:
+		return None
+	iteration_match = re.fullmatch(r"iter(\d+)", iteration_label.strip().lower())
+	if iteration_match is None:
+		return None
+	return iteration_match.group(1)
+
+
+def discover_component_py_scored_csv_paths_in_dir(
+	directory: Path,
+	component_id: str,
+	expected_version_label: str | None = None,
+) -> list[Path]:
 	if not directory.exists() or not directory.is_dir():
 		return []
+	if expected_version_label:
+		pattern = f"*{component_id}*_Layer1_SBO_scoring_prompt_py_v{expected_version_label}_*_output_output.csv"
+	else:
+		pattern = f"*{component_id}*_Layer1_SBO_scoring_prompt_py_v*_*_output_output.csv"
 	return sorted(
 		candidate_path
-		for candidate_path in directory.glob(f"*{component_id}*_Layer1_SBO_scoring_prompt_py_v*_*_output_output.csv")
+		for candidate_path in directory.glob(pattern)
 		if candidate_path.is_file()
 	)
 
@@ -268,8 +288,12 @@ def discover_component_legacy_scored_csv_paths_in_dir(directory: Path, component
 	return []
 
 
-def discover_component_scored_csv_paths_in_dir(directory: Path, component_id: str) -> list[Path]:
-	py_matches = discover_component_py_scored_csv_paths_in_dir(directory, component_id)
+def discover_component_scored_csv_paths_in_dir(
+	directory: Path,
+	component_id: str,
+	expected_version_label: str | None = None,
+) -> list[Path]:
+	py_matches = discover_component_py_scored_csv_paths_in_dir(directory, component_id, expected_version_label)
 	if py_matches:
 		return py_matches
 	legacy_matches = discover_component_legacy_scored_csv_paths_in_dir(directory, component_id)
@@ -280,12 +304,20 @@ def discover_component_scored_csv_paths_in_dir(directory: Path, component_id: st
 	)
 
 
-def resolve_component_scored_csv_paths(input_ref: Path, component_id: str) -> list[Path]:
+def resolve_component_scored_csv_paths(
+	input_ref: Path,
+	component_id: str,
+	expected_version_label: str | None = None,
+) -> list[Path]:
 	if input_ref.exists():
 		if input_ref.is_dir():
-			return discover_component_scored_csv_paths_in_dir(input_ref, component_id)
+			return discover_component_scored_csv_paths_in_dir(input_ref, component_id, expected_version_label)
 		if input_ref.is_file():
-			py_matches = discover_component_py_scored_csv_paths_in_dir(input_ref.parent, component_id)
+			py_matches = discover_component_py_scored_csv_paths_in_dir(
+				input_ref.parent,
+				component_id,
+				expected_version_label or derive_expected_version_label(input_ref),
+			)
 			if py_matches and input_ref in py_matches:
 				return py_matches
 			return [input_ref]
@@ -298,7 +330,7 @@ def resolve_component_scored_csv_paths(input_ref: Path, component_id: str) -> li
 	if legacy_duplicate.name != input_ref.name and legacy_duplicate.exists() and legacy_duplicate.is_file():
 		return [legacy_duplicate]
 
-	return discover_component_scored_csv_paths_in_dir(parent_dir, component_id)
+	return discover_component_scored_csv_paths_in_dir(parent_dir, component_id, expected_version_label)
 
 
 def derive_scored_csv_paths_for_iteration(
@@ -312,7 +344,11 @@ def derive_scored_csv_paths_for_iteration(
 		current_iteration_label,
 		target_iteration_label,
 	)
-	return resolve_component_scored_csv_paths(target_input_ref, component_id)
+	return resolve_component_scored_csv_paths(
+		target_input_ref,
+		component_id,
+		derive_expected_version_label(target_input_ref, target_iteration_label),
+	)
 
 
 def load_scored_rows_from_paths(input_paths: list[Path]) -> list[dict[str, str]]:
@@ -1154,7 +1190,11 @@ def main() -> int:
 	component_scored_csv_paths: dict[str, list[Path]] = {}
 	missing_scored_inputs: list[str] = []
 	for component_id, input_ref in zip(component_ids, scored_csv_input_refs):
-		resolved_paths = resolve_component_scored_csv_paths(input_ref, component_id)
+		resolved_paths = resolve_component_scored_csv_paths(
+			input_ref,
+			component_id,
+			derive_expected_version_label(input_ref, iteration_label),
+		)
 		if not resolved_paths:
 			missing_scored_inputs.append(f"{component_id}: {input_ref}")
 			continue
