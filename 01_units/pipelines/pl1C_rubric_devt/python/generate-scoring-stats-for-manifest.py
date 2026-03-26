@@ -70,6 +70,7 @@ from generate_rubric_and_manifest_from_indicator_registry import (
 SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
 ITERATION_RE = re.compile(r"\b(iter\d+)\b", re.IGNORECASE)
 RUNNER_OUTPUT_SUBDIR = "Level1-CalibrationTesting-Outputs"
+SCORING_OUTPUT_VERSION_RE = re.compile(r"_v(\d+)(?=_)")
 POSITIVE_EVIDENCE_STATUS_VALUES = {
 	"positive",
 	"present",
@@ -208,48 +209,117 @@ def build_delta_table_headers(iteration_history_labels: list[str]) -> list[str]:
 	return headers
 
 
-def derive_scored_csv_path_for_iteration(
-	current_path: Path, component_id: str, current_iteration_label: str, target_iteration_label: str
-) -> Path | None:
+def derive_target_version_label(current_iteration_label: str, target_iteration_label: str) -> str | None:
+	current_match = re.fullmatch(r"iter(\d+)", current_iteration_label.strip().lower())
+	target_match = re.fullmatch(r"iter(\d+)", target_iteration_label.strip().lower())
+	if current_match is None or target_match is None:
+		return None
+	return f"{int(target_match.group(1)):0{len(current_match.group(1))}d}"
+
+
+def remap_scored_input_ref_for_iteration(
+	input_ref: Path,
+	current_iteration_label: str,
+	target_iteration_label: str,
+) -> Path:
 	if target_iteration_label == current_iteration_label:
-		return current_path if current_path.exists() and current_path.is_file() else None
-
-	path_parts = list(current_path.parts)
-	target_dir = current_path.parent
-	if current_iteration_label in path_parts:
-		target_dir = Path(
-			*[target_iteration_label if part == current_iteration_label else part for part in path_parts[:-1]]
-		)
-
-	search_names: list[str] = []
-	current_name = current_path.name
-	iteration_match = re.fullmatch(r"iter(\d+)", target_iteration_label.strip().lower())
-	version_match = re.search(r"_v(\d+)_output\.csv$", current_name)
-	if version_match and iteration_match:
-		version_digits = version_match.group(1)
-		target_version = f"{int(iteration_match.group(1)):0{len(version_digits)}d}"
-		search_names.append(current_name.replace(f"_v{version_digits}_output.csv", f"_v{target_version}_output.csv"))
-	search_names.append(current_name)
-
-	for search_name in dict.fromkeys(search_names):
-		candidate_path = target_dir / search_name
-		if candidate_path.exists() and candidate_path.is_file():
-			return candidate_path
-	for candidate_path in sorted(target_dir.glob(f"*{component_id}*_output.csv")):
-		if candidate_path.is_file():
-			return candidate_path
-	return None
+		return input_ref
+	current_label = current_iteration_label.strip().lower()
+	target_label = target_iteration_label.strip().lower()
+	current_text = str(input_ref)
+	target_text = current_text.replace(f"/{current_label}/", f"/{target_label}/")
+	target_ref = Path(target_text)
+	target_version = derive_target_version_label(current_iteration_label, target_iteration_label)
+	if target_version is None:
+		return target_ref
+	updated_name = SCORING_OUTPUT_VERSION_RE.sub(f"_v{target_version}", target_ref.name, count=1)
+	if updated_name == target_ref.name:
+		return target_ref
+	return target_ref.with_name(updated_name)
 
 
-def derive_previous_scored_csv_path(
-	current_path: Path, component_id: str, current_iteration_label: str, previous_iteration_label: str
-) -> Path | None:
-	return derive_scored_csv_path_for_iteration(
-		current_path,
-		component_id,
-		current_iteration_label,
-		previous_iteration_label,
+def discover_component_py_scored_csv_paths_in_dir(directory: Path, component_id: str) -> list[Path]:
+	if not directory.exists() or not directory.is_dir():
+		return []
+	return sorted(
+		candidate_path
+		for candidate_path in directory.glob(f"*{component_id}*_Layer1_SBO_scoring_prompt_py_v*_*_output_output.csv")
+		if candidate_path.is_file()
 	)
+
+
+def discover_component_legacy_scored_csv_paths_in_dir(directory: Path, component_id: str) -> list[Path]:
+	if not directory.exists() or not directory.is_dir():
+		return []
+	exact_matches = sorted(
+		candidate_path
+		for candidate_path in directory.glob(f"*{component_id}*_Layer1_SBO_scoring_prompt_v*_output.csv")
+		if candidate_path.is_file()
+	)
+	if exact_matches:
+		return exact_matches
+	duplicated_suffix_matches = sorted(
+		candidate_path
+		for candidate_path in directory.glob(f"*{component_id}*_Layer1_SBO_scoring_prompt_v*_output_output.csv")
+		if candidate_path.is_file()
+	)
+	if duplicated_suffix_matches:
+		return duplicated_suffix_matches
+	return []
+
+
+def discover_component_scored_csv_paths_in_dir(directory: Path, component_id: str) -> list[Path]:
+	py_matches = discover_component_py_scored_csv_paths_in_dir(directory, component_id)
+	if py_matches:
+		return py_matches
+	legacy_matches = discover_component_legacy_scored_csv_paths_in_dir(directory, component_id)
+	if legacy_matches:
+		return legacy_matches
+	return sorted(
+		candidate_path for candidate_path in directory.glob(f"*{component_id}*output*.csv") if candidate_path.is_file()
+	)
+
+
+def resolve_component_scored_csv_paths(input_ref: Path, component_id: str) -> list[Path]:
+	if input_ref.exists():
+		if input_ref.is_dir():
+			return discover_component_scored_csv_paths_in_dir(input_ref, component_id)
+		if input_ref.is_file():
+			py_matches = discover_component_py_scored_csv_paths_in_dir(input_ref.parent, component_id)
+			if py_matches and input_ref in py_matches:
+				return py_matches
+			return [input_ref]
+
+	parent_dir = input_ref.parent
+	if not parent_dir.exists() or not parent_dir.is_dir():
+		return []
+
+	legacy_duplicate = parent_dir / input_ref.name.replace("_output.csv", "_output_output.csv")
+	if legacy_duplicate.name != input_ref.name and legacy_duplicate.exists() and legacy_duplicate.is_file():
+		return [legacy_duplicate]
+
+	return discover_component_scored_csv_paths_in_dir(parent_dir, component_id)
+
+
+def derive_scored_csv_paths_for_iteration(
+	current_input_ref: Path,
+	component_id: str,
+	current_iteration_label: str,
+	target_iteration_label: str,
+) -> list[Path]:
+	target_input_ref = remap_scored_input_ref_for_iteration(
+		current_input_ref,
+		current_iteration_label,
+		target_iteration_label,
+	)
+	return resolve_component_scored_csv_paths(target_input_ref, component_id)
+
+
+def load_scored_rows_from_paths(input_paths: list[Path]) -> list[dict[str, str]]:
+	rows: list[dict[str, str]] = []
+	for input_path in input_paths:
+		rows.extend(load_scored_rows(input_path))
+	return rows
 
 
 def summarize_score_value(evidence_status: str) -> str:
@@ -1059,7 +1129,7 @@ def main() -> int:
 	registry_path = args.indicator_registry.resolve()
 	manifest_path = args.sbo_manifest_file.resolve()
 	component_ids = [component_id.strip() for component_id in args.component_id if component_id.strip()]
-	scored_csv_paths = [path.resolve() for path in args.file_with_scored_texts]
+	scored_csv_input_refs = [path.resolve(strict=False) for path in args.file_with_scored_texts]
 	output_dir = args.output_dir.resolve() if args.output_dir else manifest_path.parent / RUNNER_OUTPUT_SUBDIR
 	iteration_label = derive_iteration_label(manifest_path, args.iteration_label)
 	sample_size = args.sample_size
@@ -1067,7 +1137,7 @@ def main() -> int:
 	if not component_ids:
 		print("Error: at least one --component-id value is required.", file=sys.stderr)
 		return 1
-	if len(component_ids) != len(scored_csv_paths):
+	if len(component_ids) != len(scored_csv_input_refs):
 		print(
 			"Error: --component-id and --file-with-scored-texts must be provided the same number of times.",
 			file=sys.stderr,
@@ -1080,16 +1150,32 @@ def main() -> int:
 	if not manifest_path.exists() or not manifest_path.is_file():
 		print(f"Error: markdown file not found: {manifest_path}", file=sys.stderr)
 		return 1
-	for scored_csv_path in scored_csv_paths:
-		if not scored_csv_path.exists() or not scored_csv_path.is_file():
-			print(f"Error: scored-texts file not found: {scored_csv_path}", file=sys.stderr)
-			return 1
+
+	component_scored_csv_paths: dict[str, list[Path]] = {}
+	missing_scored_inputs: list[str] = []
+	for component_id, input_ref in zip(component_ids, scored_csv_input_refs):
+		resolved_paths = resolve_component_scored_csv_paths(input_ref, component_id)
+		if not resolved_paths:
+			missing_scored_inputs.append(f"{component_id}: {input_ref}")
+			continue
+		component_scored_csv_paths[component_id] = resolved_paths
+	if missing_scored_inputs:
+		print(
+			"Error: scored-text inputs could not be resolved for: " + "; ".join(missing_scored_inputs),
+			file=sys.stderr,
+		)
+		return 1
+	scored_csv_paths = [
+		resolved_path
+		for component_id in component_ids
+		for resolved_path in component_scored_csv_paths.get(component_id, [])
+	]
 
 	output_dir.mkdir(parents=True, exist_ok=True)
 	base_row_reverse_lookup = build_base_row_reverse_lookup(registry_path)
 	scored_rows_by_component = {
-		component_id: load_scored_rows(scored_csv_path)
-		for component_id, scored_csv_path in zip(component_ids, scored_csv_paths)
+		component_id: load_scored_rows_from_paths(component_scored_csv_paths[component_id])
+		for component_id in component_ids
 	}
 	iteration_history_labels = derive_iteration_history_labels(iteration_label)
 	historical_rows_by_iteration: dict[str, dict[str, list[dict[str, str]]]] = {
@@ -1099,31 +1185,33 @@ def main() -> int:
 		if history_iteration_label == iteration_label:
 			continue
 		historical_rows_by_iteration[history_iteration_label] = {}
-		for component_id, scored_csv_path in zip(component_ids, scored_csv_paths):
-			history_scored_csv_path = derive_scored_csv_path_for_iteration(
-				scored_csv_path,
+		for component_id, scored_csv_input_ref in zip(component_ids, scored_csv_input_refs):
+			history_scored_csv_paths = derive_scored_csv_paths_for_iteration(
+				scored_csv_input_ref,
 				component_id,
 				iteration_label,
 				history_iteration_label,
 			)
-			if history_scored_csv_path is None:
+			if not history_scored_csv_paths:
 				continue
-			historical_rows_by_iteration[history_iteration_label][component_id] = load_scored_rows(history_scored_csv_path)
+			historical_rows_by_iteration[history_iteration_label][component_id] = load_scored_rows_from_paths(
+				history_scored_csv_paths
+			)
 	previous_iteration_label = derive_previous_iteration_label(iteration_label)
 	previous_rows_by_component: dict[str, list[dict[str, str]]] = {}
 	missing_previous_components: list[str] = []
 	if previous_iteration_label is not None:
-		for component_id, scored_csv_path in zip(component_ids, scored_csv_paths):
-			previous_scored_csv_path = derive_previous_scored_csv_path(
-				scored_csv_path,
+		for component_id, scored_csv_input_ref in zip(component_ids, scored_csv_input_refs):
+			previous_scored_csv_paths = derive_scored_csv_paths_for_iteration(
+				scored_csv_input_ref,
 				component_id,
 				iteration_label,
 				previous_iteration_label,
 			)
-			if previous_scored_csv_path is None:
+			if not previous_scored_csv_paths:
 				missing_previous_components.append(component_id)
 				continue
-			previous_rows_by_component[component_id] = load_scored_rows(previous_scored_csv_path)
+			previous_rows_by_component[component_id] = load_scored_rows_from_paths(previous_scored_csv_paths)
 	indicator_delta_rows = build_indicator_delta_rows(
 		component_ids,
 		iteration_history_labels,
