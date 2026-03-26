@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Deterministically render scaffold token assignments from runner-style inputs.
+"""Deterministically render scaffold instances from runner-style inputs.
 
-This script accepts the same core file inputs as the prompt runner:
-- --prompt-instructions-file
+This script accepts the same core file inputs as the prompt runner plus a
+scaffold template file:
+- --scaffold-file
 - --prompt-input-file
 - --output-dir
 - --output-file-stem
@@ -10,7 +11,7 @@ This script accepts the same core file inputs as the prompt runner:
 
 It validates the three-block payload grammar, extracts PARAM_TARGET_COMPONENT_ID,
 filters the Layer 1 scoring manifest to that component, and writes one output
-file per indicator row containing token assignments for scaffold substitution.
+file per indicator row by instantiating the provided scaffold template.
 """
 
 from __future__ import annotations
@@ -22,7 +23,6 @@ from pathlib import Path
 
 
 PAYLOAD_DELIMITER = "§§§"
-EMBEDDED_ROWS_TOKEN = "[[EMBEDDED_INDICATOR_TABLE_ROWS]]"
 PARAMETER_RE = re.compile(r"^PARAM_TARGET_COMPONENT_ID\s*=\s*(\S.*?)\s*$")
 FENCED_VALUE_TEMPLATE = r"(?ms)^{}\s*$\n```(?:text)?\n(.*?)\n```"
 MANIFEST_REQUIRED_HEADERS = [
@@ -34,13 +34,27 @@ MANIFEST_REQUIRED_HEADERS = [
 	"assessment_guidance",
 	"evaluation_notes",
 ]
+SCAFFOLD_REQUIRED_TOKENS = [
+	"[[ASSESSMENT_ID]]",
+	"[[TARGET_COMPONENT_ID]]",
+	"[[TARGET_INDICATOR_ID]]",
+	"[[SUBMISSION_IDENTIFIER_FIELD]]",
+	"[[WRAPPER_HANDLING_RULE_BULLETS]]",
+	"[[INDICATOR_ID]]",
+	"[[SBO_SHORT_DESCRIPTION]]",
+	"[[INDICATOR_DEFINITION]]",
+	"[[ASSESSMENT_GUIDANCE]]",
+	"[[EMBEDDED_EVALUATOR_GUIDANCE]]",
+]
+SCAFFOLD_OPTIONAL_TOKENS = ["[[EMBEDDED_DECISION_PROCEDURE_BLOCK]]"]
+DEFAULT_DECISION_PROCEDURE_BLOCK = "- No embedded decision procedure is provided for this indicator."
 
 
 def parse_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(
-		description="Render deterministic embedded indicator table rows from a runner-style prompt payload."
+		description="Render deterministic scaffold instances from a runner-style prompt payload."
 	)
-	parser.add_argument("--prompt-instructions-file", type=Path, required=True)
+	parser.add_argument("--scaffold-file", type=Path, required=True)
 	parser.add_argument("--prompt-input-file", type=Path, required=True)
 	parser.add_argument("--output-dir", type=Path, required=True)
 	parser.add_argument("--output-file-stem", type=str, required=True)
@@ -194,9 +208,40 @@ def parse_manifest_rows(manifest_block: str) -> list[dict[str, str]]:
 	return rows
 
 
-def validate_prompt_instructions(prompt_instructions_text: str) -> None:
-	if EMBEDDED_ROWS_TOKEN not in prompt_instructions_text:
-		raise ValueError(f"Prompt instructions file is missing required token: {EMBEDDED_ROWS_TOKEN}")
+def extract_scaffold_body(scaffold_text: str) -> str:
+	def extract_primary_render_body(body_text: str) -> str:
+		quadruple_fence_match = re.search(r"(?ms)^[ \t]*````\n(.*?)\n[ \t]*````", body_text)
+		if quadruple_fence_match is not None:
+			return quadruple_fence_match.group(1).strip() + "\n"
+		return body_text
+
+	if scaffold_text.startswith("---\n"):
+		parts = scaffold_text.split("\n---\n", 1)
+		if len(parts) != 2:
+			raise ValueError("Scaffold file has malformed YAML frontmatter.")
+		return extract_primary_render_body(parts[1])
+	return extract_primary_render_body(scaffold_text)
+
+
+def validate_scaffold(scaffold_body: str) -> None:
+	missing_tokens = [token for token in SCAFFOLD_REQUIRED_TOKENS if token not in scaffold_body]
+	if missing_tokens:
+		raise ValueError(f"Scaffold file is missing required token(s): {missing_tokens}")
+
+
+def render_scaffold(scaffold_body: str, token_values: dict[str, str]) -> str:
+	rendered = scaffold_body
+	for token in SCAFFOLD_REQUIRED_TOKENS:
+		value = token_values.get(token, "")
+		if not value:
+			raise ValueError(f"Missing value for required scaffold token: {token}")
+		rendered = rendered.replace(token, value)
+	for token in SCAFFOLD_OPTIONAL_TOKENS:
+		rendered = rendered.replace(token, token_values.get(token, ""))
+	unreplaced_tokens = sorted(set(re.findall(r"\[\[[A-Z0-9_]+\]\]", rendered)))
+	if unreplaced_tokens:
+		raise ValueError(f"Unreplaced scaffold token(s) remain: {unreplaced_tokens}")
+	return rendered
 
 
 def filter_manifest_rows(rows: list[dict[str, str]], target_component_id: str) -> list[dict[str, str]]:
@@ -216,47 +261,41 @@ def format_manifest_value(value: str) -> str:
 	return normalized.replace("|", r"\|")
 
 
-def render_token_assignment(token: str, value: str) -> str:
-	return f"{token}\n{value}" if value else f"{token}\n"
-
-
-def build_token_assignments(
+def build_token_values(
 	assignment_payload_metadata: dict[str, str],
 	target_component_id: str,
 	row: dict[str, str],
-) -> str:
-	token_blocks = [
-		render_token_assignment("[[ASSESSMENT_ID]]", assignment_payload_metadata["assessment_id"]),
-		render_token_assignment("[[TARGET_COMPONENT_ID]]", target_component_id),
-		render_token_assignment("[[TARGET_INDICATOR_ID]]", row["indicator_id"]),
-		render_token_assignment(
-			"[[SUBMISSION_IDENTIFIER_FIELD]]",
-			assignment_payload_metadata["submission_identifier_field"],
-		),
-		render_token_assignment(
-			"[[WRAPPER_HANDLING_RULE_BULLETS]]",
-			assignment_payload_metadata["wrapper_handling_rule_bullets"],
-		),
-		render_token_assignment("[[INDICATOR_ID]]", row["indicator_id"]),
-		render_token_assignment("[[SBO_SHORT_DESCRIPTION]]", row["sbo_short_description"]),
-		render_token_assignment("[[INDICATOR_DEFINITION]]", row["indicator_definition"]),
-		render_token_assignment("[[ASSESSMENT_GUIDANCE]]", row["assessment_guidance"]),
-		render_token_assignment("[[EMBEDDED_EVALUATOR_GUIDANCE]]", row["evaluation_notes"]),
-	]
-	decision_procedure_block = row.get("decision_procedure", "").strip()
-	if decision_procedure_block:
-		token_blocks.append(
-			render_token_assignment("[[EMBEDDED_DECISION_PROCEDURE_BLOCK]]", decision_procedure_block)
-		)
-	return "\n\n".join(token_blocks) + "\n"
+) -> dict[str, str]:
+	decision_procedure_block = render_decision_procedure_block(row.get("decision_procedure", ""))
+	return {
+		"[[ASSESSMENT_ID]]": assignment_payload_metadata["assessment_id"],
+		"[[TARGET_COMPONENT_ID]]": target_component_id,
+		"[[TARGET_INDICATOR_ID]]": row["indicator_id"],
+		"[[SUBMISSION_IDENTIFIER_FIELD]]": assignment_payload_metadata["submission_identifier_field"],
+		"[[WRAPPER_HANDLING_RULE_BULLETS]]": assignment_payload_metadata["wrapper_handling_rule_bullets"],
+		"[[INDICATOR_ID]]": row["indicator_id"],
+		"[[SBO_SHORT_DESCRIPTION]]": row["sbo_short_description"],
+		"[[INDICATOR_DEFINITION]]": row["indicator_definition"],
+		"[[ASSESSMENT_GUIDANCE]]": row["assessment_guidance"],
+		"[[EMBEDDED_EVALUATOR_GUIDANCE]]": row["evaluation_notes"],
+		"[[EMBEDDED_DECISION_PROCEDURE_BLOCK]]": decision_procedure_block,
+	}
+
+
+def render_decision_procedure_block(decision_procedure: str) -> str:
+	normalized = decision_procedure.strip()
+	if not normalized:
+		return DEFAULT_DECISION_PROCEDURE_BLOCK
+	return normalized
 
 
 def main() -> int:
 	args = parse_args()
 	try:
-		prompt_instructions_text = read_text_file(args.prompt_instructions_file.resolve())
+		scaffold_text = read_text_file(args.scaffold_file.resolve())
 		prompt_input_text = read_text_file(args.prompt_input_file.resolve())
-		validate_prompt_instructions(prompt_instructions_text)
+		scaffold_body = extract_scaffold_body(scaffold_text)
+		validate_scaffold(scaffold_body)
 		parameter_block, assignment_payload_block, manifest_block = split_payload_blocks(prompt_input_text)
 		target_component_id = parse_target_component_id(parameter_block)
 		validate_assignment_payload_block(assignment_payload_block)
@@ -269,7 +308,8 @@ def main() -> int:
 		for row in filtered_rows:
 			indicator_id = row["indicator_id"].strip()
 			output_path = resolve_output_path(output_dir, args.output_file_stem, args.output_format, indicator_id)
-			output_text = build_token_assignments(assignment_payload_metadata, target_component_id, row)
+			token_values = build_token_values(assignment_payload_metadata, target_component_id, row)
+			output_text = render_scaffold(scaffold_body, token_values)
 			output_path.write_text(output_text, encoding="utf-8")
 			output_paths.append(output_path)
 	except (FileNotFoundError, ValueError) as exc:
