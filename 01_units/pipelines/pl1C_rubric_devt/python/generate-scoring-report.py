@@ -298,9 +298,18 @@ def derive_delta_column_label(previous_label: str, current_label: str) -> str:
 	return f"delta {previous_label}-{current_label}"
 
 
+def derive_display_history_labels(history_labels: list[str]) -> list[str]:
+	return list(reversed(history_labels))
+
+
+def derive_display_history_pairs(history_labels: list[str]) -> list[tuple[str, str]]:
+	return list(reversed(list(zip(history_labels, history_labels[1:]))))
+
+
 def build_delta_table_headers(history_labels: list[str]) -> list[str]:
-	headers = ["indicator", *history_labels]
-	for previous_label, current_label in zip(history_labels, history_labels[1:]):
+	display_history_labels = derive_display_history_labels(history_labels)
+	headers = ["indicator", *display_history_labels]
+	for previous_label, current_label in derive_display_history_pairs(history_labels):
 		headers.extend(
 			[
 				".",
@@ -1048,6 +1057,7 @@ def build_changed_score_history_rows(
 	history_labels: list[str],
 	historical_rows_by_label: dict[str, dict[str, list[dict[str, str]]]],
 ) -> list[list[str]]:
+	display_history_labels = derive_display_history_labels(history_labels)
 	indexes_by_label: dict[str, dict[str, dict[tuple[str, str], dict[str, str]]]] = {}
 	for history_label in history_labels:
 		component_indexes: dict[str, dict[tuple[str, str], dict[str, str]]] = {}
@@ -1066,7 +1076,7 @@ def build_changed_score_history_rows(
 	for changed_row in changed_diff_rows:
 		component_id, indicator_id, submission_id = changed_row[:3]
 		row_values = [component_id, indicator_id, submission_id]
-		for history_label in history_labels:
+		for history_label in display_history_labels:
 			row = indexes_by_label.get(history_label, {}).get(component_id, {}).get((indicator_id, submission_id))
 			row_values.append(summarize_score_value(row.get("evidence_status") or "") if row is not None else "")
 		history_rows.append(row_values)
@@ -1078,6 +1088,8 @@ def build_indicator_delta_rows(
 	history_labels: list[str],
 	historical_rows_by_label: dict[str, dict[str, list[dict[str, str]]]],
 ) -> list[list[str]]:
+	display_history_labels = derive_display_history_labels(history_labels)
+	display_history_pairs = derive_display_history_pairs(history_labels)
 	counts_by_indicator = build_indicator_counts_by_label(
 		component_ids,
 		history_labels,
@@ -1091,8 +1103,8 @@ def build_indicator_delta_rows(
 			history_label: counts_by_indicator[indicator_id].get(history_label, {}).get("positive", 0)
 			for history_label in history_labels
 		}
-		row.extend(str(positive_counts_by_iteration[history_label]) for history_label in history_labels)
-		for previous_label, current_label in zip(history_labels, history_labels[1:]):
+		row.extend(str(positive_counts_by_iteration[history_label]) for history_label in display_history_labels)
+		for previous_label, current_label in display_history_pairs:
 			previous_count = positive_counts_by_iteration[previous_label]
 			current_count = positive_counts_by_iteration[current_label]
 			number_scored = counts_by_indicator[indicator_id].get(current_label, {}).get("number_scored", 0)
@@ -1549,6 +1561,7 @@ def render_consolidated_scoring_stats_document(
 		else:
 			diff_report_parts.extend(["", "#### Removed Rows", "", f"No removed rows found relative to the previous {comparison_axis_label}."])
 		if changed_score_history_rows:
+			display_history_labels = derive_display_history_labels(history_labels)
 			diff_report_parts.extend(
 				[
 					"",
@@ -1559,7 +1572,7 @@ def render_consolidated_scoring_stats_document(
 							"component_id",
 							"indicator_id",
 							"submission_id",
-							*[f"{history_label}-score" for history_label in history_labels],
+							*[f"{history_label}-score" for history_label in display_history_labels],
 						],
 							insert_blank_rows_between_groups(
 								changed_score_history_rows,
