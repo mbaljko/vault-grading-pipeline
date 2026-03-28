@@ -585,6 +585,7 @@ def render_output_report(
 		f"- Template groups: {len(grouped_rows)}\n",
 	]
 	if template_summary_rows:
+		template_summary_rows.sort(key=lambda row: template_sort_key(row[0]))
 		lines.extend(
 			[
 				"\n",
@@ -594,7 +595,9 @@ def render_output_report(
 				format_markdown_row(["---", "---", "---", "---", "---"]),
 			]
 		)
-		for summary_row in template_summary_rows:
+		for row_index, summary_row in enumerate(template_summary_rows):
+			if row_index > 0:
+				lines.append(format_markdown_row(["", "", "", "", ""]))
 			lines.append(format_markdown_row(summary_row))
 	if grouped_rows:
 		lines.extend(
