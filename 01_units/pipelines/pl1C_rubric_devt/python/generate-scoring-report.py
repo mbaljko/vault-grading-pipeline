@@ -63,6 +63,7 @@ from pathlib import Path
 from generate_rubric_and_manifest_from_indicator_registry import (
 	apply_expression_template,
 	apply_token_template,
+	collect_section_rows,
 	collect_markdown_tables,
 	expand_component_pattern,
 	extract_rule_template,
@@ -841,13 +842,24 @@ def render_yaml_frontmatter(
 
 def build_base_row_reverse_lookup(registry_path: Path) -> dict[tuple[str, str], dict[str, str]]:
 	tables = collect_markdown_tables(registry_path)
-	base_table = find_table_by_heading(tables, "base table")
+	base_rows = collect_section_rows(
+		tables,
+		"base table",
+		required_columns={
+			"template_id",
+			"local_slot",
+			"sbo_short_description",
+			"indicator_definition",
+			"assessment_guidance",
+			"evaluation_notes",
+		},
+		allow_field_value_records=True,
+	)
 	reuse_table = find_table_by_heading(tables, "reuse rule table")
 	component_block_rule_table = find_table_by_heading(tables, "component block rule table")
-	if base_table is None or reuse_table is None:
+	if not base_rows or reuse_table is None:
 		return {}
 
-	base_rows = list(base_table["rows"])
 	reuse_rows = list(reuse_table["rows"])
 	reuse_headers = set(reuse_table["headers"])
 	base_by_template_id = {

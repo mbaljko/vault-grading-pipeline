@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Generate a Layer 1 rubric payload and scoring manifest from an indicator registry.
 
-This script reads a markdown indicator registry table, extracts the Layer 1
+This script reads a markdown indicator registry, extracts the Layer 1
 indicator rows, and writes two markdown outputs in the same directory by
-default:
+default. Registry sections can continue to use the existing wide markdown
+tables, and the Base Table section may also be expressed as repeated two-column
+`field | value` record tables for indicators with longer prose fields:
 
 - RUBRIC_<ASSESSMENT>_CAL_payload_<VERSION>.md
 - <ASSESSMENT>_Layer1_ScoringManifest_<VERSION>.md
@@ -41,7 +43,8 @@ BASE_TABLE_REQUIRED_COLUMNS = {
 }
 VERSION_TOKEN_RE = re.compile(r"_(v(?:_i)?\d+)\.md$", re.IGNORECASE)
 SHORTID_NUMBER_RE = re.compile(r"(\d+)")
-HEADING_RE = re.compile(r"^\s*#{1,6}\s+(?P<title>.+?)\s*$")
+HEADING_RE = re.compile(r"^\s*(?P<level>#{1,6})\s+(?P<title>.+?)\s*$")
+FIELD_VALUE_TABLE_HEADERS = ["field", "value"]
 
 
 @dataclass(frozen=True)
@@ -119,6 +122,7 @@ def collect_markdown_tables(registry_path: Path) -> list[dict[str, object]]:
     lines = registry_path.read_text(encoding="utf-8").splitlines()
     tables: list[dict[str, object]] = []
     current_heading = ""
+    heading_path: list[str] = []
     index = 0
 
     while index < len(lines):
@@ -126,6 +130,9 @@ def collect_markdown_tables(registry_path: Path) -> list[dict[str, object]]:
         heading_match = HEADING_RE.match(line)
         if heading_match:
             current_heading = heading_match.group("title").strip().lower()
+            heading_level = len(heading_match.group("level"))
+            heading_path = heading_path[: heading_level - 1]
+            heading_path.append(current_heading)
             index += 1
             continue
 
@@ -156,6 +163,7 @@ def collect_markdown_tables(registry_path: Path) -> list[dict[str, object]]:
         tables.append(
             {
                 "heading": current_heading,
+                "heading_path": list(heading_path),
                 "headers": headers,
                 "rows": row_records,
             }
@@ -170,6 +178,77 @@ def find_table_by_heading(tables: list[dict[str, object]], heading_text: str) ->
         if str(table["heading"]).strip().lower() == normalized_heading:
             return table
     return None
+
+
+def find_tables_by_heading(
+    tables: list[dict[str, object]],
+    heading_text: str,
+    include_descendants: bool = False,
+) -> list[dict[str, object]]:
+    normalized_heading = heading_text.strip().lower()
+    matches: list[dict[str, object]] = []
+    for table in tables:
+        heading = str(table.get("heading", "")).strip().lower()
+        heading_path = [str(item).strip().lower() for item in table.get("heading_path", [])]
+        if heading == normalized_heading:
+            matches.append(table)
+            continue
+        if include_descendants and normalized_heading in heading_path:
+            matches.append(table)
+    return matches
+
+
+def is_field_value_table(table: dict[str, object]) -> bool:
+    headers = [str(header).strip().lower() for header in table.get("headers", [])]
+    return headers == FIELD_VALUE_TABLE_HEADERS
+
+
+def convert_field_value_table_to_record(table: dict[str, object]) -> dict[str, str]:
+    if not is_field_value_table(table):
+        raise ValueError("Table is not a field/value record table.")
+
+    record: dict[str, str] = {}
+    for row in table.get("rows", []):
+        field_name = str(row.get("field", "")).strip().lower()
+        if not field_name:
+            continue
+        if field_name in record:
+            raise ValueError(f"Duplicate field {field_name!r} in field/value record table.")
+        record[field_name] = str(row.get("value", "")).strip()
+    return record
+
+
+def collect_section_rows(
+    tables: list[dict[str, object]],
+    heading_text: str,
+    *,
+    required_columns: set[str],
+    allow_field_value_records: bool = False,
+    include_descendants: bool = True,
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for table in find_tables_by_heading(tables, heading_text, include_descendants=include_descendants):
+        headers = {str(header).strip().lower() for header in table.get("headers", [])}
+        if required_columns.issubset(headers):
+            rows.extend(list(table.get("rows", [])))
+            continue
+        if allow_field_value_records and is_field_value_table(table):
+            record = convert_field_value_table_to_record(table)
+            if record:
+                rows.append(record)
+    return rows
+
+
+def validate_required_columns(
+    table_name: str,
+    rows: list[dict[str, str]],
+    required_columns: set[str],
+) -> None:
+    for row_index, row in enumerate(rows, start=1):
+        missing_columns = sorted(column for column in required_columns if column not in row)
+        if missing_columns:
+            row_label = row.get("template_id", "").strip() or row.get("indicator_id", "").strip() or str(row_index)
+            raise ValueError(f"{table_name} row {row_label!r} is missing required column(s): {missing_columns}")
 
 
 def extract_registry_metadata(tables: list[dict[str, object]]) -> dict[str, str]:
@@ -530,7 +609,12 @@ def load_indicator_rows(registry_path: Path, include_inactive: bool) -> list[Ind
     registry_metadata = extract_registry_metadata(tables)
 
     explicit_table: dict[str, object] | None = None
-    base_table = find_table_by_heading(tables, "base table")
+    base_rows = collect_section_rows(
+        tables,
+        "base table",
+        required_columns=BASE_TABLE_REQUIRED_COLUMNS,
+        allow_field_value_records=True,
+    )
     reuse_table = find_table_by_heading(tables, "reuse rule table")
     component_block_rule_table = find_table_by_heading(tables, "component block rule table")
 
@@ -541,17 +625,14 @@ def load_indicator_rows(registry_path: Path, include_inactive: bool) -> list[Ind
             break
 
     rows: list[IndicatorRow] = []
-    if base_table is not None and reuse_table is not None:
-        base_headers = set(base_table["headers"])
+    if base_rows and reuse_table is not None:
         reuse_headers = set(reuse_table["headers"])
-        if not BASE_TABLE_REQUIRED_COLUMNS.issubset(base_headers):
-            missing_columns = sorted(BASE_TABLE_REQUIRED_COLUMNS.difference(base_headers))
-            raise ValueError(f"Base Table is missing required column(s): {missing_columns}")
+        validate_required_columns("Base Table", base_rows, BASE_TABLE_REQUIRED_COLUMNS)
         if {"indicator_id", "component_id"}.issubset(reuse_headers):
             if "template_id" not in reuse_headers and "local_slot" not in reuse_headers:
                 raise ValueError("Reuse Rule Table must include template_id or local_slot for Base Table joins.")
             rows = build_indicator_rows_from_base_and_reuse_tables(
-                base_rows=list(base_table["rows"]),
+                base_rows=base_rows,
                 reuse_rows=list(reuse_table["rows"]),
                 registry_metadata=registry_metadata,
                 include_inactive=include_inactive,
@@ -569,7 +650,7 @@ def load_indicator_rows(registry_path: Path, include_inactive: bool) -> list[Ind
                     "local_slot_source, and indicator_id_format columns."
                 )
             rows = build_indicator_rows_from_component_block_reuse_table(
-                base_rows=list(base_table["rows"]),
+                base_rows=base_rows,
                 reuse_rows=list(reuse_table["rows"]),
                 component_block_rows=list(component_block_rule_table["rows"]),
                 registry_metadata=registry_metadata,
@@ -577,7 +658,7 @@ def load_indicator_rows(registry_path: Path, include_inactive: bool) -> list[Ind
             )
         elif {"template_group", "applies_to_component_pattern", "indicator_id_rule"}.issubset(reuse_headers):
             rows = build_indicator_rows_from_rule_based_reuse_table(
-                base_rows=list(base_table["rows"]),
+                base_rows=base_rows,
                 reuse_rows=list(reuse_table["rows"]),
                 registry_metadata=registry_metadata,
                 include_inactive=include_inactive,
