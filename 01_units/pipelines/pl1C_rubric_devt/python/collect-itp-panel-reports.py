@@ -296,6 +296,44 @@ def resolve_indicator_registry_path(manifest_path: Path | None) -> Path | None:
 	return None
 
 
+def build_manifest_group_lookup(manifest_path: Path) -> tuple[dict[tuple[str, str], dict[str, str]], list[tuple[str, str]]]:
+	tables = collect_markdown_tables(manifest_path)
+	manifest_table: dict[str, object] | None = None
+	for table in tables:
+		headers = {str(header).strip().lower() for header in table["headers"]}
+		if {"component_id", "indicator_id", "sbo_short_description"}.issubset(headers):
+			manifest_table = table
+			break
+	if manifest_table is None:
+		return {}, []
+
+	reverse_lookup: dict[tuple[str, str], dict[str, str]] = {}
+	base_order: list[tuple[str, str]] = []
+	rows = list(manifest_table["rows"])
+	component_slot_counts: dict[str, int] = {}
+	description_by_slot: dict[int, str] = {}
+	seen_slots: set[int] = set()
+	for row in rows:
+		component_id = str(row.get("component_id", "")).strip()
+		indicator_id = str(row.get("indicator_id", "")).strip()
+		description = str(row.get("sbo_short_description", "")).strip()
+		if not component_id or not indicator_id:
+			continue
+		slot_index = component_slot_counts.get(component_id, 0)
+		component_slot_counts[component_id] = slot_index + 1
+		group_key = f"__manifest_slot__{slot_index:03d}"
+		description_by_slot.setdefault(slot_index, description or indicator_id)
+		reverse_lookup[(component_id, indicator_id)] = {
+			"template_id": group_key,
+			"local_slot": f"{slot_index + 1:02d}",
+			"sbo_short_description": description or indicator_id,
+		}
+		if slot_index not in seen_slots:
+			base_order.append((group_key, description_by_slot[slot_index]))
+			seen_slots.add(slot_index)
+	return reverse_lookup, base_order
+
+
 def build_base_row_reverse_lookup(registry_path: Path) -> tuple[dict[tuple[str, str], dict[str, str]], list[tuple[str, str]]]:
 	tables = collect_markdown_tables(registry_path)
 	base_table = find_table_by_heading(tables, "base table")
@@ -453,7 +491,12 @@ def render_combined_report(
 	manifest_path: Path | None = None,
 ) -> str:
 	registry_path = resolve_indicator_registry_path(manifest_path)
-	base_row_reverse_lookup, base_order = build_base_row_reverse_lookup(registry_path) if registry_path else ({}, [])
+	if registry_path:
+		base_row_reverse_lookup, base_order = build_base_row_reverse_lookup(registry_path)
+	elif manifest_path:
+		base_row_reverse_lookup, base_order = build_manifest_group_lookup(manifest_path)
+	else:
+		base_row_reverse_lookup, base_order = ({}, [])
 	grouped_sections: dict[str, list[tuple[str, Path, str]]] = {}
 	ungrouped_sections: list[tuple[str, Path, str]] = []
 	summary_rows_by_group: dict[str, list[list[str]]] = {}
@@ -537,7 +580,7 @@ def render_combined_report(
 				]
 			)
 
-	for template_id, template_description in base_order:
+	for group_index, (template_id, template_description) in enumerate(base_order, start=1):
 		sections = grouped_sections.get(template_id)
 		if not sections:
 			continue
@@ -545,9 +588,15 @@ def render_combined_report(
 			sections,
 			key=lambda section: section_sort_key(section, base_row_reverse_lookup, base_rank_by_template),
 		)
+		group_label = f"Group {group_index:02d}"
+		group_heading = (
+			f"{group_label} — {template_description}"
+			if template_id.startswith("__manifest_slot__")
+			else f"{group_label} — {template_id} — {template_description}"
+		)
 		output_lines.extend([
 			"\n",
-			f"## {template_id} — {template_description}\n",
+			f"## {group_heading}\n",
 		])
 		for indicator_heading, stitched_path, section_text in sections:
 			output_lines.extend(

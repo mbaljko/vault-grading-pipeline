@@ -662,7 +662,10 @@ def main() -> int:
 
 		missing_panel_outputs = [path for path in panel_collection_outputs if not path.exists()]
 		if not missing_panel_outputs:
-			print("Panel aggregation reports already exist:")
+			print(
+				"Panel aggregation reports were already present when this section checked for them. "
+				"In l1c-itp-all, they may have been created earlier in the same multi-section run:"
+			)
 			for path in panel_collection_outputs:
 				print(f"- {path}")
 			return 0
@@ -680,6 +683,7 @@ def main() -> int:
 	if existing_itp_reports and overwrite:
 		print("Overwriting existing ITP outputs because --overwrite was supplied.")
 
+	generated_stitched_outputs = False
 	for components, sbo_identifier, scored_payload in matching_manifest_rows:
 		print(sbo_identifier)
 		runner_output_file = run_l1_itp_for_payload(
@@ -701,9 +705,11 @@ def main() -> int:
 			response_texts_path,
 			components,
 		)
+		generated_stitched_outputs = True
 
 	if not runner_dry_run:
-		collected_panel_outputs = collect_panel_reports(runner_output_dir, markdown_path, overwrite)
+		refresh_panel_outputs = overwrite or generated_stitched_outputs
+		collected_panel_outputs = collect_panel_reports(runner_output_dir, markdown_path, refresh_panel_outputs)
 		print("Collected panel aggregation reports:")
 		for path in collected_panel_outputs:
 			print(f"- {path}")
