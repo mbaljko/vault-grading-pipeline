@@ -14,7 +14,7 @@ Output columns:
 - `submission_id`
 - `<iteration>-score`: `P` for `present`, `N` for `not_present`
 - `<iteration>-validation`: `TP`, `FP`, `TN`, or `FN` parsed from
-  `human_judge_notes`
+	`human_judge_notes`
 - `false_score`: echoes `FP` or `FN` when validation surfaced a false score
 - `human_judge_notes_detail`: explanatory note text with the validation label removed
 
@@ -32,6 +32,7 @@ from pathlib import Path
 from generate_rubric_and_manifest_from_indicator_registry import (
 	apply_expression_template,
 	apply_token_template,
+	collect_section_rows,
 	collect_markdown_tables as collect_registry_markdown_tables,
 	expand_component_pattern,
 	extract_rule_template,
@@ -251,13 +252,17 @@ def build_report_heading(output_filename: str, iteration_label: str) -> str:
 
 def build_indicator_reverse_lookup(registry_path: Path) -> dict[tuple[str, str], dict[str, str]]:
 	tables = collect_registry_markdown_tables(registry_path)
-	base_table = find_table_by_heading(tables, "base table")
 	reuse_table = find_table_by_heading(tables, "reuse rule table")
 	component_block_rule_table = find_table_by_heading(tables, "component block rule table")
-	if base_table is None or reuse_table is None:
+	base_rows = collect_section_rows(
+		tables,
+		"base table",
+		required_columns={"template_id", "local_slot", "sbo_short_description"},
+		allow_field_value_records=True,
+	)
+	if not base_rows or reuse_table is None:
 		return {}
 
-	base_rows = list(base_table["rows"])
 	reuse_rows = list(reuse_table["rows"])
 	reuse_headers = set(reuse_table["headers"])
 	base_by_template_id = {
@@ -606,8 +611,17 @@ def render_output_report(
 				"\n",
 				f"#### {heading}\n",
 				"\n",
-				format_markdown_row(["source_panel", "component_id", "indicator_id", "submission_id", score_column, validation_column, false_score_column]),
-				format_markdown_row(["---", "---", "---", "---", "---", "---", "---"]),
+				format_markdown_row([
+					"source_panel",
+					"component_id",
+					"indicator_id",
+					"submission_id",
+					score_column,
+					validation_column,
+					false_score_column,
+					"human_judge_notes_detail",
+				]),
+				format_markdown_row(["---", "---", "---", "---", "---", "---", "---", "---"]),
 			]
 		)
 		for record in group_records:
@@ -622,6 +636,7 @@ def render_output_report(
 						record["score"],
 						validation_label,
 						derive_false_score_flag(validation_label),
+						record.get("human_judge_notes_detail", ""),
 					]
 				)
 			)
