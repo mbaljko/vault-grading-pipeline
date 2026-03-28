@@ -39,6 +39,7 @@ from pathlib import Path
 from generate_rubric_and_manifest_from_indicator_registry import (
 	apply_expression_template,
 	apply_token_template,
+	collect_section_rows,
 	collect_markdown_tables,
 	expand_component_pattern,
 	extract_rule_template,
@@ -336,13 +337,17 @@ def build_manifest_group_lookup(manifest_path: Path) -> tuple[dict[tuple[str, st
 
 def build_base_row_reverse_lookup(registry_path: Path) -> tuple[dict[tuple[str, str], dict[str, str]], list[tuple[str, str]]]:
 	tables = collect_markdown_tables(registry_path)
-	base_table = find_table_by_heading(tables, "base table")
 	reuse_table = find_table_by_heading(tables, "reuse rule table")
 	component_block_rule_table = find_table_by_heading(tables, "component block rule table")
-	if base_table is None or reuse_table is None:
+	base_rows = collect_section_rows(
+		tables,
+		"base table",
+		required_columns={"template_id", "local_slot", "sbo_short_description"},
+		allow_field_value_records=True,
+	)
+	if not base_rows or reuse_table is None:
 		return {}, []
 
-	base_rows = list(base_table["rows"])
 	reuse_rows = list(reuse_table["rows"])
 	reuse_headers = set(reuse_table["headers"])
 	base_by_template_id = {
