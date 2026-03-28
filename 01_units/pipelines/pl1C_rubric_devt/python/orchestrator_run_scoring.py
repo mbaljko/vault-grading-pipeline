@@ -197,6 +197,22 @@ def write_metadata_output(
 	metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def format_elapsed_hms(elapsed_seconds: float) -> str:
+	total_seconds = max(0, int(round(elapsed_seconds)))
+	hours, remainder = divmod(total_seconds, 3600)
+	minutes, seconds = divmod(remainder, 60)
+	return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def print_timing_summary(args: argparse.Namespace, elapsed_seconds: float) -> None:
+	print(
+		"Completed scoring orchestrator\n"
+		f"mode={args.scoring_mode}\n"
+		f"elapsed_seconds={elapsed_seconds:.3f}\n"
+		f"elapsed_hms={format_elapsed_hms(elapsed_seconds)}"
+	)
+
+
 def invoke_runner(runner_path: Path, runner_args: list[str]) -> int:
 	command = [sys.executable, str(runner_path), *runner_args]
 	completed = subprocess.run(command, check=False)
@@ -258,6 +274,7 @@ def run_single_response_mode(
 			invocation_csv_paths.append(temp_dir / f"{temp_stem}_output.csv")
 
 		response_count, header = merge_csv_outputs(invocation_csv_paths, final_output_path)
+	elapsed_seconds = time.perf_counter() - start_ts
 
 	write_metadata_output(
 		metadata_path=metadata_path,
@@ -265,10 +282,11 @@ def run_single_response_mode(
 		final_output_path=final_output_path,
 		response_count=response_count,
 		header=header,
-		elapsed_seconds=time.perf_counter() - start_ts,
+		elapsed_seconds=elapsed_seconds,
 	)
 	print(f"Wrote aggregated CSV output: {final_output_path}")
 	print(f"Wrote orchestrator metadata: {metadata_path}")
+	print_timing_summary(args, elapsed_seconds)
 	return 0
 
 
@@ -281,6 +299,7 @@ def resolve_runner_path(args: argparse.Namespace) -> Path:
 
 def main() -> int:
 	args, forwarded_args = parse_args(sys.argv[1:])
+	start_ts = time.perf_counter()
 	try:
 		runner_path = resolve_runner_path(args)
 		if args.scoring_mode == "single-response":
@@ -289,7 +308,10 @@ def main() -> int:
 		print(f"Error: {exc}", file=sys.stderr)
 		return 1
 
-	return invoke_runner(runner_path, forwarded_args)
+	exit_code = invoke_runner(runner_path, forwarded_args)
+	if exit_code == 0:
+		print_timing_summary(args, time.perf_counter() - start_ts)
+	return exit_code
 
 
 if __name__ == "__main__":
