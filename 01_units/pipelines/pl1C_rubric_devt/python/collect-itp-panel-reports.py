@@ -51,6 +51,7 @@ from generate_rubric_and_manifest_from_indicator_registry import (
 STITCHED_REPORT_GLOBS = ["*_output_stitched_worksheet.md", "*_output_stitched.md"]
 STOP_HEADING_RE = re.compile(r"^\s*#{1,5}\s+")
 ASSESSMENT_FROM_STITCHED_RE = re.compile(r"^I_([A-Za-z0-9]+)_")
+SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
 PANEL_SPECS = {
 	"A": {
 		"slug": "panel_a",
@@ -68,6 +69,158 @@ PANEL_SPECS = {
 		"heading_re": re.compile(r"^\s*#####\s*Panel\s+C\s+—\s+Questionable\s+cases\s*$"),
 	},
 }
+
+
+def normalize_markdown_cell(value: str) -> str:
+	stripped = value.strip()
+	if re.fullmatch(r"`[^`]*`", stripped):
+		return stripped[1:-1].strip()
+	return stripped
+
+
+def parse_markdown_cells(line: str) -> list[str]:
+	parts = [part.strip() for part in line.strip().split("|")]
+	if parts and parts[0] == "":
+		parts = parts[1:]
+	if parts and parts[-1] == "":
+		parts = parts[:-1]
+	return [normalize_markdown_cell(part) for part in parts]
+
+
+def is_separator_row(cells: list[str]) -> bool:
+	if not cells:
+		return False
+	return all(bool(SEPARATOR_CELL_RE.match(cell.replace(" ", ""))) for cell in cells)
+
+
+def collect_markdown_tables_from_text(markdown_text: str) -> list[dict[str, object]]:
+	lines = markdown_text.splitlines()
+	tables: list[dict[str, object]] = []
+	index = 0
+	while index < len(lines):
+		line = lines[index]
+		if "|" not in line:
+			index += 1
+			continue
+
+		header_cells = parse_markdown_cells(line)
+		if not header_cells or index + 1 >= len(lines) or "|" not in lines[index + 1]:
+			index += 1
+			continue
+
+		separator_cells = parse_markdown_cells(lines[index + 1])
+		if len(separator_cells) != len(header_cells) or not is_separator_row(separator_cells):
+			index += 1
+			continue
+
+		headers = [cell.strip() for cell in header_cells]
+		row_records: list[dict[str, str]] = []
+		index += 2
+		while index < len(lines) and "|" in lines[index]:
+			cells = parse_markdown_cells(lines[index])
+			if len(cells) != len(headers):
+				break
+			row_records.append(dict(zip(headers, cells, strict=True)))
+			index += 1
+
+		tables.append({
+			"headers": headers,
+			"rows": row_records,
+		})
+	return tables
+
+
+def render_markdown_table(headers: list[str], rows: list[list[str]]) -> str:
+	separator = ["---"] * len(headers)
+	lines = [
+		"| " + " | ".join(headers) + " |",
+		"| " + " | ".join(separator) + " |",
+	]
+	for row in rows:
+		lines.append("| " + " | ".join(row) + " |")
+	return "\n".join(lines) + "\n"
+
+
+def insert_blank_rows_between_groups(rows: list[list[str]], group_keys: list[object]) -> list[list[str]]:
+	if not rows:
+		return rows
+	grouped_rows: list[list[str]] = []
+	previous_group_key = None
+	column_count = len(rows[0])
+	for row, group_key in zip(rows, group_keys):
+		if previous_group_key is not None and group_key != previous_group_key:
+			grouped_rows.append([""] * column_count)
+		grouped_rows.append(row)
+		previous_group_key = group_key
+	return grouped_rows
+
+
+def component_sort_key(component_id: str) -> tuple[str, int, str]:
+	match = re.search(r"(.*?)(\d+)(\D*)$", component_id)
+	if match:
+		return (match.group(1).lower(), int(match.group(2)), match.group(3).lower())
+	return (component_id.lower(), 10**9, "")
+
+
+def summary_row_sort_key(
+	row: list[str],
+	base_row_reverse_lookup: dict[tuple[str, str], dict[str, str]],
+	base_rank_by_template: dict[str, int],
+) -> tuple[int, tuple[str, int, str], str, str]:
+	component_id = row[0]
+	indicator_id = row[1]
+	group_info = base_row_reverse_lookup.get((component_id, indicator_id))
+	template_id = group_info.get("template_id", "") if group_info else ""
+	return (
+		base_rank_by_template.get(template_id, 10**9),
+		component_sort_key(component_id),
+		indicator_id.lower(),
+		row[2].lower(),
+	)
+
+
+def section_sort_key(
+	section: tuple[str, Path, str],
+	base_row_reverse_lookup: dict[tuple[str, str], dict[str, str]],
+	base_rank_by_template: dict[str, int],
+) -> tuple[int, tuple[str, int, str], str, str]:
+	indicator_heading, _stitched_path, section_text = section
+	metadata = parse_first_markdown_table(section_text)
+	component_id = (metadata.get("component_id") or "").strip()
+	indicator_id = (metadata.get("indicator_id") or "").strip()
+	group_info = base_row_reverse_lookup.get((component_id, indicator_id)) if component_id and indicator_id else None
+	template_id = group_info.get("template_id", "") if group_info else ""
+	return (
+		base_rank_by_template.get(template_id, 10**9),
+		component_sort_key(component_id),
+		indicator_id.lower(),
+		indicator_heading.lower(),
+	)
+
+
+def summarize_panel_rows(section_text: str) -> dict[str, int]:
+	tables = collect_markdown_tables_from_text(section_text)
+	if not tables:
+		return {"present": 0, "non_present": 0, "none_reported": 1}
+	panel_rows = list(tables[-1]["rows"])
+	counts = {"present": 0, "non_present": 0, "none_reported": 0}
+	if not panel_rows:
+		counts["none_reported"] = 1
+		return counts
+
+	for row in panel_rows:
+		submission_id = str(row.get("submission_id", "")).strip().lower()
+		evidence_status = str(row.get("evidence_status", "")).strip().lower()
+		if submission_id in {"*(none)*", "(none)", "none"} or not evidence_status:
+			counts["none_reported"] += 1
+			continue
+		if evidence_status == "present":
+			counts["present"] += 1
+		elif evidence_status in {"not_present", "non_present"}:
+			counts["non_present"] += 1
+		else:
+			counts["none_reported"] += 1
+	return counts
 
 
 def parse_args() -> argparse.Namespace:
@@ -303,6 +456,9 @@ def render_combined_report(
 	base_row_reverse_lookup, base_order = build_base_row_reverse_lookup(registry_path) if registry_path else ({}, [])
 	grouped_sections: dict[str, list[tuple[str, Path, str]]] = {}
 	ungrouped_sections: list[tuple[str, Path, str]] = []
+	summary_rows_by_group: dict[str, list[list[str]]] = {}
+	ungrouped_summary_rows: list[list[str]] = []
+	base_rank_by_template = {template_id: index for index, (template_id, _description) in enumerate(base_order)}
 	panel_title = PANEL_SPECS[panel_key]["title"]
 	output_lines = [
 		f"# {panel_title}\n",
@@ -323,17 +479,72 @@ def render_combined_report(
 		indicator_id = (metadata.get("indicator_id") or "").strip()
 		sbo_short_description = (metadata.get("sbo_short_description") or stitched_path.stem).strip()
 		indicator_heading = f"{indicator_id} — {sbo_short_description}" if indicator_id else stitched_path.stem
+		panel_summary = summarize_panel_rows(section_text)
+		summary_row = [
+			component_id or "",
+			indicator_id or stitched_path.stem,
+			sbo_short_description,
+			str(panel_summary["present"]),
+			str(panel_summary["non_present"]),
+			str(panel_summary["none_reported"]),
+		]
 		group_info = base_row_reverse_lookup.get((component_id, indicator_id)) if component_id and indicator_id else None
 		if group_info is None:
 			ungrouped_sections.append((indicator_heading, stitched_path, section_text))
+			ungrouped_summary_rows.append(summary_row)
 			continue
 		group_key = group_info["template_id"]
 		grouped_sections.setdefault(group_key, []).append((indicator_heading, stitched_path, section_text))
+		summary_rows_by_group.setdefault(group_key, []).append(summary_row)
+
+	output_lines.append(f"- Matching sections collected: {matched_count}\n")
+	if matched_count > 0:
+		summary_rows: list[list[str]] = []
+		for template_id, _template_description in base_order:
+			group_rows = sorted(
+				summary_rows_by_group.get(template_id, []),
+				key=lambda row: summary_row_sort_key(row, base_row_reverse_lookup, base_rank_by_template),
+			)
+			summary_rows.extend(group_rows)
+		ungrouped_summary_rows.sort(
+			key=lambda row: summary_row_sort_key(row, base_row_reverse_lookup, base_rank_by_template)
+		)
+		summary_rows.extend(ungrouped_summary_rows)
+		if summary_rows:
+			summary_group_keys = [
+				base_rank_by_template.get(
+					base_row_reverse_lookup.get((row[0], row[1]), {}).get("template_id", ""),
+					10**9,
+				)
+				for row in summary_rows
+			]
+			output_lines.extend(
+				[
+					"\n",
+					"## Indicator Summary\n",
+					"\n",
+					render_markdown_table(
+						[
+							"component_id",
+							"indicator_id",
+							"sbo_short_description",
+							"present",
+							"non_present",
+							"none_reported",
+						],
+						insert_blank_rows_between_groups(summary_rows, summary_group_keys),
+					),
+				]
+			)
 
 	for template_id, template_description in base_order:
 		sections = grouped_sections.get(template_id)
 		if not sections:
 			continue
+		sections = sorted(
+			sections,
+			key=lambda section: section_sort_key(section, base_row_reverse_lookup, base_rank_by_template),
+		)
 		output_lines.extend([
 			"\n",
 			f"## {template_id} — {template_description}\n",
@@ -351,6 +562,9 @@ def render_combined_report(
 			)
 
 	if ungrouped_sections:
+		ungrouped_sections.sort(
+			key=lambda section: section_sort_key(section, base_row_reverse_lookup, base_rank_by_template),
+		)
 		output_lines.extend(["\n", "## Ungrouped\n"])
 		for indicator_heading, stitched_path, section_text in ungrouped_sections:
 			output_lines.extend(
