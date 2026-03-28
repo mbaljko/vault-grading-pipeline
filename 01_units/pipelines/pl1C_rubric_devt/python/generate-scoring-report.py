@@ -780,6 +780,89 @@ def build_stability_table_headers(stability_labels: list[str]) -> list[str]:
 	return headers
 
 
+def build_intra_report_variance_summary_rows(
+	stability_labels: list[str],
+	stability_sections: dict[str, list[list[str]]],
+	indicator_rows: list[list[str]],
+) -> list[list[str]]:
+	if len(stability_labels) < 3:
+		return []
+
+	variance_rate_index = 1 + len(stability_labels) + max(len(stability_labels) - 1, 0) + 1
+	classification_by_indicator: dict[str, tuple[str, str]] = {}
+	for classification in ["stable", "low_variance", "borderline_unstable", "unstable"]:
+		for row in stability_sections.get(classification, []):
+			if len(row) <= variance_rate_index:
+				continue
+			indicator_id = row[0]
+			classification_by_indicator[indicator_id] = (row[variance_rate_index], classification)
+
+	summary_rows: list[list[str]] = []
+	for indicator_row in indicator_rows:
+		component_id = indicator_row[0]
+		indicator_id = indicator_row[1]
+		sbo_short_description = indicator_row[2]
+		variance_rate, classification = classification_by_indicator.get(indicator_id, ("", ""))
+		summary_rows.append(
+			[
+				component_id,
+				indicator_id,
+				sbo_short_description,
+				variance_rate,
+				"x" if classification == "stable" else "",
+				"x" if classification == "low_variance" else "",
+				"x" if classification == "borderline_unstable" else "",
+				"x" if classification == "unstable" else "",
+			]
+		)
+	return summary_rows
+
+
+def build_inter_report_saturation_summary_rows(
+	previous_label: str | None,
+	current_label: str,
+	indicator_rows: list[list[str]],
+	historical_rows_by_label: dict[str, dict[str, list[dict[str, str]]]],
+) -> list[list[str]]:
+	if previous_label is None:
+		return []
+
+	counts_by_label_component_indicator: dict[str, dict[tuple[str, str], tuple[int, int]]] = {}
+	for label in [previous_label, current_label]:
+		component_indicator_counts: dict[tuple[str, str], tuple[int, int]] = {}
+		for component_id, rows in historical_rows_by_label.get(label, {}).items():
+			counts_by_indicator: dict[str, list[int]] = {}
+			for row in rows:
+				indicator_id = (row.get("indicator_id") or "").strip()
+				if not indicator_id:
+					continue
+				counts = counts_by_indicator.setdefault(indicator_id, [0, 0])
+				counts[0] += 1
+				if is_positive_scored_row(row):
+					counts[1] += 1
+			for indicator_id, counts in counts_by_indicator.items():
+				component_indicator_counts[(component_id, indicator_id)] = (counts[0], counts[1])
+		counts_by_label_component_indicator[label] = component_indicator_counts
+
+	summary_rows: list[list[str]] = []
+	for indicator_row in indicator_rows:
+		component_id = indicator_row[0]
+		indicator_id = indicator_row[1]
+		sbo_short_description = indicator_row[2]
+		previous_counts = counts_by_label_component_indicator.get(previous_label, {}).get((component_id, indicator_id), (0, 0))
+		current_counts = counts_by_label_component_indicator.get(current_label, {}).get((component_id, indicator_id), (0, 0))
+		summary_rows.append(
+			[
+				component_id,
+				indicator_id,
+				sbo_short_description,
+				format_rate(previous_counts[1], previous_counts[0]),
+				format_rate(current_counts[1], current_counts[0]),
+			]
+		)
+	return summary_rows
+
+
 def build_iteration_stability_entries(
 	current_iteration_label: str,
 	current_run_label: str | None,
@@ -1415,6 +1498,7 @@ def render_consolidated_scoring_stats_document(
 	component_indicator_order: dict[tuple[str, str], tuple[int, int, int, str, str]],
 	coincidence_count_matrix: str,
 	coincidence_percent_matrix: str,
+	historical_rows_by_label: dict[str, dict[str, list[dict[str, str]]]],
 ) -> str:
 	component_label = component_ids[0] if len(component_ids) == 1 else ", ".join(component_ids)
 	source_csv_label = "\n".join(str(path) for path in scored_csv_paths)
@@ -1644,6 +1728,74 @@ def render_consolidated_scoring_stats_document(
 								[
 									indicator_template_group_key(row, indicator_order)
 									for row in rows
+								],
+							),
+						)
+					)
+				else:
+					diff_report_parts.append("No indicators.")
+			if comparison_scope == "run":
+				intra_report_variance_summary_rows = build_intra_report_variance_summary_rows(
+					stability_labels,
+					stability_sections,
+					indicator_rows,
+				)
+				diff_report_parts.extend([
+					"",
+					"#### Indicator Variance Summary",
+					"",
+					f"Source report: {output_path.name}",
+					"",
+				])
+				if intra_report_variance_summary_rows:
+					diff_report_parts.append(
+						render_markdown_table(
+							[
+								"component_id",
+								"indicator_id",
+								"sbo_short_description",
+								"variance_rate",
+								"stable",
+								"low_variance",
+								"borderline_unstable",
+								"unstable",
+							],
+							insert_blank_rows_between_groups(
+								intra_report_variance_summary_rows,
+								[
+									component_template_group_key(row, component_indicator_order)
+									for row in intra_report_variance_summary_rows
+								],
+							),
+						)
+					)
+				else:
+					diff_report_parts.append("No indicators.")
+			else:
+				inter_report_saturation_summary_rows = build_inter_report_saturation_summary_rows(
+					previous_label,
+					current_label,
+					indicator_rows,
+					historical_rows_by_label,
+				)
+				diff_report_parts.extend(["", "#### Indicator Saturation Summary", ""])
+				if previous_label is None:
+					diff_report_parts.append("Previous comparison label could not be derived.")
+				elif inter_report_saturation_summary_rows:
+					diff_report_parts.append(
+						render_markdown_table(
+							[
+								"component_id",
+								"indicator_id",
+								"sbo_short_description",
+								f"{previous_label}_saturation_rate",
+								f"{current_label}_saturation_rate",
+							],
+							insert_blank_rows_between_groups(
+								inter_report_saturation_summary_rows,
+								[
+									component_template_group_key(row, component_indicator_order)
+									for row in inter_report_saturation_summary_rows
 								],
 							),
 						)
@@ -1992,6 +2144,7 @@ def main() -> int:
 			component_indicator_order=component_indicator_order,
 			coincidence_count_matrix=coincidence_count_matrix,
 			coincidence_percent_matrix=coincidence_percent_matrix,
+				historical_rows_by_label=historical_rows_by_label,
 		),
 		encoding="utf-8",
 	)
