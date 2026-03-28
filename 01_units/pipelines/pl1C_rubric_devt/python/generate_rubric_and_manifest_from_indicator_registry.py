@@ -45,6 +45,7 @@ VERSION_TOKEN_RE = re.compile(r"_(v(?:_i)?\d+)\.md$", re.IGNORECASE)
 SHORTID_NUMBER_RE = re.compile(r"(\d+)")
 HEADING_RE = re.compile(r"^\s*(?P<level>#{1,6})\s+(?P<title>.+?)\s*$")
 FIELD_VALUE_TABLE_HEADERS = ["field", "value"]
+SKIPPED_REUSE_RULE_STATUSES = {"inactive", "draft"}
 
 
 @dataclass(frozen=True)
@@ -299,6 +300,12 @@ def resolve_decision_procedure(record: dict[str, str]) -> str:
     return record.get("decision_procedure", "").strip()
 
 
+def should_skip_reuse_rule_row(reuse_row: dict[str, str], include_inactive: bool) -> bool:
+    if include_inactive:
+        return False
+    return reuse_row.get("status", "").strip().lower() in SKIPPED_REUSE_RULE_STATUSES
+
+
 def build_indicator_rows_from_base_and_reuse_tables(
     base_rows: list[dict[str, str]],
     reuse_rows: list[dict[str, str]],
@@ -314,6 +321,9 @@ def build_indicator_rows_from_base_and_reuse_tables(
 
     rows: list[IndicatorRow] = []
     for reuse_row in reuse_rows:
+        if should_skip_reuse_rule_row(reuse_row, include_inactive):
+            continue
+
         template_id = reuse_row.get("template_id", "").strip()
         local_slot = reuse_row.get("local_slot", "").strip()
         base_row = None
@@ -454,8 +464,21 @@ def build_indicator_rows_from_rule_based_reuse_table(
     include_inactive: bool,
 ) -> list[IndicatorRow]:
     rows: list[IndicatorRow] = []
+    available_template_groups = sorted(
+        {
+            template_id.rsplit("_", 1)[0]
+            for template_id in (
+                row.get("template_id", "").strip()
+                for row in base_rows
+            )
+            if template_id and "_" in template_id
+        }
+    )
 
     for reuse_row in reuse_rows:
+        if should_skip_reuse_rule_row(reuse_row, include_inactive):
+            continue
+
         template_group = reuse_row.get("template_group", "").strip()
         if not template_group:
             raise ValueError("Reuse Rule Table must include template_group for rule-based expansion.")
@@ -464,7 +487,10 @@ def build_indicator_rows_from_rule_based_reuse_table(
             row for row in base_rows if row.get("template_id", "").strip().startswith(f"{template_group}_")
         ]
         if not matching_base_rows:
-            raise ValueError(f"No Base Table rows matched template_group={template_group!r}.")
+            raise ValueError(
+                "No Base Table rows matched Reuse Rule Table template_group="
+                f"{template_group!r}. Available Base Table groups: {available_template_groups}"
+            )
 
         assessment_id = reuse_row.get("assessment_id", "").strip() or registry_metadata.get("assessment_id", "").strip()
         if not assessment_id:
@@ -528,8 +554,21 @@ def build_indicator_rows_from_component_block_reuse_table(
 ) -> list[IndicatorRow]:
     rows: list[IndicatorRow] = []
     component_block_lookup = resolve_component_block_lookup(component_block_rows)
+    available_template_groups = sorted(
+        {
+            template_id.rsplit("_", 1)[0]
+            for template_id in (
+                row.get("template_id", "").strip()
+                for row in base_rows
+            )
+            if template_id and "_" in template_id
+        }
+    )
 
     for reuse_row in reuse_rows:
+        if should_skip_reuse_rule_row(reuse_row, include_inactive):
+            continue
+
         template_group = reuse_row.get("template_group", "").strip()
         if not template_group:
             raise ValueError("Reuse Rule Table must include template_group for rule-based expansion.")
@@ -538,7 +577,10 @@ def build_indicator_rows_from_component_block_reuse_table(
             row for row in base_rows if row.get("template_id", "").strip().startswith(f"{template_group}_")
         ]
         if not matching_base_rows:
-            raise ValueError(f"No Base Table rows matched template_group={template_group!r}.")
+            raise ValueError(
+                "No Base Table rows matched Reuse Rule Table template_group="
+                f"{template_group!r}. Available Base Table groups: {available_template_groups}"
+            )
 
         assessment_id = reuse_row.get("assessment_id", "").strip() or registry_metadata.get("assessment_id", "").strip()
         if not assessment_id:
