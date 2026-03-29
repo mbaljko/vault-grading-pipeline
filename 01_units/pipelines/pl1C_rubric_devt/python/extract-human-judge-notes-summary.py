@@ -484,11 +484,16 @@ def collect_input_paths(input_dir: Path, primary_glob: str, secondary_glob: str)
 
 def merge_records(source_paths: list[Path]) -> list[dict[str, str]]:
 	records: list[dict[str, str]] = []
-	seen_record_keys: set[tuple[str, str, str, str, str, str]] = set()
-	seen_submission_keys: dict[tuple[str, str, str], dict[str, str]] = {}
+	seen_record_keys: set[tuple[str, str, str, str, str, str, str]] = set()
+	seen_submission_keys: dict[tuple[str, str, str, str], dict[str, str]] = {}
 	for input_path in source_paths:
 		for record in extract_submission_rows(input_path.read_text(encoding="utf-8"), input_path):
-			submission_key = (record["report_key"], record["indicator_id"], record["submission_id"])
+			submission_key = (
+				record["report_key"],
+				record["source_panel"],
+				record["indicator_id"],
+				record["submission_id"],
+			)
 			existing_submission = seen_submission_keys.get(submission_key)
 			if existing_submission is not None:
 				if (
@@ -497,7 +502,7 @@ def merge_records(source_paths: list[Path]) -> list[dict[str, str]]:
 					and existing_submission["score"] != record["score"]
 				):
 					raise ValueError(
-						"Found conflicting rows for report/submission key "
+						"Found conflicting rows for report/panel/submission key "
 						f"{submission_key}: existing={existing_submission}, new={record}"
 					)
 				if (
@@ -506,7 +511,7 @@ def merge_records(source_paths: list[Path]) -> list[dict[str, str]]:
 					and existing_submission["validation"] != record["validation"]
 				):
 					raise ValueError(
-						"Found conflicting rows for report/submission key "
+						"Found conflicting rows for report/panel/submission key "
 						f"{submission_key}: existing={existing_submission}, new={record}"
 					)
 				if not existing_submission["score"] and record["score"]:
@@ -518,6 +523,7 @@ def merge_records(source_paths: list[Path]) -> list[dict[str, str]]:
 				continue
 			record_key = (
 				record["report_key"],
+				record["source_panel"],
 				record["component_id"],
 				record["indicator_id"],
 				record["submission_id"],

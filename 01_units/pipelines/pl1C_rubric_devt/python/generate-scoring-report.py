@@ -34,11 +34,15 @@ Report contents:
 3. A Base Table aggregation that reverses reuse expansion back to registry
 	 template rows and reports the same stats at the base-row level.
 4. A co-incidence matrix over Base Table `template_id` values, where each
-	cell contains the count of positive scored submissions that
-	appear in both the row and column template sets.
+	cell contains a directional overlap count over positive row observations.
+	For row template R and column template C, the count is the number of
+	positive observations contributing to R's Base Table
+	`number_scored_positive` total whose `(component_id, submission_id)` pair is
+	also positive for template C.
 5. A second co-incidence matrix with the same structure, but each populated
-	cell is expressed as a row-conditional percentage: the share of positive
-	samples for the row template that were also positive for the column template.
+	cell is expressed as a row-conditional percentage: the share of positive row
+	observations for the row template that were also positive for the column
+	template.
 
 Saturation rate definition:
 - saturation_rate = number_scored_positive / number_scored
@@ -1285,48 +1289,39 @@ def derive_unique_template_labels(template_ids: list[str]) -> dict[str, str]:
 
 def build_coincidence_count_matrix(
 	template_ids: list[str],
-	positive_submission_ids_by_template: dict[str, set[str]],
+	positive_observation_keys_by_template: dict[str, list[tuple[str, str]]],
+	positive_presence_keys_by_template: dict[str, set[tuple[str, str]]],
 ) -> dict[str, dict[str, int]]:
 	count_matrix: dict[str, dict[str, int]] = {}
 	for row_template_id in template_ids:
 		count_matrix[row_template_id] = {}
-		row_submission_ids = positive_submission_ids_by_template.get(row_template_id, set())
+		row_observation_keys = positive_observation_keys_by_template.get(row_template_id, [])
 		for column_template_id in template_ids:
-			column_submission_ids = positive_submission_ids_by_template.get(column_template_id, set())
-			count_matrix[row_template_id][column_template_id] = len(row_submission_ids & column_submission_ids)
+			column_presence_keys = positive_presence_keys_by_template.get(column_template_id, set())
+			count_matrix[row_template_id][column_template_id] = sum(
+				1 for observation_key in row_observation_keys if observation_key in column_presence_keys
+			)
 	return count_matrix
-
-
-def collapse_template_positive_submission_ids(
-	positive_submission_ids_by_template_indicator: dict[str, dict[str, set[str]]],
-	template_ids: list[str],
-) -> dict[str, set[str]]:
-	collapsed: dict[str, set[str]] = {}
-	for template_id in template_ids:
-		indicator_sets = list(positive_submission_ids_by_template_indicator.get(template_id, {}).values())
-		if not indicator_sets:
-			collapsed[template_id] = set()
-			continue
-		intersection = set(indicator_sets[0])
-		for submission_ids in indicator_sets[1:]:
-			intersection &= submission_ids
-		collapsed[template_id] = intersection
-	return collapsed
 
 
 def render_coincidence_matrix(
 	template_ids: list[str],
-	positive_submission_ids_by_template: dict[str, set[str]],
+	positive_observation_keys_by_template: dict[str, list[tuple[str, str]]],
+	positive_presence_keys_by_template: dict[str, set[tuple[str, str]]],
 	as_percentage: bool,
 ) -> str:
 	labels_by_template = derive_unique_template_labels(template_ids)
-	count_matrix = build_coincidence_count_matrix(template_ids, positive_submission_ids_by_template)
+	count_matrix = build_coincidence_count_matrix(
+		template_ids,
+		positive_observation_keys_by_template,
+		positive_presence_keys_by_template,
+	)
 	headers = ["template", *[labels_by_template[template_id] for template_id in template_ids]]
 	rows: list[list[str]] = []
 
 	for row_template_id in template_ids:
 		row_values = [labels_by_template[row_template_id]]
-		row_denominator = len(positive_submission_ids_by_template.get(row_template_id, set()))
+		row_denominator = len(positive_observation_keys_by_template.get(row_template_id, []))
 		for column_index, column_template_id in enumerate(template_ids):
 			cell_count = count_matrix[row_template_id][column_template_id]
 			if as_percentage:
@@ -1575,17 +1570,17 @@ def render_consolidated_scoring_stats_document(
 		"",
 		"### Co-incidence matrix",
 		"",
-		"Interpretation: each cell is a raw overlap count. For each template, a submission is counted as positive only if it is positive for every expanded indicator mapped to that template across the included components.",
-		"For row template R and column template C, the number is the count of submissions that satisfy that template-level positive condition for both R and C.",
-		"This count matrix is symmetric, so the value at (R, C) matches the value at (C, R).",
-		"Diagonal cells are self-overlap counts, so they equal the number of positive submissions for that template.",
+		"Interpretation: each cell is a directional raw overlap count over positive row observations.",
+		"For row template R and column template C, the number is the count of positive observations contributing to R's Base Table number_scored_positive whose (component_id, submission_id) pair is also positive for C.",
+		"This count matrix is not generally symmetric: the value at (R, C) need not match the value at (C, R).",
+		"Diagonal cells equal the row template's Base Table number_scored_positive, because every positive row observation for R overlaps with itself.",
 		"",
 		coincidence_count_matrix,
 		"",
 		"### Co-incidence matrix, row-conditional percent",
 		"",
-		"Interpretation: each cell is directional. Template-level positivity again means a submission is positive for every expanded indicator mapped to that template across the included components.",
-		"For a row template R and column template C, the value is the percentage of submissions positive for R that were also positive for C.",
+		"Interpretation: each cell is directional over the same positive row observations used in the raw count matrix.",
+		"For a row template R and column template C, the value is the percentage of R's positive row observations whose (component_id, submission_id) pair is also positive for C.",
 		"This percent matrix is not generally symmetric: the value at (R, C) need not match the value at (C, R).",
 		"Diagonal cells are 100% when the row template has at least one positive sample, because every positive sample for R overlaps with itself.",
 		"",
@@ -1971,7 +1966,8 @@ def main() -> int:
 	lines = manifest_path.read_text(encoding="utf-8").splitlines()
 	indicator_summary_rows: dict[str, list[str]] = {}
 	base_summary_rows: dict[str, dict[str, object]] = {}
-	positive_submission_ids_by_template_indicator: dict[str, dict[str, set[str]]] = {}
+	positive_observation_keys_by_template: dict[str, list[tuple[str, str]]] = {}
+	positive_presence_keys_by_template: dict[str, set[tuple[str, str]]] = {}
 
 	i = 0
 	while i < len(lines):
@@ -2020,7 +2016,6 @@ def main() -> int:
 				base_row_info = base_row_reverse_lookup.get((matching_component_id, indicator_id))
 				if base_row_info is not None:
 					base_key = base_row_info["template_id"]
-					template_indicator_key = f"{matching_component_id}::{indicator_id}"
 					if base_key not in base_summary_rows:
 						base_summary_rows[base_key] = {
 							"template_id": base_row_info["template_id"],
@@ -2035,8 +2030,8 @@ def main() -> int:
 								for component_id in component_ids
 							},
 						}
-						positive_submission_ids_by_template_indicator[base_key] = {}
-					positive_submission_ids_by_template_indicator[base_key].setdefault(template_indicator_key, set())
+						positive_observation_keys_by_template[base_key] = []
+						positive_presence_keys_by_template[base_key] = set()
 					base_summary_rows[base_key]["expanded_indicator_ids"].add(indicator_id)
 					base_summary_rows[base_key]["number_scored"] = int(base_summary_rows[base_key]["number_scored"]) + number_scored
 					base_summary_rows[base_key]["number_scored_positive"] = int(base_summary_rows[base_key]["number_scored_positive"]) + number_scored_positive
@@ -2048,7 +2043,9 @@ def main() -> int:
 							continue
 						submission_id = (row.get("submission_id") or "").strip()
 						if submission_id:
-							positive_submission_ids_by_template_indicator[base_key][template_indicator_key].add(submission_id)
+							observation_key = (matching_component_id, submission_id)
+							positive_observation_keys_by_template[base_key].append(observation_key)
+							positive_presence_keys_by_template[base_key].add(observation_key)
 			i += 1
 
 	consolidated_indicator_rows = [indicator_summary_rows[key] for key in sorted(indicator_summary_rows)]
@@ -2095,18 +2092,16 @@ def main() -> int:
 	for classification_rows in stability_sections.values():
 		classification_rows.sort(key=lambda row: indicator_only_row_sort_key(row, indicator_order))
 	ordered_template_ids = [row[0] for row in consolidated_base_rows]
-	positive_submission_ids_by_template = collapse_template_positive_submission_ids(
-		positive_submission_ids_by_template_indicator,
-		ordered_template_ids,
-	)
 	coincidence_count_matrix = render_coincidence_matrix(
 		ordered_template_ids,
-		positive_submission_ids_by_template,
+		positive_observation_keys_by_template,
+		positive_presence_keys_by_template,
 		False,
 	)
 	coincidence_percent_matrix = render_coincidence_matrix(
 		ordered_template_ids,
-		positive_submission_ids_by_template,
+		positive_observation_keys_by_template,
+		positive_presence_keys_by_template,
 		True,
 	)
 	consolidated_output_path = output_dir / derive_output_filename(
