@@ -277,12 +277,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v02.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Rubric_SpecificationGuide_v02"
+              "title": "_INSTRUCTIONS - REVIEWING ITP REPORTS"
             }
           }
         ],
@@ -318,7 +318,7 @@
             "state": {
               "type": "search",
               "state": {
-                "query": "\\`\\`\\`",
+                "query": "ITP",
                 "matchingCase": false,
                 "explainSearch": false,
                 "collapseAll": false,
@@ -350,7 +350,7 @@
             }
           }
         ],
-        "currentTab": 3
+        "currentTab": 1
       }
     ],
     "direction": "horizontal",
@@ -432,13 +432,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v02.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Rubric_SpecificationGuide_v02"
+              "title": "Outline of _INSTRUCTIONS - REVIEWING ITP REPORTS"
             }
           },
           {
@@ -474,6 +474,7 @@
   },
   "active": "30b7ed3094eafc89",
   "lastOpenFiles": [
+    "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v02.md",
     "01_units/pipelines/pl1C_rubric_devt/python/generate-registry-change-report",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - single indicator.md",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/collect-itp-panel-reports.cpython-313.pyc",
@@ -485,7 +486,6 @@
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/materialize-component-scored-csv.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/component_scored_texts.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/materialize-component-scored-csv.py",
-    "01_units/pipelines/pl1C_rubric_devt/python/component_scored_texts.py",
     "01_units/pipelines/pl1C_rubric_devt/README.md",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1C_scaffold_stage13_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1B_scaffold_stage13_Layer1_Indicator_Scoring_Prompt.md",
