@@ -350,7 +350,7 @@
             }
           }
         ],
-        "currentTab": 1
+        "currentTab": 3
       }
     ],
     "direction": "horizontal",
@@ -472,7 +472,7 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "30b7ed3094eafc89",
+  "active": "e5174a9fca7b05c1",
   "lastOpenFiles": [
     "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v02.md",
     "01_units/pipelines/pl1C_rubric_devt/python/generate-registry-change-report",

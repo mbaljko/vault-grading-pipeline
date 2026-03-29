@@ -719,6 +719,36 @@ def build_indicator_counts_by_label(
 	return counts_by_indicator
 
 
+def build_template_counts_by_label(
+	component_ids: list[str],
+	history_labels: list[str],
+	historical_rows_by_label: dict[str, dict[str, list[dict[str, str]]]],
+	base_row_reverse_lookup: dict[tuple[str, str], dict[str, str]],
+) -> dict[str, dict[str, dict[str, int]]]:
+	counts_by_template: dict[str, dict[str, dict[str, int]]] = {}
+	for history_label in history_labels:
+		for component_id in component_ids:
+			for row in historical_rows_by_label.get(history_label, {}).get(component_id, []):
+				indicator_id = (row.get("indicator_id") or "").strip()
+				if not indicator_id:
+					continue
+				base_row_info = base_row_reverse_lookup.get((component_id, indicator_id))
+				if base_row_info is None:
+					continue
+				template_id = (base_row_info.get("template_id") or "").strip()
+				if not template_id:
+					continue
+				counts_by_template.setdefault(template_id, {})
+				counts_by_template[template_id].setdefault(
+					history_label,
+					{"positive": 0, "number_scored": 0},
+				)
+				counts_by_template[template_id][history_label]["number_scored"] += 1
+				if is_positive_scored_row(row):
+					counts_by_template[template_id][history_label]["positive"] += 1
+	return counts_by_template
+
+
 def classify_variance_rate(variance_rate: float) -> str:
 	if variance_rate == 0:
 		return "stable"
@@ -813,6 +843,49 @@ def build_intra_report_variance_summary_rows(
 				indicator_id,
 				sbo_short_description,
 				variance_rate,
+				"x" if classification == "stable" else "",
+				"x" if classification == "low_variance" else "",
+				"x" if classification == "borderline_unstable" else "",
+				"x" if classification == "unstable" else "",
+			]
+		)
+	return summary_rows
+
+
+def build_intra_report_template_variance_summary_rows(
+	stability_labels: list[str],
+	base_rows: list[list[str]],
+	template_counts_by_label: dict[str, dict[str, dict[str, int]]],
+	sample_size: int,
+) -> list[list[str]]:
+	if len(stability_labels) < 3:
+		return []
+
+	denominator = sample_size if sample_size > 0 else 1
+	summary_rows: list[list[str]] = []
+	for base_row in base_rows:
+		template_id = base_row[0]
+		local_slot = base_row[1]
+		expanded_indicator_ids = base_row[2]
+		sbo_short_description = base_row[3]
+		positive_counts = [
+			template_counts_by_label.get(template_id, {}).get(label, {}).get("positive", 0)
+			for label in stability_labels
+		]
+		absolute_deltas = [
+			abs(current_count - previous_count)
+			for previous_count, current_count in zip(positive_counts, positive_counts[1:])
+		]
+		max_delta = max(absolute_deltas) if absolute_deltas else 0
+		variance_rate = max_delta / denominator
+		classification = classify_variance_rate(variance_rate)
+		summary_rows.append(
+			[
+				template_id,
+				local_slot,
+				expanded_indicator_ids,
+				sbo_short_description,
+				f"{variance_rate:.3f}",
 				"x" if classification == "stable" else "",
 				"x" if classification == "low_variance" else "",
 				"x" if classification == "borderline_unstable" else "",
@@ -1471,6 +1544,7 @@ def is_positive_scored_row(row: dict[str, str]) -> bool:
 def render_consolidated_scoring_stats_document(
 	output_path: Path,
 	registry_path: Path,
+	base_row_reverse_lookup: dict[tuple[str, str], dict[str, str]],
 	component_ids: list[str],
 	manifest_path: Path,
 	comparison_scope: str,
@@ -1735,9 +1809,21 @@ def render_consolidated_scoring_stats_document(
 					stability_sections,
 					indicator_rows,
 				)
+				template_counts_by_label = build_template_counts_by_label(
+					component_ids,
+					stability_labels,
+					historical_rows_by_label,
+					base_row_reverse_lookup,
+				)
+				intra_report_template_variance_summary_rows = build_intra_report_template_variance_summary_rows(
+					stability_labels,
+					base_rows,
+					template_counts_by_label,
+					sample_size,
+				)
 				diff_report_parts.extend([
 					"",
-					"#### Indicator Variance Summary",
+					"#### Indicator Variance Summary (Individual)",
 					"",
 					f"Source report: {output_path.name}",
 					"",
@@ -1766,6 +1852,32 @@ def render_consolidated_scoring_stats_document(
 					)
 				else:
 					diff_report_parts.append("No indicators.")
+				diff_report_parts.extend([
+					"",
+					"#### Indicator Variance Summary (Template)",
+					"",
+					f"Source report: {output_path.name}",
+					"",
+				])
+				if intra_report_template_variance_summary_rows:
+					diff_report_parts.append(
+						render_markdown_table(
+							[
+								"template_id",
+								"local_slot",
+								"expanded_indicator_ids",
+								"sbo_short_description",
+								"variance_rate",
+								"stable",
+								"low_variance",
+								"borderline_unstable",
+								"unstable",
+							],
+							intra_report_template_variance_summary_rows,
+						)
+					)
+				else:
+					diff_report_parts.append("No templates.")
 			else:
 				inter_report_saturation_summary_rows = build_inter_report_saturation_summary_rows(
 					previous_label,
@@ -2117,6 +2229,7 @@ def main() -> int:
 		render_consolidated_scoring_stats_document(
 			output_path=consolidated_output_path,
 			registry_path=registry_path,
+			base_row_reverse_lookup=base_row_reverse_lookup,
 			component_ids=component_ids,
 			manifest_path=manifest_path,
 			comparison_scope=comparison_scope,
