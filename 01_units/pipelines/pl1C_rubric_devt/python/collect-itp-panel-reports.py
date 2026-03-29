@@ -489,6 +489,40 @@ def extract_target_section(markdown_text: str, panel_key: str) -> str | None:
 	return section_text + "\n"
 
 
+def panel_section_has_no_actual_rows(section_text: str) -> bool:
+	panel_summary = summarize_panel_rows(section_text)
+	return panel_summary["present"] == 0 and panel_summary["non_present"] == 0
+
+
+def strip_first_markdown_table(section_text: str) -> str:
+	lines = section_text.splitlines(keepends=True)
+	table_start_index: int | None = None
+	table_end_index: int | None = None
+
+	for index, line in enumerate(lines):
+		if "|" not in line:
+			continue
+		header_cells = parse_markdown_cells(line)
+		if not header_cells or index + 1 >= len(lines) or "|" not in lines[index + 1]:
+			continue
+		separator_cells = parse_markdown_cells(lines[index + 1])
+		if len(separator_cells) != len(header_cells) or not is_separator_row(separator_cells):
+			continue
+		table_start_index = index
+		table_end_index = index + 2
+		while table_end_index < len(lines) and "|" in lines[table_end_index]:
+			cells = parse_markdown_cells(lines[table_end_index])
+			if len(cells) != len(header_cells):
+				break
+			table_end_index += 1
+		break
+
+	if table_start_index is None or table_end_index is None:
+		return section_text
+
+	return "".join(lines[:table_start_index] + lines[table_end_index:])
+
+
 def render_combined_report(
 	input_dir: Path,
 	stitched_paths: list[Path],
@@ -528,6 +562,11 @@ def render_combined_report(
 		sbo_short_description = (metadata.get("sbo_short_description") or stitched_path.stem).strip()
 		indicator_heading = f"{indicator_id} — {sbo_short_description}" if indicator_id else stitched_path.stem
 		panel_summary = summarize_panel_rows(section_text)
+		rendered_section_text = (
+			strip_first_markdown_table(section_text)
+			if panel_section_has_no_actual_rows(section_text)
+			else section_text
+		)
 		summary_row = [
 			component_id or "",
 			indicator_id or stitched_path.stem,
@@ -538,11 +577,11 @@ def render_combined_report(
 		]
 		group_info = base_row_reverse_lookup.get((component_id, indicator_id)) if component_id and indicator_id else None
 		if group_info is None:
-			ungrouped_sections.append((indicator_heading, stitched_path, section_text))
+			ungrouped_sections.append((indicator_heading, stitched_path, rendered_section_text))
 			ungrouped_summary_rows.append(summary_row)
 			continue
 		group_key = group_info["template_id"]
-		grouped_sections.setdefault(group_key, []).append((indicator_heading, stitched_path, section_text))
+		grouped_sections.setdefault(group_key, []).append((indicator_heading, stitched_path, rendered_section_text))
 		summary_rows_by_group.setdefault(group_key, []).append(summary_row)
 
 	output_lines.append(f"- Matching sections collected: {matched_count}\n")
