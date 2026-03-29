@@ -759,6 +759,194 @@ def classify_variance_rate(variance_rate: float) -> str:
 	return "unstable"
 
 
+def format_signed_deltas(deltas: list[int]) -> str:
+	if not deltas:
+		return ""
+	return ", ".join(f"{delta:+d}" for delta in deltas)
+
+
+def count_sign_flips(deltas: list[int]) -> int:
+	non_zero_signs = [1 if delta > 0 else -1 for delta in deltas if delta != 0]
+	if len(non_zero_signs) < 2:
+		return 0
+	return sum(
+		1
+		for previous_sign, current_sign in zip(non_zero_signs, non_zero_signs[1:])
+		if previous_sign != current_sign
+	)
+
+
+def classify_coarse_run_pattern(deltas: list[int]) -> str:
+	non_zero_deltas = [delta for delta in deltas if delta != 0]
+	if not non_zero_deltas:
+		return "flat"
+	if len(non_zero_deltas) == 1:
+		return "spike_up" if non_zero_deltas[0] > 0 else "spike_down"
+	if all(delta > 0 for delta in non_zero_deltas):
+		return "drifting_up"
+	if all(delta < 0 for delta in non_zero_deltas):
+		return "drifting_down"
+	if any(delta > 0 for delta in non_zero_deltas) and any(delta < 0 for delta in non_zero_deltas):
+		return "reversal"
+	return "mixed"
+
+
+def classify_fine_run_pattern(deltas: list[int]) -> str:
+	non_zero_deltas = [delta for delta in deltas if delta != 0]
+	if not non_zero_deltas:
+		return "flat"
+	if len(non_zero_deltas) == 1:
+		return "spike_up" if non_zero_deltas[0] > 0 else "spike_down"
+	sign_flips = count_sign_flips(deltas)
+	if sign_flips >= max(len(non_zero_deltas) - 1, 1) and len(non_zero_deltas) >= 3:
+		return "oscillating"
+	if sign_flips > 0:
+		return "mixed"
+	direction = "up" if non_zero_deltas[0] > 0 else "down"
+	magnitudes = [abs(delta) for delta in non_zero_deltas]
+	if len(magnitudes) >= 2:
+		if all(current <= previous for previous, current in zip(magnitudes, magnitudes[1:])) and any(
+			current < previous for previous, current in zip(magnitudes, magnitudes[1:])
+		):
+			return f"converging_{direction}"
+		if all(current >= previous for previous, current in zip(magnitudes, magnitudes[1:])) and any(
+			current > previous for previous, current in zip(magnitudes, magnitudes[1:])
+		):
+			return f"diverging_{direction}"
+	return f"drifting_{direction}"
+
+
+def classify_run_pattern(deltas: list[int], run_count: int) -> str:
+	if run_count <= 3:
+		return classify_coarse_run_pattern(deltas)
+	return classify_fine_run_pattern(deltas)
+
+
+def build_run_pattern_note(run_count: int) -> str:
+	coarse_labels = "flat, drifting_up, drifting_down, reversal, spike_up, spike_down, mixed"
+	if run_count <= 3:
+		return (
+			f"Observed run-pattern labels use the coarse vocabulary available with {run_count} runs: {coarse_labels}. "
+			"Finer-grained labels such as converging_up, converging_down, diverging_up, diverging_down, and oscillating are not emitted until at least 4 runs are available."
+		)
+	return (
+		f"Observed run-pattern labels use the expanded vocabulary available with {run_count} runs. "
+		f"The coarse labels ({coarse_labels}) remain available, and finer-grained labels such as converging_up, converging_down, diverging_up, diverging_down, and oscillating are emitted when supported by the run history."
+	)
+
+
+def build_item_metric_note() -> str:
+	return (
+		"Item-level metrics align each item across runs using the union of observed item keys. "
+		"For indicator rows, items are submission_ids within a component-indicator pair. "
+		"For template rows, items are pooled component-indicator-submission tuples across all expanded indicators mapped to the template. "
+		"Missing observations are treated as empty cells when computing disagreements and consensus."
+	)
+
+
+def format_ratio(numerator: int, denominator: int) -> str:
+	if denominator <= 0:
+		return "0.000"
+	return f"{(numerator / denominator):.3f}"
+
+
+def build_item_histories_by_component_indicator(
+	stability_labels: list[str],
+	historical_rows_by_label: dict[str, dict[str, list[dict[str, str]]]],
+) -> dict[tuple[str, str], dict[str, list[str]]]:
+	label_positions = {label: index for index, label in enumerate(stability_labels)}
+	item_histories: dict[tuple[str, str], dict[str, list[str]]] = {}
+	for history_label in stability_labels:
+		label_index = label_positions[history_label]
+		for component_id, rows in historical_rows_by_label.get(history_label, {}).items():
+			for row in rows:
+				indicator_id = (row.get("indicator_id") or "").strip()
+				submission_id = (row.get("submission_id") or "").strip()
+				if not indicator_id or not submission_id:
+					continue
+				group_key = (component_id, indicator_id)
+				group_histories = item_histories.setdefault(group_key, {})
+				item_history = group_histories.setdefault(submission_id, [""] * len(stability_labels))
+				item_history[label_index] = summarize_score_value(row.get("evidence_status") or "")
+	return item_histories
+
+
+def build_item_histories_by_template(
+	stability_labels: list[str],
+	historical_rows_by_label: dict[str, dict[str, list[dict[str, str]]]],
+	base_row_reverse_lookup: dict[tuple[str, str], dict[str, str]],
+) -> dict[str, dict[tuple[str, str, str], list[str]]]:
+	label_positions = {label: index for index, label in enumerate(stability_labels)}
+	item_histories: dict[str, dict[tuple[str, str, str], list[str]]] = {}
+	for history_label in stability_labels:
+		label_index = label_positions[history_label]
+		for component_id, rows in historical_rows_by_label.get(history_label, {}).items():
+			for row in rows:
+				indicator_id = (row.get("indicator_id") or "").strip()
+				submission_id = (row.get("submission_id") or "").strip()
+				if not indicator_id or not submission_id:
+					continue
+				base_row_info = base_row_reverse_lookup.get((component_id, indicator_id))
+				if base_row_info is None:
+					continue
+				template_id = (base_row_info.get("template_id") or "").strip()
+				if not template_id:
+					continue
+				group_histories = item_histories.setdefault(template_id, {})
+				item_key = (component_id, indicator_id, submission_id)
+				item_history = group_histories.setdefault(item_key, [""] * len(stability_labels))
+				item_history[label_index] = summarize_score_value(row.get("evidence_status") or "")
+	return item_histories
+
+
+def calculate_item_stability_metrics(item_histories: dict[object, list[str]]) -> dict[str, int | str]:
+	total_items = len(item_histories)
+	if total_items == 0:
+		return {
+			"flip_rate": "0.000",
+			"consensus_rate": "0.000",
+			"max_item_disagreement": "0",
+			"ici": "0.000",
+		}
+	comparison_count = max(len(next(iter(item_histories.values()))) - 1, 0)
+	disagreements_by_pair = [0] * comparison_count
+	consensus_items = 0
+	ever_flip_items = 0
+	for item_history in item_histories.values():
+		if len(set(item_history)) == 1:
+			consensus_items += 1
+		has_flip = False
+		for pair_index in range(comparison_count):
+			if item_history[pair_index] == item_history[pair_index + 1]:
+				continue
+			disagreements_by_pair[pair_index] += 1
+			has_flip = True
+		if has_flip:
+			ever_flip_items += 1
+	total_comparisons = total_items * comparison_count
+	return {
+		"flip_rate": format_ratio(sum(disagreements_by_pair), total_comparisons),
+		"consensus_rate": format_ratio(consensus_items, total_items),
+		"max_item_disagreement": str(max(disagreements_by_pair) if disagreements_by_pair else 0),
+		"ici": format_ratio(ever_flip_items, total_items),
+	}
+
+
+def extract_signed_deltas_from_stability_row(stability_labels: list[str], row: list[str]) -> list[int]:
+	abs_delta_count = max(len(stability_labels) - 1, 0)
+	variance_rate_index = 1 + len(stability_labels) + abs_delta_count + 1
+	signed_delta_start = variance_rate_index + 1
+	range_delta_index = signed_delta_start + abs_delta_count
+	signed_delta_cells = row[signed_delta_start:range_delta_index]
+	signed_deltas: list[int] = []
+	for cell in signed_delta_cells:
+		value = cell.strip()
+		if not value:
+			continue
+		signed_deltas.append(int(value))
+	return signed_deltas
+
+
 def build_indicator_stability_sections(
 	stability_labels: list[str],
 	counts_by_indicator: dict[str, dict[str, dict[str, int]]],
@@ -816,33 +1004,62 @@ def build_stability_table_headers(stability_labels: list[str]) -> list[str]:
 
 def build_intra_report_variance_summary_rows(
 	stability_labels: list[str],
-	stability_sections: dict[str, list[list[str]]],
 	indicator_rows: list[list[str]],
+	historical_rows_by_label: dict[str, dict[str, list[dict[str, str]]]],
+	sample_size: int,
 ) -> list[list[str]]:
 	if len(stability_labels) < 3:
 		return []
 
-	variance_rate_index = 1 + len(stability_labels) + max(len(stability_labels) - 1, 0) + 1
-	classification_by_indicator: dict[str, tuple[str, str]] = {}
-	for classification in ["stable", "low_variance", "borderline_unstable", "unstable"]:
-		for row in stability_sections.get(classification, []):
-			if len(row) <= variance_rate_index:
-				continue
-			indicator_id = row[0]
-			classification_by_indicator[indicator_id] = (row[variance_rate_index], classification)
+	denominator = sample_size if sample_size > 0 else 1
+	item_histories_by_component_indicator = build_item_histories_by_component_indicator(
+		stability_labels,
+		historical_rows_by_label,
+	)
 
 	summary_rows: list[list[str]] = []
 	for indicator_row in indicator_rows:
 		component_id = indicator_row[0]
 		indicator_id = indicator_row[1]
 		sbo_short_description = indicator_row[2]
-		variance_rate, classification = classification_by_indicator.get(indicator_id, ("", ""))
+		positive_counts = []
+		for label in stability_labels:
+			rows = historical_rows_by_label.get(label, {}).get(component_id, [])
+			positive_counts.append(
+				sum(
+					1
+					for row in rows
+					if (row.get("indicator_id") or "").strip() == indicator_id and is_positive_scored_row(row)
+				)
+			)
+		absolute_deltas = [
+			abs(current_count - previous_count)
+			for previous_count, current_count in zip(positive_counts, positive_counts[1:])
+		]
+		signed_deltas = [
+			current_count - previous_count
+			for previous_count, current_count in zip(positive_counts, positive_counts[1:])
+		]
+		max_delta = max(absolute_deltas) if absolute_deltas else 0
+		variance_rate = max_delta / denominator
+		classification = classify_variance_rate(variance_rate)
+		run_pattern = classify_run_pattern(signed_deltas, len(stability_labels))
+		item_metrics = calculate_item_stability_metrics(
+			item_histories_by_component_indicator.get((component_id, indicator_id), {})
+		)
 		summary_rows.append(
 			[
 				component_id,
 				indicator_id,
 				sbo_short_description,
-				variance_rate,
+				str(max_delta),
+				f"{variance_rate:.3f}",
+				format_signed_deltas(signed_deltas),
+				run_pattern,
+				str(item_metrics["max_item_disagreement"]),
+				str(item_metrics["flip_rate"]),
+				str(item_metrics["consensus_rate"]),
+				str(item_metrics["ici"]),
 				"x" if classification == "stable" else "",
 				"x" if classification == "low_variance" else "",
 				"x" if classification == "borderline_unstable" else "",
@@ -856,6 +1073,7 @@ def build_intra_report_template_variance_summary_rows(
 	stability_labels: list[str],
 	base_rows: list[list[str]],
 	template_counts_by_label: dict[str, dict[str, dict[str, int]]],
+	template_item_histories: dict[str, dict[tuple[str, str, str], list[str]]],
 	sample_size: int,
 ) -> list[list[str]]:
 	if len(stability_labels) < 3:
@@ -876,16 +1094,29 @@ def build_intra_report_template_variance_summary_rows(
 			abs(current_count - previous_count)
 			for previous_count, current_count in zip(positive_counts, positive_counts[1:])
 		]
+		signed_deltas = [
+			current_count - previous_count
+			for previous_count, current_count in zip(positive_counts, positive_counts[1:])
+		]
 		max_delta = max(absolute_deltas) if absolute_deltas else 0
 		variance_rate = max_delta / denominator
 		classification = classify_variance_rate(variance_rate)
+		run_pattern = classify_run_pattern(signed_deltas, len(stability_labels))
+		item_metrics = calculate_item_stability_metrics(template_item_histories.get(template_id, {}))
 		summary_rows.append(
 			[
 				template_id,
 				local_slot,
 				expanded_indicator_ids,
 				sbo_short_description,
+				str(max_delta),
 				f"{variance_rate:.3f}",
+				format_signed_deltas(signed_deltas),
+				run_pattern,
+				str(item_metrics["max_item_disagreement"]),
+				str(item_metrics["flip_rate"]),
+				str(item_metrics["consensus_rate"]),
+				str(item_metrics["ici"]),
 				"x" if classification == "stable" else "",
 				"x" if classification == "low_variance" else "",
 				"x" if classification == "borderline_unstable" else "",
@@ -1806,11 +2037,17 @@ def render_consolidated_scoring_stats_document(
 			if comparison_scope == "run":
 				intra_report_variance_summary_rows = build_intra_report_variance_summary_rows(
 					stability_labels,
-					stability_sections,
 					indicator_rows,
+					historical_rows_by_label,
+					sample_size,
 				)
 				template_counts_by_label = build_template_counts_by_label(
 					component_ids,
+					stability_labels,
+					historical_rows_by_label,
+					base_row_reverse_lookup,
+				)
+				template_item_histories = build_item_histories_by_template(
 					stability_labels,
 					historical_rows_by_label,
 					base_row_reverse_lookup,
@@ -1819,6 +2056,7 @@ def render_consolidated_scoring_stats_document(
 					stability_labels,
 					base_rows,
 					template_counts_by_label,
+					template_item_histories,
 					sample_size,
 				)
 				diff_report_parts.extend([
@@ -1826,6 +2064,8 @@ def render_consolidated_scoring_stats_document(
 					"#### Indicator Variance Summary (Individual)",
 					"",
 					f"Source report: {output_path.name}",
+					build_run_pattern_note(len(stability_labels)),
+					build_item_metric_note(),
 					"",
 				])
 				if intra_report_variance_summary_rows:
@@ -1835,7 +2075,14 @@ def render_consolidated_scoring_stats_document(
 								"component_id",
 								"indicator_id",
 								"sbo_short_description",
+								"max_delta",
 								"variance_rate",
+								"adjacent_deltas",
+								"run_pattern",
+								"max_item_disagreement",
+								"flip_rate",
+								"consensus_rate",
+								"ici",
 								"stable",
 								"low_variance",
 								"borderline_unstable",
@@ -1857,6 +2104,8 @@ def render_consolidated_scoring_stats_document(
 					"#### Indicator Variance Summary (Template)",
 					"",
 					f"Source report: {output_path.name}",
+					build_run_pattern_note(len(stability_labels)),
+					build_item_metric_note(),
 					"",
 				])
 				if intra_report_template_variance_summary_rows:
@@ -1867,7 +2116,14 @@ def render_consolidated_scoring_stats_document(
 								"local_slot",
 								"expanded_indicator_ids",
 								"sbo_short_description",
+								"max_delta",
 								"variance_rate",
+								"adjacent_deltas",
+								"run_pattern",
+								"max_item_disagreement",
+								"flip_rate",
+								"consensus_rate",
+								"ici",
 								"stable",
 								"low_variance",
 								"borderline_unstable",
