@@ -9,6 +9,7 @@ component, and writes one Layer 2 scored row per (submission, dimension).
 from __future__ import annotations
 
 import argparse
+import csv
 import importlib.util
 import json
 import re
@@ -68,6 +69,14 @@ def derive_wide_output_path(output_path: Path) -> Path:
 	return output_path.with_name(f"{output_path.stem}-wide{output_path.suffix}")
 
 
+def write_grouped_wide_csv(headers: list[str], rows: list[list[str]], output_path: Path) -> None:
+	output_path.parent.mkdir(parents=True, exist_ok=True)
+	with output_path.open("w", encoding="utf-8", newline="") as handle:
+		writer = csv.writer(handle)
+		writer.writerow(headers)
+		writer.writerows(rows)
+
+
 def load_module_from_path(module_path: Path, module_name: str) -> ModuleType:
 	spec = importlib.util.spec_from_file_location(module_name, module_path)
 	if spec is None or spec.loader is None:
@@ -111,6 +120,8 @@ def load_dimension_modules(module_dir: Path, target_component_id: str) -> list[M
 	for index, module_path in enumerate(sorted(module_dir.glob("*.py"))):
 		module = load_module_from_path(module_path, f"layer2_dimension_module_{index}")
 		if str(getattr(module, "COMPONENT_ID", "")).strip() != target_component_id:
+			continue
+		if not hasattr(module, "DIMENSION_ID") or not hasattr(module, "score_dimension"):
 			continue
 		validate_dimension_module(module, module_path, target_component_id)
 		dimension_id = str(getattr(module, "DIMENSION_ID", "")).strip()
@@ -341,27 +352,19 @@ def score_submission_rows(
 def build_wide_output_rows(
 	grouped_rows: dict[str, list[dict[str, str]]],
 	output_rows: list[dict[str, str]],
+	modules: list[ModuleType],
 	dimension_scale_lookup: dict[str, dict[str, int]],
 	indicator_id_field: str,
 	value_field: str,
-) -> list[dict[str, str]]:
-	dimension_ids = sorted(
-		{
-			(row.get("dimension_id") or "").strip()
-			for row in output_rows
-			if (row.get("dimension_id") or "").strip()
-		},
-		key=dimension_sort_key,
-	)
-	indicator_ids = sorted(
-		{
-			(row.get(indicator_id_field) or "").strip()
-			for submission_rows in grouped_rows.values()
-			for row in submission_rows
-			if (row.get(indicator_id_field) or "").strip()
-		},
-		key=dimension_sort_key,
-	)
+	) -> tuple[list[str], list[list[str]]]:
+	dimension_groups = [
+		(
+			str(getattr(module, "DIMENSION_ID", "")).strip(),
+			[str(indicator_id).strip() for indicator_id in getattr(module, "BOUND_INDICATOR_IDS", []) if str(indicator_id).strip()],
+		)
+		for module in modules
+		if str(getattr(module, "DIMENSION_ID", "")).strip()
+	]
 	dimension_rows_by_submission: dict[str, dict[str, dict[str, str]]] = {}
 	for row in output_rows:
 		submission_id = (row.get("submission_id") or "").strip()
@@ -370,7 +373,23 @@ def build_wide_output_rows(
 			continue
 		dimension_rows_by_submission.setdefault(submission_id, {})[dimension_id] = row
 
-	wide_rows: list[dict[str, str]] = []
+	representative_submission_rows = next(iter(grouped_rows.values()), [])
+	base_fieldnames = list(build_passthrough_row(representative_submission_rows[0]).keys()) if representative_submission_rows else []
+	if "component_id" not in base_fieldnames:
+		base_fieldnames.append("component_id")
+	headers = list(base_fieldnames)
+	for dimension_id, _ in dimension_groups:
+		headers.append(dimension_id)
+	if dimension_groups:
+		headers.append(".")
+	for index, (dimension_id, indicator_ids) in enumerate(dimension_groups):
+		for indicator_id in indicator_ids:
+			headers.append(f"{dimension_id}_{indicator_id}")
+		if index < len(dimension_groups) - 1:
+			headers.append(".")
+	headers.extend(["flags_any_indicator", "min_confidence_indicator"])
+
+	wide_rows: list[list[str]] = []
 	for submission_id in sorted(grouped_rows):
 		submission_rows = grouped_rows[submission_id]
 		representative_row = submission_rows[0]
@@ -384,23 +403,32 @@ def build_wide_output_rows(
 		min_confidence_indicator = derive_min_confidence_indicator(indicator_ids, indicator_confidences)
 		flags_any_indicator = derive_flags_any_indicator(
 			submission_rows,
-			indicator_ids,
+			[
+				indicator_id
+				for _, bound_indicator_ids in dimension_groups
+				for indicator_id in bound_indicator_ids
+			],
 			indicator_id_field,
 		)
-		wide_row = build_passthrough_row(representative_row)
-		wide_row["component_id"] = (representative_row.get("component_id") or "").strip()
-		for dimension_id in dimension_ids:
+		passthrough_row = build_passthrough_row(representative_row)
+		passthrough_row.setdefault("component_id", (representative_row.get("component_id") or "").strip())
+		wide_row_values = [passthrough_row.get(fieldname, "") for fieldname in base_fieldnames]
+		for dimension_id, _ in dimension_groups:
 			dimension_row = dimension_rows_by_submission.get(submission_id, {}).get(dimension_id, {})
-			wide_row[dimension_id] = ordinalize_dimension_value(
+			wide_row_values.append(ordinalize_dimension_value(
 				(dimension_row.get("evidence_status") or "").strip(),
 				dimension_scale_lookup.get(dimension_id, {}),
-			)
-		for indicator_id in indicator_ids:
-			wide_row[indicator_id] = indicator_values.get(indicator_id, "")
-		wide_row["flags_any_indicator"] = flags_any_indicator
-		wide_row["min_confidence_indicator"] = min_confidence_indicator
-		wide_rows.append(wide_row)
-	return wide_rows
+			))
+		if dimension_groups:
+			wide_row_values.append("")
+		for index, (_, indicator_ids) in enumerate(dimension_groups):
+			for indicator_id in indicator_ids:
+				wide_row_values.append(indicator_values.get(indicator_id, ""))
+			if index < len(dimension_groups) - 1:
+				wide_row_values.append("")
+		wide_row_values.extend([flags_any_indicator, min_confidence_indicator])
+		wide_rows.append(wide_row_values)
+	return headers, wide_rows
 
 
 def main() -> int:
@@ -432,11 +460,13 @@ def main() -> int:
 		wide_output_rows = build_wide_output_rows(
 			grouped_rows,
 			output_rows,
+			modules,
 			dimension_scale_lookup,
 			args.indicator_id_field,
 			args.value_field,
 		)
-		write_scored_rows(wide_output_rows, wide_output_path)
+		wide_headers, wide_row_values = wide_output_rows
+		write_grouped_wide_csv(wide_headers, wide_row_values, wide_output_path)
 	except (FileNotFoundError, ValueError) as exc:
 		print(f"Error: {exc}", file=sys.stderr)
 		return 1
