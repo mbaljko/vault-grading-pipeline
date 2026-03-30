@@ -36,6 +36,7 @@ PASSTHROUGH_EXCLUDED_FIELDS = {
 	"evaluation_notes",
 	"decision_procedure",
 	"confidence",
+	"flags",
 	"bound_indicator_ids",
 	"evidence_status",
 }
@@ -212,7 +213,33 @@ def derive_min_confidence_indicator(
 	return min(available_values, key=confidence_rank)
 
 
-def build_passthrough_row(representative_row: dict[str, str], min_confidence_indicator: str) -> dict[str, str]:
+def derive_flags_any_indicator(
+	rows: list[dict[str, str]],
+	indicator_ids: list[str],
+	indicator_id_field: str,
+	flags_field: str = "flags",
+) -> str:
+	relevant_indicator_ids = {indicator_id.strip() for indicator_id in indicator_ids if indicator_id.strip()}
+	ordered_flag_values: list[str] = []
+	seen_flag_values: set[str] = set()
+	for row in rows:
+		indicator_id = (row.get(indicator_id_field) or "").strip()
+		if relevant_indicator_ids and indicator_id not in relevant_indicator_ids:
+			continue
+		flag_value = (row.get(flags_field) or "").strip()
+		if not flag_value or flag_value.lower() == "none":
+			continue
+		normalized_key = flag_value.lower()
+		if normalized_key in seen_flag_values:
+			continue
+		seen_flag_values.add(normalized_key)
+		ordered_flag_values.append(flag_value)
+	if not ordered_flag_values:
+		return "none"
+	return " | ".join(ordered_flag_values)
+
+
+def build_passthrough_row(representative_row: dict[str, str]) -> dict[str, str]:
 	output_row: dict[str, str] = {}
 	for key, value in representative_row.items():
 		if key == "confidence":
@@ -225,17 +252,20 @@ def build_passthrough_row(representative_row: dict[str, str], min_confidence_ind
 
 def build_output_row(
 	representative_row: dict[str, str],
+	rows: list[dict[str, str]],
 	module: ModuleType,
 	score_value: str,
 	indicator_values: dict[str, str],
 	indicator_confidences: dict[str, str],
+	indicator_id_field: str,
 ) -> dict[str, str]:
 	bound_indicator_ids = [str(indicator_id) for indicator_id in getattr(module, "BOUND_INDICATOR_IDS", [])]
 	bound_indicator_values = {
 		indicator_id: indicator_values.get(indicator_id, "") for indicator_id in bound_indicator_ids
 	}
 	min_confidence_indicator = derive_min_confidence_indicator(bound_indicator_ids, indicator_confidences)
-	output_row = build_passthrough_row(representative_row, min_confidence_indicator)
+	flags_any_indicator = derive_flags_any_indicator(rows, bound_indicator_ids, indicator_id_field)
+	output_row = build_passthrough_row(representative_row)
 	output_row["component_id"] = str(getattr(module, "COMPONENT_ID", "")).strip()
 	output_row["dimension_id"] = str(getattr(module, "DIMENSION_ID", "")).strip()
 	output_row["dimension_template_id"] = str(getattr(module, "DIMENSION_TEMPLATE_ID", "")).strip()
@@ -247,6 +277,7 @@ def build_output_row(
 	output_row["bound_indicator_ids"] = ", ".join(bound_indicator_ids)
 	output_row["source_indicator_values_json"] = json.dumps(bound_indicator_values, ensure_ascii=True, sort_keys=True)
 	output_row["evidence_status"] = score_value
+	output_row["flags_any_indicator"] = flags_any_indicator
 	output_row["min_confidence_indicator"] = min_confidence_indicator
 	return output_row
 
@@ -296,10 +327,12 @@ def score_submission_rows(
 		output_rows.append(
 			build_output_row(
 				representative_row,
+				rows,
 				module,
 				score_value,
 				indicator_values,
 				indicator_confidences,
+				indicator_id_field,
 			)
 		)
 	return output_rows
@@ -349,7 +382,12 @@ def build_wide_output_rows(
 		)
 		indicator_confidences = build_indicator_confidence_map(submission_rows, indicator_id_field)
 		min_confidence_indicator = derive_min_confidence_indicator(indicator_ids, indicator_confidences)
-		wide_row = build_passthrough_row(representative_row, min_confidence_indicator)
+		flags_any_indicator = derive_flags_any_indicator(
+			submission_rows,
+			indicator_ids,
+			indicator_id_field,
+		)
+		wide_row = build_passthrough_row(representative_row)
 		wide_row["component_id"] = (representative_row.get("component_id") or "").strip()
 		for dimension_id in dimension_ids:
 			dimension_row = dimension_rows_by_submission.get(submission_id, {}).get(dimension_id, {})
@@ -359,6 +397,7 @@ def build_wide_output_rows(
 			)
 		for indicator_id in indicator_ids:
 			wide_row[indicator_id] = indicator_values.get(indicator_id, "")
+		wide_row["flags_any_indicator"] = flags_any_indicator
 		wide_row["min_confidence_indicator"] = min_confidence_indicator
 		wide_rows.append(wide_row)
 	return wide_rows
