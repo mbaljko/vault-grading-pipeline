@@ -26,6 +26,11 @@ MANIFEST_REQUIRED_HEADERS = [
 	"dimension_evidence_scale",
 	"dimension_scoring_payload_json",
 ]
+KNOWN_DIMENSION_EVIDENCE_ORDER = {
+	"little_to_no_demonstration": 0,
+	"partially_demonstrated": 1,
+	"demonstrated": 2,
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -128,7 +133,14 @@ def resolve_output_path(output_dir: Path, output_file_stem: str, output_format: 
 
 
 def parse_dimension_evidence_scale(raw_value: str) -> list[str]:
-	return [part.strip() for part in raw_value.split(",") if part.strip()]
+	values = []
+	for part in raw_value.split(","):
+		normalized = normalize_markdown_cell(part).strip().strip("`")
+		if normalized:
+			values.append(normalized)
+	if values and all(value in KNOWN_DIMENSION_EVIDENCE_ORDER for value in values):
+		return sorted(values, key=lambda value: KNOWN_DIMENSION_EVIDENCE_ORDER[value])
+	return values
 
 
 def build_module_source(row: dict[str, str], payload: dict[str, object]) -> str:
