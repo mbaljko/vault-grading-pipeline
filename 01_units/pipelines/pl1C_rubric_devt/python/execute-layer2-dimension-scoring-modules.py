@@ -20,6 +20,11 @@ from component_scored_texts import load_scored_rows, write_scored_rows
 
 
 LAYER1_REQUIRED_FIELDS = {"submission_id", "indicator_id", "evidence_status"}
+CONFIDENCE_ORDER = {
+	"low": 0,
+	"medium": 1,
+	"high": 2,
+}
 PASSTHROUGH_EXCLUDED_FIELDS = {
 	"indicator_id",
 	"dimension_id",
@@ -30,6 +35,7 @@ PASSTHROUGH_EXCLUDED_FIELDS = {
 	"assessment_guidance",
 	"evaluation_notes",
 	"decision_procedure",
+	"confidence",
 	"bound_indicator_ids",
 	"evidence_status",
 }
@@ -166,21 +172,70 @@ def build_indicator_value_map(
 	return indicator_values
 
 
+def confidence_rank(value: str) -> tuple[int, str]:
+	normalized_value = value.strip().lower()
+	if not normalized_value:
+		return (10**9, normalized_value)
+	return (CONFIDENCE_ORDER.get(normalized_value, -1), normalized_value)
+
+
+def build_indicator_confidence_map(
+	rows: list[dict[str, str]],
+	indicator_id_field: str,
+	confidence_field: str = "confidence",
+) -> dict[str, str]:
+	indicator_confidences: dict[str, str] = {}
+	for row in rows:
+		indicator_id = (row.get(indicator_id_field) or "").strip()
+		if not indicator_id:
+			continue
+		confidence_value = (row.get(confidence_field) or "").strip()
+		if not confidence_value:
+			continue
+		existing_value = indicator_confidences.get(indicator_id)
+		if existing_value is None or confidence_rank(confidence_value) < confidence_rank(existing_value):
+			indicator_confidences[indicator_id] = confidence_value
+	return indicator_confidences
+
+
+def derive_min_confidence_indicator(
+	indicator_ids: list[str],
+	indicator_confidences: dict[str, str],
+) -> str:
+	available_values = [
+		indicator_confidences[indicator_id]
+		for indicator_id in indicator_ids
+		if indicator_id in indicator_confidences and indicator_confidences[indicator_id].strip()
+	]
+	if not available_values:
+		return ""
+	return min(available_values, key=confidence_rank)
+
+
+def build_passthrough_row(representative_row: dict[str, str], min_confidence_indicator: str) -> dict[str, str]:
+	output_row: dict[str, str] = {}
+	for key, value in representative_row.items():
+		if key == "confidence":
+			continue
+		if key in PASSTHROUGH_EXCLUDED_FIELDS:
+			continue
+		output_row[key] = value
+	return output_row
+
+
 def build_output_row(
 	representative_row: dict[str, str],
 	module: ModuleType,
 	score_value: str,
 	indicator_values: dict[str, str],
+	indicator_confidences: dict[str, str],
 ) -> dict[str, str]:
-	output_row = {
-		key: value
-		for key, value in representative_row.items()
-		if key not in PASSTHROUGH_EXCLUDED_FIELDS
-	}
 	bound_indicator_ids = [str(indicator_id) for indicator_id in getattr(module, "BOUND_INDICATOR_IDS", [])]
 	bound_indicator_values = {
 		indicator_id: indicator_values.get(indicator_id, "") for indicator_id in bound_indicator_ids
 	}
+	min_confidence_indicator = derive_min_confidence_indicator(bound_indicator_ids, indicator_confidences)
+	output_row = build_passthrough_row(representative_row, min_confidence_indicator)
 	output_row["component_id"] = str(getattr(module, "COMPONENT_ID", "")).strip()
 	output_row["dimension_id"] = str(getattr(module, "DIMENSION_ID", "")).strip()
 	output_row["dimension_template_id"] = str(getattr(module, "DIMENSION_TEMPLATE_ID", "")).strip()
@@ -192,6 +247,7 @@ def build_output_row(
 	output_row["bound_indicator_ids"] = ", ".join(bound_indicator_ids)
 	output_row["source_indicator_values_json"] = json.dumps(bound_indicator_values, ensure_ascii=True, sort_keys=True)
 	output_row["evidence_status"] = score_value
+	output_row["min_confidence_indicator"] = min_confidence_indicator
 	return output_row
 
 
@@ -227,6 +283,7 @@ def score_submission_rows(
 	value_field: str,
 ) -> list[dict[str, str]]:
 	indicator_values = build_indicator_value_map(submission_id, rows, indicator_id_field, value_field)
+	indicator_confidences = build_indicator_confidence_map(rows, indicator_id_field)
 	representative_row = rows[0]
 	output_rows: list[dict[str, str]] = []
 	for module in modules:
@@ -236,7 +293,15 @@ def score_submission_rows(
 			raise ValueError(
 				f"Layer 2 scoring failed for submission_id={submission_id} dimension_id={getattr(module, 'DIMENSION_ID', '')}: {exc}"
 			) from exc
-		output_rows.append(build_output_row(representative_row, module, score_value, indicator_values))
+		output_rows.append(
+			build_output_row(
+				representative_row,
+				module,
+				score_value,
+				indicator_values,
+				indicator_confidences,
+			)
+		)
 	return output_rows
 
 
@@ -282,11 +347,9 @@ def build_wide_output_rows(
 			indicator_id_field,
 			value_field,
 		)
-		wide_row = {
-			key: value
-			for key, value in representative_row.items()
-			if key not in WIDE_EXCLUDED_FIELDS
-		}
+		indicator_confidences = build_indicator_confidence_map(submission_rows, indicator_id_field)
+		min_confidence_indicator = derive_min_confidence_indicator(indicator_ids, indicator_confidences)
+		wide_row = build_passthrough_row(representative_row, min_confidence_indicator)
 		wide_row["component_id"] = (representative_row.get("component_id") or "").strip()
 		for dimension_id in dimension_ids:
 			dimension_row = dimension_rows_by_submission.get(submission_id, {}).get(dimension_id, {})
@@ -296,6 +359,7 @@ def build_wide_output_rows(
 			)
 		for indicator_id in indicator_ids:
 			wide_row[indicator_id] = indicator_values.get(indicator_id, "")
+		wide_row["min_confidence_indicator"] = min_confidence_indicator
 		wide_rows.append(wide_row)
 	return wide_rows
 
