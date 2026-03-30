@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import importlib.util
 import json
 import sys
@@ -36,6 +37,8 @@ EXCLUDED_PASSTHROUGH_FIELDS = {
 	"min_confidence_indicator",
 }
 WIDE_EXCLUDED_FIELDS = EXCLUDED_PASSTHROUGH_FIELDS | {"source_dimension_values_json"}
+WIDE_TRAILING_FIELDS = ["flags_any_dimension", "min_confidence_dimension"]
+WIDE_METADATA_EXCLUDED_FIELDS = {"component_performance_scale", "bound_dimension_ids"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -56,6 +59,14 @@ def parse_args() -> argparse.Namespace:
 
 def derive_wide_output_path(output_path: Path) -> Path:
 	return output_path.with_name(f"{output_path.stem}-wide{output_path.suffix}")
+
+
+def write_grouped_wide_csv(headers: list[str], rows: list[list[str]], output_path: Path) -> None:
+	output_path.parent.mkdir(parents=True, exist_ok=True)
+	with output_path.open("w", encoding="utf-8", newline="") as handle:
+		writer = csv.writer(handle)
+		writer.writerow(headers)
+		writer.writerows(rows)
 
 
 def load_module_from_path(path: Path) -> ModuleType:
@@ -130,15 +141,107 @@ def build_passthrough_row(rows: list[dict[str, str]]) -> dict[str, str]:
 	return passthrough_row
 
 
-def build_wide_output_row(output_row: dict[str, str], bound_dimension_ids: list[str]) -> dict[str, str]:
-	wide_row = {key: value for key, value in output_row.items() if key not in WIDE_EXCLUDED_FIELDS}
-	raw_dimension_values = str(output_row.get("source_dimension_values_json", "")).strip()
-	dimension_values = json.loads(raw_dimension_values) if raw_dimension_values else {}
-	if not isinstance(dimension_values, dict):
-		raise ValueError("source_dimension_values_json must decode to an object.")
-	for dimension_id in bound_dimension_ids:
-		wide_row[dimension_id] = str(dimension_values.get(dimension_id, "")).strip()
-	return wide_row
+def parse_bound_ids(raw_value: object) -> list[str]:
+	return [part.strip() for part in str(raw_value or "").split(",") if part.strip()]
+
+
+def build_dimension_indicator_groups(
+	submission_groups: dict[str, list[dict[str, str]]],
+	bound_dimension_ids: list[str],
+	dimension_id_field: str,
+) -> list[tuple[str, list[str]]]:
+	indicator_ids_by_dimension: dict[str, list[str]] = {dimension_id: [] for dimension_id in bound_dimension_ids}
+	for submission_rows in submission_groups.values():
+		for row in submission_rows:
+			dimension_id = str(row.get(dimension_id_field, "")).strip()
+			if dimension_id not in indicator_ids_by_dimension or indicator_ids_by_dimension[dimension_id]:
+				continue
+			indicator_ids_by_dimension[dimension_id] = parse_bound_ids(row.get("bound_indicator_ids", ""))
+	return [(dimension_id, indicator_ids_by_dimension.get(dimension_id, [])) for dimension_id in bound_dimension_ids]
+
+
+def build_indicator_values_by_dimension(
+	submission_rows: list[dict[str, str]],
+	dimension_id_field: str,
+	bound_dimension_ids: list[str],
+) -> dict[str, dict[str, str]]:
+	values_by_dimension: dict[str, dict[str, str]] = {dimension_id: {} for dimension_id in bound_dimension_ids}
+	for row in submission_rows:
+		dimension_id = str(row.get(dimension_id_field, "")).strip()
+		if dimension_id not in values_by_dimension:
+			continue
+		raw_indicator_values = str(row.get("source_indicator_values_json", "")).strip()
+		indicator_values = json.loads(raw_indicator_values) if raw_indicator_values else {}
+		if not isinstance(indicator_values, dict):
+			raise ValueError("source_indicator_values_json must decode to an object.")
+		values_by_dimension[dimension_id] = {str(key).strip(): str(value).strip() for key, value in indicator_values.items()}
+	return values_by_dimension
+
+
+def build_wide_output_rows(
+	submission_groups: dict[str, list[dict[str, str]]],
+	output_rows: list[dict[str, str]],
+	bound_dimension_ids: list[str],
+	dimension_id_field: str,
+) -> tuple[list[str], list[list[str]]]:
+	base_fieldnames = [
+		key
+		for key in output_rows[0].keys()
+		if key not in WIDE_EXCLUDED_FIELDS and key not in WIDE_TRAILING_FIELDS and key not in WIDE_METADATA_EXCLUDED_FIELDS
+	] if output_rows else []
+	dimension_indicator_groups = build_dimension_indicator_groups(submission_groups, bound_dimension_ids, dimension_id_field)
+	output_rows_by_submission = {
+		str(output_row.get("submission_id", "")).strip(): output_row
+		for output_row in output_rows
+		if str(output_row.get("submission_id", "")).strip()
+	}
+	headers = list(base_fieldnames)
+	if bound_dimension_ids:
+		headers.append(".")
+		headers.extend(bound_dimension_ids)
+	if dimension_indicator_groups:
+		headers.append(".")
+		for index, (dimension_id, indicator_ids) in enumerate(dimension_indicator_groups):
+			for indicator_id in indicator_ids:
+				headers.append(f"{dimension_id}_{indicator_id}")
+			if index < len(dimension_indicator_groups) - 1:
+				headers.append(".")
+	if WIDE_TRAILING_FIELDS:
+		headers.append(".")
+		headers.extend(WIDE_TRAILING_FIELDS)
+
+	wide_rows: list[list[str]] = []
+	for submission_id in sorted(submission_groups):
+		output_row = output_rows_by_submission.get(submission_id)
+		if output_row is None:
+			continue
+		raw_dimension_values = str(output_row.get("source_dimension_values_json", "")).strip()
+		dimension_values = json.loads(raw_dimension_values) if raw_dimension_values else {}
+		if not isinstance(dimension_values, dict):
+			raise ValueError("source_dimension_values_json must decode to an object.")
+		indicator_values_by_dimension = build_indicator_values_by_dimension(
+			submission_groups[submission_id],
+			dimension_id_field,
+			bound_dimension_ids,
+		)
+		wide_row = [output_row.get(fieldname, "") for fieldname in base_fieldnames]
+		if bound_dimension_ids:
+			wide_row.append("")
+			for dimension_id in bound_dimension_ids:
+				wide_row.append(str(dimension_values.get(dimension_id, "")).strip())
+		if dimension_indicator_groups:
+			wide_row.append("")
+			for index, (dimension_id, indicator_ids) in enumerate(dimension_indicator_groups):
+				for indicator_id in indicator_ids:
+					wide_row.append(indicator_values_by_dimension.get(dimension_id, {}).get(indicator_id, ""))
+				if index < len(dimension_indicator_groups) - 1:
+					wide_row.append("")
+		if WIDE_TRAILING_FIELDS:
+			wide_row.append("")
+			for fieldname in WIDE_TRAILING_FIELDS:
+				wide_row.append(output_row.get(fieldname, ""))
+		wide_rows.append(wide_row)
+	return headers, wide_rows
 
 
 def score_submission_rows(
@@ -192,9 +295,14 @@ def main() -> int:
 		output_path = args.output_file.resolve()
 		write_scored_rows(output_rows, output_path)
 		bound_dimension_ids = [str(dimension_id) for dimension_id in getattr(module, "BOUND_DIMENSION_IDS", [])]
-		wide_output_rows = [build_wide_output_row(output_row, bound_dimension_ids) for output_row in output_rows]
 		wide_output_path = derive_wide_output_path(output_path)
-		write_scored_rows(wide_output_rows, wide_output_path)
+		wide_headers, wide_output_rows = build_wide_output_rows(
+			submission_groups,
+			output_rows,
+			bound_dimension_ids,
+			args.dimension_id_field,
+		)
+		write_grouped_wide_csv(wide_headers, wide_output_rows, wide_output_path)
 	except (FileNotFoundError, ImportError, ValueError, OSError) as exc:
 		print(f"Error: {exc}", file=sys.stderr)
 		return 1
