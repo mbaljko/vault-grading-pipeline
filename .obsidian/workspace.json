@@ -474,6 +474,7 @@
   },
   "active": "30b7ed3094eafc89",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/python/generate-layer3-component-scoring-module.py",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/execute-layer2-dimension-scoring-modules.cpython-313.pyc",
     "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v02.md",
     "01_units/pipelines/pl1C_rubric_devt/python/execute-layer2-dimension-scoring-modules.py",
@@ -488,7 +489,6 @@
     "01_units/pipelines/pl1C_rubric_devt/python/run-scoring-orchestrator.py",
     "01_units/pipelines/pl1C_rubric_devt/python/run-layer1-scoring-orchestrator.py",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate-scoring-report.cpython-313.pyc",
-    "01_units/pipelines/pl1C_rubric_devt/python/generate-scoring-report.py",
     "01_units/pipelines/pl1C_rubric_devt/README.md",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1C_scaffold_stage13_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1B_scaffold_stage13_Layer1_Indicator_Scoring_Prompt.md",

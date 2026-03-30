@@ -77,6 +77,13 @@ LAYER2_RULE_HEADING_RE = re.compile(r"^\s*#{4,6}\s+(D\d+)\b")
 BINDING_LINE_RE = re.compile(r"^\s*-\s+`([^`]+)`:\s*(.*?)\s*$")
 FIELD_VALUE_TABLE_HEADERS = ["field", "value"]
 SKIPPED_REUSE_RULE_STATUSES = {"inactive", "draft"}
+KNOWN_COMPONENT_PERFORMANCE_ORDER = {
+    "not_demonstrated": 0,
+    "below_expectations": 1,
+    "approaching_expectations": 2,
+    "meets_expectations": 3,
+    "exceeds_expectations": 4,
+}
 
 
 @dataclass(frozen=True)
@@ -662,6 +669,22 @@ def resolve_guidance_text(record: dict[str, str], layer_config: RegistryLayerCon
     return resolve_first_present(record, layer_config.guidance_field_candidates)
 
 
+def resolve_scale_text(record: dict[str, str], layer_config: RegistryLayerConfig) -> str:
+    if layer_config.name == "layer2":
+        return record.get("dimension_evidence_scale", "").strip()
+    if layer_config.name == "layer3":
+        return record.get("component_performance_scale", "").strip()
+    return ""
+
+
+def resolve_scoring_payload_json(record: dict[str, str], layer_config: RegistryLayerConfig) -> str:
+    if layer_config.name == "layer2":
+        return record.get("dimension_scoring_payload_json", "").strip()
+    if layer_config.name == "layer3":
+        return record.get("component_scoring_payload_json", "").strip()
+    return ""
+
+
 def extract_registry_metadata(tables: list[dict[str, object]]) -> dict[str, str]:
     metadata_table = find_table_by_heading(tables, "registry metadata")
     if metadata_table is None:
@@ -681,6 +704,14 @@ def extract_registry_metadata(tables: list[dict[str, object]]) -> dict[str, str]
 
 def serialize_scoring_payload(payload: dict[str, object]) -> str:
     return json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+
+
+def derive_ordered_scale_values(values: list[str], known_order: dict[str, int]) -> list[str]:
+    normalized_values = [value.strip() for value in values if value.strip()]
+    deduplicated_values = list(dict.fromkeys(normalized_values))
+    if deduplicated_values and all(value in known_order for value in deduplicated_values):
+        return sorted(deduplicated_values, key=lambda value: known_order[value])
+    return deduplicated_values
 
 
 def parse_layer2_scoring_payloads(registry_path: Path) -> dict[tuple[str, str], str]:
@@ -779,6 +810,53 @@ def parse_layer2_scoring_payloads(registry_path: Path) -> dict[tuple[str, str], 
     return payloads
 
 
+def parse_layer3_scoring_payloads(registry_path: Path) -> dict[str, dict[str, str]]:
+    tables = collect_markdown_tables(registry_path)
+    rule_table = find_table_by_heading(tables, "component scoring rule")
+    bindings_table = find_table_by_heading(tables, "dimension bindings")
+    if rule_table is None or bindings_table is None:
+        return {}
+
+    rule_headers = [str(header).strip() for header in rule_table.get("headers", [])]
+    if len(rule_headers) < 2:
+        return {}
+
+    token_headers = rule_headers[1:]
+    derivation_rules = [
+        {
+            "resultant_scale_value": str(row.get(rule_headers[0], "")).strip(),
+            "conditions": {
+                token: str(row.get(token, "")).strip()
+                for token in token_headers
+            },
+        }
+        for row in rule_table.get("rows", [])
+        if str(row.get(rule_headers[0], "")).strip()
+    ]
+    performance_scale = derive_ordered_scale_values(
+        [rule["resultant_scale_value"] for rule in derivation_rules],
+        KNOWN_COMPONENT_PERFORMANCE_ORDER,
+    )
+
+    payloads: dict[str, dict[str, str]] = {}
+    for row in bindings_table.get("rows", []):
+        component_id = str(row.get("component_id", "")).strip()
+        if not component_id:
+            continue
+        bound_dimension_ids = [str(row.get(token, "")).strip() for token in token_headers]
+        payload = {
+            "component_id": component_id,
+            "input_dimension_tokens": token_headers,
+            "bound_dimension_ids": bound_dimension_ids,
+            "derivation_rules": derivation_rules,
+        }
+        payloads[component_id] = {
+            "component_scoring_payload_json": serialize_scoring_payload(payload),
+            "component_performance_scale": ", ".join(performance_scale),
+        }
+    return payloads
+
+
 def build_registry_rows_from_explicit_table(
     table_rows: list[dict[str, str]],
     include_inactive: bool,
@@ -813,7 +891,8 @@ def build_registry_rows_from_explicit_table(
                 evaluation_notes=merged_record.get("evaluation_notes", "").strip(),
                 decision_procedure=resolve_decision_procedure(merged_record),
                 status=merged_record.get("status", ""),
-                evidence_scale=merged_record.get("dimension_evidence_scale", "").strip(),
+                evidence_scale=resolve_scale_text(merged_record, layer_config),
+                scoring_payload_json=resolve_scoring_payload_json(merged_record, layer_config),
             )
         )
     return rows
@@ -1231,7 +1310,11 @@ def load_registry_rows(
     tables = collect_markdown_tables(registry_path)
     registry_metadata = extract_registry_metadata(tables)
     layer2_scoring_payloads = parse_layer2_scoring_payloads(registry_path) if layer_config.name == "layer2" else {}
+    layer3_scoring_payloads = parse_layer3_scoring_payloads(registry_path) if layer_config.name == "layer3" else {}
     enrichment_lookup = build_registry_enrichment_lookup(registry_path, tables, layer_config)
+    if layer3_scoring_payloads:
+        for component_id, payload_fields in layer3_scoring_payloads.items():
+            enrichment_lookup.setdefault(component_id, {}).update(payload_fields)
 
     explicit_table: dict[str, object] | None = None
     layer2_base_rows = collect_section_rows(
@@ -1903,6 +1986,16 @@ def render_manifest_document(
                 ])
             manifest_row.extend([
                 row.template_id,
+                row.evidence_scale,
+                row.scoring_payload_json,
+            ])
+        if layer_config.name == "layer3":
+            if "component_performance_scale" not in manifest_headers:
+                manifest_headers.extend([
+                    "component_performance_scale",
+                    "component_scoring_payload_json",
+                ])
+            manifest_row.extend([
                 row.evidence_scale,
                 row.scoring_payload_json,
             ])
