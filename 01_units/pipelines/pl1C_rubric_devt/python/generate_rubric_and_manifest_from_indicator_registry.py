@@ -343,6 +343,49 @@ def collect_markdown_tables(registry_path: Path) -> list[dict[str, object]]:
     return tables
 
 
+def collect_markdown_sections(registry_path: Path) -> list[dict[str, object]]:
+    lines = registry_path.read_text(encoding="utf-8").splitlines()
+    headings: list[dict[str, object]] = []
+    heading_path: list[str] = []
+
+    for index, line in enumerate(lines):
+        heading_match = HEADING_RE.match(line)
+        if heading_match is None:
+            continue
+        title = heading_match.group("title").strip()
+        normalized_title = title.lower()
+        heading_level = len(heading_match.group("level"))
+        heading_path = heading_path[: heading_level - 1]
+        heading_path.append(normalized_title)
+        headings.append(
+            {
+                "index": index,
+                "level": heading_level,
+                "title": normalized_title,
+                "raw_title": title,
+                "heading_path": list(heading_path),
+            }
+        )
+
+    sections: list[dict[str, object]] = []
+    for heading_index, heading in enumerate(headings):
+        end_index = len(lines)
+        for next_heading in headings[heading_index + 1 :]:
+            if int(next_heading["level"]) <= int(heading["level"]):
+                end_index = int(next_heading["index"])
+                break
+        sections.append(
+            {
+                "title": heading["title"],
+                "raw_title": heading["raw_title"],
+                "level": heading["level"],
+                "heading_path": heading["heading_path"],
+                "content_lines": lines[int(heading["index"]) + 1 : end_index],
+            }
+        )
+    return sections
+
+
 def find_table_by_heading(tables: list[dict[str, object]], heading_text: str) -> dict[str, object] | None:
     normalized_heading = heading_text.strip().lower()
     for table in tables:
@@ -367,6 +410,190 @@ def find_tables_by_heading(
         if include_descendants and normalized_heading in heading_path:
             matches.append(table)
     return matches
+
+
+def find_section_by_title(sections: list[dict[str, object]], section_title: str) -> dict[str, object] | None:
+    normalized_title = section_title.strip().lower()
+    for section in sections:
+        if str(section.get("title", "")).strip().lower() == normalized_title:
+            return section
+    return None
+
+
+def extract_section_text(section: dict[str, object] | None) -> str:
+    if section is None:
+        return ""
+    prose_lines: list[str] = []
+    bullet_lines: list[str] = []
+    for raw_line in section.get("content_lines", []):
+        stripped_line = str(raw_line).strip()
+        if not stripped_line or stripped_line == "---" or stripped_line.startswith("|"):
+            continue
+        if stripped_line.startswith("- "):
+            bullet_lines.append(stripped_line[2:].strip())
+            continue
+        prose_lines.append(stripped_line)
+    parts: list[str] = []
+    if prose_lines:
+        parts.append(" ".join(prose_lines))
+    if bullet_lines:
+        parts.append("; ".join(bullet_lines))
+    return " ".join(part for part in parts if part).strip()
+
+
+def format_rule_summary(table: dict[str, object] | None) -> str:
+    if table is None:
+        return ""
+    headers = [str(header).strip() for header in table.get("headers", [])]
+    if len(headers) < 2:
+        return ""
+    outcome_field = headers[0]
+    condition_fields = headers[1:]
+    grouped_conditions: dict[str, list[str]] = {}
+    for row in table.get("rows", []):
+        outcome_value = str(row.get(outcome_field, "")).strip()
+        if not outcome_value:
+            continue
+        condition_text = ", ".join(
+            f"{field}={str(row.get(field, '')).strip()}"
+            for field in condition_fields
+            if str(row.get(field, "")).strip()
+        )
+        if not condition_text:
+            continue
+        grouped_conditions.setdefault(outcome_value, []).append(condition_text)
+    if not grouped_conditions:
+        return ""
+    return "; ".join(
+        f"{outcome_value} when " + " or ".join(conditions)
+        for outcome_value, conditions in grouped_conditions.items()
+    )
+
+
+def format_binding_summary(row: dict[str, str] | None, key_field: str) -> str:
+    if row is None:
+        return ""
+    binding_items = [
+        f"{field}={value.strip()}"
+        for field, value in row.items()
+        if field != key_field and value.strip()
+    ]
+    return ", ".join(binding_items)
+
+
+def build_layer3_registry_enrichment(
+    tables: list[dict[str, object]],
+    sections: list[dict[str, object]],
+) -> dict[str, dict[str, str]]:
+    summary_intro = extract_section_text(find_section_by_title(sections, "registry summary"))
+    execution_note = extract_section_text(find_section_by_title(sections, "execution note"))
+    target_sbo_class = extract_section_text(find_section_by_title(sections, "target sbo class"))
+    input_sbo_class = extract_section_text(find_section_by_title(sections, "input sbo class"))
+    summary_table = find_table_by_heading(tables, "registry summary")
+    bindings_table = find_table_by_heading(tables, "dimension bindings")
+    rule_table = find_table_by_heading(tables, "component scoring rule")
+    rule_summary = format_rule_summary(rule_table)
+
+    summary_rows_by_component = {
+        row.get("component_id", "").strip(): row
+        for row in (summary_table or {}).get("rows", [])
+        if row.get("component_id", "").strip()
+    }
+    binding_rows_by_component = {
+        row.get("component_id", "").strip(): row
+        for row in (bindings_table or {}).get("rows", [])
+        if row.get("component_id", "").strip()
+    }
+
+    enrichment: dict[str, dict[str, str]] = {}
+    for component_id, summary_row in summary_rows_by_component.items():
+        dimensions_text = summary_row.get("dimensions", "").strip()
+        binding_summary = format_binding_summary(binding_rows_by_component.get(component_id), "component_id")
+        definition_parts = [
+            f"Derives {target_sbo_class} from {input_sbo_class}." if target_sbo_class and input_sbo_class else "",
+            summary_intro,
+            f"Input dimensions for {component_id}: {dimensions_text}." if dimensions_text else "",
+        ]
+        evaluation_notes_parts = [
+            f"Dimension bindings: {binding_summary}." if binding_summary else "",
+            execution_note,
+        ]
+        decision_parts = [
+            "Apply the component scoring rule defined in the registry.",
+            rule_summary,
+            f"Use bindings {binding_summary}." if binding_summary else "",
+        ]
+        enrichment[component_id] = {
+            "component_definition": " ".join(part for part in definition_parts if part).strip(),
+            "component_guidance": execution_note,
+            "evaluation_notes": " ".join(part for part in evaluation_notes_parts if part).strip(),
+            "decision_procedure": " ".join(part for part in decision_parts if part).strip(),
+        }
+    return enrichment
+
+
+def build_layer4_registry_enrichment(
+    tables: list[dict[str, object]],
+    sections: list[dict[str, object]],
+) -> dict[str, dict[str, str]]:
+    summary_intro = extract_section_text(find_section_by_title(sections, "registry summary"))
+    execution_note = extract_section_text(find_section_by_title(sections, "execution note"))
+    target_sbo_class = extract_section_text(find_section_by_title(sections, "target sbo class"))
+    input_sbo_class = extract_section_text(find_section_by_title(sections, "input sbo class"))
+    summary_table = find_table_by_heading(tables, "registry summary")
+    bindings_table = find_table_by_heading(tables, "component bindings")
+    rule_table = find_table_by_heading(tables, "submission scoring rule")
+    rule_summary = format_rule_summary(rule_table)
+
+    summary_rows_by_assessment = {
+        row.get("assessment_id", "").strip(): row
+        for row in (summary_table or {}).get("rows", [])
+        if row.get("assessment_id", "").strip()
+    }
+    binding_rows_by_assessment = {
+        row.get("assessment_id", "").strip(): row
+        for row in (bindings_table or {}).get("rows", [])
+        if row.get("assessment_id", "").strip()
+    }
+
+    enrichment: dict[str, dict[str, str]] = {}
+    for assessment_id, summary_row in summary_rows_by_assessment.items():
+        input_components_text = summary_row.get("input components", "").strip()
+        binding_summary = format_binding_summary(binding_rows_by_assessment.get(assessment_id), "assessment_id")
+        definition_parts = [
+            f"Derives {target_sbo_class} from {input_sbo_class}." if target_sbo_class and input_sbo_class else "",
+            summary_intro,
+            f"Input components for {assessment_id}: {input_components_text}." if input_components_text else "",
+        ]
+        evaluation_notes_parts = [
+            f"Component bindings: {binding_summary}." if binding_summary else "",
+            execution_note,
+        ]
+        decision_parts = [
+            "Apply the submission scoring rule defined in the registry.",
+            rule_summary,
+            f"Use bindings {binding_summary}." if binding_summary else "",
+        ]
+        enrichment[assessment_id] = {
+            "submission_definition": " ".join(part for part in definition_parts if part).strip(),
+            "submission_guidance": execution_note,
+            "evaluation_notes": " ".join(part for part in evaluation_notes_parts if part).strip(),
+            "decision_procedure": " ".join(part for part in decision_parts if part).strip(),
+        }
+    return enrichment
+
+
+def build_registry_enrichment_lookup(
+    registry_path: Path,
+    tables: list[dict[str, object]],
+    layer_config: RegistryLayerConfig,
+) -> dict[str, dict[str, str]]:
+    if layer_config.name not in {"layer3", "layer4"}:
+        return {}
+    sections = collect_markdown_sections(registry_path)
+    if layer_config.name == "layer3":
+        return build_layer3_registry_enrichment(tables, sections)
+    return build_layer4_registry_enrichment(tables, sections)
 
 
 def is_field_value_table(table: dict[str, object]) -> bool:
@@ -556,6 +783,7 @@ def build_registry_rows_from_explicit_table(
     table_rows: list[dict[str, str]],
     include_inactive: bool,
     layer_config: RegistryLayerConfig,
+    enrichment_lookup: dict[str, dict[str, str]] | None = None,
 ) -> list[RegistryRow]:
     rows: list[RegistryRow] = []
     for record in table_rows:
@@ -563,20 +791,29 @@ def build_registry_rows_from_explicit_table(
         if not include_inactive and status and status != "active":
             continue
         item_id = record.get(layer_config.item_id_field, "").strip() if layer_config.item_id_field else ""
+        enrichment_key = (
+            record.get("component_id", "").strip()
+            if layer_config.name == "layer3"
+            else record.get("assessment_id", "").strip()
+            if layer_config.name == "layer4"
+            else item_id
+        )
+        merged_record = dict((enrichment_lookup or {}).get(enrichment_key, {}))
+        merged_record.update(record)
         rows.append(
             RegistryRow(
                 item_id=item_id,
-                assessment_id=record["assessment_id"].strip(),
-                component_id=record.get("component_id", "").strip(),
-                sbo_identifier=resolve_sbo_identifier(record),
-                sbo_identifier_shortid=resolve_sbo_identifier_shortid(record),
-                sbo_short_description=record["sbo_short_description"].strip(),
-                definition_text=resolve_definition_text(record, layer_config),
-                guidance_text=resolve_guidance_text(record, layer_config),
-                evaluation_notes=record.get("evaluation_notes", "").strip(),
-                decision_procedure=resolve_decision_procedure(record),
-                status=record.get("status", ""),
-                evidence_scale=record.get("dimension_evidence_scale", "").strip(),
+                assessment_id=merged_record["assessment_id"].strip(),
+                component_id=merged_record.get("component_id", "").strip(),
+                sbo_identifier=resolve_sbo_identifier(merged_record),
+                sbo_identifier_shortid=resolve_sbo_identifier_shortid(merged_record),
+                sbo_short_description=merged_record["sbo_short_description"].strip(),
+                definition_text=resolve_definition_text(merged_record, layer_config),
+                guidance_text=resolve_guidance_text(merged_record, layer_config),
+                evaluation_notes=merged_record.get("evaluation_notes", "").strip(),
+                decision_procedure=resolve_decision_procedure(merged_record),
+                status=merged_record.get("status", ""),
+                evidence_scale=merged_record.get("dimension_evidence_scale", "").strip(),
             )
         )
     return rows
@@ -994,6 +1231,7 @@ def load_registry_rows(
     tables = collect_markdown_tables(registry_path)
     registry_metadata = extract_registry_metadata(tables)
     layer2_scoring_payloads = parse_layer2_scoring_payloads(registry_path) if layer_config.name == "layer2" else {}
+    enrichment_lookup = build_registry_enrichment_lookup(registry_path, tables, layer_config)
 
     explicit_table: dict[str, object] | None = None
     layer2_base_rows = collect_section_rows(
@@ -1080,6 +1318,7 @@ def load_registry_rows(
                 table_rows=explicit_rows,
                 include_inactive=include_inactive,
                 layer_config=layer_config,
+                enrichment_lookup=enrichment_lookup,
             )
     else:
         raise ValueError(
@@ -1476,17 +1715,104 @@ def render_rubric_document(
     parts.extend(
         [
             "#### 6.3 Layer 3 Value Derivation",
-            "Derives `component_score` from dimension evidence.",
-            "Typical contents:",
-            "- dimension → component mapping tables",
-            "- optional boundary rules",
-            "- interpretation notes",
+        ]
+    )
+
+    if layer_config.name == "layer3":
+        parts.extend(
+            [
+                "Derived from the Layer 3 component registry.",
+                "",
+            ]
+        )
+        for component_id, component_registry_rows in component_rows.items():
+            parts.extend(
+                [
+                    f"##### Component: `{component_id}`",
+                    "",
+                    render_markdown_table(
+                        [
+                            "sbo_identifier",
+                            "sbo_short_description",
+                            layer_config.output_definition_header,
+                            layer_config.output_guidance_header,
+                            "evaluation_notes",
+                            "decision_procedure",
+                        ],
+                        [
+                            [
+                                row.sbo_identifier,
+                                row.sbo_short_description,
+                                row.definition_text,
+                                row.guidance_text,
+                                row.evaluation_notes,
+                                row.decision_procedure,
+                            ]
+                            for row in component_registry_rows
+                        ],
+                    ),
+                    "",
+                ]
+            )
+    else:
+        parts.extend(
+            [
+                "Derives `component_score` from dimension evidence.",
+                "Typical contents:",
+                "- dimension → component mapping tables",
+                "- optional boundary rules",
+                "- interpretation notes",
+            ]
+        )
+
+    parts.extend(
+        [
             "#### 6.4 Layer 4 Value Derivation",
-            "Derives `submission_score` from component scores.",
-            "Typical contents:",
-            "- component aggregation rules",
-            "- optional fallback rules",
-            "- interpretation notes",
+        ]
+    )
+
+    if layer_config.name == "layer4":
+        parts.extend(
+            [
+                "Derived from the Layer 4 submission registry.",
+                "",
+                render_markdown_table(
+                    [
+                        "sbo_identifier",
+                        "sbo_short_description",
+                        layer_config.output_definition_header,
+                        layer_config.output_guidance_header,
+                        "evaluation_notes",
+                        "decision_procedure",
+                    ],
+                    [
+                        [
+                            row.sbo_identifier,
+                            row.sbo_short_description,
+                            row.definition_text,
+                            row.guidance_text,
+                            row.evaluation_notes,
+                            row.decision_procedure,
+                        ]
+                        for row in rows
+                    ],
+                ),
+                "",
+            ]
+        )
+    else:
+        parts.extend(
+            [
+                "Derives `submission_score` from component scores.",
+                "Typical contents:",
+                "- component aggregation rules",
+                "- optional fallback rules",
+                "- interpretation notes",
+            ]
+        )
+
+    parts.extend(
+        [
             "### 7. Scoring Ontology and Identifier Context",
             "Evaluation hierarchy.",
             "",
@@ -1629,12 +1955,12 @@ def render_manifest_document(
     return "\n".join(parts)
 
 
-def write_text_if_stale(output_path: Path, content: str, source_path: Path) -> str:
-    """Write output_path only when it is missing or older than source_path."""
+def write_text_if_stale(output_path: Path, content: str, source_paths: list[Path]) -> str:
+    """Write output_path only when it is missing or older than any dependency path."""
     if output_path.exists():
         output_stat = output_path.stat()
-        source_stat = source_path.stat()
-        if output_stat.st_mtime_ns >= source_stat.st_mtime_ns:
+        newest_source_mtime_ns = max(source_path.stat().st_mtime_ns for source_path in source_paths)
+        if output_stat.st_mtime_ns >= newest_source_mtime_ns:
             return "skipped"
 
     output_path.write_text(content, encoding="utf-8")
@@ -1682,8 +2008,9 @@ def main() -> int:
         registry_path,
     )
 
-    rubric_status = write_text_if_stale(rubric_path, rubric_text, registry_path)
-    manifest_status = write_text_if_stale(manifest_path, manifest_text, registry_path)
+    dependency_paths = [registry_path, Path(__file__).resolve()]
+    rubric_status = write_text_if_stale(rubric_path, rubric_text, dependency_paths)
+    manifest_status = write_text_if_stale(manifest_path, manifest_text, dependency_paths)
 
     print(f"Registry: {registry_path}")
     print(f"Registry layer: {layer_config.manifest_layer_label}")
