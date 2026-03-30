@@ -33,6 +33,7 @@ PASSTHROUGH_EXCLUDED_FIELDS = {
 	"bound_indicator_ids",
 	"evidence_status",
 }
+WIDE_EXCLUDED_FIELDS = PASSTHROUGH_EXCLUDED_FIELDS | {"source_indicator_values_json"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -54,6 +55,10 @@ def dimension_sort_key(dimension_id: str) -> tuple[int, str]:
 	if match is None:
 		return (10**9, dimension_id)
 	return (int(match.group(1)), dimension_id)
+
+
+def derive_wide_output_path(output_path: Path) -> Path:
+	return output_path.with_name(f"{output_path.stem}-wide{output_path.suffix}")
 
 
 def load_module_from_path(module_path: Path, module_name: str) -> ModuleType:
@@ -205,6 +210,62 @@ def score_submission_rows(
 	return output_rows
 
 
+def build_wide_output_rows(
+	grouped_rows: dict[str, list[dict[str, str]]],
+	output_rows: list[dict[str, str]],
+	indicator_id_field: str,
+	value_field: str,
+) -> list[dict[str, str]]:
+	dimension_ids = sorted(
+		{
+			(row.get("dimension_id") or "").strip()
+			for row in output_rows
+			if (row.get("dimension_id") or "").strip()
+		},
+		key=dimension_sort_key,
+	)
+	indicator_ids = sorted(
+		{
+			(row.get(indicator_id_field) or "").strip()
+			for submission_rows in grouped_rows.values()
+			for row in submission_rows
+			if (row.get(indicator_id_field) or "").strip()
+		},
+		key=dimension_sort_key,
+	)
+	dimension_rows_by_submission: dict[str, dict[str, dict[str, str]]] = {}
+	for row in output_rows:
+		submission_id = (row.get("submission_id") or "").strip()
+		dimension_id = (row.get("dimension_id") or "").strip()
+		if not submission_id or not dimension_id:
+			continue
+		dimension_rows_by_submission.setdefault(submission_id, {})[dimension_id] = row
+
+	wide_rows: list[dict[str, str]] = []
+	for submission_id in sorted(grouped_rows):
+		submission_rows = grouped_rows[submission_id]
+		representative_row = submission_rows[0]
+		indicator_values = build_indicator_value_map(
+			submission_id,
+			submission_rows,
+			indicator_id_field,
+			value_field,
+		)
+		wide_row = {
+			key: value
+			for key, value in representative_row.items()
+			if key not in WIDE_EXCLUDED_FIELDS
+		}
+		wide_row["component_id"] = (representative_row.get("component_id") or "").strip()
+		for dimension_id in dimension_ids:
+			dimension_row = dimension_rows_by_submission.get(submission_id, {}).get(dimension_id, {})
+			wide_row[dimension_id] = (dimension_row.get("evidence_status") or "").strip()
+		for indicator_id in indicator_ids:
+			wide_row[indicator_id] = indicator_values.get(indicator_id, "")
+		wide_rows.append(wide_row)
+	return wide_rows
+
+
 def main() -> int:
 	args = parse_args()
 	try:
@@ -227,11 +288,21 @@ def main() -> int:
 					args.value_field,
 				)
 			)
-		write_scored_rows(output_rows, args.output_file.resolve())
+		output_path = args.output_file.resolve()
+		write_scored_rows(output_rows, output_path)
+		wide_output_path = derive_wide_output_path(output_path)
+		wide_output_rows = build_wide_output_rows(
+			grouped_rows,
+			output_rows,
+			args.indicator_id_field,
+			args.value_field,
+		)
+		write_scored_rows(wide_output_rows, wide_output_path)
 	except (FileNotFoundError, ValueError) as exc:
 		print(f"Error: {exc}", file=sys.stderr)
 		return 1
-	print(args.output_file.resolve())
+	print(output_path)
+	print(wide_output_path)
 	return 0
 
 

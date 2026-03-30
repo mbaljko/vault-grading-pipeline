@@ -98,6 +98,7 @@ class RegistryRow:
     decision_procedure: str
     status: str
     template_id: str = ""
+    evidence_scale: str = ""
     scoring_payload_json: str = ""
 
 
@@ -515,6 +516,7 @@ def build_registry_rows_from_explicit_table(
                 evaluation_notes=record.get("evaluation_notes", "").strip(),
                 decision_procedure=resolve_decision_procedure(record),
                 status=record.get("status", ""),
+                evidence_scale=record.get("dimension_evidence_scale", "").strip(),
             )
         )
     return rows
@@ -561,6 +563,7 @@ def build_layer2_rows_from_instance_and_base_tables(
                 decision_procedure=resolve_decision_procedure(merged_record),
                 status=merged_record.get("status", ""),
                 template_id=dimension_template_id,
+                evidence_scale=merged_record.get("dimension_evidence_scale", "").strip(),
                 scoring_payload_json=scoring_payload_json,
             )
         )
@@ -1495,10 +1498,12 @@ def render_manifest_document(
             if "dimension_template_id" not in manifest_headers:
                 manifest_headers.extend([
                     "dimension_template_id",
+                    "dimension_evidence_scale",
                     "dimension_scoring_payload_json",
                 ])
             manifest_row.extend([
                 row.template_id,
+                row.evidence_scale,
                 row.scoring_payload_json,
             ])
         manifest_rows.append(manifest_row)
