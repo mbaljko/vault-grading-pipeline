@@ -91,6 +91,9 @@ def validate_dimension_module(module: ModuleType, module_path: Path, target_comp
 	bound_indicator_ids = getattr(module, "BOUND_INDICATOR_IDS", None)
 	if not isinstance(bound_indicator_ids, list):
 		raise ValueError(f"Module {module_path} has invalid BOUND_INDICATOR_IDS value")
+	dimension_evidence_scale = getattr(module, "DIMENSION_EVIDENCE_SCALE", None)
+	if dimension_evidence_scale is not None and not isinstance(dimension_evidence_scale, list):
+		raise ValueError(f"Module {module_path} has invalid DIMENSION_EVIDENCE_SCALE value")
 
 
 def load_dimension_modules(module_dir: Path, target_component_id: str) -> list[ModuleType]:
@@ -181,12 +184,39 @@ def build_output_row(
 	output_row["component_id"] = str(getattr(module, "COMPONENT_ID", "")).strip()
 	output_row["dimension_id"] = str(getattr(module, "DIMENSION_ID", "")).strip()
 	output_row["dimension_template_id"] = str(getattr(module, "DIMENSION_TEMPLATE_ID", "")).strip()
+	output_row["dimension_evidence_scale"] = ", ".join(
+		str(value).strip() for value in getattr(module, "DIMENSION_EVIDENCE_SCALE", []) if str(value).strip()
+	)
 	output_row["sbo_identifier"] = str(getattr(module, "SBO_IDENTIFIER", "")).strip()
 	output_row["sbo_short_description"] = str(getattr(module, "SBO_SHORT_DESCRIPTION", "")).strip()
 	output_row["bound_indicator_ids"] = ", ".join(bound_indicator_ids)
 	output_row["source_indicator_values_json"] = json.dumps(bound_indicator_values, ensure_ascii=True, sort_keys=True)
 	output_row["evidence_status"] = score_value
 	return output_row
+
+
+def build_dimension_scale_lookup(modules: list[ModuleType]) -> dict[str, dict[str, int]]:
+	lookup: dict[str, dict[str, int]] = {}
+	for module in modules:
+		dimension_id = str(getattr(module, "DIMENSION_ID", "")).strip()
+		if not dimension_id:
+			continue
+		scale_values = [
+			str(value).strip()
+			for value in getattr(module, "DIMENSION_EVIDENCE_SCALE", [])
+			if str(value).strip()
+		]
+		lookup[dimension_id] = {value: index for index, value in enumerate(scale_values)}
+	return lookup
+
+
+def ordinalize_dimension_value(value: str, ordinal_lookup: dict[str, int]) -> str:
+	normalized_value = value.strip()
+	if not normalized_value:
+		return ""
+	if normalized_value not in ordinal_lookup:
+		return normalized_value
+	return f"{ordinal_lookup[normalized_value]}-{normalized_value}"
 
 
 def score_submission_rows(
@@ -213,6 +243,7 @@ def score_submission_rows(
 def build_wide_output_rows(
 	grouped_rows: dict[str, list[dict[str, str]]],
 	output_rows: list[dict[str, str]],
+	dimension_scale_lookup: dict[str, dict[str, int]],
 	indicator_id_field: str,
 	value_field: str,
 ) -> list[dict[str, str]]:
@@ -259,7 +290,10 @@ def build_wide_output_rows(
 		wide_row["component_id"] = (representative_row.get("component_id") or "").strip()
 		for dimension_id in dimension_ids:
 			dimension_row = dimension_rows_by_submission.get(submission_id, {}).get(dimension_id, {})
-			wide_row[dimension_id] = (dimension_row.get("evidence_status") or "").strip()
+			wide_row[dimension_id] = ordinalize_dimension_value(
+				(dimension_row.get("evidence_status") or "").strip(),
+				dimension_scale_lookup.get(dimension_id, {}),
+			)
 		for indicator_id in indicator_ids:
 			wide_row[indicator_id] = indicator_values.get(indicator_id, "")
 		wide_rows.append(wide_row)
@@ -291,9 +325,11 @@ def main() -> int:
 		output_path = args.output_file.resolve()
 		write_scored_rows(output_rows, output_path)
 		wide_output_path = derive_wide_output_path(output_path)
+		dimension_scale_lookup = build_dimension_scale_lookup(modules)
 		wide_output_rows = build_wide_output_rows(
 			grouped_rows,
 			output_rows,
+			dimension_scale_lookup,
 			args.indicator_id_field,
 			args.value_field,
 		)

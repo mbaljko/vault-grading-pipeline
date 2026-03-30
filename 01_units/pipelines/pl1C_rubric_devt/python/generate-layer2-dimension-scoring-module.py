@@ -23,6 +23,7 @@ MANIFEST_REQUIRED_HEADERS = [
 	"sbo_short_description",
 	"dimension_definition",
 	"dimension_template_id",
+	"dimension_evidence_scale",
 	"dimension_scoring_payload_json",
 ]
 
@@ -126,8 +127,13 @@ def resolve_output_path(output_dir: Path, output_file_stem: str, output_format: 
 	return output_dir / f"{output_file_stem}_{dimension_id}.{output_format.lstrip('.')}"
 
 
+def parse_dimension_evidence_scale(raw_value: str) -> list[str]:
+	return [part.strip() for part in raw_value.split(",") if part.strip()]
+
+
 def build_module_source(row: dict[str, str], payload: dict[str, object]) -> str:
 	bound_indicator_ids = [str(indicator_id) for indicator_id in payload["bound_indicator_ids"]]
+	dimension_evidence_scale = parse_dimension_evidence_scale(row.get("dimension_evidence_scale", ""))
 	indicator_tokens = [str(token) for token in payload["input_indicator_tokens"]]
 	derivation_rules = [dict(rule) for rule in payload["derivation_rules"]]
 	concrete_rules = []
@@ -161,6 +167,7 @@ def build_module_source(row: dict[str, str], payload: dict[str, object]) -> str:
 			f"DIMENSION_TEMPLATE_ID = {row['dimension_template_id']!r}",
 			f"SBO_IDENTIFIER = {row['sbo_identifier']!r}",
 			f"SBO_SHORT_DESCRIPTION = {row['sbo_short_description']!r}",
+			f"DIMENSION_EVIDENCE_SCALE = {dimension_evidence_scale!r}",
 			f"BOUND_INDICATOR_IDS = {bound_indicator_ids!r}",
 			f"DERIVATION_RULES = {json.dumps(concrete_rules, ensure_ascii=True, indent=4)}",
 			"",
@@ -205,6 +212,7 @@ def build_module_source(row: dict[str, str], payload: dict[str, object]) -> str:
 			"\t'DIMENSION_TEMPLATE_ID',",
 			"\t'SBO_IDENTIFIER',",
 			"\t'SBO_SHORT_DESCRIPTION',",
+			"\t'DIMENSION_EVIDENCE_SCALE',",
 			"\t'BOUND_INDICATOR_IDS',",
 			"\t'DERIVATION_RULES',",
 			"\t'build_indicator_value_map',",
