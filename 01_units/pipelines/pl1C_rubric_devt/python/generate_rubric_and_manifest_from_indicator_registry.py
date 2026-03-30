@@ -21,6 +21,7 @@ pl1C_rubric_devt rubric payload and scoring manifest examples.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 from collections import defaultdict
 from dataclasses import dataclass
@@ -61,6 +62,8 @@ LAYER2_BASE_TABLE_REQUIRED_COLUMNS = {
 VERSION_TOKEN_RE = re.compile(r"_(v(?:_i)?\d+)\.md$", re.IGNORECASE)
 SHORTID_NUMBER_RE = re.compile(r"(\d+)")
 HEADING_RE = re.compile(r"^\s*(?P<level>#{1,6})\s+(?P<title>.+?)\s*$")
+LAYER2_RULE_HEADING_RE = re.compile(r"^\s*#{4,6}\s+(D\d+)\b")
+BINDING_LINE_RE = re.compile(r"^\s*-\s+`([^`]+)`:\s*(.*?)\s*$")
 FIELD_VALUE_TABLE_HEADERS = ["field", "value"]
 SKIPPED_REUSE_RULE_STATUSES = {"inactive", "draft"}
 
@@ -94,6 +97,8 @@ class RegistryRow:
     evaluation_notes: str
     decision_procedure: str
     status: str
+    template_id: str = ""
+    scoring_payload_json: str = ""
 
 
 LAYER_CONFIGS = {
@@ -387,6 +392,106 @@ def extract_registry_metadata(tables: list[dict[str, object]]) -> dict[str, str]
     return metadata
 
 
+def serialize_scoring_payload(payload: dict[str, object]) -> str:
+    return json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+
+
+def parse_layer2_scoring_payloads(registry_path: Path) -> dict[tuple[str, str], str]:
+    lines = registry_path.read_text(encoding="utf-8").splitlines()
+    in_layer2_value_derivation = False
+    payloads: dict[tuple[str, str], str] = {}
+    index = 0
+
+    while index < len(lines):
+        line = lines[index]
+        heading_match = HEADING_RE.match(line)
+        if heading_match:
+            heading_title = heading_match.group("title").strip().lower()
+            if heading_title == "layer 2 value derivation":
+                in_layer2_value_derivation = True
+                index += 1
+                continue
+
+        if not in_layer2_value_derivation:
+            index += 1
+            continue
+
+        template_heading_match = LAYER2_RULE_HEADING_RE.match(line)
+        if template_heading_match is None:
+            index += 1
+            continue
+
+        dimension_template_id = template_heading_match.group(1)
+        index += 1
+
+        while index + 1 < len(lines):
+            if HEADING_RE.match(lines[index]) and LAYER2_RULE_HEADING_RE.match(lines[index]):
+                break
+            if "|" not in lines[index] or "|" not in lines[index + 1]:
+                index += 1
+                continue
+            header_cells = parse_markdown_row(lines[index])
+            separator_cells = parse_markdown_row(lines[index + 1])
+            if not header_cells or len(header_cells) != len(separator_cells) or not is_separator_row(separator_cells):
+                index += 1
+                continue
+
+            headers = [cell.strip() for cell in header_cells]
+            rule_rows: list[dict[str, str]] = []
+            cursor = index + 2
+            while cursor < len(lines) and lines[cursor].lstrip().startswith("|"):
+                cells = parse_markdown_row(lines[cursor])
+                if len(cells) != len(headers):
+                    break
+                rule_rows.append({headers[cell_index]: cells[cell_index].strip() for cell_index in range(len(headers))})
+                cursor += 1
+
+            bindings_by_component: dict[str, list[str]] = {}
+            while cursor < len(lines):
+                stripped_line = lines[cursor].strip()
+                if not stripped_line:
+                    cursor += 1
+                    continue
+                if stripped_line == "---":
+                    cursor += 1
+                    break
+                if HEADING_RE.match(lines[cursor]):
+                    break
+                if stripped_line.lower() == "bindings:":
+                    cursor += 1
+                    continue
+                binding_match = BINDING_LINE_RE.match(lines[cursor])
+                if binding_match is not None:
+                    component_id = binding_match.group(1).strip()
+                    bound_indicator_ids = re.findall(r"`([^`]+)`", binding_match.group(2))
+                    bindings_by_component[component_id] = [indicator_id.strip() for indicator_id in bound_indicator_ids]
+                    cursor += 1
+                    continue
+                cursor += 1
+
+            input_indicator_tokens = headers[1:]
+            normalized_rule_rows = [
+                {
+                    "resultant_scale_value": row[headers[0]],
+                    "conditions": {token: row.get(token, "").strip() for token in input_indicator_tokens},
+                }
+                for row in rule_rows
+            ]
+            for component_id, bound_indicator_ids in bindings_by_component.items():
+                payload = {
+                    "dimension_template_id": dimension_template_id,
+                    "input_indicator_tokens": input_indicator_tokens,
+                    "bound_indicator_ids": bound_indicator_ids,
+                    "derivation_rules": normalized_rule_rows,
+                }
+                payloads[(component_id, dimension_template_id)] = serialize_scoring_payload(payload)
+
+            index = cursor
+            break
+
+    return payloads
+
+
 def build_registry_rows_from_explicit_table(
     table_rows: list[dict[str, str]],
     include_inactive: bool,
@@ -418,6 +523,7 @@ def build_registry_rows_from_explicit_table(
 def build_layer2_rows_from_instance_and_base_tables(
     instance_rows: list[dict[str, str]],
     base_rows: list[dict[str, str]],
+    scoring_payloads_by_component_template: dict[tuple[str, str], str],
     include_inactive: bool,
     layer_config: RegistryLayerConfig,
 ) -> list[RegistryRow]:
@@ -436,6 +542,10 @@ def build_layer2_rows_from_instance_and_base_tables(
         dimension_template_id = instance_row.get("dimension_template_id", "").strip()
         merged_record = dict(base_by_template_id.get(dimension_template_id, {}))
         merged_record.update(instance_row)
+        scoring_payload_json = scoring_payloads_by_component_template.get(
+            (merged_record["component_id"].strip(), dimension_template_id),
+            "",
+        )
 
         rows.append(
             RegistryRow(
@@ -450,6 +560,8 @@ def build_layer2_rows_from_instance_and_base_tables(
                 evaluation_notes=merged_record.get("evaluation_notes", "").strip(),
                 decision_procedure=resolve_decision_procedure(merged_record),
                 status=merged_record.get("status", ""),
+                template_id=dimension_template_id,
+                scoring_payload_json=scoring_payload_json,
             )
         )
 
@@ -818,6 +930,7 @@ def load_registry_rows(
 ) -> list[RegistryRow]:
     tables = collect_markdown_tables(registry_path)
     registry_metadata = extract_registry_metadata(tables)
+    layer2_scoring_payloads = parse_layer2_scoring_payloads(registry_path) if layer_config.name == "layer2" else {}
 
     explicit_table: dict[str, object] | None = None
     layer2_base_rows = collect_section_rows(
@@ -895,6 +1008,7 @@ def load_registry_rows(
             rows = build_layer2_rows_from_instance_and_base_tables(
                 instance_rows=explicit_rows,
                 base_rows=layer2_base_rows,
+                scoring_payloads_by_component_template=layer2_scoring_payloads,
                 include_inactive=include_inactive,
                 layer_config=layer_config,
             )
@@ -1355,8 +1469,19 @@ def render_manifest_document(
     layer_config: RegistryLayerConfig,
 ) -> str:
     component_rows = group_rows_by_component(rows)
-    manifest_rows = [
-        [
+    manifest_headers = [
+        "component_id",
+        "sbo_identifier",
+        layer_config.item_id_field,
+        "sbo_short_description",
+        layer_config.output_definition_header,
+        layer_config.output_guidance_header,
+        "evaluation_notes",
+        "decision_procedure",
+    ]
+    manifest_rows: list[list[str]] = []
+    for row in rows:
+        manifest_row = [
             row.component_id,
             f"`{row.sbo_identifier}`",
             f"`{row.item_id}`",
@@ -1366,8 +1491,17 @@ def render_manifest_document(
             row.evaluation_notes,
             row.decision_procedure,
         ]
-        for row in rows
-    ]
+        if layer_config.name == "layer2":
+            if "dimension_template_id" not in manifest_headers:
+                manifest_headers.extend([
+                    "dimension_template_id",
+                    "dimension_scoring_payload_json",
+                ])
+            manifest_row.extend([
+                row.template_id,
+                row.scoring_payload_json,
+            ])
+        manifest_rows.append(manifest_row)
 
     parts = [
         f"## {title_stem}",
@@ -1405,16 +1539,7 @@ def render_manifest_document(
         f"### 3. {layer_config.section_layer_label} {layer_config.item_label} Scoring Manifest",
         "",
         render_markdown_table(
-            [
-                "component_id",
-                "sbo_identifier",
-                layer_config.item_id_field,
-                "sbo_short_description",
-                layer_config.output_definition_header,
-                layer_config.output_guidance_header,
-                "evaluation_notes",
-                "decision_procedure",
-            ],
+            manifest_headers,
             manifest_rows,
         ),
         "",
