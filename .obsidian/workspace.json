@@ -277,12 +277,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v02.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO"
+              "title": "Rubric_SpecificationGuide_v02"
             }
           }
         ],
@@ -432,13 +432,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v02.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO"
+              "title": "Outline of Rubric_SpecificationGuide_v02"
             }
           },
           {
@@ -472,8 +472,9 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "e5174a9fca7b05c1",
+  "active": "30b7ed3094eafc89",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate-layer2-dimension-scoring-module.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/generate-layer2-dimension-scoring-module.py",
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS.md",
@@ -487,7 +488,6 @@
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate-scoring-report.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/generate-scoring-report.py",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/materialize-component-scored-csv.cpython-313.pyc",
-    "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/component_scored_texts.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/README.md",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1C_scaffold_stage13_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1B_scaffold_stage13_Layer1_Indicator_Scoring_Prompt.md",
@@ -508,7 +508,6 @@
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification_inclCaseStudy.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2B.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP1B.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md"
   ]
 }
