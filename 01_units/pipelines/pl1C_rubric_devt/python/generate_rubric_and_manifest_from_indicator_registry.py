@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
-"""Generate rubric payload and scoring manifest markdown from Layer 1 or Layer 2 registries.
+"""Generate rubric payload and scoring manifest markdown from Layer 1-4 registries.
 
-This script reads a markdown registry, extracts either Layer 1 indicator rows
-or Layer 2 dimension rows, and writes two markdown outputs in the same
-directory by default. Layer 1 registries may continue to use the existing wide
-markdown tables or the Base Table plus Reuse Rule Table expansion model. Layer
-2 registries are currently expected to provide an explicit dimension table.
+This script reads a markdown registry, extracts Layer 1 indicator rows, Layer 2
+dimension rows, Layer 3 component rows, or Layer 4 submission rows, and writes
+two markdown outputs in the same directory by default. Layer 1 registries may
+continue to use the existing wide markdown tables or the Base Table plus Reuse
+Rule Table expansion model. Layers 2-4 are expected to provide explicit tables.
 
 Default outputs:
 
 - RUBRIC_<ASSESSMENT>_CAL_payload_<VERSION>.md for Layer 1
 - RUBRIC_<ASSESSMENT>_CAL_payload_Layer2_<VERSION>.md for Layer 2
+- RUBRIC_<ASSESSMENT>_CAL_payload_Layer3_<VERSION>.md for Layer 3
+- RUBRIC_<ASSESSMENT>_CAL_payload_Layer4_<VERSION>.md for Layer 4
 - <ASSESSMENT>_Layer1_ScoringManifest_<VERSION>.md
 - <ASSESSMENT>_Layer2_ScoringManifest_<VERSION>.md
+- <ASSESSMENT>_Layer3_ScoringManifest_<VERSION>.md
+- <ASSESSMENT>_Layer4_ScoringManifest_<VERSION>.md
 
 The generated documents follow the same structural conventions as the existing
 pl1C_rubric_devt rubric payload and scoring manifest examples.
@@ -53,6 +57,13 @@ LAYER2_REQUIRED_REGISTRY_COLUMNS = {
     "dimension_id",
     *COMMON_EXPLICIT_REQUIRED_COLUMNS,
 }
+LAYER3_REQUIRED_REGISTRY_COLUMNS = {
+    *COMMON_EXPLICIT_REQUIRED_COLUMNS,
+}
+LAYER4_REQUIRED_REGISTRY_COLUMNS = {
+    "assessment_id",
+    "sbo_short_description",
+}
 LAYER2_BASE_TABLE_REQUIRED_COLUMNS = {
     "dimension_template_id",
     "dimension_local_id",
@@ -75,6 +86,7 @@ class RegistryLayerConfig:
     section_layer_label: str
     item_label: str
     item_id_field: str
+    manifest_item_id_field: str
     explicit_required_columns: set[str]
     definition_field_candidates: tuple[str, ...]
     guidance_field_candidates: tuple[str, ...]
@@ -82,6 +94,7 @@ class RegistryLayerConfig:
     output_guidance_header: str
     supports_base_table_reuse: bool
     rubric_filename_suffix: str
+    manifest_includes_component_id: bool = True
 
 
 @dataclass(frozen=True)
@@ -109,6 +122,7 @@ LAYER_CONFIGS = {
         section_layer_label="Layer 1",
         item_label="Indicator",
         item_id_field="indicator_id",
+        manifest_item_id_field="indicator_id",
         explicit_required_columns=LAYER1_REQUIRED_REGISTRY_COLUMNS,
         definition_field_candidates=("indicator_definition",),
         guidance_field_candidates=("assessment_guidance",),
@@ -123,6 +137,7 @@ LAYER_CONFIGS = {
         section_layer_label="Layer 2",
         item_label="Dimension",
         item_id_field="dimension_id",
+        manifest_item_id_field="dimension_id",
         explicit_required_columns=LAYER2_REQUIRED_REGISTRY_COLUMNS,
         definition_field_candidates=("dimension_definition", "scoring_claim", "dimension_claim"),
         guidance_field_candidates=("dimension_guidance", "assessment_guidance", "dimension_notes"),
@@ -131,12 +146,43 @@ LAYER_CONFIGS = {
         supports_base_table_reuse=False,
         rubric_filename_suffix="_Layer2",
     ),
+    "layer3": RegistryLayerConfig(
+        name="layer3",
+        manifest_layer_label="Layer3",
+        section_layer_label="Layer 3",
+        item_label="Component",
+        item_id_field="component_id",
+        manifest_item_id_field="",
+        explicit_required_columns=LAYER3_REQUIRED_REGISTRY_COLUMNS,
+        definition_field_candidates=("component_definition", "scoring_claim", "component_claim"),
+        guidance_field_candidates=("component_guidance", "assessment_guidance", "component_notes"),
+        output_definition_header="component_definition",
+        output_guidance_header="component_guidance",
+        supports_base_table_reuse=False,
+        rubric_filename_suffix="_Layer3",
+    ),
+    "layer4": RegistryLayerConfig(
+        name="layer4",
+        manifest_layer_label="Layer4",
+        section_layer_label="Layer 4",
+        item_label="Submission",
+        item_id_field="",
+        manifest_item_id_field="",
+        explicit_required_columns=LAYER4_REQUIRED_REGISTRY_COLUMNS,
+        definition_field_candidates=("submission_definition", "scoring_claim", "submission_claim"),
+        guidance_field_candidates=("submission_guidance", "assessment_guidance", "submission_notes"),
+        output_definition_header="submission_definition",
+        output_guidance_header="submission_guidance",
+        supports_base_table_reuse=False,
+        rubric_filename_suffix="_Layer4",
+        manifest_includes_component_id=False,
+    ),
 }
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate rubric and scoring manifest markdown from a Layer 1 or Layer 2 registry."
+        description="Generate rubric and scoring manifest markdown from a Layer 1, 2, 3, or 4 registry."
     )
     parser.add_argument(
         "--registry",
@@ -148,7 +194,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--registry-layer",
-        choices=["auto", "layer1", "layer2"],
+        choices=["auto", "layer1", "layer2", "layer3", "layer4"],
         default="auto",
         help="Registry layer to load. Defaults to auto-detection.",
     )
@@ -186,6 +232,7 @@ def resolve_first_present(record: dict[str, str], field_names: tuple[str, ...]) 
 def infer_registry_layer(
     tables: list[dict[str, object]],
     requested_layer: str,
+    registry_path: Path,
 ) -> RegistryLayerConfig:
     if requested_layer != "auto":
         return LAYER_CONFIGS[requested_layer]
@@ -196,14 +243,26 @@ def infer_registry_layer(
             return LAYER_CONFIGS["layer2"]
         if "indicator_id" in headers:
             return LAYER_CONFIGS["layer1"]
+        if {"assessment_id", "component_id", "sbo_short_description"}.issubset(headers):
+            if headers & {"component_definition", "component_guidance", "component_notes", "component_claim"}:
+                return LAYER_CONFIGS["layer3"]
+        if {"assessment_id", "sbo_short_description"}.issubset(headers) and "component_id" not in headers:
+            if headers & {"submission_definition", "submission_guidance", "submission_notes", "submission_claim"}:
+                return LAYER_CONFIGS["layer4"]
 
     base_table = find_table_by_heading(tables, "base table")
     reuse_table = find_table_by_heading(tables, "reuse rule table")
     if base_table is not None and reuse_table is not None:
         return LAYER_CONFIGS["layer1"]
 
+    registry_name = registry_path.name.lower()
+    if "layer3" in registry_name:
+        return LAYER_CONFIGS["layer3"]
+    if "layer4" in registry_name:
+        return LAYER_CONFIGS["layer4"]
+
     raise ValueError(
-        "Could not infer registry layer. Pass --registry-layer layer1 or --registry-layer layer2 explicitly."
+        "Could not infer registry layer. Pass --registry-layer layer1, layer2, layer3, or layer4 explicitly."
     )
 
 
@@ -503,11 +562,12 @@ def build_registry_rows_from_explicit_table(
         status = record.get("status", "").strip().lower()
         if not include_inactive and status and status != "active":
             continue
+        item_id = record.get(layer_config.item_id_field, "").strip() if layer_config.item_id_field else ""
         rows.append(
             RegistryRow(
-                item_id=record[layer_config.item_id_field].strip(),
+                item_id=item_id,
                 assessment_id=record["assessment_id"].strip(),
-                component_id=record["component_id"].strip(),
+                component_id=record.get("component_id", "").strip(),
                 sbo_identifier=resolve_sbo_identifier(record),
                 sbo_identifier_shortid=resolve_sbo_identifier_shortid(record),
                 sbo_short_description=record["sbo_short_description"].strip(),
@@ -1043,17 +1103,21 @@ def resolve_sbo_identifier(record: dict[str, str]) -> str:
         return explicit_value
 
     assessment_id = record["assessment_id"].strip()
-    component_id = record["component_id"].strip()
+    component_id = record.get("component_id", "").strip()
     item_id = (
         record.get("indicator_id", "").strip()
         or record.get("dimension_id", "").strip()
     )
-    if not item_id:
-        raise ValueError("Record is missing indicator_id/dimension_id required to derive sbo_identifier.")
-    component_shortid = derive_component_shortid(component_id)
     if "indicator_id" in record and record.get("indicator_id", "").strip():
+        component_shortid = derive_component_shortid(component_id)
         return f"I_{assessment_id}_{component_shortid}_{item_id}"
-    return f"D_{assessment_id}_{component_shortid}_{item_id}"
+    if "dimension_id" in record and record.get("dimension_id", "").strip():
+        component_shortid = derive_component_shortid(component_id)
+        return f"D_{assessment_id}_{component_shortid}_{item_id}"
+    if component_id:
+        component_shortid = derive_component_shortid(component_id)
+        return f"C_{assessment_id}_{component_shortid}"
+    return f"S_{assessment_id}"
 
 
 def resolve_sbo_identifier_shortid(record: dict[str, str]) -> str:
@@ -1063,6 +1127,8 @@ def resolve_sbo_identifier_shortid(record: dict[str, str]) -> str:
     return (
         record.get("indicator_id", "").strip()
         or record.get("dimension_id", "").strip()
+        or derive_component_shortid(record.get("component_id", "").strip())
+        or "submission"
     )
 
 
@@ -1472,28 +1538,36 @@ def render_manifest_document(
     layer_config: RegistryLayerConfig,
 ) -> str:
     component_rows = group_rows_by_component(rows)
-    manifest_headers = [
-        "component_id",
+    manifest_headers: list[str] = []
+    if layer_config.manifest_includes_component_id:
+        manifest_headers.append("component_id")
+    manifest_headers.extend([
         "sbo_identifier",
-        layer_config.item_id_field,
+    ])
+    if layer_config.manifest_item_id_field:
+        manifest_headers.append(layer_config.manifest_item_id_field)
+    manifest_headers.extend([
         "sbo_short_description",
         layer_config.output_definition_header,
         layer_config.output_guidance_header,
         "evaluation_notes",
         "decision_procedure",
-    ]
+    ])
     manifest_rows: list[list[str]] = []
     for row in rows:
-        manifest_row = [
-            row.component_id,
-            f"`{row.sbo_identifier}`",
-            f"`{row.item_id}`",
+        manifest_row: list[str] = []
+        if layer_config.manifest_includes_component_id:
+            manifest_row.append(row.component_id)
+        manifest_row.append(f"`{row.sbo_identifier}`")
+        if layer_config.manifest_item_id_field:
+            manifest_row.append(f"`{row.item_id}`")
+        manifest_row.extend([
             f"`{row.sbo_short_description}`",
             row.definition_text,
             row.guidance_text,
             row.evaluation_notes,
             row.decision_procedure,
-        ]
+        ])
         if layer_config.name == "layer2":
             if "dimension_template_id" not in manifest_headers:
                 manifest_headers.extend([
@@ -1508,6 +1582,18 @@ def render_manifest_document(
             ])
         manifest_rows.append(manifest_row)
 
+    metadata_rows = [
+        ["assessment_id", assessment_id],
+        ["scoring_layer", layer_config.manifest_layer_label],
+        ["scoring_scope", "participant_id × component_id" if layer_config.name != "layer4" else "participant_id"],
+        ["ontology_reference", "Rubric_SpecificationGuide_v*"],
+        ["expected_input_identifier", "participant_id"],
+        ["runtime_output_identifier", "submission_id"],
+    ]
+    if layer_config.manifest_includes_component_id:
+        metadata_rows.append(["component_registry_count", str(len(component_rows))])
+    metadata_rows.append([f"total_{layer_config.item_label.lower()}_count", str(len(rows))])
+
     parts = [
         f"## {title_stem}",
         "",
@@ -1515,16 +1601,7 @@ def render_manifest_document(
         "",
         render_markdown_table(
             ["field", "value"],
-            [
-                ["assessment_id", assessment_id],
-                ["scoring_layer", layer_config.manifest_layer_label],
-                ["scoring_scope", "participant_id × component_id"],
-                ["ontology_reference", "Rubric_SpecificationGuide_v*"],
-                ["expected_input_identifier", "participant_id"],
-                ["runtime_output_identifier", "submission_id"],
-                ["component_registry_count", str(len(component_rows))],
-                [f"total_{layer_config.item_label.lower()}_count", str(len(rows))],
-            ],
+            metadata_rows,
         ),
         "",
         "### 2. Identifier context",
@@ -1532,7 +1609,7 @@ def render_manifest_document(
         "Scoring unit:",
         "",
         "```text",
-        "participant_id × component_id",
+        "participant_id" if layer_config.name == "layer4" else "participant_id × component_id",
         "```",
         "",
         "Identifier relationship:",
@@ -1576,7 +1653,7 @@ def main() -> int:
         raise FileNotFoundError(f"Registry not found: {registry_path}")
 
     tables = collect_markdown_tables(registry_path)
-    layer_config = infer_registry_layer(tables, args.registry_layer)
+    layer_config = infer_registry_layer(tables, args.registry_layer, registry_path)
 
     rows = load_registry_rows(
         registry_path,
