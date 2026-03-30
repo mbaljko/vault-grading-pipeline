@@ -749,6 +749,37 @@ def build_template_counts_by_label(
 	return counts_by_template
 
 
+def build_template_component_counts_by_label(
+	component_ids: list[str],
+	history_labels: list[str],
+	historical_rows_by_label: dict[str, dict[str, list[dict[str, str]]]],
+	base_row_reverse_lookup: dict[tuple[str, str], dict[str, str]],
+) -> dict[str, dict[str, dict[str, dict[str, int]]]]:
+	counts_by_template_component: dict[str, dict[str, dict[str, dict[str, int]]]] = {}
+	for history_label in history_labels:
+		for component_id in component_ids:
+			for row in historical_rows_by_label.get(history_label, {}).get(component_id, []):
+				indicator_id = (row.get("indicator_id") or "").strip()
+				if not indicator_id:
+					continue
+				base_row_info = base_row_reverse_lookup.get((component_id, indicator_id))
+				if base_row_info is None:
+					continue
+				template_id = (base_row_info.get("template_id") or "").strip()
+				if not template_id:
+					continue
+				counts_by_template_component.setdefault(template_id, {})
+				counts_by_template_component[template_id].setdefault(component_id, {})
+				counts_by_template_component[template_id][component_id].setdefault(
+					history_label,
+					{"positive": 0, "number_scored": 0},
+				)
+				counts_by_template_component[template_id][component_id][history_label]["number_scored"] += 1
+				if is_positive_scored_row(row):
+					counts_by_template_component[template_id][component_id][history_label]["positive"] += 1
+	return counts_by_template_component
+
+
 def classify_variance_rate(variance_rate: float) -> str:
 	if variance_rate == 0:
 		return "stable"
@@ -839,7 +870,7 @@ def build_item_metric_note() -> str:
 	return (
 		"Item-level metrics align each item across runs using the union of observed item keys. "
 		"For indicator rows, items are submission_ids within a component-indicator pair. "
-		"For template rows, items are pooled component-indicator-submission tuples across all expanded indicators mapped to the template. "
+		"For template rows, flip_rate, consensus_rate, and ici are recomputed from pooled component-indicator-submission tuples across all expanded indicators mapped to the template, while max_item_disagreement is the maximum component-level disagreement count. "
 		"Missing observations are treated as empty cells when computing disagreements and consensus."
 	)
 
@@ -899,6 +930,35 @@ def build_item_histories_by_template(
 	return item_histories
 
 
+def build_item_histories_by_template_component(
+	stability_labels: list[str],
+	historical_rows_by_label: dict[str, dict[str, list[dict[str, str]]]],
+	base_row_reverse_lookup: dict[tuple[str, str], dict[str, str]],
+) -> dict[str, dict[str, dict[tuple[str, str], list[str]]]]:
+	label_positions = {label: index for index, label in enumerate(stability_labels)}
+	item_histories: dict[str, dict[str, dict[tuple[str, str], list[str]]]] = {}
+	for history_label in stability_labels:
+		label_index = label_positions[history_label]
+		for component_id, rows in historical_rows_by_label.get(history_label, {}).items():
+			for row in rows:
+				indicator_id = (row.get("indicator_id") or "").strip()
+				submission_id = (row.get("submission_id") or "").strip()
+				if not indicator_id or not submission_id:
+					continue
+				base_row_info = base_row_reverse_lookup.get((component_id, indicator_id))
+				if base_row_info is None:
+					continue
+				template_id = (base_row_info.get("template_id") or "").strip()
+				if not template_id:
+					continue
+				template_histories = item_histories.setdefault(template_id, {})
+				component_histories = template_histories.setdefault(component_id, {})
+				item_key = (indicator_id, submission_id)
+				item_history = component_histories.setdefault(item_key, [""] * len(stability_labels))
+				item_history[label_index] = summarize_score_value(row.get("evidence_status") or "")
+	return item_histories
+
+
 def calculate_item_stability_metrics(item_histories: dict[object, list[str]]) -> dict[str, int | str]:
 	total_items = len(item_histories)
 	if total_items == 0:
@@ -930,6 +990,43 @@ def calculate_item_stability_metrics(item_histories: dict[object, list[str]]) ->
 		"max_item_disagreement": str(max(disagreements_by_pair) if disagreements_by_pair else 0),
 		"ici": format_ratio(ever_flip_items, total_items),
 	}
+
+
+def calculate_max_component_item_disagreement(
+	template_component_item_histories: dict[str, dict[tuple[str, str], list[str]]],
+) -> str:
+	max_disagreement = 0
+	for component_histories in template_component_item_histories.values():
+		component_metrics = calculate_item_stability_metrics(component_histories)
+		max_disagreement = max(max_disagreement, int(str(component_metrics["max_item_disagreement"])))
+	return str(max_disagreement)
+
+
+def calculate_max_component_template_variance_rate(
+	stability_labels: list[str],
+	template_component_counts_by_label: dict[str, dict[str, dict[str, int]]],
+	sample_size: int,
+) -> float:
+	component_variance_rates: list[float] = []
+	for component_counts_by_label in template_component_counts_by_label.values():
+		number_scored_counts = [
+			component_counts_by_label.get(label, {}).get("number_scored", 0)
+			for label in stability_labels
+		]
+		positive_counts = [
+			component_counts_by_label.get(label, {}).get("positive", 0)
+			for label in stability_labels
+		]
+		absolute_deltas = [
+			abs(current_count - previous_count)
+			for previous_count, current_count in zip(positive_counts, positive_counts[1:])
+		]
+		max_delta = max(absolute_deltas) if absolute_deltas else 0
+		denominator = max(number_scored_counts) if any(number_scored_counts) else (sample_size if sample_size > 0 else 1)
+		component_variance_rates.append(max_delta / denominator)
+	if not component_variance_rates:
+		return 0.0
+	return max(component_variance_rates)
 
 
 def extract_signed_deltas_from_stability_row(stability_labels: list[str], row: list[str]) -> list[int]:
@@ -1074,18 +1171,23 @@ def build_intra_report_template_variance_summary_rows(
 	base_rows: list[list[str]],
 	template_counts_by_label: dict[str, dict[str, dict[str, int]]],
 	template_item_histories: dict[str, dict[tuple[str, str, str], list[str]]],
+	template_component_counts_by_label: dict[str, dict[str, dict[str, dict[str, int]]]],
+	template_component_item_histories: dict[str, dict[str, dict[tuple[str, str], list[str]]]],
 	sample_size: int,
 ) -> list[list[str]]:
 	if len(stability_labels) < 3:
 		return []
 
-	denominator = sample_size if sample_size > 0 else 1
 	summary_rows: list[list[str]] = []
 	for base_row in base_rows:
 		template_id = base_row[0]
 		local_slot = base_row[1]
 		expanded_indicator_ids = base_row[2]
 		sbo_short_description = base_row[3]
+		number_scored_counts = [
+			template_counts_by_label.get(template_id, {}).get(label, {}).get("number_scored", 0)
+			for label in stability_labels
+		]
 		positive_counts = [
 			template_counts_by_label.get(template_id, {}).get(label, {}).get("positive", 0)
 			for label in stability_labels
@@ -1099,10 +1201,17 @@ def build_intra_report_template_variance_summary_rows(
 			for previous_count, current_count in zip(positive_counts, positive_counts[1:])
 		]
 		max_delta = max(absolute_deltas) if absolute_deltas else 0
-		variance_rate = max_delta / denominator
+		variance_rate = calculate_max_component_template_variance_rate(
+			stability_labels,
+			template_component_counts_by_label.get(template_id, {}),
+			sample_size,
+		)
 		classification = classify_variance_rate(variance_rate)
 		run_pattern = classify_run_pattern(signed_deltas, len(stability_labels))
 		item_metrics = calculate_item_stability_metrics(template_item_histories.get(template_id, {}))
+		max_component_item_disagreement = calculate_max_component_item_disagreement(
+			template_component_item_histories.get(template_id, {})
+		)
 		summary_rows.append(
 			[
 				template_id,
@@ -1111,7 +1220,7 @@ def build_intra_report_template_variance_summary_rows(
 				sbo_short_description,
 				format_signed_deltas(signed_deltas),
 				run_pattern,
-				str(item_metrics["max_item_disagreement"]),
+				max_component_item_disagreement,
 				str(item_metrics["flip_rate"]),
 				str(item_metrics["consensus_rate"]),
 				str(item_metrics["ici"]),
@@ -2047,7 +2156,18 @@ def render_consolidated_scoring_stats_document(
 					historical_rows_by_label,
 					base_row_reverse_lookup,
 				)
+				template_component_counts_by_label = build_template_component_counts_by_label(
+					component_ids,
+					stability_labels,
+					historical_rows_by_label,
+					base_row_reverse_lookup,
+				)
 				template_item_histories = build_item_histories_by_template(
+					stability_labels,
+					historical_rows_by_label,
+					base_row_reverse_lookup,
+				)
+				template_component_item_histories = build_item_histories_by_template_component(
 					stability_labels,
 					historical_rows_by_label,
 					base_row_reverse_lookup,
@@ -2057,6 +2177,8 @@ def render_consolidated_scoring_stats_document(
 					base_rows,
 					template_counts_by_label,
 					template_item_histories,
+					template_component_counts_by_label,
+					template_component_item_histories,
 					sample_size,
 				)
 				diff_report_parts.extend([
@@ -2105,6 +2227,7 @@ def render_consolidated_scoring_stats_document(
 					"",
 					f"Source report: {output_path.name}",
 					build_run_pattern_note(len(stability_labels)),
+					"For template rows, adjacent_deltas and run_pattern are derived from pooled template deltas; flip_rate, consensus_rate, and ici are recomputed from pooled item labels; max_item_disagreement is the maximum component-level disagreement count; variance_rate is the maximum component-level variance_rate across contributing components.",
 					build_item_metric_note(),
 					"",
 				])
