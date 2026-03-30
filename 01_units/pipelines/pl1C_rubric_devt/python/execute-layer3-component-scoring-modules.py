@@ -35,6 +35,7 @@ EXCLUDED_PASSTHROUGH_FIELDS = {
 	"flags_any_indicator",
 	"min_confidence_indicator",
 }
+WIDE_EXCLUDED_FIELDS = EXCLUDED_PASSTHROUGH_FIELDS | {"source_dimension_values_json"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,6 +52,10 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument("--confidence-field", type=str, default="min_confidence_indicator")
 	parser.add_argument("--flags-field", type=str, default="flags_any_indicator")
 	return parser.parse_args()
+
+
+def derive_wide_output_path(output_path: Path) -> Path:
+	return output_path.with_name(f"{output_path.stem}-wide{output_path.suffix}")
 
 
 def load_module_from_path(path: Path) -> ModuleType:
@@ -125,6 +130,17 @@ def build_passthrough_row(rows: list[dict[str, str]]) -> dict[str, str]:
 	return passthrough_row
 
 
+def build_wide_output_row(output_row: dict[str, str], bound_dimension_ids: list[str]) -> dict[str, str]:
+	wide_row = {key: value for key, value in output_row.items() if key not in WIDE_EXCLUDED_FIELDS}
+	raw_dimension_values = str(output_row.get("source_dimension_values_json", "")).strip()
+	dimension_values = json.loads(raw_dimension_values) if raw_dimension_values else {}
+	if not isinstance(dimension_values, dict):
+		raise ValueError("source_dimension_values_json must decode to an object.")
+	for dimension_id in bound_dimension_ids:
+		wide_row[dimension_id] = str(dimension_values.get(dimension_id, "")).strip()
+	return wide_row
+
+
 def score_submission_rows(
 	module: ModuleType,
 	submission_rows: list[dict[str, str]],
@@ -173,11 +189,17 @@ def main() -> int:
 			)
 			for _, submission_rows in sorted(submission_groups.items())
 		]
-		write_scored_rows(output_rows, args.output_file.resolve())
+		output_path = args.output_file.resolve()
+		write_scored_rows(output_rows, output_path)
+		bound_dimension_ids = [str(dimension_id) for dimension_id in getattr(module, "BOUND_DIMENSION_IDS", [])]
+		wide_output_rows = [build_wide_output_row(output_row, bound_dimension_ids) for output_row in output_rows]
+		wide_output_path = derive_wide_output_path(output_path)
+		write_scored_rows(wide_output_rows, wide_output_path)
 	except (FileNotFoundError, ImportError, ValueError, OSError) as exc:
 		print(f"Error: {exc}", file=sys.stderr)
 		return 1
-	print(args.output_file.resolve())
+	print(output_path)
+	print(wide_output_path)
 	return 0
 
 
