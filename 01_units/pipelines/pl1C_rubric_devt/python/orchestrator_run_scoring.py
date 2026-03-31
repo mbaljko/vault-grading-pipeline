@@ -204,9 +204,10 @@ def format_elapsed_hms(elapsed_seconds: float) -> str:
 	return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
-def print_timing_summary(args: argparse.Namespace, elapsed_seconds: float) -> None:
+def print_timing_summary(args: argparse.Namespace, elapsed_seconds: float, exit_code: int) -> None:
 	print(
 		"Completed scoring orchestrator\n"
+		f"exit_code={exit_code}\n"
 		f"mode={args.scoring_mode}\n"
 		f"elapsed_seconds={elapsed_seconds:.3f}\n"
 		f"elapsed_hms={format_elapsed_hms(elapsed_seconds)}"
@@ -286,7 +287,6 @@ def run_single_response_mode(
 	)
 	print(f"Wrote aggregated CSV output: {final_output_path}")
 	print(f"Wrote orchestrator metadata: {metadata_path}")
-	print_timing_summary(args, elapsed_seconds)
 	return 0
 
 
@@ -300,18 +300,21 @@ def resolve_runner_path(args: argparse.Namespace) -> Path:
 def main() -> int:
 	args, forwarded_args = parse_args(sys.argv[1:])
 	start_ts = time.perf_counter()
+	exit_code = 1
 	try:
 		runner_path = resolve_runner_path(args)
 		if args.scoring_mode == "single-response":
-			return run_single_response_mode(runner_path, args, forwarded_args)
+			exit_code = run_single_response_mode(runner_path, args, forwarded_args)
+			return exit_code
+
+		exit_code = invoke_runner(runner_path, forwarded_args)
+		return exit_code
 	except (FileNotFoundError, ValueError) as exc:
 		print(f"Error: {exc}", file=sys.stderr)
-		return 1
-
-	exit_code = invoke_runner(runner_path, forwarded_args)
-	if exit_code == 0:
-		print_timing_summary(args, time.perf_counter() - start_ts)
-	return exit_code
+		exit_code = 1
+		return exit_code
+	finally:
+		print_timing_summary(args, time.perf_counter() - start_ts, exit_code)
 
 
 if __name__ == "__main__":
