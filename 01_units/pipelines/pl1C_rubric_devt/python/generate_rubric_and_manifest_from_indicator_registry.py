@@ -1573,12 +1573,12 @@ def resolve_output_paths(
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
 
     rubric_path = (
-        with_registry_version_suffix(rubric_output.resolve(), version_token)
+        rubric_output.resolve()
         if rubric_output
         else resolved_output_dir / f"RUBRIC_{assessment_id}_CAL_payload{layer_config.rubric_filename_suffix}_{version_token}.md"
     )
     manifest_path = (
-        with_registry_version_suffix(manifest_output.resolve(), version_token)
+        manifest_output.resolve()
         if manifest_output
         else resolved_output_dir / f"{assessment_id}_{layer_config.manifest_layer_label}_ScoringManifest_{version_token}.md"
     )
