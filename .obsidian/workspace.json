@@ -474,6 +474,8 @@
   },
   "active": "e5174a9fca7b05c1",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/python/execute-layer4-submission-scoring-modules.py",
+    "01_units/pipelines/pl1C_rubric_devt/python/generate-layer4-submission-scoring-module.py",
     "01_units/pipelines/pl1C_rubric_devt/python/generate-layer4-submission-scoring-prompt.py",
     "01_units/pipelines/pl1C_rubric_devt/python/generate-layer3-submission-payload.py",
     "01_units/pipelines/pl1C_rubric_devt/python/execute-layer3-component-scoring-modules.py",
@@ -487,8 +489,6 @@
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS.md",
     "01_units/pipelines/pl1C_rubric_devt/python/generate-registry-change-report",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - single indicator.md",
-    "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/collect-itp-panel-reports.cpython-313.pyc",
-    "01_units/pipelines/pl1C_rubric_devt/python/orchestrator_run_scoring.py",
     "01_units/pipelines/pl1C_rubric_devt/README.md",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1C_scaffold_stage13_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1B_scaffold_stage13_Layer1_Indicator_Scoring_Prompt.md",

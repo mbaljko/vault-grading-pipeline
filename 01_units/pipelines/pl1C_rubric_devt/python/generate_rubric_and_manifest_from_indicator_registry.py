@@ -84,6 +84,13 @@ KNOWN_COMPONENT_PERFORMANCE_ORDER = {
     "meets_expectations": 3,
     "exceeds_expectations": 4,
 }
+KNOWN_SUBMISSION_PERFORMANCE_ORDER = {
+    "not_demonstrated": 0,
+    "below_expectations": 1,
+    "approaching_expectations": 2,
+    "meets_expectations": 3,
+    "exceeds_expectations": 4,
+}
 
 
 @dataclass(frozen=True)
@@ -674,6 +681,8 @@ def resolve_scale_text(record: dict[str, str], layer_config: RegistryLayerConfig
         return record.get("dimension_evidence_scale", "").strip()
     if layer_config.name == "layer3":
         return record.get("component_performance_scale", "").strip()
+    if layer_config.name == "layer4":
+        return record.get("submission_performance_scale", "").strip()
     return ""
 
 
@@ -682,6 +691,8 @@ def resolve_scoring_payload_json(record: dict[str, str], layer_config: RegistryL
         return record.get("dimension_scoring_payload_json", "").strip()
     if layer_config.name == "layer3":
         return record.get("component_scoring_payload_json", "").strip()
+    if layer_config.name == "layer4":
+        return record.get("submission_scoring_payload_json", "").strip()
     return ""
 
 
@@ -712,6 +723,11 @@ def derive_ordered_scale_values(values: list[str], known_order: dict[str, int]) 
     if deduplicated_values and all(value in known_order for value in deduplicated_values):
         return sorted(deduplicated_values, key=lambda value: known_order[value])
     return deduplicated_values
+
+
+def normalize_scale_token(value: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "_", value.strip().lower())
+    return normalized.strip("_")
 
 
 def parse_layer2_scoring_payloads(registry_path: Path) -> dict[tuple[str, str], str]:
@@ -853,6 +869,72 @@ def parse_layer3_scoring_payloads(registry_path: Path) -> dict[str, dict[str, st
         payloads[component_id] = {
             "component_scoring_payload_json": serialize_scoring_payload(payload),
             "component_performance_scale": ", ".join(performance_scale),
+        }
+    return payloads
+
+
+def parse_layer4_scoring_payloads(registry_path: Path) -> dict[str, dict[str, str]]:
+    tables = collect_markdown_tables(registry_path)
+    bindings_table = find_table_by_heading(tables, "component bindings")
+    component_value_table = find_table_by_heading(tables, "component value mapping")
+    cutpoint_table = find_table_by_heading(tables, "numeric cutpoint table")
+    if bindings_table is None or component_value_table is None or cutpoint_table is None:
+        return {}
+
+    component_value_map: dict[str, float] = {}
+    for row in component_value_table.get("rows", []):
+        raw_level = str(row.get("component level", "")).strip()
+        raw_numeric_value = str(row.get("numeric value", "")).strip()
+        if not raw_level or not raw_numeric_value:
+            continue
+        component_value_map[normalize_scale_token(raw_level)] = float(raw_numeric_value)
+    if not component_value_map:
+        return {}
+
+    numeric_cutpoints: list[dict[str, object]] = []
+    for row in cutpoint_table.get("rows", []):
+        raw_scale_value = str(row.get("resultant scale value", "")).strip()
+        raw_minimum = str(row.get("numeric minimum", "")).strip()
+        raw_maximum = str(row.get("numeric maximum", "")).strip()
+        if not raw_scale_value or not raw_minimum or not raw_maximum:
+            continue
+        numeric_cutpoints.append(
+            {
+                "resultant_scale_value": normalize_scale_token(raw_scale_value),
+                "numeric_minimum": float(raw_minimum),
+                "numeric_maximum": float(raw_maximum),
+            }
+        )
+    if not numeric_cutpoints:
+        return {}
+
+    performance_scale = derive_ordered_scale_values(
+        [str(cutpoint["resultant_scale_value"]) for cutpoint in numeric_cutpoints],
+        KNOWN_SUBMISSION_PERFORMANCE_ORDER,
+    )
+
+    payloads: dict[str, dict[str, str]] = {}
+    for row in bindings_table.get("rows", []):
+        assessment_id = str(row.get("assessment_id", "")).strip()
+        if not assessment_id:
+            continue
+        component_tokens = [str(header).strip() for header in bindings_table.get("headers", []) if str(header).strip() and str(header).strip() != "assessment_id"]
+        component_bindings = {
+            token: str(row.get(token, "")).strip()
+            for token in component_tokens
+            if str(row.get(token, "")).strip()
+        }
+        payload = {
+            "assessment_id": assessment_id,
+            "input_component_tokens": component_tokens,
+            "component_bindings": component_bindings,
+            "bound_component_ids": list(component_bindings.values()),
+            "component_value_map": component_value_map,
+            "numeric_cutpoints": numeric_cutpoints,
+        }
+        payloads[assessment_id] = {
+            "submission_scoring_payload_json": serialize_scoring_payload(payload),
+            "submission_performance_scale": ", ".join(performance_scale),
         }
     return payloads
 
@@ -1311,10 +1393,14 @@ def load_registry_rows(
     registry_metadata = extract_registry_metadata(tables)
     layer2_scoring_payloads = parse_layer2_scoring_payloads(registry_path) if layer_config.name == "layer2" else {}
     layer3_scoring_payloads = parse_layer3_scoring_payloads(registry_path) if layer_config.name == "layer3" else {}
+    layer4_scoring_payloads = parse_layer4_scoring_payloads(registry_path) if layer_config.name == "layer4" else {}
     enrichment_lookup = build_registry_enrichment_lookup(registry_path, tables, layer_config)
     if layer3_scoring_payloads:
         for component_id, payload_fields in layer3_scoring_payloads.items():
             enrichment_lookup.setdefault(component_id, {}).update(payload_fields)
+    if layer4_scoring_payloads:
+        for assessment_id, payload_fields in layer4_scoring_payloads.items():
+            enrichment_lookup.setdefault(assessment_id, {}).update(payload_fields)
 
     explicit_table: dict[str, object] | None = None
     layer2_base_rows = collect_section_rows(
@@ -1994,6 +2080,16 @@ def render_manifest_document(
                 manifest_headers.extend([
                     "component_performance_scale",
                     "component_scoring_payload_json",
+                ])
+            manifest_row.extend([
+                row.evidence_scale,
+                row.scoring_payload_json,
+            ])
+        if layer_config.name == "layer4":
+            if "submission_performance_scale" not in manifest_headers:
+                manifest_headers.extend([
+                    "submission_performance_scale",
+                    "submission_scoring_payload_json",
                 ])
             manifest_row.extend([
                 row.evidence_scale,

@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+"""Execute deterministic Layer 4 submission scoring modules over Layer 3 submission payload rows."""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import importlib.util
+import json
+import sys
+from pathlib import Path
+from types import ModuleType
+
+from component_scored_texts import load_scored_rows, write_scored_rows
+
+
+WIDE_TRAILING_FIELDS = ["flags_any_component", "min_confidence_component"]
+WIDE_METADATA_EXCLUDED_FIELDS = {
+	"submission_performance_scale",
+	"bound_component_ids",
+	"source_component_scores_json",
+	"source_component_numeric_values_json",
+	"sbo_identifier",
+	"sbo_short_description",
+}
+WIDE_BASE_FIELDS = ["submission_id", "submission_score", "submission_numeric_score"]
+
+
+def parse_args() -> argparse.Namespace:
+	parser = argparse.ArgumentParser(
+		description="Execute deterministic Layer 4 submission scoring modules over Layer 3 submission payload rows."
+	)
+	parser.add_argument("--layer3-submission-payload-csv", type=Path, required=True)
+	parser.add_argument("--module-dir", type=Path, required=True)
+	parser.add_argument("--target-assessment-id", type=str, required=True)
+	parser.add_argument("--output-file", type=Path, required=True)
+	parser.add_argument("--submission-id-field", type=str, default="submission_id")
+	parser.add_argument("--flags-field", type=str, default="flags_any_component")
+	parser.add_argument("--confidence-field", type=str, default="min_confidence_component")
+	return parser.parse_args()
+
+
+def derive_wide_output_path(output_path: Path) -> Path:
+	return output_path.with_name(f"{output_path.stem}-wide{output_path.suffix}")
+
+
+def write_grouped_wide_csv(headers: list[str], rows: list[list[str]], output_path: Path) -> None:
+	output_path.parent.mkdir(parents=True, exist_ok=True)
+	with output_path.open("w", encoding="utf-8", newline="") as handle:
+		writer = csv.writer(handle)
+		writer.writerow(headers)
+		writer.writerows(rows)
+
+
+def load_module_from_path(path: Path) -> ModuleType:
+	spec = importlib.util.spec_from_file_location(path.stem, path)
+	if spec is None or spec.loader is None:
+		raise ImportError(f"Unable to load module from {path}")
+	module = importlib.util.module_from_spec(spec)
+	spec.loader.exec_module(module)
+	return module
+
+
+def load_submission_modules(module_dir: Path) -> dict[str, ModuleType]:
+	modules: dict[str, ModuleType] = {}
+	for module_path in sorted(module_dir.glob("*.py")):
+		module = load_module_from_path(module_path)
+		assessment_id = str(getattr(module, "ASSESSMENT_ID", "")).strip()
+		if assessment_id:
+			modules[assessment_id] = module
+	return modules
+
+
+def format_numeric(value: float) -> str:
+	return f"{value:.2f}"
+
+
+def build_component_score_map(row: dict[str, str], bound_component_ids: list[str]) -> dict[str, str]:
+	component_scores: dict[str, str] = {}
+	for component_id in bound_component_ids:
+		field_name = f"component_score__{component_id}"
+		component_scores[component_id] = str(row.get(field_name, "")).strip()
+	return component_scores
+
+
+def score_submission_row(
+	module: ModuleType,
+	row: dict[str, str],
+	submission_id_field: str,
+	flags_field: str,
+	confidence_field: str,
+) -> dict[str, str]:
+	bound_component_ids = [str(component_id) for component_id in getattr(module, "BOUND_COMPONENT_IDS", [])]
+	component_scores = build_component_score_map(row, bound_component_ids)
+	result = module.score_submission(component_scores)
+	source_component_numeric_values = {
+		component_id: format_numeric(float(value))
+		for component_id, value in dict(result["source_component_numeric_values"]).items()
+	}
+	output_row = dict(row)
+	output_row[submission_id_field] = str(row.get(submission_id_field, "")).strip()
+	output_row["sbo_identifier"] = str(getattr(module, "SBO_IDENTIFIER", "")).strip()
+	output_row["sbo_short_description"] = str(getattr(module, "SBO_SHORT_DESCRIPTION", "")).strip()
+	output_row["submission_performance_scale"] = ", ".join(getattr(module, "SUBMISSION_PERFORMANCE_SCALE", []))
+	output_row["bound_component_ids"] = ", ".join(bound_component_ids)
+	output_row["source_component_scores_json"] = json.dumps(component_scores, ensure_ascii=True, sort_keys=True)
+	output_row["source_component_numeric_values_json"] = json.dumps(source_component_numeric_values, ensure_ascii=True, sort_keys=True)
+	output_row["submission_numeric_score"] = format_numeric(float(result["submission_numeric_score"]))
+	output_row["submission_score"] = str(result["submission_score"])
+	output_row["flags_any_component"] = str(row.get(flags_field, "")).strip()
+	output_row["min_confidence_component"] = str(row.get(confidence_field, "")).strip()
+	return output_row
+
+
+def build_wide_output_rows(output_rows: list[dict[str, str]], bound_component_ids: list[str]) -> tuple[list[str], list[list[str]]]:
+	if not output_rows:
+		return [], []
+	component_score_fields = [f"component_score__{component_id}" for component_id in bound_component_ids]
+	component_numeric_headers = [f"{component_id}_numeric" for component_id in bound_component_ids]
+	base_fieldnames = [fieldname for fieldname in WIDE_BASE_FIELDS if fieldname in output_rows[0]]
+	headers = list(base_fieldnames)
+	if component_score_fields:
+		headers.append(".")
+		headers.extend(bound_component_ids)
+	if component_numeric_headers:
+		headers.append(".")
+		headers.extend(component_numeric_headers)
+	if WIDE_TRAILING_FIELDS:
+		headers.append(".")
+		headers.extend(WIDE_TRAILING_FIELDS)
+
+	wide_rows: list[list[str]] = []
+	for output_row in output_rows:
+		raw_numeric_values = str(output_row.get("source_component_numeric_values_json", "")).strip()
+		numeric_values = json.loads(raw_numeric_values) if raw_numeric_values else {}
+		if not isinstance(numeric_values, dict):
+			raise ValueError("source_component_numeric_values_json must decode to an object.")
+		wide_row = [output_row.get(fieldname, "") for fieldname in base_fieldnames]
+		if component_score_fields:
+			wide_row.append("")
+			for fieldname in component_score_fields:
+				wide_row.append(output_row.get(fieldname, ""))
+		if component_numeric_headers:
+			wide_row.append("")
+			for component_id in bound_component_ids:
+				wide_row.append(str(numeric_values.get(component_id, "")))
+		if WIDE_TRAILING_FIELDS:
+			wide_row.append("")
+			for fieldname in WIDE_TRAILING_FIELDS:
+				wide_row.append(output_row.get(fieldname, ""))
+		wide_rows.append(wide_row)
+	return headers, wide_rows
+
+
+def main() -> int:
+	args = parse_args()
+	try:
+		rows = load_scored_rows(args.layer3_submission_payload_csv.resolve())
+		modules = load_submission_modules(args.module_dir.resolve())
+		module = modules.get(args.target_assessment_id)
+		if module is None:
+			raise ValueError(f"No Layer 4 module found for assessment_id={args.target_assessment_id}")
+		output_rows = [
+			score_submission_row(
+				module,
+				row,
+				submission_id_field=args.submission_id_field,
+				flags_field=args.flags_field,
+				confidence_field=args.confidence_field,
+			)
+			for row in rows
+		]
+		output_path = args.output_file.resolve()
+		write_scored_rows(output_rows, output_path)
+		bound_component_ids = [str(component_id) for component_id in getattr(module, "BOUND_COMPONENT_IDS", [])]
+		wide_output_path = derive_wide_output_path(output_path)
+		wide_headers, wide_output_rows = build_wide_output_rows(output_rows, bound_component_ids)
+		write_grouped_wide_csv(wide_headers, wide_output_rows, wide_output_path)
+	except (FileNotFoundError, ImportError, ValueError, OSError, json.JSONDecodeError) as exc:
+		print(f"Error: {exc}", file=sys.stderr)
+		return 1
+	print(output_path)
+	print(wide_output_path)
+	return 0
+
+
+if __name__ == "__main__":
+	raise SystemExit(main())
