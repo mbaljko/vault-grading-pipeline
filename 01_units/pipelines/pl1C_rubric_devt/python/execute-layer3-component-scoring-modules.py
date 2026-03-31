@@ -46,6 +46,8 @@ def parse_args() -> argparse.Namespace:
 		description="Execute deterministic Layer 3 component scoring modules over Layer 2 scored CSV rows."
 	)
 	parser.add_argument("--layer2-scored-csv", type=Path, required=True)
+	parser.add_argument("--response-text-csv", type=Path)
+	parser.add_argument("--stitched-wide-output-file", type=Path)
 	parser.add_argument("--module-dir", type=Path, required=True)
 	parser.add_argument("--target-component-id", type=str, required=True)
 	parser.add_argument("--output-file", type=Path, required=True)
@@ -59,6 +61,10 @@ def parse_args() -> argparse.Namespace:
 
 def derive_wide_output_path(output_path: Path) -> Path:
 	return output_path.with_name(f"{output_path.stem}-wide{output_path.suffix}")
+
+
+def derive_stitched_wide_output_path(output_path: Path) -> Path:
+	return output_path.with_name(f"{output_path.stem}-wide-stitched{output_path.suffix}")
 
 
 def write_grouped_wide_csv(headers: list[str], rows: list[list[str]], output_path: Path) -> None:
@@ -86,6 +92,45 @@ def load_component_modules(module_dir: Path) -> dict[str, ModuleType]:
 		if component_id:
 			modules[component_id] = module
 	return modules
+
+
+def build_response_text_lookup(response_text_csv: Path) -> dict[str, str]:
+	lookup: dict[str, str] = {}
+	for row in load_scored_rows(response_text_csv):
+		submission_id = str(row.get("submission_id", "")).strip()
+		if not submission_id or submission_id in lookup:
+			continue
+		lookup[submission_id] = str(row.get("response_text", ""))
+	return lookup
+
+
+def build_dimension_scale_lookup(rows: Iterable[Mapping[str, str]], dimension_id_field: str) -> dict[str, dict[str, int]]:
+	lookup: dict[str, dict[str, int]] = {}
+	for row in rows:
+		dimension_id = str(row.get(dimension_id_field, "")).strip()
+		if not dimension_id or dimension_id in lookup:
+			continue
+		raw_scale = str(row.get("dimension_evidence_scale", "")).strip()
+		scale_values = [part.strip() for part in raw_scale.split(",") if part.strip()]
+		lookup[dimension_id] = {value: index for index, value in enumerate(scale_values)}
+	return lookup
+
+
+def build_component_scale_lookup(output_rows: list[dict[str, str]]) -> dict[str, int]:
+	if not output_rows:
+		return {}
+	raw_scale = str(output_rows[0].get("component_performance_scale", "")).strip()
+	scale_values = [part.strip() for part in raw_scale.split(",") if part.strip()]
+	return {value: index for index, value in enumerate(scale_values)}
+
+
+def ordinalize_dimension_value(value: str, ordinal_lookup: dict[str, int]) -> str:
+	normalized_value = value.strip()
+	if not normalized_value:
+		return ""
+	if normalized_value not in ordinal_lookup:
+		return normalized_value
+	return f"{ordinal_lookup[normalized_value]}-{normalized_value}"
 
 
 def build_submission_groups(rows: Iterable[Mapping[str, str]], submission_id_field: str) -> dict[str, list[dict[str, str]]]:
@@ -183,7 +228,10 @@ def build_wide_output_rows(
 	output_rows: list[dict[str, str]],
 	bound_dimension_ids: list[str],
 	dimension_id_field: str,
+	dimension_scale_lookup: dict[str, dict[str, int]],
+	response_text_lookup: dict[str, str] | None = None,
 ) -> tuple[list[str], list[list[str]]]:
+	component_scale_lookup = build_component_scale_lookup(output_rows)
 	base_fieldnames = [
 		key
 		for key in output_rows[0].keys()
@@ -196,6 +244,9 @@ def build_wide_output_rows(
 		if str(output_row.get("submission_id", "")).strip()
 	}
 	headers = list(base_fieldnames)
+	if response_text_lookup is not None:
+		headers.append(".")
+		headers.append("response_text")
 	if bound_dimension_ids:
 		headers.append(".")
 		headers.extend(bound_dimension_ids)
@@ -224,11 +275,24 @@ def build_wide_output_rows(
 			dimension_id_field,
 			bound_dimension_ids,
 		)
-		wide_row = [output_row.get(fieldname, "") for fieldname in base_fieldnames]
+		wide_row: list[str] = []
+		for fieldname in base_fieldnames:
+			field_value = output_row.get(fieldname, "")
+			if fieldname == "component_score":
+				field_value = ordinalize_dimension_value(str(field_value), component_scale_lookup)
+			wide_row.append(field_value)
+		if response_text_lookup is not None:
+			wide_row.append("")
+			wide_row.append(response_text_lookup.get(submission_id, ""))
 		if bound_dimension_ids:
 			wide_row.append("")
 			for dimension_id in bound_dimension_ids:
-				wide_row.append(str(dimension_values.get(dimension_id, "")).strip())
+				wide_row.append(
+					ordinalize_dimension_value(
+						str(dimension_values.get(dimension_id, "")).strip(),
+						dimension_scale_lookup.get(dimension_id, {}),
+					)
+				)
 		if dimension_indicator_groups:
 			wide_row.append("")
 			for index, (dimension_id, indicator_ids) in enumerate(dimension_indicator_groups):
@@ -295,19 +359,39 @@ def main() -> int:
 		output_path = args.output_file.resolve()
 		write_scored_rows(output_rows, output_path)
 		bound_dimension_ids = [str(dimension_id) for dimension_id in getattr(module, "BOUND_DIMENSION_IDS", [])]
+		dimension_scale_lookup = build_dimension_scale_lookup(target_rows, args.dimension_id_field)
 		wide_output_path = derive_wide_output_path(output_path)
 		wide_headers, wide_output_rows = build_wide_output_rows(
 			submission_groups,
 			output_rows,
 			bound_dimension_ids,
 			args.dimension_id_field,
+			dimension_scale_lookup,
 		)
 		write_grouped_wide_csv(wide_headers, wide_output_rows, wide_output_path)
+		if args.response_text_csv is not None:
+			response_text_lookup = build_response_text_lookup(args.response_text_csv.resolve())
+			stitched_output_path = (
+				args.stitched_wide_output_file.resolve()
+				if args.stitched_wide_output_file is not None
+				else derive_stitched_wide_output_path(output_path)
+			)
+			stitched_headers, stitched_rows = build_wide_output_rows(
+				submission_groups,
+				output_rows,
+				bound_dimension_ids,
+				args.dimension_id_field,
+				dimension_scale_lookup,
+				response_text_lookup,
+			)
+			write_grouped_wide_csv(stitched_headers, stitched_rows, stitched_output_path)
 	except (FileNotFoundError, ImportError, ValueError, OSError) as exc:
 		print(f"Error: {exc}", file=sys.stderr)
 		return 1
 	print(output_path)
 	print(wide_output_path)
+	if args.response_text_csv is not None:
+		print(args.stitched_wide_output_file.resolve() if args.stitched_wide_output_file is not None else derive_stitched_wide_output_path(output_path))
 	return 0
 
 

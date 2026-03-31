@@ -189,15 +189,15 @@ def build_wide_output_rows(
 	response_text_headers = [f"{component_id}_response_text" for component_id in (response_component_ids or [])]
 	base_fieldnames = [fieldname for fieldname in WIDE_BASE_FIELDS if fieldname in output_rows[0]]
 	headers = list(base_fieldnames)
+	if response_text_headers:
+		headers.append(".")
+		headers.extend(response_text_headers)
 	if component_score_fields:
 		headers.append(".")
 		headers.extend(bound_component_ids)
 	if component_numeric_headers:
 		headers.append(".")
 		headers.extend(component_numeric_headers)
-	if response_text_headers:
-		headers.append(".")
-		headers.extend(response_text_headers)
 	if layer3_wide_blocks:
 		headers.append(".")
 		for index, block in enumerate(layer3_wide_blocks):
@@ -215,6 +215,11 @@ def build_wide_output_rows(
 		if not isinstance(numeric_values, dict):
 			raise ValueError("source_component_numeric_values_json must decode to an object.")
 		wide_row = [output_row.get(fieldname, "") for fieldname in base_fieldnames]
+		if response_text_headers:
+			wide_row.append("")
+			submission_id = str(output_row.get("submission_id", "")).strip()
+			for component_id in (response_component_ids or []):
+				wide_row.append((response_text_lookup or {}).get(submission_id, {}).get(component_id, ""))
 		if component_score_fields:
 			wide_row.append("")
 			for fieldname in component_score_fields:
@@ -223,11 +228,6 @@ def build_wide_output_rows(
 			wide_row.append("")
 			for component_id in bound_component_ids:
 				wide_row.append(str(numeric_values.get(component_id, "")))
-		if response_text_headers:
-			wide_row.append("")
-			submission_id = str(output_row.get("submission_id", "")).strip()
-			for component_id in (response_component_ids or []):
-				wide_row.append((response_text_lookup or {}).get(submission_id, {}).get(component_id, ""))
 		if layer3_wide_blocks:
 			wide_row.append("")
 			submission_id = str(output_row.get("submission_id", "")).strip()
