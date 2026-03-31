@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from generate_rubric_and_manifest_from_indicator_registry import collect_markdown_tables
+
 
 ITERATION_RE = re.compile(r"\b(iter\d+)\b", re.IGNORECASE)
 RUN_RE = re.compile(r"\b(run\d+)\b", re.IGNORECASE)
@@ -28,6 +30,12 @@ class NumericSummary:
     q3: float
     maximum: float
     stdev: float | None
+
+
+@dataclass(frozen=True)
+class Layer4ScaleInfo:
+    maximum_numeric_score: float
+    cutpoints: list[dict[str, object]]
 
 
 def parse_args() -> argparse.Namespace:
@@ -182,6 +190,103 @@ def parse_json_object(raw_value: str) -> dict[str, str]:
     return {str(key): str(value) for key, value in decoded.items()}
 
 
+def parse_layer4_scale_info(manifest_path: Path) -> Layer4ScaleInfo | None:
+    tables = collect_markdown_tables(manifest_path)
+    manifest_table = next(
+        (
+            table
+            for table in tables
+            if "submission_scoring_payload_json" in table.get("headers", [])
+        ),
+        None,
+    )
+    if manifest_table is None:
+        return None
+
+    rows = manifest_table.get("rows", [])
+    if not rows:
+        return None
+
+    payload_raw = str(rows[0].get("submission_scoring_payload_json", "")).strip()
+    if not payload_raw:
+        return None
+
+    payload = json.loads(payload_raw)
+    if not isinstance(payload, dict):
+        return None
+
+    raw_cutpoints = payload.get("numeric_cutpoints", [])
+    if not isinstance(raw_cutpoints, list) or not raw_cutpoints:
+        return None
+
+    maximum_numeric_score = max(float(cutpoint["numeric_maximum"]) for cutpoint in raw_cutpoints)
+    return Layer4ScaleInfo(maximum_numeric_score=maximum_numeric_score, cutpoints=raw_cutpoints)
+
+
+def normalize_to_percent(value: float, maximum_numeric_score: float) -> float:
+    if maximum_numeric_score <= 0:
+        return 0.0
+    return value / maximum_numeric_score * 100.0
+
+
+def build_band_edges() -> list[tuple[float, float]]:
+    edges: list[tuple[float, float]] = [(0.0, 50.0)]
+    start = 50.0
+    while start < 100.0:
+        end = min(start + 5.0, 100.0)
+        edges.append((start, end))
+        start = end
+    return edges
+
+
+def intervals_overlap(start_a: float, end_a: float, start_b: float, end_b: float) -> bool:
+    return start_a < end_b and start_b < end_a
+
+
+def format_band_value(value: float) -> str:
+    if value.is_integer():
+        return str(int(value))
+    return f"{value:.1f}"
+
+
+def score_in_band(score: float, band_min: float, band_max: float) -> bool:
+    if band_max >= 100.0:
+        return band_min <= score <= band_max
+    return band_min <= score < band_max
+
+
+def build_cutpoint_percentage_rows(scale_info: Layer4ScaleInfo, normalized_percentages: list[float]) -> list[list[str]]:
+    cutpoint_ranges: list[tuple[float, float, str]] = []
+    for cutpoint in scale_info.cutpoints:
+        minimum = normalize_to_percent(float(cutpoint["numeric_minimum"]), scale_info.maximum_numeric_score)
+        maximum = normalize_to_percent(float(cutpoint["numeric_maximum"]), scale_info.maximum_numeric_score)
+        cutpoint_ranges.append((minimum, maximum, str(cutpoint["resultant_scale_value"])))
+
+    rows: list[list[str]] = []
+    total_scores = len(normalized_percentages)
+    for band_min, band_max in build_band_edges():
+        matching_labels = [
+            label
+            for range_min, range_max, label in cutpoint_ranges
+            if intervals_overlap(band_min, band_max, range_min, range_max)
+        ]
+        label_text = ", ".join(dict.fromkeys(matching_labels)) if matching_labels else ""
+        band_count = sum(1 for score in normalized_percentages if score_in_band(score, band_min, band_max))
+        band_percent = f"{(band_count / total_scores * 100) if total_scores else 0:.1f}%"
+        rows.append([f"{format_band_value(band_min)}-{format_band_value(band_max)}", label_text, str(band_count), band_percent])
+    return rows
+
+
+def build_percentage_distribution_rows(percentages: list[float]) -> list[list[str]]:
+    percentage_counts = Counter(f"{value:.1f}%" for value in percentages)
+    total = len(percentages)
+    ordered_values = sorted(percentage_counts, key=lambda value: float(value.rstrip("%")))
+    return [
+        [percentage_value, str(percentage_counts[percentage_value]), f"{(percentage_counts[percentage_value] / total * 100) if total else 0:.1f}%"]
+        for percentage_value in ordered_values
+    ]
+
+
 def build_component_grade_rows(rows: list[dict[str, str]]) -> tuple[list[str], list[list[str]]]:
     component_grade_counts: dict[str, Counter[str]] = defaultdict(Counter)
     for row in rows:
@@ -251,7 +356,13 @@ def generate_report(args: argparse.Namespace) -> Path:
         for parsed_value in (parse_float(row.get("submission_numeric_score", "")) for row in rows)
         if parsed_value is not None
     ]
+    scale_info = parse_layer4_scale_info(args.sbo_manifest_file)
+    normalized_percentages = [
+        normalize_to_percent(value, scale_info.maximum_numeric_score)
+        for value in numeric_scores
+    ] if scale_info is not None else []
     numeric_summary = summarize_numeric(numeric_scores) if numeric_scores else None
+    normalized_percentage_summary = summarize_numeric(normalized_percentages) if normalized_percentages else None
     component_grade_headers, component_grade_rows = build_component_grade_rows(rows)
     component_numeric_rows = build_component_numeric_rows(rows)
 
@@ -267,6 +378,8 @@ def generate_report(args: argparse.Namespace) -> Path:
         ["rows_read", str(total_rows)],
         ["distinct_submissions", str(len(submission_ids))],
     ]
+    if scale_info is not None:
+        metadata_rows.append(["maximum_numeric_score", format_float(scale_info.maximum_numeric_score)])
 
     sections = [
         f"# Layer 4 Grade Award Report: {assignment_id}",
@@ -281,6 +394,18 @@ def generate_report(args: argparse.Namespace) -> Path:
         ),
         "",
     ]
+
+    if scale_info is not None:
+        sections.extend(
+            [
+                "## Grade Band Mapping to 0-100%",
+                render_markdown_table(
+                    ["percent_band", "submission_score", "count", "% of scores"],
+                    build_cutpoint_percentage_rows(scale_info, normalized_percentages),
+                ),
+                "",
+            ]
+        )
 
     if numeric_summary is not None:
         sections.extend(
@@ -298,6 +423,33 @@ def generate_report(args: argparse.Namespace) -> Path:
                         format_float(numeric_summary.maximum),
                         format_float(numeric_summary.stdev),
                     ]],
+                ),
+                "",
+            ]
+        )
+
+    if normalized_percentage_summary is not None:
+        sections.extend(
+            [
+                "## Submission Percentage Score Summary",
+                render_markdown_table(
+                    ["count", "min", "q1", "median", "mean", "q3", "max", "stdev"],
+                    [[
+                        str(normalized_percentage_summary.count),
+                        f"{normalized_percentage_summary.minimum:.1f}%",
+                        f"{normalized_percentage_summary.q1:.1f}%",
+                        f"{normalized_percentage_summary.median:.1f}%",
+                        f"{normalized_percentage_summary.mean:.1f}%",
+                        f"{normalized_percentage_summary.q3:.1f}%",
+                        f"{normalized_percentage_summary.maximum:.1f}%",
+                        f"{normalized_percentage_summary.stdev:.1f}%" if normalized_percentage_summary.stdev is not None else "",
+                    ]],
+                ),
+                "",
+                "## Exact Percentage Distribution",
+                render_markdown_table(
+                    ["normalized_grade_value", "count", "percent"],
+                    build_percentage_distribution_rows(normalized_percentages),
                 ),
                 "",
             ]
