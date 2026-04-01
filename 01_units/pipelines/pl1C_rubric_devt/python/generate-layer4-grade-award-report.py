@@ -42,8 +42,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate a markdown report with descriptive statistics for Layer 4 grade awards."
     )
-    parser.add_argument("--submission-registry", type=Path, required=False)
-    parser.add_argument("--sbo-manifest-file", type=Path, required=False)
+    parser.add_argument("--submission-registry", type=Path, required=True)
+    parser.add_argument("--sbo-manifest-file", type=Path, required=True)
     parser.add_argument("--file-with-scored-texts", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=False)
     parser.add_argument("--iteration-label", type=str, required=False)
@@ -190,10 +190,7 @@ def parse_json_object(raw_value: str) -> dict[str, str]:
     return {str(key): str(value) for key, value in decoded.items()}
 
 
-def parse_layer4_scale_info(manifest_path: Path | None) -> Layer4ScaleInfo | None:
-    if manifest_path is None or not manifest_path.exists():
-        return None
-
+def parse_layer4_scale_info(manifest_path: Path) -> Layer4ScaleInfo | None:
     tables = collect_markdown_tables(manifest_path)
     manifest_table = next(
         (
@@ -341,9 +338,7 @@ def generate_report(args: argparse.Namespace) -> Path:
     if not rows:
         raise ValueError(f"No scored rows found in {args.file_with_scored_texts}")
 
-    manifest_path = args.sbo_manifest_file.resolve() if args.sbo_manifest_file else None
-    registry_path = args.submission_registry.resolve() if args.submission_registry else None
-    assignment_id = derive_assignment_id(manifest_path) if manifest_path else derive_assignment_id(args.file_with_scored_texts)
+    assignment_id = derive_assignment_id(args.sbo_manifest_file)
     iteration_label = derive_iteration_label(args.file_with_scored_texts, args.iteration_label)
     run_label = derive_run_label(args.file_with_scored_texts, args.run_label)
     output_dir = args.output_dir.resolve() if args.output_dir else args.file_with_scored_texts.parent.resolve()
@@ -361,7 +356,7 @@ def generate_report(args: argparse.Namespace) -> Path:
         for parsed_value in (parse_float(row.get("submission_numeric_score", "")) for row in rows)
         if parsed_value is not None
     ]
-    scale_info = parse_layer4_scale_info(manifest_path)
+    scale_info = parse_layer4_scale_info(args.sbo_manifest_file)
     normalized_percentages = [
         normalize_to_percent(value, scale_info.maximum_numeric_score)
         for value in numeric_scores
@@ -376,8 +371,8 @@ def generate_report(args: argparse.Namespace) -> Path:
         ["iteration_label", iteration_label],
         ["run_label", run_label],
         ["generated_at_utc", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")],
-        ["submission_registry", str(registry_path) if registry_path else ""],
-        ["manifest_file", str(manifest_path) if manifest_path else ""],
+        ["submission_registry", str(args.submission_registry.resolve())],
+        ["manifest_file", str(args.sbo_manifest_file.resolve())],
         ["scored_csv", str(args.file_with_scored_texts.resolve())],
         ["output_file", str(output_path)],
         ["rows_read", str(total_rows)],
