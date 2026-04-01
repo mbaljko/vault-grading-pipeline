@@ -1,5 +1,53 @@
 #!/usr/bin/env python3
 
+"""Segment submission response text into three claim-level rows via the shared LLM runner.
+
+This script is the Layer 0 segmentation step for canonical population prep. It reads a
+submission-level CSV, strips wrapper markup from each response, sends cleaned submissions
+to the shared prompt runner in batches, and writes two outputs:
+
+1. A claim-expanded CSV with one row per claim/component.
+2. An audit CSV that preserves the cleaned submission text, raw LLM output, parsed claim
+     columns, reconstruction checks, and any batch-level errors.
+
+The script is intentionally batch-oriented. Each batch stores its prompt input, parsed
+output, audit CSV, and status metadata under ``--batch-cache-dir`` so runs can be resumed,
+rerun selectively, or rebuilt entirely from cached artifacts.
+
+Expected inputs
+----------------
+- ``--input-path`` must point to a CSV with a header row.
+- The CSV must include a ``response_text`` column.
+- A ``submission_id`` column is optional. If it is missing, the script will try to recover
+    the submission ID from the leading ``+++submission_id=...`` wrapper inside the response text.
+- Source response text may be wrapped in the house format:
+
+    ``+++submission_id=...``
+    ``+++``
+    response body
+    ``+++``
+
+    The script removes that wrapper before calling the LLM runner.
+- The output filename is also significant: its basename must contain either an ``AP<digits><section>_``
+    prefix such as ``AP3B_...`` or a component marker such as ``SectionBResponse``. That section
+    letter is used to derive the claim columns written to the audit CSV, for example
+    ``claim_B1``, ``claim_B2``, and ``claim_B3``.
+
+Outputs
+-------
+- ``--output-path`` receives the claim-expanded CSV with columns:
+    ``submission_id``, ``component_id``, ``response_text``.
+- ``--output-audit-path`` receives the full audit CSV with cleaned submission text, raw LLM
+    output, three parsed claim columns, reconstruction diagnostics, and any LLM error message.
+- ``--batch-cache-dir`` stores per-batch intermediate files and status JSON used for reruns.
+
+LLM output contract
+-------------------
+For each submitted response, the prompt runner is expected to return exactly one logical line
+containing three claim strings separated by the ``∞`` character. The parser treats those as
+claim 1, claim 2, and claim 3 respectively.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -31,7 +79,29 @@ SUBMISSION_TAG_RE = re.compile(r'(?m)^<submission index="')
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Clean segmentation input rows, invoke the shared LLM runner, and write a normalized CSV output."
+        description=(
+            "Read a submission-level CSV, clean and batch response_text values, invoke the shared "
+            "LLM runner, and write both claim-expanded and audit CSV outputs."
+        ),
+        epilog=(
+            "Input requirements:\n"
+            "  - --input-path must be a CSV containing a response_text column.\n"
+            "  - submission_id is optional if it is embedded in the +++submission_id=... wrapper.\n"
+            "  - The output filename must include either an AP<digits><section> prefix or a SectionXResponse token\n"
+            "    so the script can derive claim column names such as claim_B1, claim_B2, claim_B3.\n\n"
+            "Batch cache behavior:\n"
+            "  - Each batch writes input, output, audit, and status files under --batch-cache-dir.\n"
+            "  - Use --rerun-batch / --rerun-batches to rerun selected batches.\n"
+            "  - Use --rerun-failed-batches to rerun only failed batches.\n"
+            "  - Use --rebuild-from-batch-cache to skip API calls and rebuild final outputs only from successful cache artifacts.\n\n"
+            "Examples:\n"
+            "  python segment_as_per_prompt.py --input-path AP3B_source.csv --output-path AP3B_segmented.csv \\\n"
+            "    --output-audit-path AP3B_segmented_audit.csv --runner-prompt-path segmentation_prompt.md \\\n"
+            "    --batch-cache-dir batch_cache\n"
+            "  python segment_as_per_prompt.py ... --rerun-batches 3,5\n"
+            "  python segment_as_per_prompt.py ... --rebuild-from-batch-cache"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--input-path", type=Path, required=True, help="Source file for segmentation input.")
     parser.add_argument("--output-path", type=Path, required=True, help="Destination CSV file for cleaned segmentation rows.")

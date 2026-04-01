@@ -289,10 +289,14 @@
             "id": "fe3cb8bfbc96d736",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "01_units/pipelines/pl1A_canonical_population_prep/excel/README.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "New tab"
+              "title": "README"
             }
           }
         ],
@@ -442,12 +446,13 @@
             "state": {
               "type": "outline",
               "state": {
+                "file": "01_units/pipelines/pl1A_canonical_population_prep/excel/README.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline"
+              "title": "Outline of README"
             }
           },
           {
@@ -483,6 +488,8 @@
   },
   "active": "fe3cb8bfbc96d736",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1A_canonical_population_prep/excel/Pipeline1A_Excel_Implementation_Standard.md",
+    "01_units/pipelines/pl1A_canonical_population_prep/excel/Pipeline1A_Excel_Runbook.md",
     "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v02.md",
     "01_units/pipelines/pl3_production_scoring/python/__pycache__/populate_gradebook_from_layer4_scores.cpython-313.pyc",
     "01_units/pipelines/pl3_production_scoring/python/__pycache__",
@@ -516,7 +523,6 @@
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP3B.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - AP2B.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification_inclCaseStudy.md",
-    "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2B.md",
-    "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP1B.md"
+    "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2B.md"
   ]
 }
