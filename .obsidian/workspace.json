@@ -474,6 +474,8 @@
   },
   "active": "30b7ed3094eafc89",
   "lastOpenFiles": [
+    "01_units/pipelines/pl3_production_scoring/python/__pycache__/populate_gradebook_from_layer4_scores.cpython-313.pyc",
+    "01_units/pipelines/pl3_production_scoring/python/__pycache__",
     "01_units/pipelines/pl3_production_scoring/python/populate_gradebook_from_layer4_scores.py",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate-layer4-grade-award-report.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/generate-layer4-grade-award-report.py",
@@ -484,9 +486,7 @@
     "01_units/pipelines/pl1C_rubric_devt/python/generate-layer3-submission-payload.py",
     "01_units/pipelines/pl1C_rubric_devt/python/execute-layer3-component-scoring-modules.py",
     "01_units/pipelines/pl1C_rubric_devt/python/generate-layer3-component-scoring-module.py",
-    "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/execute-layer2-dimension-scoring-modules.cpython-313.pyc",
     "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v02.md",
-    "01_units/pipelines/pl1C_rubric_devt/python/execute-layer2-dimension-scoring-modules.py",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - single indicator.md",
