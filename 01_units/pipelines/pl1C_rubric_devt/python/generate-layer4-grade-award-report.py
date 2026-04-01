@@ -35,7 +35,9 @@ class NumericSummary:
 @dataclass(frozen=True)
 class Layer4ScaleInfo:
     maximum_numeric_score: float
+    maximum_component_numeric_score: float
     cutpoints: list[dict[str, object]]
+    bound_component_ids: list[str]
 
 
 def parse_args() -> argparse.Namespace:
@@ -220,7 +222,18 @@ def parse_layer4_scale_info(manifest_path: Path) -> Layer4ScaleInfo | None:
         return None
 
     maximum_numeric_score = max(float(cutpoint["numeric_maximum"]) for cutpoint in raw_cutpoints)
-    return Layer4ScaleInfo(maximum_numeric_score=maximum_numeric_score, cutpoints=raw_cutpoints)
+    raw_component_value_map = payload.get("component_value_map", {})
+    maximum_component_numeric_score = 0.0
+    if isinstance(raw_component_value_map, dict) and raw_component_value_map:
+        maximum_component_numeric_score = max(float(value) for value in raw_component_value_map.values())
+    raw_bound_component_ids = payload.get("bound_component_ids", [])
+    bound_component_ids = [str(component_id) for component_id in raw_bound_component_ids if str(component_id).strip()]
+    return Layer4ScaleInfo(
+        maximum_numeric_score=maximum_numeric_score,
+        maximum_component_numeric_score=maximum_component_numeric_score,
+        cutpoints=raw_cutpoints,
+        bound_component_ids=bound_component_ids,
+    )
 
 
 def normalize_to_percent(value: float, maximum_numeric_score: float) -> float:
@@ -255,26 +268,66 @@ def score_in_band(score: float, band_min: float, band_max: float) -> bool:
     return band_min <= score < band_max
 
 
-def build_cutpoint_percentage_rows(scale_info: Layer4ScaleInfo, normalized_percentages: list[float]) -> list[list[str]]:
-    cutpoint_ranges: list[tuple[float, float, str]] = []
-    for cutpoint in scale_info.cutpoints:
-        minimum = normalize_to_percent(float(cutpoint["numeric_minimum"]), scale_info.maximum_numeric_score)
-        maximum = normalize_to_percent(float(cutpoint["numeric_maximum"]), scale_info.maximum_numeric_score)
-        cutpoint_ranges.append((minimum, maximum, str(cutpoint["resultant_scale_value"])))
+def build_cutpoint_percentage_table(
+    scale_info: Layer4ScaleInfo,
+    input_rows: list[dict[str, str]],
+) -> tuple[list[str], list[list[str]]]:
+    component_ids = scale_info.bound_component_ids
+    table_rows: list[list[str]] = []
+    submission_percentages: list[float] = []
+    component_percentages: dict[str, list[float]] = defaultdict(list)
+    for row in input_rows:
+        submission_numeric_score = parse_float(row.get("submission_numeric_score", ""))
+        if submission_numeric_score is not None:
+            submission_percentages.append(
+                normalize_to_percent(submission_numeric_score, scale_info.maximum_numeric_score)
+            )
 
-    rows: list[list[str]] = []
-    total_scores = len(normalized_percentages)
+        component_numeric_values = parse_json_object(row.get("source_component_numeric_values_json", ""))
+        for component_id in component_ids:
+            component_numeric_value = parse_float(component_numeric_values.get(component_id, ""))
+            if component_numeric_value is None:
+                continue
+            component_percentages[component_id].append(
+                normalize_to_percent(component_numeric_value, scale_info.maximum_component_numeric_score)
+            )
+
+    total_submission_scores = len(submission_percentages)
+    component_totals = {component_id: len(component_percentages[component_id]) for component_id in component_ids}
     for band_min, band_max in build_band_edges():
-        matching_labels = [
-            label
-            for range_min, range_max, label in cutpoint_ranges
-            if intervals_overlap(band_min, band_max, range_min, range_max)
-        ]
-        label_text = ", ".join(dict.fromkeys(matching_labels)) if matching_labels else ""
-        band_count = sum(1 for score in normalized_percentages if score_in_band(score, band_min, band_max))
-        band_percent = f"{(band_count / total_scores * 100) if total_scores else 0:.1f}%"
-        rows.append([f"{format_band_value(band_min)}-{format_band_value(band_max)}", label_text, str(band_count), band_percent])
-    return rows
+        row_cells = [f"{format_band_value(band_min)}-{format_band_value(band_max)}"]
+        submission_band_count = sum(
+            1 for normalized_percentage in submission_percentages
+            if score_in_band(normalized_percentage, band_min, band_max)
+        )
+        submission_band_percent = (
+            f"{(submission_band_count / total_submission_scores * 100) if total_submission_scores else 0:.1f}%"
+        )
+        row_cells.extend([str(submission_band_count), submission_band_percent])
+
+        for component_id in component_ids:
+            component_band_count = sum(
+                1 for normalized_percentage in component_percentages[component_id]
+                if score_in_band(normalized_percentage, band_min, band_max)
+            )
+            component_total = component_totals[component_id]
+            component_band_percent = (
+                f"{(component_band_count / component_total * 100) if component_total else 0:.1f}%"
+            )
+            row_cells.extend([str(component_band_count), component_band_percent])
+
+        table_rows.append(row_cells)
+
+    totals_row = ["Total", str(total_submission_scores), "100.0%" if total_submission_scores else "0.0%"]
+    for component_id in component_ids:
+        component_total = component_totals[component_id]
+        totals_row.extend([str(component_total), "100.0%" if component_total else "0.0%"])
+    table_rows.append(totals_row)
+
+    headers = ["percent_band", "submission_count", "submission_% of scores"]
+    for component_id in component_ids:
+        headers.extend([f"{component_id}_count", f"{component_id}_% of scores"])
+    return headers, table_rows
 
 
 def build_percentage_distribution_rows(percentages: list[float]) -> list[list[str]]:
@@ -396,12 +449,13 @@ def generate_report(args: argparse.Namespace) -> Path:
     ]
 
     if scale_info is not None:
+        cutpoint_headers, cutpoint_rows = build_cutpoint_percentage_table(scale_info, rows)
         sections.extend(
             [
                 "## Grade Band Mapping to 0-100%",
                 render_markdown_table(
-                    ["percent_band", "submission_score", "count", "% of scores"],
-                    build_cutpoint_percentage_rows(scale_info, normalized_percentages),
+                    cutpoint_headers,
+                    cutpoint_rows,
                 ),
                 "",
             ]
