@@ -488,6 +488,7 @@
   },
   "active": "fe3cb8bfbc96d736",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1A_canonical_population_prep/python/post-hoc-componentisation.py",
     "01_units/pipelines/pl1A_canonical_population_prep/excel/README.md",
     "01_units/pipelines/pl1A_canonical_population_prep/python/pl1A_canonical_population_validation.py",
     "01_units/pipelines/pl1A_canonical_population_prep/python/print_csv_rows.py",
@@ -522,7 +523,6 @@
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP3B.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - AP2B.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification_inclCaseStudy.md"
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - AP2B.md"
   ]
 }

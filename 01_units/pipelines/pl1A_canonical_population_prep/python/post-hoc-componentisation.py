@@ -96,11 +96,11 @@ def parse_args() -> argparse.Namespace:
             "  - Use --rerun-failed-batches to rerun only failed batches.\n"
             "  - Use --rebuild-from-batch-cache to skip API calls and rebuild final outputs only from successful cache artifacts.\n\n"
             "Examples:\n"
-            "  python segment_as_per_prompt.py --input-path AP3B_source.csv --output-path AP3B_segmented.csv \\\n"
+            "  python post-hoc-componentisation.py --input-path AP3B_source.csv --output-path AP3B_segmented.csv \\\n"
             "    --output-audit-path AP3B_segmented_audit.csv --runner-prompt-path segmentation_prompt.md \\\n"
             "    --batch-cache-dir batch_cache\n"
-            "  python segment_as_per_prompt.py ... --rerun-batches 3,5\n"
-            "  python segment_as_per_prompt.py ... --rebuild-from-batch-cache"
+            "  python post-hoc-componentisation.py ... --rerun-batches 3,5\n"
+            "  python post-hoc-componentisation.py ... --rebuild-from-batch-cache"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -1019,7 +1019,7 @@ def format_unavailable_batches_error(unavailable_batches: list[dict[str, Any]]) 
     batch_numbers = ",".join(str(item["batch_number"]) for item in unavailable_batches)
     summary_lines = [
         "One or more batches are not available as successful cache artifacts.",
-        f"Rerun suggestion: just RERUN_BATCHES=\"{batch_numbers}\" l0-segment <ASSIGNMENT>",
+        f"Rerun suggestion: just RERUN_BATCHES=\"{batch_numbers}\" l0-post-hoc-componentisation <ASSIGNMENT>",
         "Unavailable batches:",
     ]
     for item in unavailable_batches:
