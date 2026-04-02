@@ -5,8 +5,9 @@
 This ports the validation and cleaning logic from the Power Query pipeline into Python.
 It reads the canonical-population / LMS-export CSV plus the grading worksheet CSV,
 matches LMS rows to the grading worksheet by normalized name, expands response columns
-into a long canonical structure, and writes the canonical-population CSV used by later
-pipeline steps.
+into a long canonical structure, and writes three outputs: the canonical-population
+CSV used by later pipeline steps, a submission-id mapping CSV for grade-sheet joins,
+and a short Markdown mismatch report.
 """
 
 from __future__ import annotations
@@ -340,6 +341,119 @@ def default_output_path(input_path: Path) -> Path:
     return input_path.with_name(f"{input_path.stem}-canonical-population.csv")
 
 
+def default_mapping_output_path(output_path: Path) -> Path:
+    return output_path.with_name(f"{output_path.stem}-submission-id-map.csv")
+
+
+def default_mismatch_report_path(output_path: Path) -> Path:
+    return output_path.with_name(f"{output_path.stem}-mismatch-report.md")
+
+
+def build_identifier_mapping_rows(
+    validation_rows: list[dict[str, str | int | None]],
+) -> list[dict[str, str]]:
+    mapping_rows: list[dict[str, str]] = []
+    seen_pairs: set[tuple[str, str]] = set()
+
+    for row in validation_rows:
+        if row.get("__join_status") != "matched_unique":
+            continue
+
+        submission_id = str(row.get("submission_id", "") or "")
+        identifier = str(row.get("GW.Identifier", "") or "")
+        if not submission_id or not identifier:
+            continue
+
+        pair = (submission_id, identifier)
+        if pair in seen_pairs:
+            continue
+
+        seen_pairs.add(pair)
+        mapping_rows.append(
+            {
+                "submission_id": submission_id,
+                "Identifier": identifier,
+            }
+        )
+
+    return mapping_rows
+
+
+def build_mismatch_report(
+    validation_rows: list[dict[str, str | int | None]],
+    gw_rows: list[dict[str, str]],
+) -> str:
+    matched_identifiers = {
+        str(row.get("GW.Identifier", "") or "")
+        for row in validation_rows
+        if row.get("__join_status") == "matched_unique" and row.get("GW.Identifier")
+    }
+
+    raw_rows_without_identifier: list[str] = []
+    for row in validation_rows:
+        if row.get("__join_status") == "matched_unique":
+            continue
+        user = str(row.get("User", "") or "")
+        username = str(row.get("Username", "") or "")
+        if user and username:
+            raw_rows_without_identifier.append(f"{user} ({username})")
+        elif user:
+            raw_rows_without_identifier.append(user)
+        elif username:
+            raw_rows_without_identifier.append(username)
+
+    unmatched_grade_identifiers: list[str] = []
+    for row in gw_rows:
+        identifier = str(row.get("Identifier", "") or "")
+        if not identifier or identifier in matched_identifiers:
+            continue
+        submission_id = extract_trailing_digits(identifier)
+        if submission_id:
+            unmatched_grade_identifiers.append(f"{submission_id} -> {identifier}")
+        else:
+            unmatched_grade_identifiers.append(identifier)
+
+    raw_rows_without_identifier = sorted(set(raw_rows_without_identifier))
+    unmatched_grade_identifiers = sorted(set(unmatched_grade_identifiers))
+
+    lines = [
+        "# Mismatch Report",
+        "",
+        "This report lists records that do not map cleanly between LMS submissions and the grading worksheet.",
+        "",
+        f"- LMS rows without a grade Identifier mapping: {len(raw_rows_without_identifier)}",
+        f"- Grade Identifiers without an LMS mapping: {len(unmatched_grade_identifiers)}",
+        "",
+        "## LMS Rows Without Grade Identifier Mapping",
+        "",
+        "students who made submissions who are not listed in the grading worksheet (e.g., dropped the course in the meantime)",
+        "",
+    ]
+
+    if raw_rows_without_identifier:
+        lines.extend(f"- {value}" for value in raw_rows_without_identifier)
+    else:
+        lines.append("- None")
+
+    lines.extend(
+        [
+            "",
+            "## Grade Identifiers Without LMS Mapping",
+            "",
+            "students in the gradesheet who do not have submissions in this canonical population",
+            "",
+        ]
+    )
+
+    if unmatched_grade_identifiers:
+        lines.extend(f"- {value}" for value in unmatched_grade_identifiers)
+    else:
+        lines.append("- None")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
 def write_output_rows(output_path: Path, rows: list[dict[str, str | int]]) -> None:
     fieldnames = [
         "submission_id",
@@ -355,17 +469,38 @@ def write_output_rows(output_path: Path, rows: list[dict[str, str | int]]) -> No
             writer.writerow(row)
 
 
+def write_mapping_rows(output_path: Path, rows: list[dict[str, str]]) -> None:
+    fieldnames = ["submission_id", "Identifier"]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
+def write_text_output(output_path: Path, content: str) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(content, encoding="utf-8")
+
+
 def print_summary(
     validation_rows: list[dict[str, str | int | None]],
     canonical_rows: list[dict[str, str | int]],
+    mapping_rows: list[dict[str, str]],
     output_path: Path,
+    mapping_output_path: Path,
+    mismatch_report_path: Path,
 ) -> None:
     status_counts = Counter(str(row.get("__join_status", "")) for row in validation_rows)
     print(f"[summary] validation_rows={len(validation_rows)}")
     for status, count in sorted(status_counts.items()):
         print(f"[summary] join_status[{status}]={count}")
     print(f"[summary] canonical_population_rows={len(canonical_rows)}")
+    print(f"[summary] mapping_rows={len(mapping_rows)}")
     print(f"[summary] output_path={output_path}")
+    print(f"[summary] mapping_output_path={mapping_output_path}")
+    print(f"[summary] mismatch_report_path={mismatch_report_path}")
 
 
 def main() -> int:
@@ -373,18 +508,33 @@ def main() -> int:
     input_path = args.input_path.resolve()
     gradework_sheet_input_path = args.gradework_sheet_input_path.resolve()
     output_path = args.output_path.resolve() if args.output_path else default_output_path(input_path)
+    mapping_output_path = default_mapping_output_path(output_path)
+    mismatch_report_path = default_mismatch_report_path(output_path)
 
     raw_rows = load_csv_rows(input_path)
     gw_rows = load_csv_rows(gradework_sheet_input_path)
     gw_index = build_gw_index(gw_rows)
     validation_rows = build_output_rows(raw_rows, gw_index)
     canonical_rows = build_canonical_population_rows(raw_rows, validation_rows)
+    mapping_rows = build_identifier_mapping_rows(validation_rows)
+    mismatch_report = build_mismatch_report(validation_rows, gw_rows)
     write_output_rows(output_path, canonical_rows)
+    write_mapping_rows(mapping_output_path, mapping_rows)
+    write_text_output(mismatch_report_path, mismatch_report)
 
     print(f"[canonical_population] path={input_path}")
     print(f"[gradework_sheet] path={gradework_sheet_input_path}")
     print(f"[output] path={output_path}")
-    print_summary(validation_rows, canonical_rows, output_path)
+    print(f"[mapping_output] path={mapping_output_path}")
+    print(f"[mismatch_report] path={mismatch_report_path}")
+    print_summary(
+        validation_rows,
+        canonical_rows,
+        mapping_rows,
+        output_path,
+        mapping_output_path,
+        mismatch_report_path,
+    )
 
     return 0
 
