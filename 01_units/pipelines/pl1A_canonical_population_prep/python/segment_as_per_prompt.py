@@ -17,7 +17,8 @@ rerun selectively, or rebuilt entirely from cached artifacts.
 Expected inputs
 ----------------
 - ``--input-path`` must point to a CSV with a header row.
-- The CSV must include a ``response_text`` column.
+- The CSV must include a ``response_text`` column.  
+- all rows of the CSV contain response_text values to be segmented.
 - A ``submission_id`` column is optional. If it is missing, the script will try to recover
     the submission ID from the leading ``+++submission_id=...`` wrapper inside the response text.
 - Source response text may be wrapped in the house format:

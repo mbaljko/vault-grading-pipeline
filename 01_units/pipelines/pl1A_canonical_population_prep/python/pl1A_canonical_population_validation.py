@@ -1,13 +1,46 @@
 #!/usr/bin/env python3
 
-"""Build the canonical-population CSV from LMS-export and grading worksheet inputs.
+"""Build canonical-population and reconciliation outputs from two CSV inputs.
 
-This ports the validation and cleaning logic from the Power Query pipeline into Python.
-It reads the canonical-population / LMS-export CSV plus the grading worksheet CSV,
-matches LMS rows to the grading worksheet by normalized name, expands response columns
-into a long canonical structure, and writes three outputs: the canonical-population
-CSV used by later pipeline steps, a submission-id mapping CSV for grade-sheet joins,
-and a short Markdown mismatch report.
+Inputs
+------
+1. ``--input-path``
+    CSV exported from the LMS submission population. This file must include the
+    student-identifying columns used here (notably ``User`` and ``Username``) plus
+    the response/component columns that should be expanded into the long-form
+    canonical-population table. Response columns are inferred as all columns that
+    appear before ``Tags``.
+
+2. ``--gradework-sheet-input-path``
+    CSV exported from the grading worksheet. This file must include ``Full name``
+    and ``Identifier``. The script normalizes student names, matches LMS rows to
+    grading worksheet rows by normalized name, and derives ``submission_id`` from
+    trailing digits in ``Identifier``.
+
+Outputs
+-------
+1. Canonical-population CSV
+    Written to ``--output-path`` when provided, otherwise next to ``--input-path``
+    with the suffix ``-canonical-population.csv``. This long-form output contains
+    the columns ``submission_id``, ``component_id``, ``response_presence``, and
+    ``response_text``. When ``--component-id`` is provided, only the requested
+    component rows are included in this output.
+
+2. Submission-id mapping CSV
+    Written next to the canonical-population CSV with the suffix
+    ``-submission-id-map.csv``. This contains unique ``submission_id`` to
+    ``Identifier`` pairs so downstream scoring outputs keyed by ``submission_id``
+    can be mapped back into the grade sheet.
+
+3. Markdown mismatch report
+    Written next to the canonical-population CSV with the suffix
+    ``-mismatch-report.md``. This short report lists LMS rows that do not map to a
+    grading worksheet Identifier and grading worksheet Identifiers that do not map
+    back to the LMS population.
+
+This script ports the validation and cleaning logic from the Power Query pipeline
+into Python so the same matching and canonicalization can run in the command-line
+pipeline.
 """
 
 from __future__ import annotations
@@ -28,8 +61,9 @@ TRAILING_DIGITS_RE = re.compile(r"(\d+)$")
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Read the canonical-population CSV and grading worksheet CSV, join them by "
-            "normalized name, and write the canonical-population CSV."
+            "Read an LMS population CSV and a grading worksheet CSV, match them by "
+            "normalized name, and write canonical-population, mapping, and mismatch "
+            "report outputs."
         ),
     )
     parser.add_argument(
@@ -50,6 +84,15 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Destination CSV file. If omitted, the script writes next to --input-path using "
             "the suffix '-canonical-population'."
+        ),
+    )
+    parser.add_argument(
+        "--component-id",
+        action="append",
+        default=[],
+        help=(
+            "Optional component_id to include in the canonical-population output. "
+            "Repeat the argument to include multiple components, or pass a comma-separated list."
         ),
     )
     return parser.parse_args()
@@ -304,6 +347,21 @@ def build_response_payload(response_presence: str, response_text_clean: str | No
     return response_text_clean or ""
 
 
+def normalize_requested_component_ids(requested_component_ids: list[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+
+    for raw_value in requested_component_ids:
+        for component_id in raw_value.split(","):
+            candidate = component_id.strip()
+            if not candidate or candidate in seen:
+                continue
+            seen.add(candidate)
+            normalized.append(candidate)
+
+    return normalized
+
+
 def wrap_response_text(payload: str, submission_id: str) -> str:
     return f"+++submission_id={submission_id}\n+++\n{payload}\n+++\n"
 
@@ -311,9 +369,21 @@ def wrap_response_text(payload: str, submission_id: str) -> str:
 def build_canonical_population_rows(
     raw_rows: list[dict[str, str]],
     validation_rows: list[dict[str, str | int | None]],
+    requested_component_ids: list[str] | None = None,
 ) -> list[dict[str, str | int]]:
     validation_map = build_validation_map(validation_rows)
     response_columns = infer_response_columns(raw_rows)
+    if requested_component_ids:
+        missing_component_ids = [
+            component_id for component_id in requested_component_ids if component_id not in response_columns
+        ]
+        if missing_component_ids:
+            missing_display = ", ".join(missing_component_ids)
+            raise ValueError(f"Requested component_id values not found in input CSV: {missing_display}")
+        response_columns = [
+            component_id for component_id in response_columns if component_id in set(requested_component_ids)
+        ]
+
     canonical_rows: list[dict[str, str | int]] = []
 
     for raw_row in raw_rows:
@@ -510,12 +580,17 @@ def main() -> int:
     output_path = args.output_path.resolve() if args.output_path else default_output_path(input_path)
     mapping_output_path = default_mapping_output_path(output_path)
     mismatch_report_path = default_mismatch_report_path(output_path)
+    requested_component_ids = normalize_requested_component_ids(args.component_id)
 
     raw_rows = load_csv_rows(input_path)
     gw_rows = load_csv_rows(gradework_sheet_input_path)
     gw_index = build_gw_index(gw_rows)
     validation_rows = build_output_rows(raw_rows, gw_index)
-    canonical_rows = build_canonical_population_rows(raw_rows, validation_rows)
+    canonical_rows = build_canonical_population_rows(
+        raw_rows,
+        validation_rows,
+        requested_component_ids=requested_component_ids,
+    )
     mapping_rows = build_identifier_mapping_rows(validation_rows)
     mismatch_report = build_mismatch_report(validation_rows, gw_rows)
     write_output_rows(output_path, canonical_rows)
