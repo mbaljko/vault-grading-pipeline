@@ -291,12 +291,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2B.md",
+                "file": "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP3B.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "_prompt_derive_pseudo_assignment_parsing_AP2B"
+              "title": "_prompt_derive_pseudo_assignment_parsing_AP3B"
             }
           }
         ],
@@ -446,13 +446,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2B.md",
+                "file": "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP3B.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of _prompt_derive_pseudo_assignment_parsing_AP2B"
+              "title": "Outline of _prompt_derive_pseudo_assignment_parsing_AP3B"
             }
           },
           {
@@ -488,6 +488,8 @@
   },
   "active": "fe3cb8bfbc96d736",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2B.md",
+    "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP3B.md",
     "01_units/pipelines/pl1A_canonical_population_prep/python/__pycache__/post_hoc_componentisation_common.cpython-313.pyc",
     "01_units/pipelines/pl1A_canonical_population_prep/python/post_hoc_componentisation_common.py",
     "01_units/pipelines/pl1A_canonical_population_prep/python/post-hoc-componentisation-analysis.py",
@@ -502,7 +504,6 @@
     "01_units/pipelines/pl3_production_scoring/python/__pycache__",
     "01_units/pipelines/pl3_production_scoring/python/populate_gradebook_from_layer4_scores.py",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate-layer4-grade-award-report.cpython-313.pyc",
-    "01_units/pipelines/pl1C_rubric_devt/python/generate-layer4-grade-award-report.py",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS.md",
@@ -522,7 +523,6 @@
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage01_AssignmentPayloadSpec.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage12_Layer1_SBO_61.md",
-    "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP3B.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - AP2B.md"
   ]
 }

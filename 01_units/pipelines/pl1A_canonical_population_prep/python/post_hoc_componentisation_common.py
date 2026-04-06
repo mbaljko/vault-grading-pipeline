@@ -11,7 +11,10 @@ LEADING_TICKED_HEADER_RE = re.compile(r"\A`+\s*(?=\+\+\+)", re.DOTALL)
 HEADER_BLOCK_RE = re.compile(r"\A\+\+\+(?P<header>[^\n]+)\n\+\+\+\n?", re.DOTALL)
 FOOTER_BLOCK_RE = re.compile(r"\n?\+\+\+\s*\Z", re.DOTALL)
 CLAIM_MARKER_SEGMENT_RE = re.compile(
-    r"(?im)(?<![a-z])(?P<segment>claim(?:\s+statement)?\s*#?\s*(?P<number>[123])\s*[:.)-]?)"
+    r"(?im)(?<![a-z])(?P<segment>(?:analytic\s+)?claim(?:\s+statement)?\s*#?\s*(?P<number>[123])\s*[:.)-]?)"
+)
+PLAIN_CLAIM_STATEMENT_SEGMENT_RE = re.compile(
+    r"(?im)(?:^|[\n\r])\s*(?P<segment>claim\s+statement\s*[:.)-]?)"
 )
 NUMBERED_MARKER_SEGMENT_RE = re.compile(
     r"(?im)(?:^|[\n\r])\s*(?P<segment>(?P<number>[123])\s*[.)]\s+)"
@@ -178,6 +181,17 @@ def try_easy_parse_claims(
             reconstruction_status = build_reconstruction_check_output(cleaned_response_text, *claims)
             if reconstruction_status in {"ok", "ok_after_outer_quote_normalization"}:
                 return claims, "numbered_markers"
+
+    plain_claim_statement_starts = [
+        match.start("segment")
+        for match in PLAIN_CLAIM_STATEMENT_SEGMENT_RE.finditer(cleaned_response_text)
+    ]
+    if len(plain_claim_statement_starts) >= 3:
+        claims = split_claims_from_starts(cleaned_response_text, plain_claim_statement_starts[:3])
+        if claims is not None:
+            reconstruction_status = build_reconstruction_check_output(cleaned_response_text, *claims)
+            if reconstruction_status in {"ok", "ok_after_outer_quote_normalization"}:
+                return claims, "plain_claim_statement_markers"
 
     in_this_system_starts = [
         match.start("segment")
