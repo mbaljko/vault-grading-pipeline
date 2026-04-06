@@ -45,9 +45,11 @@ Outputs
 
 LLM output contract
 -------------------
-For each submitted response, the prompt runner is expected to return exactly one logical line
-containing three claim strings separated by the ``∞`` character. The parser treats those as
-claim 1, claim 2, and claim 3 respectively.
+For each submitted response, the prompt runner is expected to return one fenced Markdown block
+containing explicit ``<row index="N">`` wrappers. Each row wrapper must contain exactly one
+``<claim1>...</claim1>``, ``<claim2>...</claim2>``, and ``<claim3>...</claim3>`` block. This
+format supports multiline verbatim claims. The parser retains backward compatibility with the
+older single-line ``∞``-delimited format as a fallback.
 
 Deterministic-only mode
 -----------------------
@@ -112,6 +114,13 @@ NUMBERED_MARKER_SEGMENT_RE = re.compile(
 )
 IN_THIS_SYSTEM_SEGMENT_RE = re.compile(r"(?i)(?P<segment>(?:-\s*)?in\s+(?:this|the)\s*system)")
 BULLET_O_SEGMENT_RE = re.compile(r"(?im)(?:^|[\n\r])\s*(?P<segment>o)\s*(?=$|[\n\r])")
+STRUCTURED_ROW_BLOCK_RE = re.compile(
+    r"(?s)<row\b[^>]*\bindex=[\"'](?P<index>\d+)[\"'][^>]*>\s*"
+    r"<claim1>(?P<claim_1>.*?)</claim1>\s*"
+    r"<claim2>(?P<claim_2>.*?)</claim2>\s*"
+    r"<claim3>(?P<claim_3>.*?)</claim3>\s*"
+    r"</row>"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -627,6 +636,33 @@ def copy_segmentation_fields(target_row: dict[str, str], source_row: dict[str, s
 
 def parse_batch_llm_output(extracted_output_text: str, expected_rows: int) -> list[dict[str, str]]:
     body = extract_fenced_markdown_body(extracted_output_text)
+    structured_matches = list(STRUCTURED_ROW_BLOCK_RE.finditer(body))
+    if structured_matches:
+        if len(structured_matches) != expected_rows:
+            raise ValueError(
+                f"Expected {expected_rows} structured row block(s) from batch, received {len(structured_matches)}."
+            )
+
+        parsed_rows: list[dict[str, str]] = []
+        for expected_index, match in enumerate(structured_matches, start=1):
+            actual_index = int(match.group("index"))
+            if actual_index != expected_index:
+                raise ValueError(
+                    f"Structured batch output row index mismatch: expected {expected_index}, received {actual_index}."
+                )
+            claim_1 = match.group("claim_1")
+            claim_2 = match.group("claim_2")
+            claim_3 = match.group("claim_3")
+            parsed_rows.append(
+                {
+                    "llm_output_text": match.group(0).strip(),
+                    "claim_1": claim_1,
+                    "claim_2": claim_2,
+                    "claim_3": claim_3,
+                }
+            )
+        return parsed_rows
+
     lines = [
         line.strip()
         for line in body.splitlines()
@@ -955,8 +991,6 @@ def prepare_cleaned_rows(input_path: Path) -> list[dict[str, str]]:
     for row in rows:
         response_text = row.get(response_text_key, "")
         header_info, cleaned_text = extract_response_payload(response_text)
-        if not cleaned_text.strip():
-            continue
         submission_id = extract_submission_id(row, header_info)
         prepared_rows.append(
             {
@@ -1617,7 +1651,10 @@ def write_claim_expanded_rows(
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         for row in rows:
-            if not all((row.get(claim_key, "") or "").strip() for claim_key in claim_keys):
+            if (
+                row.get("parse_strategy", "") != "empty_response"
+                and not all((row.get(claim_key, "") or "").strip() for claim_key in claim_keys)
+            ):
                 continue
             submission_id = row.get("submission_id", "")
             submission_header = row.get("submission_header", "")
@@ -1676,7 +1713,7 @@ def main() -> int:
     physical_line_count = count_physical_lines(input_path)
     raw_rows, _ = load_csv_rows(input_path)
     prepared_rows = prepare_cleaned_rows(input_path)
-    skipped_empty_rows = len(raw_rows) - len(prepared_rows)
+    skipped_empty_rows = max(0, len(raw_rows) - len(prepared_rows))
     parse_counter = apply_easy_parse_first_pass(prepared_rows)
     llm_candidate_rows = rows_requiring_llm(prepared_rows)
     print(

@@ -85,9 +85,6 @@ def main() -> int:
     for row in raw_rows:
         response_text = row.get(response_text_key, "")
         header_info, cleaned_text = extract_response_payload(response_text)
-        if not cleaned_text.strip():
-            skipped_empty_rows += 1
-            continue
         submission_id = extract_submission_id(row, header_info)
         claims, parse_strategy = try_easy_parse_claims(cleaned_text)
         reconstruction_check_output = ""
