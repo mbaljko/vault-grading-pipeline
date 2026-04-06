@@ -634,6 +634,63 @@ def copy_segmentation_fields(target_row: dict[str, str], source_row: dict[str, s
     target_row["parse_strategy"] = source_row.get("parse_strategy", target_row.get("parse_strategy", "llm"))
 
 
+def is_manual_override_note(text: str) -> bool:
+    return "OVERRIDE" in (text or "").upper()
+
+
+def recover_claims_from_llm_output_text(llm_output_text: str) -> dict[str, str] | None:
+    if not (llm_output_text or "").strip():
+        return None
+    try:
+        parsed_rows = parse_batch_llm_output(llm_output_text, expected_rows=1)
+    except ValueError:
+        return None
+    return parsed_rows[0]
+
+
+def normalize_loaded_audit_row(
+    normalized_row: dict[str, str],
+    claim_column_names: list[str],
+) -> dict[str, str]:
+    llm_error = normalized_row.get("llm_error", "")
+    extra_note = normalized_row.get("", "")
+    if not llm_error.strip() and extra_note.strip():
+        llm_error = extra_note.strip()
+
+    claim_1 = normalized_row.get(claim_column_names[0], "")
+    claim_2 = normalized_row.get(claim_column_names[1], "")
+    claim_3 = normalized_row.get(claim_column_names[2], "")
+    llm_output_text = normalized_row.get("llm_output_text", "")
+    if (not claim_1.strip() or not claim_2.strip() or not claim_3.strip()) and llm_output_text.strip():
+        recovered = recover_claims_from_llm_output_text(llm_output_text)
+        if recovered is not None:
+            claim_1 = recovered["claim_1"]
+            claim_2 = recovered["claim_2"]
+            claim_3 = recovered["claim_3"]
+
+    reconstruction_check_output = normalized_row.get("reconstruction_check_output", "")
+    cleaned_response_text = normalized_row.get("cleaned_response_text", "")
+    if claim_1 or claim_2 or claim_3:
+        recomputed = build_reconstruction_check_output(cleaned_response_text, claim_1, claim_2, claim_3)
+        if not reconstruction_check_output.strip() or is_manual_override_note(llm_error):
+            reconstruction_check_output = recomputed
+    if is_manual_override_note(llm_error):
+        reconstruction_check_output = "ok_manual_override"
+
+    return {
+        "submission_id": normalized_row.get("submission_id", ""),
+        "submission_header": normalized_row.get("submission_header", ""),
+        "cleaned_response_text": cleaned_response_text,
+        "llm_output_text": llm_output_text,
+        "claim_1": claim_1,
+        "claim_2": claim_2,
+        "claim_3": claim_3,
+        "reconstruction_check_output": reconstruction_check_output,
+        "llm_error": llm_error,
+        "parse_strategy": normalized_row.get("parse_strategy", "llm"),
+    }
+
+
 def parse_batch_llm_output(extracted_output_text: str, expected_rows: int) -> list[dict[str, str]]:
     body = extract_fenced_markdown_body(extracted_output_text)
     structured_matches = list(STRUCTURED_ROW_BLOCK_RE.finditer(body))
@@ -894,7 +951,11 @@ def summarize_batch_rows(batch_rows: list[dict[str, str]]) -> tuple[int, Counter
     reconstruction_counter = Counter(
         row.get("reconstruction_check_output", "") or "<empty>" for row in batch_rows
     )
-    llm_error_count = sum(1 for row in batch_rows if (row.get("llm_error", "") or "").strip())
+    llm_error_count = sum(
+        1
+        for row in batch_rows
+        if (row.get("llm_error", "") or "").strip() and not is_manual_override_note(row.get("llm_error", ""))
+    )
     return llm_error_count, reconstruction_counter
 
 
@@ -1040,20 +1101,7 @@ def load_audit_rows(output_audit_path: Path, claim_column_names: list[str]) -> l
             normalized_row = {key.strip(): (value or "") for key, value in raw_row.items() if key is not None}
             if not any(value.strip() for value in normalized_row.values()):
                 continue
-            rows.append(
-                {
-                    "submission_id": normalized_row.get("submission_id", ""),
-                    "submission_header": normalized_row.get("submission_header", ""),
-                    "cleaned_response_text": normalized_row.get("cleaned_response_text", ""),
-                    "llm_output_text": normalized_row.get("llm_output_text", ""),
-                    "claim_1": normalized_row.get(claim_column_names[0], ""),
-                    "claim_2": normalized_row.get(claim_column_names[1], ""),
-                    "claim_3": normalized_row.get(claim_column_names[2], ""),
-                    "reconstruction_check_output": normalized_row.get("reconstruction_check_output", ""),
-                    "llm_error": normalized_row.get("llm_error", ""),
-                    "parse_strategy": normalized_row.get("parse_strategy", "llm"),
-                }
-            )
+            rows.append(normalize_loaded_audit_row(normalized_row, claim_column_names))
 
     return rows
 
@@ -1078,11 +1126,17 @@ def print_summary(
         row.get("reconstruction_check_output", "") or "<empty>" for row in rows
     )
     parse_strategy_counter = Counter(row.get("parse_strategy", "llm") or "<empty>" for row in rows)
-    llm_error_count = sum(1 for row in rows if (row.get("llm_error", "") or "").strip())
+    llm_error_count = sum(
+        1
+        for row in rows
+        if (row.get("llm_error", "") or "").strip() and not is_manual_override_note(row.get("llm_error", ""))
+    )
+    manual_override_count = sum(1 for row in rows if is_manual_override_note(row.get("llm_error", "")))
 
     print(f"[{prefix}] {label}", flush=True)
     print(f"[{prefix}] total_rows={len(rows)}", flush=True)
     print(f"[{prefix}] llm_error_rows={llm_error_count}", flush=True)
+    print(f"[{prefix}] manual_override_rows={manual_override_count}", flush=True)
     print(f"[{prefix}] claim_columns={', '.join(claim_column_names)}", flush=True)
     if elapsed_seconds is not None:
         print(f"[{prefix}] elapsed_seconds={elapsed_seconds:.2f}", flush=True)
@@ -1651,11 +1705,6 @@ def write_claim_expanded_rows(
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         for row in rows:
-            if (
-                row.get("parse_strategy", "") != "empty_response"
-                and not all((row.get(claim_key, "") or "").strip() for claim_key in claim_keys)
-            ):
-                continue
             submission_id = row.get("submission_id", "")
             submission_header = row.get("submission_header", "")
             for claim_key, claim_column_name in zip(claim_keys, claim_column_names, strict=True):
