@@ -10,16 +10,24 @@ SUBMISSION_ID_COLUMN = "submission_id"
 LEADING_TICKED_HEADER_RE = re.compile(r"\A`+\s*(?=\+\+\+)", re.DOTALL)
 HEADER_BLOCK_RE = re.compile(r"\A\+\+\+(?P<header>[^\n]+)\n\+\+\+\n?", re.DOTALL)
 FOOTER_BLOCK_RE = re.compile(r"\n?\+\+\+\s*\Z", re.DOTALL)
+LEADING_SECTION_HEADING_RE = re.compile(
+    r"\A\s*Section\s*(?:[\n\r]+\s*)?(?P<section>[A-Z])\s*(?:[:\-\u2013\u2014]|‚Äì|‚Äî)\s*Constraint\s+Interaction\s+Claims\s*",
+    re.IGNORECASE,
+)
+EMPTY_RESPONSE_PLACEHOLDERS = {"<<EMPTY>>"}
 CLAIM_MARKER_SEGMENT_RE = re.compile(
     r"(?im)(?<![a-z])(?P<segment>(?:analytic\s+)?claim(?:\s+statement)?\s*#?\s*(?P<number>[123])\s*[:.)-]?)"
 )
 PLAIN_CLAIM_STATEMENT_SEGMENT_RE = re.compile(
     r"(?im)(?:^|[\n\r])\s*(?P<segment>claim\s+statement\s*[:.)-]?)"
 )
+PLAIN_CLAIM_SEGMENT_RE = re.compile(
+    r"(?im)(?:^|[\n\r])\s*(?P<segment>claim\s*[:.)-])"
+)
 NUMBERED_MARKER_SEGMENT_RE = re.compile(
     r"(?im)(?:^|[\n\r])\s*(?P<segment>(?P<number>[123])\s*[.)]\s+)"
 )
-IN_THIS_SYSTEM_SEGMENT_RE = re.compile(r"(?i)(?P<segment>in\s+this\s*system)")
+IN_THIS_SYSTEM_SEGMENT_RE = re.compile(r"(?i)(?P<segment>(?:-\s*)?in\s+(?:this|the)\s*system)")
 
 
 def load_csv_rows(input_path: Path) -> tuple[list[dict[str, str]], str]:
@@ -58,6 +66,9 @@ def extract_response_payload(response_text: str) -> tuple[str, str]:
         stripped_text = stripped_text[header_match.end():]
 
     stripped_text = FOOTER_BLOCK_RE.sub("", stripped_text).strip()
+    stripped_text = LEADING_SECTION_HEADING_RE.sub("", stripped_text, count=1).lstrip()
+    if stripped_text.strip().upper() in EMPTY_RESPONSE_PLACEHOLDERS:
+        stripped_text = ""
     return header_info, stripped_text
 
 
@@ -139,6 +150,13 @@ def split_claims_from_starts(cleaned_response_text: str, starts: list[int]) -> t
         return None
     if sorted(starts) != starts or len(set(starts)) != 3:
         return None
+    if (
+        starts[0] == 1
+        and len(cleaned_response_text) >= 2
+        and cleaned_response_text[0] == cleaned_response_text[-1]
+        and cleaned_response_text[0] in {'"', "'"}
+    ):
+        starts = [0, starts[1], starts[2]]
     return (
         cleaned_response_text[starts[0]:starts[1]],
         cleaned_response_text[starts[1]:starts[2]],
@@ -160,6 +178,9 @@ def parse_segment_starts_with_numbered_pattern(
 def try_easy_parse_claims(
     cleaned_response_text: str,
 ) -> tuple[tuple[str, str, str] | None, str]:
+    if not cleaned_response_text.strip():
+        return ("", "", ""), "empty_response"
+
     claim_marker_starts = parse_segment_starts_with_numbered_pattern(
         cleaned_response_text,
         CLAIM_MARKER_SEGMENT_RE,
@@ -192,6 +213,17 @@ def try_easy_parse_claims(
             reconstruction_status = build_reconstruction_check_output(cleaned_response_text, *claims)
             if reconstruction_status in {"ok", "ok_after_outer_quote_normalization"}:
                 return claims, "plain_claim_statement_markers"
+
+    plain_claim_starts = [
+        match.start("segment")
+        for match in PLAIN_CLAIM_SEGMENT_RE.finditer(cleaned_response_text)
+    ]
+    if len(plain_claim_starts) >= 3:
+        claims = split_claims_from_starts(cleaned_response_text, plain_claim_starts[:3])
+        if claims is not None:
+            reconstruction_status = build_reconstruction_check_output(cleaned_response_text, *claims)
+            if reconstruction_status in {"ok", "ok_after_outer_quote_normalization"}:
+                return claims, "plain_claim_markers"
 
     in_this_system_starts = [
         match.start("segment")

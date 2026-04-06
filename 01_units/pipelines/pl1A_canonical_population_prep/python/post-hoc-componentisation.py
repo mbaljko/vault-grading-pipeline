@@ -48,6 +48,13 @@ LLM output contract
 For each submitted response, the prompt runner is expected to return exactly one logical line
 containing three claim strings separated by the ``∞`` character. The parser treats those as
 claim 1, claim 2, and claim 3 respectively.
+
+Deterministic-only mode
+-----------------------
+When ``--deterministic-only`` is set, the script performs only the structural first pass,
+writes claim-expanded rows for submissions segmented deterministically, and writes an audit
+CSV for all rows. Rows that still require the LLM are marked as pending in the audit and are
+not sent to the prompt runner.
 """
 
 from __future__ import annotations
@@ -74,6 +81,11 @@ LEADING_TICKED_HEADER_RE = re.compile(r"\A`+\s*(?=\+\+\+)", re.DOTALL)
 HEADER_BLOCK_RE = re.compile(r"\A\+\+\+(?P<header>[^\n]+)\n\+\+\+\n?", re.DOTALL)
 FOOTER_BLOCK_RE = re.compile(r"\n?\+\+\+\s*\Z", re.DOTALL)
 FENCED_BLOCK_RE = re.compile(r"(?ms)^\s*`{3,4}[^\n`]*\n(?P<body>.*?)\n\s*`{3,4}\s*$")
+LEADING_SECTION_HEADING_RE = re.compile(
+    r"\A\s*Section\s*(?:[\n\r]+\s*)?(?P<section>[A-Z])\s*(?:[:\-\u2013\u2014]|‚Äì|‚Äî)\s*Constraint\s+Interaction\s+Claims\s*",
+    re.IGNORECASE,
+)
+EMPTY_RESPONSE_PLACEHOLDERS = {"<<EMPTY>>"}
 ASSIGNMENT_SECTION_RE = re.compile(r"^(AP\d+)([A-Z])_", re.IGNORECASE)
 SECTION_COMPONENT_RE = re.compile(r"Section([A-Z])\d*Response", re.IGNORECASE)
 SUBMISSION_TAG_RE = re.compile(r'(?m)^<submission index="')
@@ -83,10 +95,13 @@ CLAIM_MARKER_SEGMENT_RE = re.compile(
 PLAIN_CLAIM_STATEMENT_SEGMENT_RE = re.compile(
     r"(?im)(?:^|[\n\r])\s*(?P<segment>claim\s+statement\s*[:.)-]?)"
 )
+PLAIN_CLAIM_SEGMENT_RE = re.compile(
+    r"(?im)(?:^|[\n\r])\s*(?P<segment>claim\s*[:.)-])"
+)
 NUMBERED_MARKER_SEGMENT_RE = re.compile(
     r"(?im)(?:^|[\n\r])\s*(?P<segment>(?P<number>[123])\s*[.)]\s+)"
 )
-IN_THIS_SYSTEM_SEGMENT_RE = re.compile(r"(?i)(?P<segment>in\s+this\s*system)")
+IN_THIS_SYSTEM_SEGMENT_RE = re.compile(r"(?i)(?P<segment>(?:-\s*)?in\s+(?:this|the)\s*system)")
 
 
 def parse_args() -> argparse.Namespace:
@@ -181,6 +196,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Do not invoke the LLM runner; rebuild final outputs only from existing batch cache artifacts.",
     )
+    parser.add_argument(
+        "--deterministic-only",
+        action="store_true",
+        help=(
+            "Run only the deterministic structural parser, write claim-expanded rows for resolved submissions, "
+            "and mark unresolved submissions as pending LLM segmentation in the audit CSV."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -224,6 +247,9 @@ def extract_response_payload(response_text: str) -> tuple[str, str]:
         stripped_text = stripped_text[header_match.end():]
 
     stripped_text = FOOTER_BLOCK_RE.sub("", stripped_text).strip()
+    stripped_text = LEADING_SECTION_HEADING_RE.sub("", stripped_text, count=1).lstrip()
+    if stripped_text.strip().upper() in EMPTY_RESPONSE_PLACEHOLDERS:
+        stripped_text = ""
     return header_info, stripped_text
 
 
@@ -390,6 +416,13 @@ def split_claims_from_starts(cleaned_response_text: str, starts: list[int]) -> t
         return None
     if sorted(starts) != starts or len(set(starts)) != 3:
         return None
+    if (
+        starts[0] == 1
+        and len(cleaned_response_text) >= 2
+        and cleaned_response_text[0] == cleaned_response_text[-1]
+        and cleaned_response_text[0] in {'"', "'"}
+    ):
+        starts = [0, starts[1], starts[2]]
     return (
         cleaned_response_text[starts[0]:starts[1]],
         cleaned_response_text[starts[1]:starts[2]],
@@ -411,6 +444,9 @@ def parse_segment_starts_with_numbered_pattern(
 def try_easy_parse_claims(
     cleaned_response_text: str,
 ) -> tuple[tuple[str, str, str] | None, str]:
+    if not cleaned_response_text.strip():
+        return ("", "", ""), "empty_response"
+
     claim_marker_starts = parse_segment_starts_with_numbered_pattern(
         cleaned_response_text,
         CLAIM_MARKER_SEGMENT_RE,
@@ -443,6 +479,17 @@ def try_easy_parse_claims(
             reconstruction_status = build_reconstruction_check_output(cleaned_response_text, *claims)
             if reconstruction_status in {"ok", "ok_after_outer_quote_normalization"}:
                 return claims, "plain_claim_statement_markers"
+
+    plain_claim_starts = [
+        match.start("segment")
+        for match in PLAIN_CLAIM_SEGMENT_RE.finditer(cleaned_response_text)
+    ]
+    if len(plain_claim_starts) >= 3:
+        claims = split_claims_from_starts(cleaned_response_text, plain_claim_starts[:3])
+        if claims is not None:
+            reconstruction_status = build_reconstruction_check_output(cleaned_response_text, *claims)
+            if reconstruction_status in {"ok", "ok_after_outer_quote_normalization"}:
+                return claims, "plain_claim_markers"
 
     in_this_system_starts = [
         match.start("segment")
@@ -478,6 +525,15 @@ def apply_claim_segmentation(
 
 def rows_requiring_llm(prepared_rows: list[dict[str, str]]) -> list[dict[str, str]]:
     return [row for row in prepared_rows if row.get("parse_strategy", "llm") == "llm"]
+
+
+def mark_rows_pending_llm(prepared_rows: list[dict[str, str]]) -> None:
+    for row in prepared_rows:
+        if row.get("parse_strategy", "llm") != "llm":
+            continue
+        if row.get("llm_error", "").strip():
+            continue
+        row["llm_error"] = "pending_llm_segmentation"
 
 
 def apply_easy_parse_first_pass(prepared_rows: list[dict[str, str]]) -> Counter[str]:
@@ -836,6 +892,8 @@ def prepare_cleaned_rows(input_path: Path) -> list[dict[str, str]]:
     for row in rows:
         response_text = row.get(response_text_key, "")
         header_info, cleaned_text = extract_response_payload(response_text)
+        if not cleaned_text.strip():
+            continue
         submission_id = extract_submission_id(row, header_info)
         prepared_rows.append(
             {
@@ -1496,6 +1554,8 @@ def write_claim_expanded_rows(
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         for row in rows:
+            if not all((row.get(claim_key, "") or "").strip() for claim_key in claim_keys):
+                continue
             submission_id = row.get("submission_id", "")
             submission_header = row.get("submission_header", "")
             for claim_key, claim_column_name in zip(claim_keys, claim_column_names, strict=True):
@@ -1542,16 +1602,25 @@ def main() -> int:
 
     if args.rebuild_from_batch_cache and selected_batches:
         raise ValueError("--rebuild-from-batch-cache cannot be combined with --rerun-batch/--rerun-batches")
+    if args.deterministic_only and (
+        selected_batches or args.rerun_failed_batches or args.rebuild_from_batch_cache
+    ):
+        raise ValueError(
+            "--deterministic-only cannot be combined with rerun or batch-cache rebuild options"
+        )
 
     print(f"[progress] loading source CSV: {input_path}", flush=True)
     physical_line_count = count_physical_lines(input_path)
+    raw_rows, _ = load_csv_rows(input_path)
     prepared_rows = prepare_cleaned_rows(input_path)
+    skipped_empty_rows = len(raw_rows) - len(prepared_rows)
     parse_counter = apply_easy_parse_first_pass(prepared_rows)
     llm_candidate_rows = rows_requiring_llm(prepared_rows)
     print(
         f"[progress] source file has {physical_line_count} physical line(s); prepared {len(prepared_rows)} non-empty submission row(s)",
         flush=True,
     )
+    print(f"[progress] skipped_empty_rows={skipped_empty_rows}", flush=True)
     print(
         f"[progress] deterministic structural parsing handled {len(prepared_rows) - len(llm_candidate_rows)} row(s); "
         f"{len(llm_candidate_rows)} row(s) remain for LLM segmentation",
@@ -1559,6 +1628,24 @@ def main() -> int:
     )
     for parse_strategy, count in sorted(parse_counter.items()):
         print(f"[progress] parse_strategy[{parse_strategy}]={count}", flush=True)
+
+    if args.deterministic_only:
+        mark_rows_pending_llm(prepared_rows)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_audit_path.parent.mkdir(parents=True, exist_ok=True)
+        print("[progress] deterministic-only mode enabled; skipping LLM batching", flush=True)
+        print(f"[progress] writing output CSV: {output_path}", flush=True)
+        write_claim_expanded_rows(output_path, prepared_rows, claim_column_names)
+        print(f"[progress] writing audit CSV: {output_audit_path}", flush=True)
+        write_segmentation_rows(output_audit_path, prepared_rows, claim_column_names)
+        print_summary(
+            prepared_rows,
+            prefix="summary",
+            label="deterministic-only run complete",
+            claim_column_names=claim_column_names,
+        )
+        print("[progress] deterministic-only segmentation run complete", flush=True)
+        return 0
 
     batch_specs = build_batch_specs(llm_candidate_rows, args.batch_size)
     has_existing_batch_cache = batch_cache_dir.exists() and any(batch_cache_dir.iterdir())

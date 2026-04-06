@@ -80,10 +80,14 @@ def main() -> int:
     audit_rows: list[dict[str, str]] = []
     parse_counter: Counter[str] = Counter()
     easy_count = 0
+    skipped_empty_rows = 0
 
     for row in raw_rows:
         response_text = row.get(response_text_key, "")
         header_info, cleaned_text = extract_response_payload(response_text)
+        if not cleaned_text.strip():
+            skipped_empty_rows += 1
+            continue
         submission_id = extract_submission_id(row, header_info)
         claims, parse_strategy = try_easy_parse_claims(cleaned_text)
         reconstruction_check_output = ""
@@ -108,6 +112,7 @@ def main() -> int:
 
     print(f"[summary] input_path={input_path}")
     print(f"[summary] total_rows={total_rows}")
+    print(f"[summary] skipped_empty_rows={skipped_empty_rows}")
     print(f"[summary] easily_parsable_rows={easy_count}")
     print(f"[summary] easily_parsable_pct={easy_share:.2f}")
     for parse_strategy, count in sorted(parse_counter.items()):
