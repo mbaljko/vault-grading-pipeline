@@ -488,6 +488,8 @@
   },
   "active": "fe3cb8bfbc96d736",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1A_canonical_population_prep/python/__pycache__/post_hoc_componentisation_common.cpython-313.pyc",
+    "01_units/pipelines/pl1A_canonical_population_prep/python/post_hoc_componentisation_common.py",
     "01_units/pipelines/pl1A_canonical_population_prep/python/post-hoc-componentisation-analysis.py",
     "01_units/pipelines/pl1A_canonical_population_prep/python/post-hoc-componentisation.py",
     "01_units/pipelines/pl1A_canonical_population_prep/excel/README.md",
@@ -502,8 +504,6 @@
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate-layer4-grade-award-report.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/generate-layer4-grade-award-report.py",
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
-    "01_units/pipelines/pl1C_rubric_devt/python/execute-layer4-submission-scoring-modules.py",
-    "01_units/pipelines/pl1C_rubric_devt/python/generate-layer4-submission-scoring-module.py",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - single indicator.md",

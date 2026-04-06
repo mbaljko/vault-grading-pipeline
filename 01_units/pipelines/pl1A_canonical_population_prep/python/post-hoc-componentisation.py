@@ -38,8 +38,9 @@ Outputs
 -------
 - ``--output-path`` receives the claim-expanded CSV with columns:
     ``submission_id``, ``component_id``, ``response_text``.
-- ``--output-audit-path`` receives the full audit CSV with cleaned submission text, raw LLM
-    output, three parsed claim columns, reconstruction diagnostics, and any LLM error message.
+- ``--output-audit-path`` receives the full audit CSV with cleaned submission text, parse
+    strategy, raw LLM output, three parsed claim columns, reconstruction diagnostics, and any
+    LLM error message.
 - ``--batch-cache-dir`` stores per-batch intermediate files and status JSON used for reruns.
 
 LLM output contract
@@ -76,6 +77,13 @@ FENCED_BLOCK_RE = re.compile(r"(?ms)^\s*`{3,4}[^\n`]*\n(?P<body>.*?)\n\s*`{3,4}\
 ASSIGNMENT_SECTION_RE = re.compile(r"^(AP\d+)([A-Z])_", re.IGNORECASE)
 SECTION_COMPONENT_RE = re.compile(r"Section([A-Z])\d*Response", re.IGNORECASE)
 SUBMISSION_TAG_RE = re.compile(r'(?m)^<submission index="')
+CLAIM_MARKER_SEGMENT_RE = re.compile(
+    r"(?im)(?:^|[\n\r])(?P<segment>\s*claim(?:\s+statement)?\s*(?P<number>[123])\s*[:.)-]?)"
+)
+NUMBERED_MARKER_SEGMENT_RE = re.compile(
+    r"(?im)(?:^|[\n\r])(?P<segment>\s*(?P<number>[123])\s*[.)]\s+)"
+)
+IN_THIS_SYSTEM_SEGMENT_RE = re.compile(r"(?i)(?P<segment>in\s+this\s*system)")
 
 
 def parse_args() -> argparse.Namespace:
@@ -359,6 +367,129 @@ def build_reconstruction_check_output(
         f"; expected_length={len(normalized_cleaned)}"
         f"; actual_length={len(normalized_reconstructed)}"
     )
+
+
+def select_ordered_triplet_starts(matches: list[tuple[int, int]]) -> list[int]:
+    expected_number = 1
+    starts: list[int] = []
+    for number, start in matches:
+        if number != expected_number:
+            continue
+        starts.append(start)
+        expected_number += 1
+        if expected_number == 4:
+            return starts
+    return []
+
+
+def split_claims_from_starts(cleaned_response_text: str, starts: list[int]) -> tuple[str, str, str] | None:
+    if len(starts) != 3:
+        return None
+    if sorted(starts) != starts or len(set(starts)) != 3:
+        return None
+    return (
+        cleaned_response_text[starts[0]:starts[1]],
+        cleaned_response_text[starts[1]:starts[2]],
+        cleaned_response_text[starts[2]:],
+    )
+
+
+def parse_segment_starts_with_numbered_pattern(
+    cleaned_response_text: str,
+    pattern: re.Pattern[str],
+) -> list[int]:
+    matches = [
+        (int(match.group("number")), match.start("segment"))
+        for match in pattern.finditer(cleaned_response_text)
+    ]
+    return select_ordered_triplet_starts(matches)
+
+
+def try_easy_parse_claims(
+    cleaned_response_text: str,
+) -> tuple[tuple[str, str, str] | None, str]:
+    claim_marker_starts = parse_segment_starts_with_numbered_pattern(
+        cleaned_response_text,
+        CLAIM_MARKER_SEGMENT_RE,
+    )
+    if claim_marker_starts:
+        claims = split_claims_from_starts(cleaned_response_text, claim_marker_starts)
+        if claims is not None:
+            reconstruction_status = build_reconstruction_check_output(cleaned_response_text, *claims)
+            if reconstruction_status in {"ok", "ok_after_outer_quote_normalization"}:
+                return claims, "claim_markers"
+
+    numbered_marker_starts = parse_segment_starts_with_numbered_pattern(
+        cleaned_response_text,
+        NUMBERED_MARKER_SEGMENT_RE,
+    )
+    if numbered_marker_starts:
+        claims = split_claims_from_starts(cleaned_response_text, numbered_marker_starts)
+        if claims is not None:
+            reconstruction_status = build_reconstruction_check_output(cleaned_response_text, *claims)
+            if reconstruction_status in {"ok", "ok_after_outer_quote_normalization"}:
+                return claims, "numbered_markers"
+
+    in_this_system_starts = [
+        match.start("segment")
+        for match in IN_THIS_SYSTEM_SEGMENT_RE.finditer(cleaned_response_text)
+    ]
+    if len(in_this_system_starts) >= 3:
+        claims = split_claims_from_starts(cleaned_response_text, in_this_system_starts[:3])
+        if claims is not None:
+            reconstruction_status = build_reconstruction_check_output(cleaned_response_text, *claims)
+            if reconstruction_status in {"ok", "ok_after_outer_quote_normalization"}:
+                return claims, "in_this_system_triplet"
+
+    return None, "llm"
+
+
+def apply_claim_segmentation(
+    row: dict[str, str],
+    claims: tuple[str, str, str],
+    parse_strategy: str,
+) -> None:
+    row["llm_output_text"] = " ∞ ".join(claims)
+    row["claim_1"] = claims[0]
+    row["claim_2"] = claims[1]
+    row["claim_3"] = claims[2]
+    row["reconstruction_check_output"] = build_reconstruction_check_output(
+        cleaned_response_text=row["cleaned_response_text"],
+        claim_1=row["claim_1"],
+        claim_2=row["claim_2"],
+        claim_3=row["claim_3"],
+    )
+    row["parse_strategy"] = parse_strategy
+
+
+def rows_requiring_llm(prepared_rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    return [row for row in prepared_rows if row.get("parse_strategy", "llm") == "llm"]
+
+
+def apply_easy_parse_first_pass(prepared_rows: list[dict[str, str]]) -> Counter[str]:
+    parse_counter: Counter[str] = Counter()
+    for row in prepared_rows:
+        claims, parse_strategy = try_easy_parse_claims(row["cleaned_response_text"])
+        if claims is None:
+            row["parse_strategy"] = "llm"
+            parse_counter["llm"] += 1
+            continue
+        apply_claim_segmentation(row, claims, parse_strategy=parse_strategy)
+        parse_counter[parse_strategy] += 1
+    return parse_counter
+
+
+def copy_segmentation_fields(target_row: dict[str, str], source_row: dict[str, str]) -> None:
+    for field_name in [
+        "llm_output_text",
+        "claim_1",
+        "claim_2",
+        "claim_3",
+        "reconstruction_check_output",
+        "llm_error",
+    ]:
+        target_row[field_name] = source_row.get(field_name, "")
+    target_row["parse_strategy"] = source_row.get("parse_strategy", target_row.get("parse_strategy", "llm"))
 
 
 def parse_batch_llm_output(extracted_output_text: str, expected_rows: int) -> list[dict[str, str]]:
@@ -703,6 +834,7 @@ def prepare_cleaned_rows(input_path: Path) -> list[dict[str, str]]:
                 "claim_3": "",
                 "reconstruction_check_output": "",
                 "llm_error": "",
+                "parse_strategy": "llm",
             }
         )
 
@@ -750,6 +882,7 @@ def load_audit_rows(output_audit_path: Path, claim_column_names: list[str]) -> l
                     "claim_3": normalized_row.get(claim_column_names[2], ""),
                     "reconstruction_check_output": normalized_row.get("reconstruction_check_output", ""),
                     "llm_error": normalized_row.get("llm_error", ""),
+                    "parse_strategy": normalized_row.get("parse_strategy", "llm"),
                 }
             )
 
@@ -775,6 +908,7 @@ def print_summary(
     reconstruction_counter = Counter(
         row.get("reconstruction_check_output", "") or "<empty>" for row in rows
     )
+    parse_strategy_counter = Counter(row.get("parse_strategy", "llm") or "<empty>" for row in rows)
     llm_error_count = sum(1 for row in rows if (row.get("llm_error", "") or "").strip())
 
     print(f"[{prefix}] {label}", flush=True)
@@ -786,6 +920,8 @@ def print_summary(
 
     for status, count in sorted(reconstruction_counter.items()):
         print(f"[{prefix}] reconstruction[{status}]={count}", flush=True)
+    for parse_strategy, count in sorted(parse_strategy_counter.items()):
+        print(f"[{prefix}] parse_strategy[{parse_strategy}]={count}", flush=True)
 
 
 def print_cached_batch_summary(
@@ -921,6 +1057,7 @@ def run_one_batch(
                 "claim_3": "",
                 "reconstruction_check_output": "",
                 "llm_error": "",
+                "parse_strategy": "llm",
             }
             for row in batch_rows
         ], "", elapsed_seconds, batch_input_sha256
@@ -951,6 +1088,7 @@ def run_one_batch(
             claim_2=row["claim_2"],
             claim_3=row["claim_3"],
         )
+        row["parse_strategy"] = "llm"
 
     print(
         f"[batch {batch_spec['batch_number']}/{total_batches}] received {len(batch_rows)} segmented row(s)",
@@ -1090,15 +1228,20 @@ def execute_batch_cache_workflow(
     if batch_size <= 0:
         raise ValueError(f"--batch-size must be a positive integer, received: {batch_size}")
 
+    llm_candidate_rows = rows_requiring_llm(prepared_rows)
+    if not llm_candidate_rows:
+        print("[progress] deterministic structural parsing covered all rows; no LLM batches required", flush=True)
+        return prepared_rows
+
     batch_cache_dir.mkdir(parents=True, exist_ok=True)
-    batch_specs = build_batch_specs(prepared_rows, batch_size)
+    batch_specs = build_batch_specs(llm_candidate_rows, batch_size)
     total_batches = len(batch_specs)
     print(
         f"[progress] batch cache directory: {batch_cache_dir}",
         flush=True,
     )
     print(
-        f"[progress] planned {total_batches} batch(es) from {len(prepared_rows)} cleaned submission(s)",
+        f"[progress] planned {total_batches} batch(es) from {len(llm_candidate_rows)} LLM submission(s)",
         flush=True,
     )
 
@@ -1200,7 +1343,12 @@ def execute_batch_cache_workflow(
     if unavailable_batches:
         raise RuntimeError(format_unavailable_batches_error(unavailable_batches))
 
-    return merge_batch_audit_rows(batch_specs, batch_cache_dir, claim_column_names)
+    merged_llm_rows = merge_batch_audit_rows(batch_specs, batch_cache_dir, claim_column_names)
+    for target_row, merged_row in zip(llm_candidate_rows, merged_llm_rows, strict=True):
+        copy_segmentation_fields(target_row, merged_row)
+        target_row["parse_strategy"] = "llm"
+
+    return prepared_rows
 
 
 def apply_llm_segmentation(
@@ -1293,6 +1441,7 @@ def write_segmentation_rows(
         "submission_id",
         "submission_header",
         "cleaned_response_text",
+        "parse_strategy",
         "llm_output_text",
         *claim_column_names,
         "reconstruction_check_output",
@@ -1307,6 +1456,7 @@ def write_segmentation_rows(
                     "submission_id": row.get("submission_id", ""),
                     "submission_header": row.get("submission_header", ""),
                     "cleaned_response_text": row.get("cleaned_response_text", ""),
+                    "parse_strategy": row.get("parse_strategy", "llm"),
                     "llm_output_text": row.get("llm_output_text", ""),
                     claim_column_names[0]: row.get("claim_1", ""),
                     claim_column_names[1]: row.get("claim_2", ""),
@@ -1382,19 +1532,37 @@ def main() -> int:
     print(f"[progress] loading source CSV: {input_path}", flush=True)
     physical_line_count = count_physical_lines(input_path)
     prepared_rows = prepare_cleaned_rows(input_path)
+    parse_counter = apply_easy_parse_first_pass(prepared_rows)
+    llm_candidate_rows = rows_requiring_llm(prepared_rows)
     print(
         f"[progress] source file has {physical_line_count} physical line(s); prepared {len(prepared_rows)} non-empty submission row(s)",
         flush=True,
     )
+    print(
+        f"[progress] deterministic structural parsing handled {len(prepared_rows) - len(llm_candidate_rows)} row(s); "
+        f"{len(llm_candidate_rows)} row(s) remain for LLM segmentation",
+        flush=True,
+    )
+    for parse_strategy, count in sorted(parse_counter.items()):
+        print(f"[progress] parse_strategy[{parse_strategy}]={count}", flush=True)
 
-    batch_specs = build_batch_specs(prepared_rows, args.batch_size)
+    batch_specs = build_batch_specs(llm_candidate_rows, args.batch_size)
     has_existing_batch_cache = batch_cache_dir.exists() and any(batch_cache_dir.iterdir())
     if not has_existing_batch_cache and output_audit_path.exists() and not selected_batches and not args.rerun_failed_batches and not args.rebuild_from_batch_cache:
         print(f"[progress] seeding batch cache from existing whole-audit CSV: {output_audit_path}", flush=True)
         whole_audit_rows = load_audit_rows(output_audit_path, claim_column_names)
+        if len(whole_audit_rows) != len(prepared_rows):
+            raise ValueError(
+                "Whole-audit cache row count does not match the current prepared row count; cannot seed batch cache."
+            )
+        whole_audit_llm_rows = [
+            audit_row
+            for audit_row, prepared_row in zip(whole_audit_rows, prepared_rows, strict=True)
+            if prepared_row.get("parse_strategy", "llm") == "llm"
+        ]
         batch_cache_dir.mkdir(parents=True, exist_ok=True)
         seed_batch_cache_from_whole_audit(
-            whole_audit_rows=whole_audit_rows,
+            whole_audit_rows=whole_audit_llm_rows,
             batch_specs=batch_specs,
             batch_cache_dir=batch_cache_dir,
             claim_column_names=claim_column_names,
