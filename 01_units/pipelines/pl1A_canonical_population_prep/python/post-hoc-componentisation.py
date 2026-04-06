@@ -623,12 +623,17 @@ def apply_easy_parse_first_pass(prepared_rows: list[dict[str, str]]) -> Counter[
 
 def copy_segmentation_fields(target_row: dict[str, str], source_row: dict[str, str]) -> None:
     for field_name in [
+        "batch_id",
         "llm_output_text",
         "claim_1",
         "claim_2",
         "claim_3",
         "reconstruction_check_output",
         "llm_error",
+        "manual_override_flag",
+        "manual_override_note",
+        "manual_override_by",
+        "manual_override_at",
     ]:
         target_row[field_name] = source_row.get(field_name, "")
     target_row["parse_strategy"] = source_row.get("parse_strategy", target_row.get("parse_strategy", "llm"))
@@ -636,6 +641,22 @@ def copy_segmentation_fields(target_row: dict[str, str], source_row: dict[str, s
 
 def is_manual_override_note(text: str) -> bool:
     return "OVERRIDE" in (text or "").upper()
+
+
+def is_manual_override_flag(value: str) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "y"}
+
+
+def format_manual_override_flag(value: bool) -> str:
+    return "true" if value else ""
+
+
+def row_has_manual_override(row: dict[str, str]) -> bool:
+    if is_manual_override_flag(row.get("manual_override_flag", "")):
+        return True
+    if (row.get("manual_override_note", "") or "").strip():
+        return True
+    return is_manual_override_note(row.get("llm_error", ""))
 
 
 def recover_claims_from_llm_output_text(llm_output_text: str) -> dict[str, str] | None:
@@ -654,8 +675,24 @@ def normalize_loaded_audit_row(
 ) -> dict[str, str]:
     llm_error = normalized_row.get("llm_error", "")
     extra_note = normalized_row.get("", "")
-    if not llm_error.strip() and extra_note.strip():
+    manual_override_note = normalized_row.get("manual_override_note", "").strip()
+    if not llm_error.strip() and extra_note.strip() and not is_manual_override_note(extra_note):
         llm_error = extra_note.strip()
+    if not manual_override_note and extra_note.strip() and is_manual_override_note(extra_note):
+        manual_override_note = extra_note.strip()
+
+    if is_manual_override_note(llm_error) and not manual_override_note:
+        manual_override_note = llm_error.strip()
+        llm_error = ""
+
+    manual_override_flag = normalized_row.get("manual_override_flag", "")
+    manual_override_by = normalized_row.get("manual_override_by", "").strip()
+    manual_override_at = normalized_row.get("manual_override_at", "").strip()
+    has_manual_override = (
+        is_manual_override_flag(manual_override_flag)
+        or bool(manual_override_note)
+        or is_manual_override_note(llm_error)
+    )
 
     claim_1 = normalized_row.get(claim_column_names[0], "")
     claim_2 = normalized_row.get(claim_column_names[1], "")
@@ -672,14 +709,15 @@ def normalize_loaded_audit_row(
     cleaned_response_text = normalized_row.get("cleaned_response_text", "")
     if claim_1 or claim_2 or claim_3:
         recomputed = build_reconstruction_check_output(cleaned_response_text, claim_1, claim_2, claim_3)
-        if not reconstruction_check_output.strip() or is_manual_override_note(llm_error):
+        if not reconstruction_check_output.strip() or has_manual_override:
             reconstruction_check_output = recomputed
-    if is_manual_override_note(llm_error):
+    if has_manual_override:
         reconstruction_check_output = "ok_manual_override"
 
     return {
         "submission_id": normalized_row.get("submission_id", ""),
         "submission_header": normalized_row.get("submission_header", ""),
+        "batch_id": normalized_row.get("batch_id", "").strip(),
         "cleaned_response_text": cleaned_response_text,
         "llm_output_text": llm_output_text,
         "claim_1": claim_1,
@@ -687,6 +725,10 @@ def normalize_loaded_audit_row(
         "claim_3": claim_3,
         "reconstruction_check_output": reconstruction_check_output,
         "llm_error": llm_error,
+        "manual_override_flag": format_manual_override_flag(has_manual_override),
+        "manual_override_note": manual_override_note,
+        "manual_override_by": manual_override_by,
+        "manual_override_at": manual_override_at,
         "parse_strategy": normalized_row.get("parse_strategy", "llm"),
     }
 
@@ -954,7 +996,7 @@ def summarize_batch_rows(batch_rows: list[dict[str, str]]) -> tuple[int, Counter
     llm_error_count = sum(
         1
         for row in batch_rows
-        if (row.get("llm_error", "") or "").strip() and not is_manual_override_note(row.get("llm_error", ""))
+        if (row.get("llm_error", "") or "").strip() and not row_has_manual_override(row)
     )
     return llm_error_count, reconstruction_counter
 
@@ -1057,6 +1099,7 @@ def prepare_cleaned_rows(input_path: Path) -> list[dict[str, str]]:
             {
                 "submission_id": submission_id,
                 "submission_header": header_info,
+                "batch_id": "",
                 "cleaned_response_text": cleaned_text,
                 "llm_output_text": "",
                 "claim_1": "",
@@ -1064,6 +1107,10 @@ def prepare_cleaned_rows(input_path: Path) -> list[dict[str, str]]:
                 "claim_3": "",
                 "reconstruction_check_output": "",
                 "llm_error": "",
+                "manual_override_flag": "",
+                "manual_override_note": "",
+                "manual_override_by": "",
+                "manual_override_at": "",
                 "parse_strategy": "llm",
             }
         )
@@ -1107,7 +1154,12 @@ def load_audit_rows(output_audit_path: Path, claim_column_names: list[str]) -> l
 
 
 def load_batch_audit_rows(batch_audit_path: Path, claim_column_names: list[str]) -> list[dict[str, str]]:
-    return load_audit_rows(batch_audit_path, claim_column_names)
+    rows = load_audit_rows(batch_audit_path, claim_column_names)
+    batch_id = batch_audit_path.stem.removesuffix("_audit")
+    for row in rows:
+        if not (row.get("batch_id", "") or "").strip():
+            row["batch_id"] = batch_id
+    return rows
 
 
 def count_physical_lines(input_path: Path) -> int:
@@ -1129,9 +1181,9 @@ def print_summary(
     llm_error_count = sum(
         1
         for row in rows
-        if (row.get("llm_error", "") or "").strip() and not is_manual_override_note(row.get("llm_error", ""))
+        if (row.get("llm_error", "") or "").strip() and not row_has_manual_override(row)
     )
-    manual_override_count = sum(1 for row in rows if is_manual_override_note(row.get("llm_error", "")))
+    manual_override_count = sum(1 for row in rows if row_has_manual_override(row))
 
     print(f"[{prefix}] {label}", flush=True)
     print(f"[{prefix}] total_rows={len(rows)}", flush=True)
@@ -1317,6 +1369,8 @@ def run_one_batch(
         f"[batch {batch_spec['batch_number']}/{total_batches}] received {len(batch_rows)} segmented row(s)",
         flush=True,
     )
+    for row in batch_rows:
+        row["batch_id"] = str(batch_spec["stem"])
     write_segmentation_rows(batch_paths["audit_csv"], batch_rows, claim_column_names)
     return batch_rows, "", elapsed_seconds, batch_input_sha256
 
@@ -1421,6 +1475,8 @@ def seed_batch_cache_from_whole_audit(
             batch_spec=batch_spec,
             source_input_sha256=source_input_sha256,
         )
+        for row in batch_rows:
+            row["batch_id"] = str(batch_spec["stem"])
         write_segmentation_rows(batch_paths["audit_csv"], batch_rows, claim_column_names)
         write_batch_status(
             batch_paths["status_json"],
@@ -1663,12 +1719,17 @@ def write_segmentation_rows(
     fieldnames = [
         "submission_id",
         "submission_header",
+        "batch_id",
         "cleaned_response_text",
         "parse_strategy",
         "llm_output_text",
         *claim_column_names,
         "reconstruction_check_output",
         "llm_error",
+        "manual_override_flag",
+        "manual_override_note",
+        "manual_override_by",
+        "manual_override_at",
     ]
     with output_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -1678,6 +1739,7 @@ def write_segmentation_rows(
                 {
                     "submission_id": row.get("submission_id", ""),
                     "submission_header": row.get("submission_header", ""),
+                    "batch_id": row.get("batch_id", ""),
                     "cleaned_response_text": row.get("cleaned_response_text", ""),
                     "parse_strategy": row.get("parse_strategy", "llm"),
                     "llm_output_text": row.get("llm_output_text", ""),
@@ -1686,6 +1748,10 @@ def write_segmentation_rows(
                     claim_column_names[2]: row.get("claim_3", ""),
                     "reconstruction_check_output": row.get("reconstruction_check_output", ""),
                     "llm_error": row.get("llm_error", ""),
+                    "manual_override_flag": row.get("manual_override_flag", ""),
+                    "manual_override_note": row.get("manual_override_note", ""),
+                    "manual_override_by": row.get("manual_override_by", ""),
+                    "manual_override_at": row.get("manual_override_at", ""),
                 }
             )
 
