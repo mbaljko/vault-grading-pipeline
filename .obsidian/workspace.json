@@ -291,12 +291,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP3B.md",
+                "file": "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2B.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "_prompt_derive_pseudo_assignment_parsing_AP3B"
+              "title": "_prompt_derive_pseudo_assignment_parsing_AP2B"
             }
           }
         ],
@@ -446,13 +446,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP3B.md",
+                "file": "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2B.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of _prompt_derive_pseudo_assignment_parsing_AP3B"
+              "title": "Outline of _prompt_derive_pseudo_assignment_parsing_AP2B"
             }
           },
           {
@@ -488,8 +488,8 @@
   },
   "active": "fe3cb8bfbc96d736",
   "lastOpenFiles": [
-    "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2B.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP3B.md",
+    "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2B.md",
     "01_units/pipelines/pl1A_canonical_population_prep/python/__pycache__/post_hoc_componentisation_common.cpython-313.pyc",
     "01_units/pipelines/pl1A_canonical_population_prep/python/post_hoc_componentisation_common.py",
     "01_units/pipelines/pl1A_canonical_population_prep/python/post-hoc-componentisation-analysis.py",

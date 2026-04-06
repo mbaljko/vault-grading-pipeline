@@ -15,8 +15,11 @@ LEADING_SECTION_HEADING_RE = re.compile(
     re.IGNORECASE,
 )
 EMPTY_RESPONSE_PLACEHOLDERS = {"<<EMPTY>>"}
+STANDALONE_LEADING_LABEL_RE = re.compile(
+    r"(?is)(?P<label>(?:analytic\s+)?(?:claim|constraint|case)(?:\s+statement)?\s*)\Z"
+)
 CLAIM_MARKER_SEGMENT_RE = re.compile(
-    r"(?im)(?<![a-z])(?P<segment>(?:analytic\s+)?claim(?:\s+statement)?\s*#?\s*(?P<number>[123])\s*[:.)-]?)"
+    r"(?im)(?<![a-z])(?P<segment>(?:analytic\s+)?(?:claim|constraint|case)(?:\s+statement)?\s*#?\s*(?P<number>[123])\s*[:.)-]?)"
 )
 PLAIN_CLAIM_STATEMENT_SEGMENT_RE = re.compile(
     r"(?im)(?:^|[\n\r])\s*(?P<segment>claim\s+statement\s*[:.)-]?)"
@@ -24,10 +27,17 @@ PLAIN_CLAIM_STATEMENT_SEGMENT_RE = re.compile(
 PLAIN_CLAIM_SEGMENT_RE = re.compile(
     r"(?im)(?:^|[\n\r])\s*(?P<segment>claim\s*[:.)-])"
 )
+ORDINAL_LABEL_SEGMENT_RE = re.compile(
+    r"(?im)(?:^|[\n\r])\s*(?P<segment>(?:the\s+)?(?P<ordinal>first|second|third|final)\s+(?:analytic\s+)?(?:claim|constraint|case)(?:\s+is(?:\s+that)?)?\s*[:.)-]?)"
+)
+COLON_NUMBERED_MARKER_SEGMENT_RE = re.compile(
+    r"(?im)(?:^|[\n\r])\s*(?P<segment>(?P<number>[123])\s*:\s*)"
+)
 NUMBERED_MARKER_SEGMENT_RE = re.compile(
     r"(?im)(?:^|[\n\r])\s*(?P<segment>(?P<number>[123])\s*[.)]\s+)"
 )
 IN_THIS_SYSTEM_SEGMENT_RE = re.compile(r"(?i)(?P<segment>(?:-\s*)?in\s+(?:this|the)\s*system)")
+BULLET_O_SEGMENT_RE = re.compile(r"(?im)(?:^|[\n\r])\s*(?P<segment>o)\s*(?=$|[\n\r])")
 
 
 def load_csv_rows(input_path: Path) -> tuple[list[dict[str, str]], str]:
@@ -150,6 +160,9 @@ def split_claims_from_starts(cleaned_response_text: str, starts: list[int]) -> t
         return None
     if sorted(starts) != starts or len(set(starts)) != 3:
         return None
+    leading_label_match = STANDALONE_LEADING_LABEL_RE.search(cleaned_response_text[:starts[0]])
+    if leading_label_match is not None:
+        starts = [leading_label_match.start("label"), starts[1], starts[2]]
     if (
         starts[0] == 1
         and len(cleaned_response_text) >= 2
@@ -170,6 +183,23 @@ def parse_segment_starts_with_numbered_pattern(
 ) -> list[int]:
     matches = [
         (int(match.group("number")), match.start("segment"))
+        for match in pattern.finditer(cleaned_response_text)
+    ]
+    return select_ordered_triplet_starts(matches)
+
+
+def parse_segment_starts_with_ordinal_pattern(
+    cleaned_response_text: str,
+    pattern: re.Pattern[str],
+) -> list[int]:
+    ordinal_to_number = {
+        "first": 1,
+        "second": 2,
+        "third": 3,
+        "final": 3,
+    }
+    matches = [
+        (ordinal_to_number[match.group("ordinal").lower()], match.start("segment"))
         for match in pattern.finditer(cleaned_response_text)
     ]
     return select_ordered_triplet_starts(matches)
@@ -203,6 +233,17 @@ def try_easy_parse_claims(
             if reconstruction_status in {"ok", "ok_after_outer_quote_normalization"}:
                 return claims, "numbered_markers"
 
+    colon_numbered_marker_starts = parse_segment_starts_with_numbered_pattern(
+        cleaned_response_text,
+        COLON_NUMBERED_MARKER_SEGMENT_RE,
+    )
+    if colon_numbered_marker_starts:
+        claims = split_claims_from_starts(cleaned_response_text, colon_numbered_marker_starts)
+        if claims is not None:
+            reconstruction_status = build_reconstruction_check_output(cleaned_response_text, *claims)
+            if reconstruction_status in {"ok", "ok_after_outer_quote_normalization"}:
+                return claims, "colon_numbered_markers"
+
     plain_claim_statement_starts = [
         match.start("segment")
         for match in PLAIN_CLAIM_STATEMENT_SEGMENT_RE.finditer(cleaned_response_text)
@@ -225,6 +266,17 @@ def try_easy_parse_claims(
             if reconstruction_status in {"ok", "ok_after_outer_quote_normalization"}:
                 return claims, "plain_claim_markers"
 
+    ordinal_label_starts = parse_segment_starts_with_ordinal_pattern(
+        cleaned_response_text,
+        ORDINAL_LABEL_SEGMENT_RE,
+    )
+    if ordinal_label_starts:
+        claims = split_claims_from_starts(cleaned_response_text, ordinal_label_starts)
+        if claims is not None:
+            reconstruction_status = build_reconstruction_check_output(cleaned_response_text, *claims)
+            if reconstruction_status in {"ok", "ok_after_outer_quote_normalization"}:
+                return claims, "ordinal_label_markers"
+
     in_this_system_starts = [
         match.start("segment")
         for match in IN_THIS_SYSTEM_SEGMENT_RE.finditer(cleaned_response_text)
@@ -235,5 +287,16 @@ def try_easy_parse_claims(
             reconstruction_status = build_reconstruction_check_output(cleaned_response_text, *claims)
             if reconstruction_status in {"ok", "ok_after_outer_quote_normalization"}:
                 return claims, "in_this_system_triplet"
+
+    bullet_o_starts = [
+        match.start("segment")
+        for match in BULLET_O_SEGMENT_RE.finditer(cleaned_response_text)
+    ]
+    if len(bullet_o_starts) >= 3:
+        claims = split_claims_from_starts(cleaned_response_text, bullet_o_starts[:3])
+        if claims is not None:
+            reconstruction_status = build_reconstruction_check_output(cleaned_response_text, *claims)
+            if reconstruction_status in {"ok", "ok_after_outer_quote_normalization"}:
+                return claims, "bullet_o_markers"
 
     return None, "llm"
