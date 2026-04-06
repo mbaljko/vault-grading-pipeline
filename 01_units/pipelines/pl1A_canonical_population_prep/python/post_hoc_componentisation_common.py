@@ -11,10 +11,10 @@ LEADING_TICKED_HEADER_RE = re.compile(r"\A`+\s*(?=\+\+\+)", re.DOTALL)
 HEADER_BLOCK_RE = re.compile(r"\A\+\+\+(?P<header>[^\n]+)\n\+\+\+\n?", re.DOTALL)
 FOOTER_BLOCK_RE = re.compile(r"\n?\+\+\+\s*\Z", re.DOTALL)
 CLAIM_MARKER_SEGMENT_RE = re.compile(
-    r"(?im)(?:^|[\n\r])(?P<segment>\s*claim(?:\s+statement)?\s*(?P<number>[123])\s*[:.)-]?)"
+    r"(?im)(?<![a-z])(?P<segment>claim(?:\s+statement)?\s*#?\s*(?P<number>[123])\s*[:.)-]?)"
 )
 NUMBERED_MARKER_SEGMENT_RE = re.compile(
-    r"(?im)(?:^|[\n\r])(?P<segment>\s*(?P<number>[123])\s*[.)]\s+)"
+    r"(?im)(?:^|[\n\r])\s*(?P<segment>(?P<number>[123])\s*[.)]\s+)"
 )
 IN_THIS_SYSTEM_SEGMENT_RE = re.compile(r"(?i)(?P<segment>in\s+this\s*system)")
 

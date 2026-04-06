@@ -78,10 +78,10 @@ ASSIGNMENT_SECTION_RE = re.compile(r"^(AP\d+)([A-Z])_", re.IGNORECASE)
 SECTION_COMPONENT_RE = re.compile(r"Section([A-Z])\d*Response", re.IGNORECASE)
 SUBMISSION_TAG_RE = re.compile(r'(?m)^<submission index="')
 CLAIM_MARKER_SEGMENT_RE = re.compile(
-    r"(?im)(?:^|[\n\r])(?P<segment>\s*claim(?:\s+statement)?\s*(?P<number>[123])\s*[:.)-]?)"
+    r"(?im)(?<![a-z])(?P<segment>claim(?:\s+statement)?\s*#?\s*(?P<number>[123])\s*[:.)-]?)"
 )
 NUMBERED_MARKER_SEGMENT_RE = re.compile(
-    r"(?im)(?:^|[\n\r])(?P<segment>\s*(?P<number>[123])\s*[.)]\s+)"
+    r"(?im)(?:^|[\n\r])\s*(?P<segment>(?P<number>[123])\s*[.)]\s+)"
 )
 IN_THIS_SYSTEM_SEGMENT_RE = re.compile(r"(?i)(?P<segment>in\s+this\s*system)")
 
