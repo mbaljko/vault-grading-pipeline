@@ -9,10 +9,15 @@ rule from the Power Query workflow in
 
 - build one long-format row per ``submission_id`` x ``component_id``
 - compute ``response_wc`` for each cleaned response payload
-- ignore empty / zero-word rows when sampling
-- rank remaining rows by ``response_wc`` within each component
-- drop the shortest and longest eligible row for that component
-- sample up to ``m`` interior rows by uniform spacing over the wc-ranked rows
+- restrict sampling to ``submission_id`` values that have eligible non-empty rows for
+    every target component
+- compute a shared cohort ranking using total ``response_wc`` across the target
+    components for each ``submission_id``
+- drop the shortest and longest eligible submission from that shared cohort
+- sample up to ``m`` interior submissions by uniform spacing over the shared
+    wc-ranked cohort
+- emit one component-scoped CSV per component using the same sampled
+    ``submission_id`` cohort across all components
 
 The output is one CSV per component, suitable for calibration scoring flows.
 Existing output files are skipped by default unless ``--overwrite`` is passed.
@@ -33,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Prepare one sampled calibration CSV per component_id from a componentised input CSV "
-            "using the Power Query sampling rule."
+            "using a shared submission cohort across the requested components."
         )
     )
     parser.add_argument(
@@ -69,7 +74,7 @@ def parse_args() -> argparse.Namespace:
         "--sample-size",
         type=int,
         default=30,
-        help="Maximum number of sampled interior rows to keep per component_id. Default: 30.",
+        help="Maximum number of sampled interior submissions to keep in the shared cohort. Default: 30.",
     )
     parser.add_argument(
         "--overwrite",
@@ -216,6 +221,88 @@ def sample_interior_uniform_rows(rows: list[dict[str, str | int]], sample_size: 
     return [interior_rows[index] for index in sampled_indexes]
 
 
+def determine_target_component_ids(
+    grouped_rows: dict[str, list[dict[str, str | int]]],
+    requested_component_ids: list[str],
+) -> list[str]:
+    if requested_component_ids:
+        return list(requested_component_ids)
+    return sorted(grouped_rows)
+
+
+def sample_shared_submission_ids(
+    grouped_rows: dict[str, list[dict[str, str | int]]],
+    target_component_ids: list[str],
+    sample_size: int,
+) -> list[str]:
+    if not target_component_ids:
+        return []
+
+    component_submission_maps: dict[str, dict[str, dict[str, str | int]]] = {}
+    for component_id in target_component_ids:
+        component_rows = grouped_rows.get(component_id, [])
+        eligible_rows = [row for row in component_rows if int(row.get("response_wc", 0)) > 0]
+        submission_map: dict[str, dict[str, str | int]] = {}
+        for row in eligible_rows:
+            submission_id = str(row.get("submission_id", "") or "").strip()
+            if not submission_id:
+                continue
+            if submission_id in submission_map:
+                raise ValueError(
+                    f"Duplicate eligible rows detected for submission_id={submission_id!r} and component_id={component_id!r}."
+                )
+            submission_map[submission_id] = row
+        component_submission_maps[component_id] = submission_map
+
+    eligible_submission_ids = set.intersection(
+        *(set(submission_map) for submission_map in component_submission_maps.values())
+    )
+    if len(eligible_submission_ids) <= 2:
+        return []
+
+    ranked_submission_rows: list[dict[str, str | int]] = []
+    for submission_id in sorted(eligible_submission_ids):
+        total_response_wc = sum(
+            int(component_submission_maps[component_id][submission_id].get("response_wc", 0))
+            for component_id in target_component_ids
+        )
+        ranked_submission_rows.append(
+            {
+                "submission_id": submission_id,
+                "component_id": "ALL_COMPONENTS",
+                "response_presence": "NONEMPTY",
+                "response_wc": total_response_wc,
+                "response_text": "",
+            }
+        )
+
+    sampled_rows = sample_interior_uniform_rows(ranked_submission_rows, sample_size)
+    return [str(row["submission_id"]) for row in sampled_rows]
+
+
+def filter_rows_to_sampled_submission_ids(
+    grouped_rows: dict[str, list[dict[str, str | int]]],
+    target_component_ids: list[str],
+    sampled_submission_ids: list[str],
+) -> dict[str, list[dict[str, str | int]]]:
+    sampled_submission_id_set = set(sampled_submission_ids)
+    filtered_rows: dict[str, list[dict[str, str | int]]] = {}
+    for component_id in target_component_ids:
+        component_rows = grouped_rows.get(component_id, [])
+        eligible_rows = [row for row in component_rows if int(row.get("response_wc", 0)) > 0]
+        eligible_rows_by_submission_id = {
+            str(row.get("submission_id", "") or "").strip(): row
+            for row in eligible_rows
+            if str(row.get("submission_id", "") or "").strip()
+        }
+        filtered_rows[component_id] = [
+            eligible_rows_by_submission_id[submission_id]
+            for submission_id in sampled_submission_ids
+            if submission_id in eligible_rows_by_submission_id
+        ]
+    return filtered_rows
+
+
 def group_rows_by_component(rows: list[dict[str, str | int]]) -> dict[str, list[dict[str, str | int]]]:
     grouped_rows: dict[str, list[dict[str, str | int]]] = defaultdict(list)
     for row in rows:
@@ -300,12 +387,16 @@ def print_summary(
     sampled_rows_by_component: dict[str, list[dict[str, str | int]]],
     output_paths: dict[str, Path],
     output_actions: dict[str, str],
+    target_component_ids: list[str],
+    sampled_submission_ids: list[str],
     combined_output_path: Path,
     combined_output_action: str,
     combined_output_rows: int,
 ) -> None:
     print(f"[summary] component_rows={len(component_rows)}")
+    print(f"[summary] target_components={len(target_component_ids)}")
     print(f"[summary] sampled_components={len(sampled_rows_by_component)}")
+    print(f"[summary] sampled_submissions={len(sampled_submission_ids)}")
     for component_id in sorted(sampled_rows_by_component):
         print(f"[summary] sampled_rows[{component_id}]={len(sampled_rows_by_component[component_id])}")
         print(f"[summary] output_action[{component_id}]={output_actions[component_id]}")
@@ -330,15 +421,24 @@ def main() -> int:
         requested_component_ids=requested_component_ids,
     )
     grouped_rows = group_rows_by_component(component_rows)
+    target_component_ids = determine_target_component_ids(grouped_rows, requested_component_ids)
+    sampled_submission_ids = sample_shared_submission_ids(
+        grouped_rows,
+        target_component_ids,
+        args.sample_size,
+    )
+    sampled_rows_by_component = filter_rows_to_sampled_submission_ids(
+        grouped_rows,
+        target_component_ids,
+        sampled_submission_ids,
+    )
 
-    sampled_rows_by_component: dict[str, list[dict[str, str | int]]] = {}
     output_paths: dict[str, Path] = {}
     output_actions: dict[str, str] = {}
-    for component_id in sorted(grouped_rows):
-        sampled_rows = sample_interior_uniform_rows(grouped_rows[component_id], args.sample_size)
+    for component_id in target_component_ids:
+        sampled_rows = sampled_rows_by_component[component_id]
         output_path = resolve_output_path(output_dir, args.output_file_template, component_id)
         output_action = write_component_rows(output_path, sampled_rows, overwrite=args.overwrite)
-        sampled_rows_by_component[component_id] = sampled_rows
         output_paths[component_id] = output_path
         output_actions[component_id] = output_action
 
@@ -361,6 +461,8 @@ def main() -> int:
         sampled_rows_by_component,
         output_paths,
         output_actions,
+        target_component_ids,
+        sampled_submission_ids,
         combined_output_path,
         combined_output_action,
         len(combined_output_rows),
