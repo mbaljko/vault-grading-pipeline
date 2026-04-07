@@ -962,6 +962,31 @@ def parse_layer3_scoring_payloads(registry_path: Path) -> dict[str, dict[str, st
         return {}
 
     token_headers = rule_headers[1:]
+    binding_headers = [str(header).strip() for header in bindings_table.get("headers", [])]
+    if len(binding_headers) < 2:
+        return {}
+
+    def normalize_binding_token(token: str) -> str:
+        normalized = token.strip().lower()
+        if not normalized:
+            return ""
+        return normalized.split("(", 1)[0].strip()
+
+    binding_header_map = {
+        normalize_binding_token(header): header
+        for header in binding_headers[1:]
+        if normalize_binding_token(header)
+    }
+    aligned_binding_headers: list[str] = []
+    for index, token_header in enumerate(token_headers):
+        normalized_token = normalize_binding_token(token_header)
+        binding_header = binding_header_map.get(normalized_token)
+        if binding_header is None and index + 1 < len(binding_headers):
+            binding_header = binding_headers[index + 1]
+        if binding_header is None:
+            return {}
+        aligned_binding_headers.append(binding_header)
+
     derivation_rules = [
         {
             "resultant_scale_value": str(row.get(rule_headers[0], "")).strip(),
@@ -983,7 +1008,7 @@ def parse_layer3_scoring_payloads(registry_path: Path) -> dict[str, dict[str, st
         component_id = str(row.get("component_id", "")).strip()
         if not component_id:
             continue
-        bound_dimension_ids = [str(row.get(token, "")).strip() for token in token_headers]
+        bound_dimension_ids = [str(row.get(binding_header, "")).strip().strip("`") for binding_header in aligned_binding_headers]
         payload = {
             "component_id": component_id,
             "input_dimension_tokens": token_headers,
