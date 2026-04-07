@@ -9,8 +9,9 @@ rule from the Power Query workflow in
 
 - build one long-format row per ``submission_id`` x ``component_id``
 - compute ``response_wc`` for each cleaned response payload
-- rank rows by ``response_wc`` within each component
-- drop the shortest and longest row for that component
+- ignore empty / zero-word rows when sampling
+- rank remaining rows by ``response_wc`` within each component
+- drop the shortest and longest eligible row for that component
 - sample up to ``m`` interior rows by uniform spacing over the wc-ranked rows
 
 The output is one CSV per component, suitable for calibration scoring flows.
@@ -177,7 +178,8 @@ def build_component_rows(
 
 
 def sample_interior_uniform_rows(rows: list[dict[str, str | int]], sample_size: int) -> list[dict[str, str | int]]:
-    rows_sorted = sorted(rows, key=lambda row: (int(row.get("response_wc", 0)), str(row.get("submission_id", ""))))
+    eligible_rows = [row for row in rows if int(row.get("response_wc", 0)) > 0]
+    rows_sorted = sorted(eligible_rows, key=lambda row: (int(row.get("response_wc", 0)), str(row.get("submission_id", ""))))
     total_rows = len(rows_sorted)
     if total_rows <= 2:
         return []
