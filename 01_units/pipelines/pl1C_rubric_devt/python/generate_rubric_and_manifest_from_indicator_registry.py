@@ -730,10 +730,10 @@ def normalize_scale_token(value: str) -> str:
     return normalized.strip("_")
 
 
-def parse_layer2_scoring_payloads(registry_path: Path) -> dict[tuple[str, str], str]:
+def parse_layer2_rule_templates(registry_path: Path) -> dict[str, dict[str, object]]:
     lines = registry_path.read_text(encoding="utf-8").splitlines()
     in_layer2_value_derivation = False
-    payloads: dict[tuple[str, str], str] = {}
+    rule_templates: dict[str, dict[str, object]] = {}
     index = 0
 
     while index < len(lines):
@@ -811,19 +811,143 @@ def parse_layer2_scoring_payloads(registry_path: Path) -> dict[tuple[str, str], 
                 }
                 for row in rule_rows
             ]
-            for component_id, bound_indicator_ids in bindings_by_component.items():
-                payload = {
-                    "dimension_template_id": dimension_template_id,
-                    "input_indicator_tokens": input_indicator_tokens,
-                    "bound_indicator_ids": bound_indicator_ids,
-                    "derivation_rules": normalized_rule_rows,
-                }
-                payloads[(component_id, dimension_template_id)] = serialize_scoring_payload(payload)
+            rule_templates[dimension_template_id] = {
+                "input_indicator_tokens": input_indicator_tokens,
+                "derivation_rules": normalized_rule_rows,
+                "bindings_by_component": bindings_by_component,
+            }
 
             index = cursor
             break
 
+    return rule_templates
+
+
+def extract_dimension_local_id_from_source(source_text: str) -> str:
+    match = re.search(r"dimension\.local_id\s*=\s*([A-Za-z0-9]+)", source_text)
+    if match is None:
+        return ""
+    return match.group(1).strip()
+
+
+def resolve_indicator_binding_ids(indicator_binding_rule: str, expression_values: dict[str, str]) -> list[str]:
+    bound_indicator_ids = [
+        apply_expression_template(token, expression_values).strip()
+        for token in re.findall(r"[A-Za-z0-9_]+\{[^{}]+\}", indicator_binding_rule)
+    ]
+    if bound_indicator_ids:
+        return [indicator_id for indicator_id in bound_indicator_ids if indicator_id]
+    return [token.strip() for token in re.findall(r"`([^`]+)`", indicator_binding_rule) if token.strip()]
+
+
+def derive_layer2_scoring_payloads_from_reuse_tables(
+    registry_path: Path,
+    rule_templates: dict[str, dict[str, object]],
+) -> dict[tuple[str, str], str]:
+    if not rule_templates:
+        return {}
+
+    tables = collect_markdown_tables(registry_path)
+    base_rows = collect_section_rows(
+        tables,
+        "dimension base table",
+        required_columns=LAYER2_BASE_TABLE_REQUIRED_COLUMNS,
+        allow_field_value_records=True,
+    )
+    reuse_table = find_table_by_heading(tables, "reuse rule table")
+    component_block_rule_table = find_table_by_heading(tables, "component block rule table")
+    if reuse_table is None or component_block_rule_table is None:
+        return {}
+
+    base_by_local_id = {
+        row.get("dimension_local_id", "").strip(): row
+        for row in base_rows
+        if row.get("dimension_local_id", "").strip()
+    }
+    component_block_lookup = resolve_component_block_lookup(list(component_block_rule_table.get("rows", [])))
+    payloads: dict[tuple[str, str], str] = {}
+
+    for reuse_row in reuse_table.get("rows", []):
+        if should_skip_reuse_rule_row(reuse_row, include_inactive=False):
+            continue
+
+        dimension_local_id = extract_dimension_local_id_from_source(reuse_row.get("dimension_local_source", ""))
+        if not dimension_local_id:
+            continue
+        base_row = base_by_local_id.get(dimension_local_id)
+        if base_row is None:
+            continue
+
+        dimension_template_id = base_row.get("dimension_template_id", "").strip()
+        if not dimension_template_id:
+            continue
+        rule_template = rule_templates.get(dimension_template_id)
+        if not rule_template:
+            continue
+
+        component_pattern = reuse_row.get("applies_to_component_pattern", "").strip()
+        component_block_rule = reuse_row.get("component_block_rule", "").strip()
+        indicator_binding_rule = reuse_row.get("indicator_binding_rule", "").strip()
+        if not component_pattern or not component_block_rule or not indicator_binding_rule:
+            continue
+
+        input_indicator_tokens = [str(token) for token in rule_template.get("input_indicator_tokens", [])]
+        derivation_rules = list(rule_template.get("derivation_rules", []))
+        if not input_indicator_tokens or not derivation_rules:
+            continue
+
+        for component_id, template_values in expand_component_pattern(component_pattern):
+            component_block = component_block_lookup.get((component_block_rule, component_id))
+            if component_block is None:
+                raise ValueError(
+                    "Component block rule table could not resolve component_block for "
+                    f"block_rule_id={component_block_rule!r}, component_id={component_id!r}"
+                )
+
+            bound_indicator_ids = resolve_indicator_binding_ids(
+                indicator_binding_rule,
+                {
+                    **template_values,
+                    "component_block": component_block,
+                },
+            )
+            if len(bound_indicator_ids) != len(input_indicator_tokens):
+                raise ValueError(
+                    "Layer 2 indicator binding rule did not resolve to the same number of indicators as the "
+                    f"value-derivation table for {dimension_template_id} and {component_id}."
+                )
+
+            payload = {
+                "dimension_template_id": dimension_template_id,
+                "input_indicator_tokens": input_indicator_tokens,
+                "bound_indicator_ids": bound_indicator_ids,
+                "derivation_rules": derivation_rules,
+            }
+            payloads[(component_id, dimension_template_id)] = serialize_scoring_payload(payload)
+
     return payloads
+
+
+def parse_layer2_scoring_payloads(registry_path: Path) -> dict[tuple[str, str], str]:
+    rule_templates = parse_layer2_rule_templates(registry_path)
+    payloads: dict[tuple[str, str], str] = {}
+
+    for dimension_template_id, rule_template in rule_templates.items():
+        input_indicator_tokens = [str(token) for token in rule_template.get("input_indicator_tokens", [])]
+        derivation_rules = list(rule_template.get("derivation_rules", []))
+        bindings_by_component = dict(rule_template.get("bindings_by_component", {}))
+        for component_id, bound_indicator_ids in bindings_by_component.items():
+            payload = {
+                "dimension_template_id": dimension_template_id,
+                "input_indicator_tokens": input_indicator_tokens,
+                "bound_indicator_ids": bound_indicator_ids,
+                "derivation_rules": derivation_rules,
+            }
+            payloads[(component_id, dimension_template_id)] = serialize_scoring_payload(payload)
+
+    if payloads:
+        return payloads
+    return derive_layer2_scoring_payloads_from_reuse_tables(registry_path, rule_templates)
 
 
 def parse_layer3_scoring_payloads(registry_path: Path) -> dict[str, dict[str, str]]:
