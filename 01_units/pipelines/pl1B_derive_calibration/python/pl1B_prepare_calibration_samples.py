@@ -15,13 +15,17 @@ rule from the Power Query workflow in
 - sample up to ``m`` interior rows by uniform spacing over the wc-ranked rows
 
 The output is one CSV per component, suitable for calibration scoring flows.
+Existing output files are skipped by default unless ``--overwrite`` is passed.
+After component outputs are resolved, the script also materializes one combined
+all-components CSV in the same directory. That combined file follows the same
+overwrite rule as the component-scoped outputs.
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
-from collections import Counter, defaultdict
+from collections import defaultdict
 from pathlib import Path
 
 
@@ -66,6 +70,11 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=30,
         help="Maximum number of sampled interior rows to keep per component_id. Default: 30.",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing output files. By default existing files are left in place and skipped.",
     )
     return parser.parse_args()
 
@@ -222,7 +231,13 @@ def resolve_output_path(output_dir: Path, output_file_template: str, component_i
     return output_dir / output_file_template.format(component_id=component_id)
 
 
-def write_component_rows(output_path: Path, rows: list[dict[str, str | int]]) -> None:
+def resolve_combined_output_path(output_dir: Path, output_file_template: str) -> Path:
+    if "{component_id}" not in output_file_template:
+        raise ValueError("--output-file-template must include the token {component_id}.")
+    return output_dir / output_file_template.format(component_id="ALL_COMPONENTS")
+
+
+def write_component_rows(output_path: Path, rows: list[dict[str, str | int]], overwrite: bool) -> str:
     fieldnames = [
         "submission_id",
         "component_id",
@@ -231,23 +246,73 @@ def write_component_rows(output_path: Path, rows: list[dict[str, str | int]]) ->
         "response_text",
     ]
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_path.exists() and not overwrite:
+        return "skipped_existing"
     with output_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         for row in rows:
             writer.writerow({fieldname: row.get(fieldname, "") for fieldname in fieldnames})
+    return "written"
+
+
+def load_component_output_rows(output_path: Path) -> list[dict[str, str]]:
+    if not output_path.exists():
+        raise FileNotFoundError(f"Component output file not found: {output_path}")
+
+    with output_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if not reader.fieldnames:
+            raise ValueError(f"Component output CSV has no header row: {output_path}")
+        rows: list[dict[str, str]] = []
+        for raw_row in reader:
+            rows.append(
+                {
+                    key.strip(): (value or "")
+                    for key, value in raw_row.items()
+                    if key is not None
+                }
+            )
+    return rows
+
+
+def write_combined_component_rows(output_path: Path, rows: list[dict[str, str]], overwrite: bool) -> str:
+    fieldnames = [
+        "submission_id",
+        "component_id",
+        "response_presence",
+        "response_wc",
+        "response_text",
+    ]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_path.exists() and not overwrite:
+        return "skipped_existing"
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({fieldname: row.get(fieldname, "") for fieldname in fieldnames})
+    return "written"
 
 
 def print_summary(
     component_rows: list[dict[str, str | int]],
     sampled_rows_by_component: dict[str, list[dict[str, str | int]]],
     output_paths: dict[str, Path],
+    output_actions: dict[str, str],
+    combined_output_path: Path,
+    combined_output_action: str,
+    combined_output_rows: int,
 ) -> None:
     print(f"[summary] component_rows={len(component_rows)}")
     print(f"[summary] sampled_components={len(sampled_rows_by_component)}")
     for component_id in sorted(sampled_rows_by_component):
         print(f"[summary] sampled_rows[{component_id}]={len(sampled_rows_by_component[component_id])}")
+        print(f"[summary] output_action[{component_id}]={output_actions[component_id]}")
         print(f"[summary] output[{component_id}]={output_paths[component_id]}")
+    print(f"[summary] combined_output_rows={combined_output_rows}")
+    print(f"[summary] combined_output_action={combined_output_action}")
+    print(f"[summary] combined_output={combined_output_path}")
 
 
 def main() -> int:
@@ -268,20 +333,37 @@ def main() -> int:
 
     sampled_rows_by_component: dict[str, list[dict[str, str | int]]] = {}
     output_paths: dict[str, Path] = {}
+    output_actions: dict[str, str] = {}
     for component_id in sorted(grouped_rows):
         sampled_rows = sample_interior_uniform_rows(grouped_rows[component_id], args.sample_size)
         output_path = resolve_output_path(output_dir, args.output_file_template, component_id)
-        write_component_rows(output_path, sampled_rows)
+        output_action = write_component_rows(output_path, sampled_rows, overwrite=args.overwrite)
         sampled_rows_by_component[component_id] = sampled_rows
         output_paths[component_id] = output_path
+        output_actions[component_id] = output_action
+
+    combined_output_rows: list[dict[str, str]] = []
+    for component_id in sorted(output_paths):
+        combined_output_rows.extend(load_component_output_rows(output_paths[component_id]))
+    combined_output_path = resolve_combined_output_path(output_dir, args.output_file_template)
+    combined_output_action = write_combined_component_rows(
+        combined_output_path,
+        combined_output_rows,
+        overwrite=args.overwrite,
+    )
 
     print(f"[source_input] path={input_path}")
     print(f"[output_dir] path={output_dir}")
     print(f"[sample_size] value={args.sample_size}")
+    print(f"[overwrite] value={args.overwrite}")
     print_summary(
         component_rows,
         sampled_rows_by_component,
         output_paths,
+        output_actions,
+        combined_output_path,
+        combined_output_action,
+        len(combined_output_rows),
     )
     return 0
 
