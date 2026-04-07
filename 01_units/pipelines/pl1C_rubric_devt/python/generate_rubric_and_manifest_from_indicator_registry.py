@@ -1157,9 +1157,16 @@ def resolve_local_slot_values(base_row: dict[str, str], local_slot_source: str) 
     if local_slot_source and local_slot_source != "template.local_slot":
         raise ValueError(f"Unsupported local_slot_source: {local_slot_source}")
 
+    if re.fullmatch(r"\d+", local_slot):
+        local_slot_numeric = str(int(local_slot))
+    elif re.fullmatch(r"0[A-Za-z0-9]+", local_slot):
+        local_slot_numeric = local_slot[1:]
+    else:
+        local_slot_numeric = local_slot
+
     return {
         "local_slot": local_slot,
-        "local_slot_int": str(int(local_slot)),
+        "local_slot_int": local_slot_numeric,
     }
 
 
