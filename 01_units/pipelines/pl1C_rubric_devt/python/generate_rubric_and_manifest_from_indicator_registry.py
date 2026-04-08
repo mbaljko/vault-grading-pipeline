@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
-"""Generate rubric payload and scoring manifest markdown from Layer 1-4 registries.
+"""Generate rubric payload and scoring manifest markdown from Layer 0-4 registries.
 
-This script reads a markdown registry, extracts Layer 1 indicator rows, Layer 2
-dimension rows, Layer 3 component rows, or Layer 4 submission rows, and writes
-two markdown outputs in the same directory by default. Layer 1 registries may
-continue to use the existing wide markdown tables or the Base Table plus Reuse
-Rule Table expansion model. Layers 2-4 are expected to provide explicit tables.
+This script reads a markdown registry, extracts Layer 0/1 indicator rows,
+Layer 2 dimension rows, Layer 3 component rows, or Layer 4 submission rows,
+and writes two markdown outputs in the same directory by default. Layer 0/1
+registries may continue to use the existing wide markdown tables or the Base
+Table plus Reuse Rule Table expansion model. Layers 2-4 are expected to provide
+explicit tables.
 
 Default outputs:
 
+- RUBRIC_<ASSESSMENT>_CAL_payload_Layer0_<VERSION>.md for Layer 0
 - RUBRIC_<ASSESSMENT>_CAL_payload_<VERSION>.md for Layer 1
 - RUBRIC_<ASSESSMENT>_CAL_payload_Layer2_<VERSION>.md for Layer 2
 - RUBRIC_<ASSESSMENT>_CAL_payload_Layer3_<VERSION>.md for Layer 3
 - RUBRIC_<ASSESSMENT>_CAL_payload_Layer4_<VERSION>.md for Layer 4
 - <ASSESSMENT>_Layer1_ScoringManifest_<VERSION>.md
+- <ASSESSMENT>_Layer0_ScoringManifest_<VERSION>.md
 - <ASSESSMENT>_Layer2_ScoringManifest_<VERSION>.md
 - <ASSESSMENT>_Layer3_ScoringManifest_<VERSION>.md
 - <ASSESSMENT>_Layer4_ScoringManifest_<VERSION>.md
@@ -130,6 +133,21 @@ class RegistryRow:
 
 
 LAYER_CONFIGS = {
+    "layer0": RegistryLayerConfig(
+        name="layer0",
+        manifest_layer_label="Layer0",
+        section_layer_label="Layer 0",
+        item_label="Indicator",
+        item_id_field="indicator_id",
+        manifest_item_id_field="indicator_id",
+        explicit_required_columns=LAYER1_REQUIRED_REGISTRY_COLUMNS,
+        definition_field_candidates=("indicator_definition",),
+        guidance_field_candidates=("assessment_guidance",),
+        output_definition_header="indicator_definition",
+        output_guidance_header="assessment_guidance",
+        supports_base_table_reuse=True,
+        rubric_filename_suffix="_Layer0",
+    ),
     "layer1": RegistryLayerConfig(
         name="layer1",
         manifest_layer_label="Layer1",
@@ -196,7 +214,7 @@ LAYER_CONFIGS = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate rubric and scoring manifest markdown from a Layer 1, 2, 3, or 4 registry."
+        description="Generate rubric and scoring manifest markdown from a Layer 0, 1, 2, 3, or 4 registry."
     )
     parser.add_argument(
         "--registry",
@@ -208,7 +226,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--registry-layer",
-        choices=["auto", "layer1", "layer2", "layer3", "layer4"],
+        choices=["auto", "layer0", "layer1", "layer2", "layer3", "layer4"],
         default="auto",
         help="Registry layer to load. Defaults to auto-detection.",
     )
@@ -270,13 +288,15 @@ def infer_registry_layer(
         return LAYER_CONFIGS["layer1"]
 
     registry_name = registry_path.name.lower()
+    if "layer0" in registry_name:
+        return LAYER_CONFIGS["layer0"]
     if "layer3" in registry_name:
         return LAYER_CONFIGS["layer3"]
     if "layer4" in registry_name:
         return LAYER_CONFIGS["layer4"]
 
     raise ValueError(
-        "Could not infer registry layer. Pass --registry-layer layer1, layer2, layer3, or layer4 explicitly."
+        "Could not infer registry layer. Pass --registry-layer layer0, layer1, layer2, layer3, or layer4 explicitly."
     )
 
 
@@ -1829,7 +1849,7 @@ def render_rubric_document(
             "sbo_short_description",
         ],
         instance_rows,
-    ) if layer_config.name == "layer1" else render_markdown_table(["field"], [["`sbo_identifier`"], ["`sbo_identifier_shortid`"], ["`assessment_id`"], ["`component_id`"], ["`indicator_id`"], ["`sbo_short_description`"]])
+    ) if layer_config.name in {"layer0", "layer1"} else render_markdown_table(["field"], [["`sbo_identifier`"], ["`sbo_identifier_shortid`"], ["`assessment_id`"], ["`component_id`"], ["`indicator_id`"], ["`sbo_short_description`"]])
 
     layer2_instances_content = render_markdown_table(
         [
@@ -1966,7 +1986,7 @@ def render_rubric_document(
         "",
     ]
 
-    if layer_config.name == "layer1":
+    if layer_config.name in {"layer0", "layer1"}:
         for component_id, component_registry_rows in component_rows.items():
             parts.extend(
                 [
