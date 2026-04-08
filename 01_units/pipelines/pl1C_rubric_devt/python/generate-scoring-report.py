@@ -67,6 +67,7 @@ from pathlib import Path
 from generate_rubric_and_manifest_from_indicator_registry import (
 	apply_expression_template,
 	apply_token_template,
+	collect_field_value_records,
 	collect_section_rows,
 	collect_markdown_tables,
 	expand_component_pattern,
@@ -1355,6 +1356,18 @@ def build_base_row_reverse_lookup(registry_path: Path) -> dict[tuple[str, str], 
 		},
 		allow_field_value_records=True,
 	)
+	if not base_rows:
+		base_rows = collect_field_value_records(
+			tables,
+			required_columns={
+				"template_id",
+				"local_slot",
+				"sbo_short_description",
+				"indicator_definition",
+				"assessment_guidance",
+				"evaluation_notes",
+			},
+		)
 	reuse_table = find_table_by_heading(tables, "reuse rule table")
 	component_block_rule_table = find_table_by_heading(tables, "component block rule table")
 	if not base_rows or reuse_table is None:
