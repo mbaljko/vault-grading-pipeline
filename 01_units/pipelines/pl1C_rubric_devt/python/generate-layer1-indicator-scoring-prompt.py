@@ -10,8 +10,8 @@ scaffold template file:
 - --output-format
 
 It validates the three-block payload grammar, extracts PARAM_TARGET_COMPONENT_ID,
-filters the Layer 1 scoring manifest to that component, and writes one output
-file per indicator row by instantiating the provided scaffold template.
+filters the Layer 0 or Layer 1 manifest to that component, and writes one output
+file per operator/indicator row by instantiating the provided scaffold template.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from pathlib import Path
 PAYLOAD_DELIMITER = "§§§"
 PARAMETER_RE = re.compile(r"^PARAM_TARGET_COMPONENT_ID\s*=\s*(\S.*?)\s*$")
 FENCED_VALUE_TEMPLATE = r"(?ms)^{}\s*$\n```(?:text)?\n(.*?)\n```"
-MANIFEST_REQUIRED_HEADERS = [
+LAYER1_MANIFEST_REQUIRED_HEADERS = [
 	"component_id",
 	"sbo_identifier",
 	"indicator_id",
@@ -34,7 +34,16 @@ MANIFEST_REQUIRED_HEADERS = [
 	"assessment_guidance",
 	"evaluation_notes",
 ]
-SCAFFOLD_REQUIRED_TOKENS = [
+LAYER0_MANIFEST_REQUIRED_HEADERS = [
+	"component_id",
+	"sbo_identifier",
+	"operator_id",
+	"sbo_short_description",
+	"operator_definition",
+	"operator_guidance",
+	"evaluation_notes",
+]
+LAYER1_SCAFFOLD_REQUIRED_TOKENS = [
 	"[[ASSESSMENT_ID]]",
 	"[[TARGET_COMPONENT_ID]]",
 	"[[TARGET_INDICATOR_ID]]",
@@ -45,6 +54,18 @@ SCAFFOLD_REQUIRED_TOKENS = [
 	"[[INDICATOR_DEFINITION]]",
 	"[[ASSESSMENT_GUIDANCE]]",
 	"[[EMBEDDED_EVALUATOR_GUIDANCE]]",
+]
+LAYER0_SCAFFOLD_REQUIRED_TOKENS = [
+	"[[ASSESSMENT_ID]]",
+	"[[TARGET_COMPONENT_ID]]",
+	"[[TARGET_OPERATOR_ID]]",
+	"[[SUBMISSION_IDENTIFIER_FIELD]]",
+	"[[WRAPPER_HANDLING_RULE_BULLETS]]",
+	"[[OPERATOR_ID]]",
+	"[[SBO_SHORT_DESCRIPTION]]",
+	"[[OPERATOR_DEFINITION]]",
+	"[[OPERATOR_GUIDANCE]]",
+	"[[FAILURE_MODE_GUIDANCE]]",
 ]
 SCAFFOLD_OPTIONAL_TOKENS = ["[[EMBEDDED_DECISION_PROCEDURE_BLOCK]]"]
 DEFAULT_DECISION_PROCEDURE_BLOCK = "- No embedded decision procedure is provided for this indicator."
@@ -71,8 +92,8 @@ def read_text_file(path: Path) -> str:
 	return path.read_text(encoding="utf-8")
 
 
-def resolve_output_path(output_dir: Path, output_file_stem: str, output_format: str, indicator_id: str) -> Path:
-	return output_dir / f"{output_file_stem}_{indicator_id}.{output_format.lstrip('.')}"
+def resolve_output_path(output_dir: Path, output_file_stem: str, output_format: str, item_id: str) -> Path:
+	return output_dir / f"{output_file_stem}_{item_id}.{output_format.lstrip('.')}"
 
 
 def split_payload_blocks(payload_text: str) -> tuple[str, str, str]:
@@ -175,11 +196,12 @@ def normalize_markdown_cell(value: str) -> str:
 	return normalized
 
 
-def find_manifest_table_lines(manifest_block: str) -> tuple[list[str], list[str]]:
+def find_manifest_table_lines(manifest_block: str) -> tuple[str, list[str], list[str]]:
 	lines = manifest_block.splitlines()
 	for index, line in enumerate(lines[:-1]):
 		headers = parse_markdown_cells(line)
-		if not manifest_headers_are_supported(headers):
+		schema = detect_manifest_schema(headers)
+		if schema is None:
 			continue
 		separator = parse_markdown_cells(lines[index + 1])
 		if not separator or not all(set(cell.replace(" ", "")) <= {"-", ":"} for cell in separator):
@@ -189,23 +211,27 @@ def find_manifest_table_lines(manifest_block: str) -> tuple[list[str], list[str]
 		while cursor < len(lines) and lines[cursor].lstrip().startswith("|"):
 			row_lines.append(lines[cursor])
 			cursor += 1
-		return (headers, row_lines)
-	raise ValueError("Layer 1 scoring manifest table was not found.")
+		return (schema, headers, row_lines)
+	raise ValueError("Supported Layer 0 or Layer 1 manifest table was not found.")
 
 
-def manifest_headers_are_supported(headers: list[str]) -> bool:
-	return all(required_header in headers for required_header in MANIFEST_REQUIRED_HEADERS)
+def detect_manifest_schema(headers: list[str]) -> str | None:
+	if all(required_header in headers for required_header in LAYER1_MANIFEST_REQUIRED_HEADERS):
+		return "layer1"
+	if all(required_header in headers for required_header in LAYER0_MANIFEST_REQUIRED_HEADERS):
+		return "layer0"
+	return None
 
 
-def parse_manifest_rows(manifest_block: str) -> list[dict[str, str]]:
-	headers, row_lines = find_manifest_table_lines(manifest_block)
+def parse_manifest_rows(manifest_block: str) -> tuple[str, list[dict[str, str]]]:
+	schema, headers, row_lines = find_manifest_table_lines(manifest_block)
 	rows: list[dict[str, str]] = []
 	for row_line in row_lines:
 		cells = parse_markdown_cells(row_line)
 		if len(cells) != len(headers):
 			raise ValueError("Manifest row does not match expected column count.")
 		rows.append({headers[index]: cells[index].strip() for index in range(len(headers))})
-	return rows
+	return schema, rows
 
 
 def extract_scaffold_body(scaffold_text: str) -> str:
@@ -223,16 +249,15 @@ def extract_scaffold_body(scaffold_text: str) -> str:
 	return extract_primary_render_body(scaffold_text)
 
 
-def validate_scaffold(scaffold_body: str) -> None:
-	missing_tokens = [token for token in SCAFFOLD_REQUIRED_TOKENS if token not in scaffold_body]
+def validate_scaffold(scaffold_body: str, required_tokens: list[str]) -> None:
+	missing_tokens = [token for token in required_tokens if token not in scaffold_body]
 	if missing_tokens:
 		raise ValueError(f"Scaffold file is missing required token(s): {missing_tokens}")
 
 
 def render_scaffold(scaffold_body: str, token_values: dict[str, str]) -> str:
 	rendered = scaffold_body
-	for token in SCAFFOLD_REQUIRED_TOKENS:
-		value = token_values.get(token, "")
+	for token, value in token_values.items():
 		if not value:
 			raise ValueError(f"Missing value for required scaffold token: {token}")
 		rendered = rendered.replace(token, value)
@@ -244,15 +269,15 @@ def render_scaffold(scaffold_body: str, token_values: dict[str, str]) -> str:
 	return rendered
 
 
-def filter_manifest_rows(rows: list[dict[str, str]], target_component_id: str) -> list[dict[str, str]]:
+def filter_manifest_rows(rows: list[dict[str, str]], target_component_id: str, item_id_field: str) -> list[dict[str, str]]:
 	filtered_rows = [row for row in rows if row.get("component_id", "").strip() == target_component_id]
 	if not filtered_rows:
 		raise ValueError("Filtered manifest is empty for PARAM_TARGET_COMPONENT_ID.")
-	indicator_ids = [row.get("indicator_id", "").strip() for row in filtered_rows]
-	if any(not indicator_id for indicator_id in indicator_ids):
-		raise ValueError("Filtered manifest rows must contain non-empty indicator_id values.")
-	if len(set(indicator_ids)) != len(indicator_ids):
-		raise ValueError("Duplicate indicator_id values detected within filtered manifest rows.")
+	item_ids = [row.get(item_id_field, "").strip() for row in filtered_rows]
+	if any(not item_id for item_id in item_ids):
+		raise ValueError(f"Filtered manifest rows must contain non-empty {item_id_field} values.")
+	if len(set(item_ids)) != len(item_ids):
+		raise ValueError(f"Duplicate {item_id_field} values detected within filtered manifest rows.")
 	return filtered_rows
 
 
@@ -262,11 +287,26 @@ def format_manifest_value(value: str) -> str:
 
 
 def build_token_values(
+	schema: str,
 	assignment_payload_metadata: dict[str, str],
 	target_component_id: str,
 	row: dict[str, str],
 ) -> dict[str, str]:
 	decision_procedure_block = render_decision_procedure_block(row.get("decision_procedure", ""))
+	if schema == "layer0":
+		return {
+			"[[ASSESSMENT_ID]]": assignment_payload_metadata["assessment_id"],
+			"[[TARGET_COMPONENT_ID]]": target_component_id,
+			"[[TARGET_OPERATOR_ID]]": row["operator_id"],
+			"[[SUBMISSION_IDENTIFIER_FIELD]]": assignment_payload_metadata["submission_identifier_field"],
+			"[[WRAPPER_HANDLING_RULE_BULLETS]]": assignment_payload_metadata["wrapper_handling_rule_bullets"],
+			"[[OPERATOR_ID]]": row["operator_id"],
+			"[[SBO_SHORT_DESCRIPTION]]": row["sbo_short_description"],
+			"[[OPERATOR_DEFINITION]]": row["operator_definition"],
+			"[[OPERATOR_GUIDANCE]]": row["operator_guidance"],
+			"[[FAILURE_MODE_GUIDANCE]]": row["evaluation_notes"],
+			"[[EMBEDDED_DECISION_PROCEDURE_BLOCK]]": decision_procedure_block,
+		}
 	return {
 		"[[ASSESSMENT_ID]]": assignment_payload_metadata["assessment_id"],
 		"[[TARGET_COMPONENT_ID]]": target_component_id,
@@ -282,6 +322,12 @@ def build_token_values(
 	}
 
 
+def manifest_schema_config(schema: str) -> tuple[str, list[str]]:
+	if schema == "layer0":
+		return "operator_id", LAYER0_SCAFFOLD_REQUIRED_TOKENS
+	return "indicator_id", LAYER1_SCAFFOLD_REQUIRED_TOKENS
+
+
 def render_decision_procedure_block(decision_procedure: str) -> str:
 	normalized = decision_procedure.strip()
 	if not normalized:
@@ -295,20 +341,21 @@ def main() -> int:
 		scaffold_text = read_text_file(args.scaffold_file.resolve())
 		prompt_input_text = read_text_file(args.prompt_input_file.resolve())
 		scaffold_body = extract_scaffold_body(scaffold_text)
-		validate_scaffold(scaffold_body)
 		parameter_block, assignment_payload_block, manifest_block = split_payload_blocks(prompt_input_text)
 		target_component_id = parse_target_component_id(parameter_block)
 		validate_assignment_payload_block(assignment_payload_block)
 		assignment_payload_metadata = parse_assignment_payload_metadata(assignment_payload_block)
-		manifest_rows = parse_manifest_rows(manifest_block)
-		filtered_rows = filter_manifest_rows(manifest_rows, target_component_id)
+		schema, manifest_rows = parse_manifest_rows(manifest_block)
+		item_id_field, required_tokens = manifest_schema_config(schema)
+		validate_scaffold(scaffold_body, required_tokens)
+		filtered_rows = filter_manifest_rows(manifest_rows, target_component_id, item_id_field)
 		output_dir = args.output_dir.resolve()
 		output_dir.mkdir(parents=True, exist_ok=True)
 		output_paths: list[Path] = []
 		for row in filtered_rows:
-			indicator_id = row["indicator_id"].strip()
-			output_path = resolve_output_path(output_dir, args.output_file_stem, args.output_format, indicator_id)
-			token_values = build_token_values(assignment_payload_metadata, target_component_id, row)
+			item_id = row[item_id_field].strip()
+			output_path = resolve_output_path(output_dir, args.output_file_stem, args.output_format, item_id)
+			token_values = build_token_values(schema, assignment_payload_metadata, target_component_id, row)
 			output_text = render_scaffold(scaffold_body, token_values)
 			output_path.write_text(output_text, encoding="utf-8")
 			output_paths.append(output_path)
