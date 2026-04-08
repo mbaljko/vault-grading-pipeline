@@ -41,12 +41,28 @@ COMMON_EXPLICIT_REQUIRED_COLUMNS = {
     "component_id",
     "sbo_short_description",
 }
+LAYER0_REQUIRED_REGISTRY_COLUMNS = {
+    "operator_id",
+    "assessment_id",
+    "component_id",
+    "operator_short_description",
+    "operator_definition",
+    "operator_guidance",
+}
 LAYER1_REQUIRED_REGISTRY_COLUMNS = {
     "indicator_id",
     *COMMON_EXPLICIT_REQUIRED_COLUMNS,
     "indicator_definition",
     "assessment_guidance",
     "evaluation_notes",
+}
+LAYER0_BASE_TABLE_REQUIRED_COLUMNS = {
+    "template_id",
+    "local_slot",
+    "operator_short_description",
+    "operator_definition",
+    "operator_guidance",
+    "failure_mode_guidance",
 }
 LAYER1_BASE_TABLE_REQUIRED_COLUMNS = {
     "template_id",
@@ -137,14 +153,14 @@ LAYER_CONFIGS = {
         name="layer0",
         manifest_layer_label="Layer0",
         section_layer_label="Layer 0",
-        item_label="Indicator",
-        item_id_field="indicator_id",
-        manifest_item_id_field="indicator_id",
-        explicit_required_columns=LAYER1_REQUIRED_REGISTRY_COLUMNS,
-        definition_field_candidates=("indicator_definition",),
-        guidance_field_candidates=("assessment_guidance",),
-        output_definition_header="indicator_definition",
-        output_guidance_header="assessment_guidance",
+        item_label="Operator",
+        item_id_field="operator_id",
+        manifest_item_id_field="operator_id",
+        explicit_required_columns=LAYER0_REQUIRED_REGISTRY_COLUMNS,
+        definition_field_candidates=("operator_definition",),
+        guidance_field_candidates=("operator_guidance",),
+        output_definition_header="operator_definition",
+        output_guidance_header="operator_guidance",
         supports_base_table_reuse=True,
         rubric_filename_suffix="_Layer0",
     ),
@@ -711,6 +727,18 @@ def resolve_guidance_text(record: dict[str, str], layer_config: RegistryLayerCon
     return resolve_first_present(record, layer_config.guidance_field_candidates)
 
 
+def resolve_short_description(record: dict[str, str], layer_config: RegistryLayerConfig) -> str:
+    if layer_config.name == "layer0":
+        return record.get("operator_short_description", "").strip()
+    return record.get("sbo_short_description", "").strip()
+
+
+def resolve_evaluation_notes(record: dict[str, str], layer_config: RegistryLayerConfig) -> str:
+    if layer_config.name == "layer0":
+        return record.get("failure_mode_guidance", "").strip()
+    return record.get("evaluation_notes", "").strip()
+
+
 def resolve_scale_text(record: dict[str, str], layer_config: RegistryLayerConfig) -> str:
     if layer_config.name == "layer2":
         return record.get("dimension_evidence_scale", "").strip()
@@ -1151,10 +1179,10 @@ def build_registry_rows_from_explicit_table(
                 component_id=merged_record.get("component_id", "").strip(),
                 sbo_identifier=resolve_sbo_identifier(merged_record),
                 sbo_identifier_shortid=resolve_sbo_identifier_shortid(merged_record),
-                sbo_short_description=merged_record["sbo_short_description"].strip(),
+                sbo_short_description=resolve_short_description(merged_record, layer_config),
                 definition_text=resolve_definition_text(merged_record, layer_config),
                 guidance_text=resolve_guidance_text(merged_record, layer_config),
-                evaluation_notes=merged_record.get("evaluation_notes", "").strip(),
+                evaluation_notes=resolve_evaluation_notes(merged_record, layer_config),
                 decision_procedure=resolve_decision_procedure(merged_record),
                 status=merged_record.get("status", ""),
                 evidence_scale=resolve_scale_text(merged_record, layer_config),
@@ -1198,10 +1226,10 @@ def build_layer2_rows_from_instance_and_base_tables(
                 component_id=merged_record["component_id"].strip(),
                 sbo_identifier=resolve_sbo_identifier(merged_record),
                 sbo_identifier_shortid=resolve_sbo_identifier_shortid(merged_record),
-                sbo_short_description=merged_record["sbo_short_description"].strip(),
+                sbo_short_description=resolve_short_description(merged_record, layer_config),
                 definition_text=resolve_definition_text(merged_record, layer_config),
                 guidance_text=resolve_guidance_text(merged_record, layer_config),
-                evaluation_notes=merged_record.get("evaluation_notes", "").strip(),
+                evaluation_notes=resolve_evaluation_notes(merged_record, layer_config),
                 decision_procedure=resolve_decision_procedure(merged_record),
                 status=merged_record.get("status", ""),
                 template_id=dimension_template_id,
@@ -1280,10 +1308,10 @@ def build_registry_rows_from_base_and_reuse_tables(
                 component_id=merged_record["component_id"],
                 sbo_identifier=resolve_sbo_identifier(merged_record),
                 sbo_identifier_shortid=resolve_sbo_identifier_shortid(merged_record),
-                sbo_short_description=merged_record["sbo_short_description"],
+                sbo_short_description=resolve_short_description(merged_record, layer_config),
                 definition_text=resolve_definition_text(merged_record, layer_config),
                 guidance_text=resolve_guidance_text(merged_record, layer_config),
-                evaluation_notes=merged_record["evaluation_notes"],
+                evaluation_notes=resolve_evaluation_notes(merged_record, layer_config),
                 decision_procedure=resolve_decision_procedure(merged_record),
                 status=effective_status,
             )
@@ -1460,10 +1488,10 @@ def build_registry_rows_from_rule_based_reuse_table(
                         component_id=component_id,
                         sbo_identifier=resolve_sbo_identifier(merged_record),
                         sbo_identifier_shortid=resolve_sbo_identifier_shortid(merged_record),
-                        sbo_short_description=base_row["sbo_short_description"],
+                        sbo_short_description=resolve_short_description(base_row, layer_config),
                         definition_text=resolve_definition_text(base_row, layer_config),
                         guidance_text=resolve_guidance_text(base_row, layer_config),
-                        evaluation_notes=base_row["evaluation_notes"],
+                        evaluation_notes=resolve_evaluation_notes(base_row, layer_config),
                         decision_procedure=resolve_decision_procedure(base_row),
                         status=effective_status,
                     )
@@ -1563,10 +1591,10 @@ def build_registry_rows_from_component_block_reuse_table(
                         component_id=component_id,
                         sbo_identifier=resolve_sbo_identifier(merged_record),
                         sbo_identifier_shortid=resolve_sbo_identifier_shortid(merged_record),
-                        sbo_short_description=base_row["sbo_short_description"],
+                        sbo_short_description=resolve_short_description(base_row, layer_config),
                         definition_text=resolve_definition_text(base_row, layer_config),
                         guidance_text=resolve_guidance_text(base_row, layer_config),
-                        evaluation_notes=base_row["evaluation_notes"],
+                        evaluation_notes=resolve_evaluation_notes(base_row, layer_config),
                         decision_procedure=resolve_decision_procedure(base_row),
                         status=effective_status,
                     )
@@ -1594,6 +1622,11 @@ def load_registry_rows(
             enrichment_lookup.setdefault(assessment_id, {}).update(payload_fields)
 
     explicit_table: dict[str, object] | None = None
+    layer_base_required_columns = (
+        LAYER0_BASE_TABLE_REQUIRED_COLUMNS
+        if layer_config.name == "layer0"
+        else LAYER1_BASE_TABLE_REQUIRED_COLUMNS
+    )
     layer2_base_rows = collect_section_rows(
         tables,
         "dimension base table",
@@ -1603,13 +1636,13 @@ def load_registry_rows(
     base_rows = collect_section_rows(
         tables,
         "base table",
-        required_columns=LAYER1_BASE_TABLE_REQUIRED_COLUMNS,
+        required_columns=layer_base_required_columns,
         allow_field_value_records=True,
     )
     if layer_config.supports_base_table_reuse and not base_rows:
         base_rows = collect_field_value_records(
             tables,
-            required_columns=LAYER1_BASE_TABLE_REQUIRED_COLUMNS,
+            required_columns=layer_base_required_columns,
         )
     reuse_table = find_table_by_heading(tables, "reuse rule table")
     component_block_rule_table = find_table_by_heading(tables, "component block rule table")
@@ -1623,7 +1656,7 @@ def load_registry_rows(
     rows: list[RegistryRow] = []
     if layer_config.supports_base_table_reuse and base_rows and reuse_table is not None:
         reuse_headers = set(reuse_table["headers"])
-        validate_required_columns("Base Table", base_rows, LAYER1_BASE_TABLE_REQUIRED_COLUMNS)
+        validate_required_columns("Base Table", base_rows, layer_base_required_columns)
         if {layer_config.item_id_field, "component_id"}.issubset(reuse_headers):
             if "template_id" not in reuse_headers and "local_slot" not in reuse_headers:
                 raise ValueError("Reuse Rule Table must include template_id or local_slot for Base Table joins.")
@@ -1709,6 +1742,14 @@ def resolve_sbo_identifier(record: dict[str, str]) -> str:
     assessment_id = record["assessment_id"].strip()
     component_id = record.get("component_id", "").strip()
     item_id = (
+        record.get("operator_id", "").strip()
+        or record.get("indicator_id", "").strip()
+        or record.get("dimension_id", "").strip()
+    )
+    if "operator_id" in record and record.get("operator_id", "").strip():
+        component_shortid = derive_component_shortid(component_id)
+        return f"O_{assessment_id}_{component_shortid}_{item_id}"
+    item_id = (
         record.get("indicator_id", "").strip()
         or record.get("dimension_id", "").strip()
     )
@@ -1729,11 +1770,40 @@ def resolve_sbo_identifier_shortid(record: dict[str, str]) -> str:
     if explicit_value:
         return explicit_value
     return (
-        record.get("indicator_id", "").strip()
+        record.get("operator_id", "").strip()
+        or record.get("indicator_id", "").strip()
         or record.get("dimension_id", "").strip()
         or derive_component_shortid(record.get("component_id", "").strip())
         or "submission"
     )
+
+
+def resolve_instance_item_field_name(layer_config: RegistryLayerConfig) -> str:
+    if layer_config.name == "layer0":
+        return "operator_id"
+    if layer_config.name == "layer1":
+        return "indicator_id"
+    return layer_config.item_id_field
+
+
+def resolve_instance_item_field_label(layer_config: RegistryLayerConfig) -> str:
+    if layer_config.name == "layer0":
+        return "operator_id"
+    if layer_config.name == "layer1":
+        return "indicator_id"
+    return layer_config.item_id_field or "item_id"
+
+
+def resolve_layer1_value_derivation_label(layer_config: RegistryLayerConfig) -> str:
+    if layer_config.name == "layer0":
+        return "#### 6.1 Layer 0 Operator Derivation"
+    return "#### 6.1 Layer 1 SBO Value Derivation (Draft)"
+
+
+def resolve_layer1_instance_heading(layer_config: RegistryLayerConfig) -> str:
+    if layer_config.name == "layer0":
+        return "#### 5.4 Layer 0 Operator Instances (Draft)"
+    return "#### 5.4 Layer 1 SBO Instances (Draft)"
 
 
 def derive_component_shortid(component_id: str) -> str:
@@ -1819,12 +1889,138 @@ def render_derived_file_header(source_path: Path) -> str:
     )
 
 
+def render_layer0_rubric_document(
+    title_stem: str,
+    rows: list[RegistryRow],
+) -> str:
+    component_rows = group_rows_by_component(rows)
+    instance_rows = [
+        [
+            row.sbo_identifier,
+            row.sbo_identifier_shortid,
+            row.assessment_id,
+            row.component_id,
+            row.item_id,
+            row.sbo_short_description,
+        ]
+        for row in rows
+    ]
+
+    parts: list[str] = [
+        f"## {title_stem}",
+        "### 0A. Purpose",
+        "Defines the **Layer 0 segmentation operator registry** used to derive structured spans from participant response text.",
+        "",
+        "This document is not a Layer 1 scoring rubric.",
+        "It specifies the extraction operators that prepare response text for downstream scoring and validation workflows.",
+        "",
+        "### 0B. Pipeline Context",
+        "Layer 0 sits upstream of the scoring ontology and is responsible for segmentation only.",
+        "Each operator identifies whether a target span can be extracted and, when possible, emits the bounded text needed by downstream layers.",
+        "",
+        render_markdown_table(
+            ["layer", "function"],
+            [
+                ["Layer 0", "segment response text into structured operator outputs"],
+                ["Layer 1", "evaluate extracted content against indicator expectations"],
+                ["Layer 2", "aggregate indicator evidence into dimensions"],
+                ["Layer 3", "aggregate dimensions into component judgements"],
+                ["Layer 4", "aggregate component judgements into submission outcomes"],
+            ],
+        ),
+        "",
+        "### 1. Identifier Registry",
+        "",
+        render_markdown_table(
+            ["identifier", "level", "meaning", "used in"],
+            [
+                ["`assessment_id`", "registry", "identifies the assessment specification that owns the operator set", "registry metadata, derived payloads"],
+                ["`participant_id`", "runtime input", "identifies one participant artefact submitted for processing", "runtime segmentation inputs"],
+                ["`submission_id`", "runtime output", "standardised runtime identifier emitted by downstream scoring pipelines", "stitched scoring outputs"],
+                ["`component_id`", "component", "identifies the response surface within the assessment", "registry rows, runtime segmentation outputs"],
+                ["`operator_id`", "operator", "identifies one segmentation operator instance within a component", "registry rows, manifests, prompts"],
+                ["`sbo_identifier`", "derived SBO id", "stable fully qualified identifier derived from assessment, component, and operator ids", "rubric payload, manifests"],
+            ],
+        ),
+        "",
+        "### 2. Layer 0 Operator Instances",
+        "Registry of segmentation operators generated from the base table and reuse rules.",
+        "",
+        render_markdown_table(
+            [
+                "sbo_identifier",
+                "sbo_identifier_shortid",
+                "assessment_id",
+                "component_id",
+                "operator_id",
+                "operator_short_description",
+            ],
+            instance_rows,
+        ),
+        "",
+        "### 3. Operator Derivation Registry",
+        "Each component inherits the shared operator templates and binds them into concrete per-component operator instances.",
+        "",
+    ]
+
+    for component_id, component_registry_rows in component_rows.items():
+        parts.extend(
+            [
+                f"#### Component: `{component_id}`",
+                "",
+                render_markdown_table(
+                    [
+                        "sbo_identifier",
+                        "operator_short_description",
+                        "operator_definition",
+                        "operator_guidance",
+                        "failure_mode_guidance",
+                        "decision_procedure",
+                    ],
+                    [
+                        [
+                            row.sbo_identifier,
+                            row.sbo_short_description,
+                            row.definition_text,
+                            row.guidance_text,
+                            row.evaluation_notes,
+                            row.decision_procedure,
+                        ]
+                        for row in component_registry_rows
+                    ],
+                ),
+                "",
+            ]
+        )
+
+    parts.extend(
+        [
+            "### 4. Downstream Handoff",
+            "The outputs defined by this Layer 0 operator registry are intended to feed later scoring stages rather than to assign evidence or performance judgements directly.",
+            "Expected downstream uses include:",
+            "- prompt generation for segmentation or extraction runs",
+            "- normalised operator-level output manifests",
+            "- Layer 1 validation and scoring over extracted spans",
+            "",
+            "### 5. Interpretation Notes",
+            "Layer 0 operators do not determine semantic correctness, scoring status, or grade outcomes.",
+            "Their role is limited to locating, extracting, and describing candidate spans plus any extraction failure conditions.",
+            "",
+        ]
+    )
+
+    return "\n".join(parts)
+
+
 def render_rubric_document(
     title_stem: str,
     assessment_id: str,
     rows: list[RegistryRow],
     layer_config: RegistryLayerConfig,
 ) -> str:
+    if layer_config.name == "layer0":
+        return render_layer0_rubric_document(title_stem, rows)
+
     component_rows = group_rows_by_component(rows)
 
     instance_rows = [
@@ -1845,7 +2041,7 @@ def render_rubric_document(
             "sbo_identifier_shortid",
             "assessment_id",
             "component_id",
-            "indicator_id",
+            resolve_instance_item_field_label(layer_config),
             "sbo_short_description",
         ],
         instance_rows,
@@ -1938,7 +2134,7 @@ def render_rubric_document(
         "`sbo_identifier_shortid` is a compact token used in mapping tables and rule definitions.",
         "",
         "",
-        "#### 5.4 Layer 1 SBO Instances (Draft)",
+        resolve_layer1_instance_heading(layer_config),
         "",
         layer1_instances_content,
         "",
@@ -1982,7 +2178,7 @@ def render_rubric_document(
         "- interpretation notes",
         "",
         "",
-        "#### 6.1 Layer 1 SBO Value Derivation (Draft)",
+        resolve_layer1_value_derivation_label(layer_config),
         "",
     ]
 
