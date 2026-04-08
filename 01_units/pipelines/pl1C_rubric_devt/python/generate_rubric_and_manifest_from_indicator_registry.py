@@ -45,6 +45,7 @@ LAYER0_REQUIRED_REGISTRY_COLUMNS = {
     "operator_id",
     "assessment_id",
     "component_id",
+    "segment_id",
     "operator_short_description",
     "operator_definition",
     "operator_guidance",
@@ -59,6 +60,7 @@ LAYER1_REQUIRED_REGISTRY_COLUMNS = {
 LAYER0_BASE_TABLE_REQUIRED_COLUMNS = {
     "template_id",
     "local_slot",
+    "segment_id",
     "operator_short_description",
     "operator_definition",
     "operator_guidance",
@@ -137,6 +139,7 @@ class RegistryRow:
     sbo_identifier_shortid: str
     assessment_id: str
     component_id: str
+    segment_id: str
     sbo_short_description: str
     definition_text: str
     guidance_text: str
@@ -1177,6 +1180,7 @@ def build_registry_rows_from_explicit_table(
                 item_id=item_id,
                 assessment_id=merged_record["assessment_id"].strip(),
                 component_id=merged_record.get("component_id", "").strip(),
+                segment_id=merged_record.get("segment_id", "").strip(),
                 sbo_identifier=resolve_sbo_identifier(merged_record),
                 sbo_identifier_shortid=resolve_sbo_identifier_shortid(merged_record),
                 sbo_short_description=resolve_short_description(merged_record, layer_config),
@@ -1224,6 +1228,7 @@ def build_layer2_rows_from_instance_and_base_tables(
                 item_id=merged_record[layer_config.item_id_field].strip(),
                 assessment_id=merged_record["assessment_id"].strip(),
                 component_id=merged_record["component_id"].strip(),
+                segment_id=merged_record.get("segment_id", "").strip(),
                 sbo_identifier=resolve_sbo_identifier(merged_record),
                 sbo_identifier_shortid=resolve_sbo_identifier_shortid(merged_record),
                 sbo_short_description=resolve_short_description(merged_record, layer_config),
@@ -1486,6 +1491,7 @@ def build_registry_rows_from_rule_based_reuse_table(
                         item_id=item_id,
                         assessment_id=assessment_id,
                         component_id=component_id,
+                        segment_id=base_row.get("segment_id", "").strip(),
                         sbo_identifier=resolve_sbo_identifier(merged_record),
                         sbo_identifier_shortid=resolve_sbo_identifier_shortid(merged_record),
                         sbo_short_description=resolve_short_description(base_row, layer_config),
@@ -1589,6 +1595,7 @@ def build_registry_rows_from_component_block_reuse_table(
                         item_id=item_id,
                         assessment_id=assessment_id,
                         component_id=component_id,
+                        segment_id=base_row.get("segment_id", "").strip(),
                         sbo_identifier=resolve_sbo_identifier(merged_record),
                         sbo_identifier_shortid=resolve_sbo_identifier_shortid(merged_record),
                         sbo_short_description=resolve_short_description(base_row, layer_config),
@@ -2440,6 +2447,8 @@ def render_manifest_document(
         "evaluation_notes",
         "decision_procedure",
     ])
+    if layer_config.name == "layer0":
+        manifest_headers.append("segment_id")
     manifest_rows: list[list[str]] = []
     for row in rows:
         manifest_row: list[str] = []
@@ -2455,6 +2464,8 @@ def render_manifest_document(
             row.evaluation_notes,
             row.decision_procedure,
         ])
+        if layer_config.name == "layer0":
+            manifest_row.append(f"`{row.segment_id}`")
         if layer_config.name == "layer2":
             if "dimension_template_id" not in manifest_headers:
                 manifest_headers.extend([

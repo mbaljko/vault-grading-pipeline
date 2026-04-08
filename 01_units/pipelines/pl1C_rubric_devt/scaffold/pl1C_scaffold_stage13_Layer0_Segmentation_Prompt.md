@@ -8,6 +8,7 @@ required_tokens:
 	- ASSESSMENT_ID
 	- TARGET_COMPONENT_ID
 	- TARGET_OPERATOR_ID
+	- CANONICAL_SEGMENT_ID
 	- SUBMISSION_IDENTIFIER_FIELD
 	- WRAPPER_HANDLING_RULE_BULLETS
 	- OPERATOR_ID
@@ -29,6 +30,8 @@ notes: |
 [[TARGET_COMPONENT_ID]]
 
 [[TARGET_OPERATOR_ID]]
+
+[[CANONICAL_SEGMENT_ID]]
 
 [[SUBMISSION_IDENTIFIER_FIELD]]
 
@@ -92,6 +95,12 @@ Target operator:
 [[TARGET_OPERATOR_ID]]
 ```
 
+Canonical segment identifier:
+
+```text
+[[CANONICAL_SEGMENT_ID]]
+```
+
 Canonical evaluation unit:
 
 ```text
@@ -135,6 +144,13 @@ Required output fields:
 - `segment_text`
 - `extraction_status`
 - `extraction_notes`
+
+Canonical output identifier rule:
+
+- For every emitted row, set `segment_id` exactly to `[[CANONICAL_SEGMENT_ID]]`.
+- Do not emit numeric placeholders such as `1`.
+- Do not synthesize derived identifiers such as `[[TARGET_OPERATOR_ID]]_1`.
+- `segment_id` is a registry-defined semantic identifier, not a per-row sequence number.
 
 Do not use:
 
