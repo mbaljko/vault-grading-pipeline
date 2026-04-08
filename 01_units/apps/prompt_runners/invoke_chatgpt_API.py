@@ -464,6 +464,9 @@ def build_run_metadata_payload(
     written_files: dict[str, Path],
 ) -> dict[str, Any]:
     response_model = response_obj.get("model") if isinstance(response_obj, dict) else None
+    system_fingerprint = (
+        response_obj.get("system_fingerprint") if isinstance(response_obj, dict) else None
+    )
     usage = response_obj.get("usage") if isinstance(response_obj, dict) else None
     response_id = response_obj.get("id") if isinstance(response_obj, dict) else None
     incomplete_details = response_obj.get("incomplete_details") if isinstance(response_obj, dict) else None
@@ -494,6 +497,7 @@ def build_run_metadata_payload(
         "response": {
             "id": response_id,
             "model_reported": response_model,
+            "system_fingerprint": system_fingerprint,
             "usage": usage,
             "incomplete_details": incomplete_details,
             "output_item_count": output_count,
