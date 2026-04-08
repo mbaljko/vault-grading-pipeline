@@ -26,6 +26,25 @@ CONFIDENCE_ORDER = {
 	"medium": 1,
 	"high": 2,
 }
+KNOWN_DIMENSION_SCALE_ORDERS = [
+	{
+		"little_to_no_demonstration": 0,
+		"partially_demonstrated": 1,
+		"demonstrated": 2,
+	},
+	{
+		"not_demonstrated": 0,
+		"below_expectations": 1,
+		"approaching_expectations": 2,
+		"meets_expectations": 3,
+		"exceeds_expectations": 4,
+	},
+	{
+		"little_to_no_demonstration": 0,
+		"semantic_only": 1,
+		"template_conformant": 2,
+	},
+]
 PASSTHROUGH_EXCLUDED_FIELDS = {
 	"indicator_id",
 	"dimension_id",
@@ -299,12 +318,37 @@ def build_dimension_scale_lookup(modules: list[ModuleType]) -> dict[str, dict[st
 		dimension_id = str(getattr(module, "DIMENSION_ID", "")).strip()
 		if not dimension_id:
 			continue
-		scale_values = [
+		declared_scale_values = [
 			str(value).strip()
 			for value in getattr(module, "DIMENSION_EVIDENCE_SCALE", [])
 			if str(value).strip()
 		]
-		lookup[dimension_id] = {value: index for index, value in enumerate(scale_values)}
+		rule_result_values = []
+		for rule in getattr(module, "DERIVATION_RULES", []):
+			if not isinstance(rule, dict):
+				continue
+			result_value = str(rule.get("resultant_scale_value") or "").strip()
+			if result_value:
+				rule_result_values.append(result_value)
+		scale_values = list(dict.fromkeys(rule_result_values or declared_scale_values))
+		matched_known_order = next(
+			(
+				known_order
+				for known_order in KNOWN_DIMENSION_SCALE_ORDERS
+				if scale_values and all(value in known_order for value in scale_values)
+			),
+			None,
+		)
+		if matched_known_order is not None:
+			lookup[dimension_id] = {
+				value: matched_known_order[value]
+				for value in scale_values
+			}
+			continue
+		max_index = len(scale_values) - 1
+		lookup[dimension_id] = {
+			value: max_index - index for index, value in enumerate(scale_values)
+		}
 	return lookup
 
 
