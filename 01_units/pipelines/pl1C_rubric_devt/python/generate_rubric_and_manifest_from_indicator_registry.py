@@ -651,6 +651,21 @@ def collect_section_rows(
     return rows
 
 
+def collect_field_value_records(
+    tables: list[dict[str, object]],
+    *,
+    required_columns: set[str],
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for table in tables:
+        if not is_field_value_table(table):
+            continue
+        record = convert_field_value_table_to_record(table)
+        if record and required_columns.issubset(record):
+            rows.append(record)
+    return rows
+
+
 def validate_required_columns(
     table_name: str,
     rows: list[dict[str, str]],
@@ -1571,6 +1586,11 @@ def load_registry_rows(
         required_columns=LAYER1_BASE_TABLE_REQUIRED_COLUMNS,
         allow_field_value_records=True,
     )
+    if layer_config.supports_base_table_reuse and not base_rows:
+        base_rows = collect_field_value_records(
+            tables,
+            required_columns=LAYER1_BASE_TABLE_REQUIRED_COLUMNS,
+        )
     reuse_table = find_table_by_heading(tables, "reuse rule table")
     component_block_rule_table = find_table_by_heading(tables, "component block rule table")
 
