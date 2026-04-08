@@ -1,12 +1,45 @@
 #!/usr/bin/env python3
-"""Run scoring in batch mode or one response at a time.
+"""Orchestrate prompt-runner scoring for either whole-payload or per-row execution.
 
-This wrapper preserves the shared prompt-runner CLI contract while adding a
-runner-path argument and a scoring-mode switch:
+This module sits in front of the shared API runner and provides one extra layer
+of execution control for grading workflows that need either:
 
-- batch: forward the invocation directly to the supplied API runner script
-- single-response: split the input payload into one response per invocation,
-	call the supplied runner for each response, and merge the CSV outputs
+- a single scoring call over the full prompt payload, or
+- one scoring call per response row followed by CSV reassembly.
+
+The script preserves the existing prompt-runner command-line contract as much as
+possible. Most arguments are passed through unchanged to the underlying runner.
+The orchestrator itself adds only a small number of control arguments,
+primarily ``--api-runner-script`` and ``--scoring-mode``.
+
+Execution modes:
+
+- ``batch``:
+	Forward the request directly to the supplied API runner script. This is the
+	simplest mode and is appropriate when the prompt and input payload are meant
+	to be processed in one invocation.
+- ``single-response``:
+	Read the prompt input payload, split it into one runtime unit per response,
+	invoke the supplied API runner once for each unit, and merge the resulting
+	CSV outputs into one final CSV artifact. This is useful when per-response
+	isolation improves reliability, debuggability, or output discipline.
+
+Input handling:
+
+- CSV payloads are split into one header-plus-one-data-row payload per call.
+- Non-CSV payloads are split on non-empty lines, with one line sent per call.
+- Empty rows or lines are skipped.
+
+Output handling:
+
+- In ``batch`` mode, output generation is delegated entirely to the shared
+	runner.
+- In ``single-response`` mode, this script writes the merged CSV output and a
+	companion run-metadata JSON file that records timing, runner configuration,
+	request paths, and CSV header information.
+
+This module does not interpret scoring semantics. It only manages invocation
+shape, output-path resolution, and post-run aggregation.
 """
 
 from __future__ import annotations
