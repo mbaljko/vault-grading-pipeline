@@ -1230,7 +1230,7 @@ def derive_anchor_patterns(row: dict[str, object], family: str) -> list[str]:
 			return ["shaping"]
 		raise ValueError(f"Anchor patterns cannot be derived for template {row.get('template_id', '')!r}.")
 	if local_slot == "05":
-		if " by " in f" {text} " and "shaping" in text:
+		if "by" in text and "shaping" in text:
 			return ["by"]
 		raise ValueError(f"Anchor patterns cannot be derived for template {row.get('template_id', '')!r}.")
 	raise ValueError(f"Anchor patterns cannot be derived for template {row.get('template_id', '')!r}.")
