@@ -488,6 +488,7 @@
   },
   "active": "fe3cb8bfbc96d736",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/python/merge-scoring-output-csvs.py",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1C_scaffold_stage13_Layer0_Segmentation_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage00_Generate_Layer0_Segmentation_Prompt.md",
@@ -522,7 +523,6 @@
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - engagement - signal prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage01_SubmissionAnalyticBrief_Sec1-3.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage01_AssignmentPayloadSpec.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11_Layer1_SBO_54.md"
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage01_AssignmentPayloadSpec.md"
   ]
 }
