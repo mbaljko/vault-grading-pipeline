@@ -1,0 +1,148 @@
+from __future__ import annotations
+
+from .boundaries import find_anchor_occurrences, find_first_stop_marker, find_left_boundary, trim_span
+from .diagnostics import disagreement_note
+from .models import FamilyExecution, OperatorSpec
+from .nlp_utils import first_right_noun_chunk, nearest_left_noun_chunk, parse_text
+
+
+def _missing_result(note: str) -> FamilyExecution:
+	return FamilyExecution(
+		segment_text="",
+		extraction_status="missing",
+		extraction_notes=note,
+		confidence="high",
+		flags="needs_review" if note else "none",
+	)
+
+
+def _ambiguous_result(note: str) -> FamilyExecution:
+	return FamilyExecution(
+		segment_text="",
+		extraction_status="ambiguous",
+		extraction_notes=note,
+		confidence="medium",
+		flags="needs_review",
+	)
+
+
+def _malformed_result(note: str) -> FamilyExecution:
+	return FamilyExecution(
+		segment_text="",
+		extraction_status="malformed",
+		extraction_notes=note,
+		confidence="low",
+		flags="needs_review",
+	)
+
+
+def _ok_result(segment_text: str, confidence: str = "high", note: str = "", needs_review: bool = False) -> FamilyExecution:
+	return FamilyExecution(
+		segment_text=segment_text,
+		extraction_status="ok",
+		extraction_notes=note,
+		confidence=confidence,
+		flags="needs_review" if needs_review else "none",
+	)
+
+
+def _first_anchor(text: str, spec: OperatorSpec) -> tuple[int, int, str] | None:
+	occurrences = find_anchor_occurrences(text, spec.anchor_patterns)
+	if not occurrences:
+		return None
+	return occurrences[0]
+
+
+def run_left_np_before_anchor(text: str, spec: OperatorSpec) -> FamilyExecution:
+	anchor = _first_anchor(text, spec)
+	if anchor is None:
+		return _missing_result("anchor not found")
+	anchor_start, _, _ = anchor
+	boundary_start = find_left_boundary(text, anchor_start, spec.stop_markers)
+	context = text[boundary_start:anchor_start]
+	trimmed_context = trim_span(context)
+	if not trimmed_context:
+		return _missing_result("anchor found but no recoverable pre-anchor noun phrase")
+	doc = parse_text(text)
+	chunk = nearest_left_noun_chunk(doc, anchor_start, minimum_start=boundary_start)
+	if chunk is not None:
+		chunk_start, chunk_end, chunk_text = chunk
+		segment_text = trim_span(text[chunk_start:chunk_end])
+		if segment_text:
+			needs_review = trimmed_context != segment_text
+			note = disagreement_note("parser and boundary heuristics disagreed") if needs_review else ""
+			confidence = "medium" if needs_review else "high"
+			return _ok_result(segment_text, confidence=confidence, note=note, needs_review=needs_review)
+	if len(trimmed_context.split()) > 8:
+		return _ambiguous_result("multiple candidate noun phrase boundaries")
+	return _ok_result(trimmed_context, confidence="medium", note="fallback pre-anchor span recovery", needs_review=True)
+
+
+def run_right_np_after_anchor_before_marker(text: str, spec: OperatorSpec) -> FamilyExecution:
+	anchor = _first_anchor(text, spec)
+	if anchor is None:
+		return _missing_result("anchor not found")
+	_, anchor_end, _ = anchor
+	stop_index = find_first_stop_marker(text, anchor_end, spec.stop_markers)
+	doc = parse_text(text)
+	chunk = first_right_noun_chunk(doc, anchor_end, stop_index)
+	if chunk is not None:
+		chunk_start, chunk_end, chunk_text = chunk
+		segment_text = trim_span(text[chunk_start:chunk_end])
+		if segment_text:
+			return _ok_result(segment_text)
+	span_end = stop_index if stop_index is not None else len(text)
+	fallback_text = trim_span(text[anchor_end:span_end])
+	if not fallback_text:
+		return _missing_result("anchor found but no recoverable post-anchor noun phrase")
+	if len(fallback_text.split()) > 10:
+		return _ambiguous_result("multiple candidate noun phrase boundaries")
+	return _ok_result(fallback_text, confidence="medium", note="fallback post-anchor span recovery", needs_review=True)
+
+
+def run_span_after_marker_before_marker(text: str, spec: OperatorSpec) -> FamilyExecution:
+	anchor = _first_anchor(text, spec)
+	if anchor is None:
+		return _missing_result("anchor not found")
+	_, anchor_end, _ = anchor
+	stop_index = find_first_stop_marker(text, anchor_end, spec.stop_markers)
+	span_end = stop_index if stop_index is not None else len(text)
+	segment_text = trim_span(text[anchor_end:span_end])
+	if not segment_text:
+		return _missing_result("anchor found but no recoverable span after marker")
+	if len(segment_text.split()) > 14:
+		return _ambiguous_result("marker span boundary unclear")
+	return _ok_result(segment_text)
+
+
+def run_local_effect_phrase_after_marker(text: str, spec: OperatorSpec) -> FamilyExecution:
+	workflow_occurrences = find_anchor_occurrences(text, ["shaping"])
+	workflow_end = workflow_occurrences[0][1] if workflow_occurrences else 0
+	by_occurrences = [occ for occ in find_anchor_occurrences(text, spec.anchor_patterns) if occ[0] >= workflow_end]
+	if not by_occurrences:
+		return _missing_result("workflow/effect anchor sequence not found")
+	_, anchor_end, _ = by_occurrences[0]
+	stop_index = find_first_stop_marker(text, anchor_end, spec.stop_markers)
+	span_end = stop_index if stop_index is not None else len(text)
+	segment_text = trim_span(text[anchor_end:span_end])
+	if not segment_text:
+		return _missing_result("anchor found but no recoverable local effect phrase")
+	if len(segment_text.split()) > 18:
+		return _ambiguous_result("local effect phrase boundary unclear")
+	return _ok_result(segment_text, confidence="medium" if spec.allow_coordination else "high")
+
+
+def run_status_only_anchor_detector(text: str, spec: OperatorSpec) -> FamilyExecution:
+	anchor = _first_anchor(text, spec)
+	if anchor is None:
+		return _missing_result("anchor not found")
+	return _ok_result("")
+
+
+FAMILY_EXECUTORS = {
+	"left_np_before_anchor": run_left_np_before_anchor,
+	"right_np_after_anchor_before_marker": run_right_np_after_anchor_before_marker,
+	"span_after_marker_before_marker": run_span_after_marker_before_marker,
+	"local_effect_phrase_after_marker": run_local_effect_phrase_after_marker,
+	"status_only_anchor_detector": run_status_only_anchor_detector,
+}
