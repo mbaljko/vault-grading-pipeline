@@ -70,6 +70,12 @@ def parse_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
 		default="batch",
 		help="Run one API call for the full payload or one call per response row.",
 	)
+	parser.add_argument(
+		"--single-response-max-attempts",
+		type=int,
+		default=3,
+		help="Maximum attempts per response row in single-response mode when runner output is empty or malformed.",
+	)
 	parser.add_argument("--prompt-input-file", type=Path, default=None)
 	parser.add_argument("--prompt-input-json", default=None)
 	parser.add_argument("--prompt-instructions-file", type=Path, default=None)
@@ -98,6 +104,11 @@ def strip_orchestrator_args(argv: list[str]) -> list[str]:
 			skip_next = True
 			continue
 		if token.startswith("--scoring-mode="):
+			continue
+		if token == "--single-response-max-attempts":
+			skip_next = True
+			continue
+		if token.startswith("--single-response-max-attempts="):
 			continue
 		filtered.append(token)
 	return filtered
@@ -197,6 +208,22 @@ def merge_csv_outputs(csv_paths: list[Path], final_output_path: Path) -> tuple[i
 	return len(merged_rows), merged_header
 
 
+def validate_single_response_csv_output(csv_path: Path) -> None:
+	rows = read_csv_rows(csv_path)
+	if not rows:
+		raise ValueError(f"Runner produced an empty CSV output: {csv_path}")
+	if len(rows) < 2:
+		raise ValueError(f"Runner produced a header-only CSV output: {csv_path}")
+	header, *data_rows = rows
+	if not any(cell.strip() for cell in header):
+		raise ValueError(f"Runner produced a CSV output with an empty header: {csv_path}")
+	if len(data_rows) != 1:
+		raise ValueError(
+			"Single-response mode expected exactly one data row from runner output; "
+			f"got {len(data_rows)} from {csv_path}"
+		)
+
+
 def write_metadata_output(
 	metadata_path: Path,
 	args: argparse.Namespace,
@@ -266,6 +293,8 @@ def run_single_response_mode(
 		raise ValueError("Single-response mode does not support --save-full-api-response.")
 	if args.dry_run:
 		raise ValueError("Single-response mode does not support --dry-run.")
+	if args.single_response_max_attempts < 1:
+		raise ValueError("Single-response mode requires --single-response-max-attempts >= 1.")
 	requested_formats = set(args.output_format or ["csv"])
 	if requested_formats != {"csv"}:
 		raise ValueError("Single-response mode currently supports only --output-format csv.")
@@ -284,28 +313,51 @@ def run_single_response_mode(
 	with tempfile.TemporaryDirectory(prefix="run-scoring-orchestrator-") as temp_dir_str:
 		temp_dir = Path(temp_dir_str)
 		for index, payload_text in enumerate(payloads, start=1):
-			temp_input_path = temp_dir / f"prompt_input_{index:05d}.txt"
-			temp_stem = f"{final_output_stem}__part_{index:05d}"
-			temp_input_path.write_text(payload_text, encoding="utf-8")
-			runner_args = [
-				*base_args,
-				"--prompt-input-file",
-				str(temp_input_path),
-				"--output-dir",
-				str(temp_dir),
-				"--output-file-stem",
-				temp_stem,
-				"--output-format",
-				"csv",
-			]
-			print(
-				f"Running response scoring (single-response) {index}/{len(payloads)} "
-				f"for {args.prompt_input_file}"
-			)
-			exit_code = invoke_runner(runner_path, runner_args)
-			if exit_code != 0:
-				return exit_code
-			invocation_csv_paths.append(temp_dir / f"{temp_stem}_output.csv")
+			part_completed = False
+			last_failure: str | None = None
+			for attempt in range(1, args.single_response_max_attempts + 1):
+				temp_input_path = temp_dir / f"prompt_input_{index:05d}_attempt_{attempt:02d}.txt"
+				temp_stem = f"{final_output_stem}__part_{index:05d}_attempt_{attempt:02d}"
+				temp_csv_path = temp_dir / f"{temp_stem}_output.csv"
+				temp_input_path.write_text(payload_text, encoding="utf-8")
+				runner_args = [
+					*base_args,
+					"--prompt-input-file",
+					str(temp_input_path),
+					"--output-dir",
+					str(temp_dir),
+					"--output-file-stem",
+					temp_stem,
+					"--output-format",
+					"csv",
+				]
+				print(
+					f"Running response scoring (single-response) {index}/{len(payloads)} "
+					f"attempt {attempt}/{args.single_response_max_attempts} for {args.prompt_input_file}"
+				)
+				exit_code = invoke_runner(runner_path, runner_args)
+				if exit_code != 0:
+					last_failure = (
+						"Runner exited non-zero for single-response part "
+						f"{index}/{len(payloads)} on attempt {attempt}: exit_code={exit_code}"
+					)
+					continue
+
+				try:
+					validate_single_response_csv_output(temp_csv_path)
+				except ValueError as exc:
+					last_failure = (
+						f"Invalid single-response CSV output for part {index}/{len(payloads)} "
+						f"on attempt {attempt}: {exc}"
+					)
+					continue
+
+				invocation_csv_paths.append(temp_csv_path)
+				part_completed = True
+				break
+
+			if not part_completed:
+				raise ValueError(last_failure or f"Single-response part {index}/{len(payloads)} failed.")
 
 		response_count, header = merge_csv_outputs(invocation_csv_paths, final_output_path)
 	elapsed_seconds = time.perf_counter() - start_ts

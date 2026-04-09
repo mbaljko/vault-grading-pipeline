@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import re
 import sys
 from collections import OrderedDict
 from pathlib import Path
@@ -170,6 +171,40 @@ def load_source_lookup(source_csv_path: Path | None) -> dict[tuple[str, str], di
 	return source_lookup
 
 
+def operator_sort_key(operator_id: str, segment_id: str) -> tuple[int, str, str]:
+	match = re.search(r"(\d+)", operator_id)
+	if match:
+		return (int(match.group(1)), operator_id, segment_id)
+	return (sys.maxsize, operator_id, segment_id)
+
+
+def resolve_segment_ids_in_operator_order(
+	header: list[str],
+	rows: list[list[str]],
+) -> list[str]:
+	index_by_name = {name: idx for idx, name in enumerate(header)}
+	segment_to_operator: dict[str, str] = {}
+	for row in rows:
+		padded_row = row + [""] * (len(header) - len(row))
+		segment_id = padded_row[index_by_name["segment_id"]].strip()
+		operator_id = padded_row[index_by_name["operator_id"]].strip()
+		if not segment_id:
+			continue
+		existing = segment_to_operator.get(segment_id)
+		if existing is not None and operator_id and existing != operator_id:
+			raise ValueError(
+				"Cannot sort wide columns by operator_id; conflicting operator_ids found for "
+				f"segment_id={segment_id!r}: {existing!r} vs {operator_id!r}"
+			)
+		if operator_id:
+			segment_to_operator[segment_id] = operator_id
+
+	return sorted(
+		segment_to_operator,
+		key=lambda segment_id: operator_sort_key(segment_to_operator.get(segment_id, ""), segment_id),
+	)
+
+
 def build_wide_header(segment_ids: list[str]) -> list[str]:
 	header = ["submission_id", "component_id", "source_submission_id", "source_response_text"]
 	column_groups = [
@@ -191,8 +226,14 @@ def build_wide_header(segment_ids: list[str]) -> list[str]:
 def build_missing_audit(wide_row: dict[str, str], segment_ids: list[str]) -> str:
 	audit_failures: list[str] = []
 	for segment_id in segment_ids:
-		status = wide_row.get(f"extraction_status_{segment_id}", "").strip().lower()
+		status_raw = wide_row.get(f"extraction_status_{segment_id}", "").strip()
+		notes = wide_row.get(f"extraction_notes_{segment_id}", "").strip()
 		segment_text = wide_row.get(f"segment_text_{segment_id}", "").strip()
+		if not status_raw:
+			audit_failures.append(f"{segment_id}:empty_extraction_status")
+		if not notes:
+			audit_failures.append(f"{segment_id}:empty_extraction_notes")
+		status = status_raw.lower()
 		if status == "missing" and segment_text:
 			audit_failures.append(f"{segment_id}:missing_has_text")
 		elif status == "ok" and not segment_text:
@@ -232,13 +273,7 @@ def pivot_rows_to_wide(
 		raise ValueError(f"Cannot pivot merged CSV; missing required columns: {sorted(missing)!r}")
 
 	index_by_name = {name: idx for idx, name in enumerate(header)}
-	segment_ids = sorted(
-		{
-			row[index_by_name["segment_id"]].strip()
-			for row in rows
-			if len(row) > index_by_name["segment_id"] and row[index_by_name["segment_id"]].strip()
-		}
-	)
+	segment_ids = resolve_segment_ids_in_operator_order(header, rows)
 	wide_header = build_wide_header(segment_ids)
 	wide_rows: OrderedDict[tuple[str, str], dict[str, str]] = OrderedDict()
 
