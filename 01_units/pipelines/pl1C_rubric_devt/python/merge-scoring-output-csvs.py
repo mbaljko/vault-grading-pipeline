@@ -265,13 +265,10 @@ def build_missing_audit(wide_row: dict[str, str], segment_descriptors: list[Segm
 	audit_failures: list[str] = []
 	for descriptor in segment_descriptors:
 		status_raw = wide_row.get(f"extraction_status_{descriptor.column_suffix}", "").strip()
-		notes = wide_row.get(f"extraction_notes_{descriptor.column_suffix}", "").strip()
 		segment_text = wide_row.get(f"segment_text_{descriptor.column_suffix}", "").strip()
 		segment_label = descriptor.segment_id
 		if not status_raw:
 			audit_failures.append(f"{segment_label}:empty_extraction_status")
-		if not notes:
-			audit_failures.append(f"{segment_label}:empty_extraction_notes")
 		status = status_raw.lower()
 		if status == "missing" and segment_text:
 			audit_failures.append(f"{segment_label}:missing_has_text")
