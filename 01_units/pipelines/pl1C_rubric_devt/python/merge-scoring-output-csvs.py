@@ -26,6 +26,8 @@ Wide-format behavior:
 	row's ``segment_text`` value
 - the remaining non-key fields are suffixed with the segment id, for example
 	``operator_id_DemandA`` or ``extraction_notes_DemandA``
+- when present in the input rows, ``confidence`` and ``flags`` are also carried
+	through into grouped wide columns such as ``confidence_DemandA``
 - wide columns are grouped by field prefix, with spacer columns named ``.``
 	inserted between groups
 """
@@ -37,6 +39,7 @@ import csv
 import re
 import sys
 from collections import OrderedDict
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -178,66 +181,102 @@ def operator_sort_key(operator_id: str, segment_id: str) -> tuple[int, str, str]
 	return (sys.maxsize, operator_id, segment_id)
 
 
-def resolve_segment_ids_in_operator_order(
+@dataclass(frozen=True)
+class SegmentDescriptor:
+	component_id: str
+	segment_id: str
+	operator_id: str
+	column_suffix: str
+
+
+def resolve_segment_descriptors_in_operator_order(
 	header: list[str],
 	rows: list[list[str]],
-) -> list[str]:
+) -> tuple[list[SegmentDescriptor], dict[str, list[SegmentDescriptor]]]:
 	index_by_name = {name: idx for idx, name in enumerate(header)}
-	segment_to_operator: dict[str, str] = {}
+	component_ids: list[str] = []
+	seen_components: set[str] = set()
+	segment_to_operator: dict[tuple[str, str], str] = {}
 	for row in rows:
 		padded_row = row + [""] * (len(header) - len(row))
+		component_id = padded_row[index_by_name["component_id"]].strip()
 		segment_id = padded_row[index_by_name["segment_id"]].strip()
 		operator_id = padded_row[index_by_name["operator_id"]].strip()
-		if not segment_id:
+		if component_id and component_id not in seen_components:
+			seen_components.add(component_id)
+			component_ids.append(component_id)
+		if not component_id or not segment_id:
 			continue
-		existing = segment_to_operator.get(segment_id)
+		key = (component_id, segment_id)
+		existing = segment_to_operator.get(key)
 		if existing is not None and operator_id and existing != operator_id:
 			raise ValueError(
 				"Cannot sort wide columns by operator_id; conflicting operator_ids found for "
-				f"segment_id={segment_id!r}: {existing!r} vs {operator_id!r}"
+				f"component_id={component_id!r}, segment_id={segment_id!r}: "
+				f"{existing!r} vs {operator_id!r}"
 			)
 		if operator_id:
-			segment_to_operator[segment_id] = operator_id
+			segment_to_operator[key] = operator_id
 
-	return sorted(
-		segment_to_operator,
-		key=lambda segment_id: operator_sort_key(segment_to_operator.get(segment_id, ""), segment_id),
+	qualify_with_component = len(component_ids) > 1
+	descriptors = [
+		SegmentDescriptor(
+			component_id=component_id,
+			segment_id=segment_id,
+			operator_id=operator_id,
+			column_suffix=f"{component_id}__{segment_id}" if qualify_with_component else segment_id,
+		)
+		for (component_id, segment_id), operator_id in segment_to_operator.items()
+	]
+	descriptors.sort(
+		key=lambda descriptor: (
+			component_ids.index(descriptor.component_id),
+			operator_sort_key(descriptor.operator_id, descriptor.segment_id),
+		)
 	)
+	by_component: dict[str, list[SegmentDescriptor]] = {component_id: [] for component_id in component_ids}
+	for descriptor in descriptors:
+		by_component.setdefault(descriptor.component_id, []).append(descriptor)
+
+	return descriptors, by_component
 
 
-def build_wide_header(segment_ids: list[str]) -> list[str]:
+def build_wide_header(segment_descriptors: list[SegmentDescriptor]) -> list[str]:
 	header = ["submission_id", "component_id", "source_submission_id", "source_response_text"]
 	column_groups = [
 		"segment_text",
 		"operator_id",
 		"extraction_status",
 		"extraction_notes",
+		"confidence",
+		"flags",
 	]
 	for group_index, column_prefix in enumerate(column_groups):
 		if group_index > 0:
 			header.append(".")
-		for segment_id in segment_ids:
-			header.append(f"{column_prefix}_{segment_id}")
+		for descriptor in segment_descriptors:
+			header.append(f"{column_prefix}_{descriptor.column_suffix}")
 	header.append(".")
 	header.append("missing_audit")
 	return header
 
 
-def build_missing_audit(wide_row: dict[str, str], segment_ids: list[str]) -> str:
+def build_missing_audit(wide_row: dict[str, str], segment_descriptors: list[SegmentDescriptor]) -> str:
 	audit_failures: list[str] = []
-	for segment_id in segment_ids:
-		status_raw = wide_row.get(f"extraction_status_{segment_id}", "").strip()
-		notes = wide_row.get(f"extraction_notes_{segment_id}", "").strip()
-		segment_text = wide_row.get(f"segment_text_{segment_id}", "").strip()
+	for descriptor in segment_descriptors:
+		status_raw = wide_row.get(f"extraction_status_{descriptor.column_suffix}", "").strip()
+		notes = wide_row.get(f"extraction_notes_{descriptor.column_suffix}", "").strip()
+		segment_text = wide_row.get(f"segment_text_{descriptor.column_suffix}", "").strip()
+		segment_label = descriptor.segment_id
 		if not status_raw:
-			audit_failures.append(f"{segment_id}:empty_extraction_status")
+			audit_failures.append(f"{segment_label}:empty_extraction_status")
 		if not notes:
-			audit_failures.append(f"{segment_id}:empty_extraction_notes")
+			audit_failures.append(f"{segment_label}:empty_extraction_notes")
 		status = status_raw.lower()
 		if status == "missing" and segment_text:
-			audit_failures.append(f"{segment_id}:missing_has_text")
+			audit_failures.append(f"{segment_label}:missing_has_text")
 		elif status == "ok" and not segment_text:
-			audit_failures.append(f"{segment_id}:ok_missing_text")
+			audit_failures.append(f"{segment_label}:ok_missing_text")
 	if not audit_failures:
 		return "ok"
 	return ";".join(audit_failures)
@@ -273,8 +312,8 @@ def pivot_rows_to_wide(
 		raise ValueError(f"Cannot pivot merged CSV; missing required columns: {sorted(missing)!r}")
 
 	index_by_name = {name: idx for idx, name in enumerate(header)}
-	segment_ids = resolve_segment_ids_in_operator_order(header, rows)
-	wide_header = build_wide_header(segment_ids)
+	segment_descriptors, segment_descriptors_by_component = resolve_segment_descriptors_in_operator_order(header, rows)
+	wide_header = build_wide_header(segment_descriptors)
 	wide_rows: OrderedDict[tuple[str, str], dict[str, str]] = OrderedDict()
 
 	for row in rows:
@@ -294,6 +333,11 @@ def pivot_rows_to_wide(
 				"source_submission_id": "",
 				"source_response_text": "",
 			},
+		)
+		column_suffix = next(
+			descriptor.column_suffix
+			for descriptor in segment_descriptors_by_component.get(component_id, [])
+			if descriptor.segment_id == segment_id
 		)
 
 		if source_lookup:
@@ -318,31 +362,49 @@ def pivot_rows_to_wide(
 
 		set_pivot_value(
 			wide_row,
-			f"segment_text_{segment_id}",
+			f"segment_text_{column_suffix}",
 			padded_row[index_by_name["segment_text"]].strip(),
 			segment_id,
 		)
 		set_pivot_value(
 			wide_row,
-			f"operator_id_{segment_id}",
+			f"operator_id_{column_suffix}",
 			padded_row[index_by_name["operator_id"]].strip(),
 			segment_id,
 		)
 		set_pivot_value(
 			wide_row,
-			f"extraction_status_{segment_id}",
+			f"extraction_status_{column_suffix}",
 			padded_row[index_by_name["extraction_status"]].strip(),
 			segment_id,
 		)
 		set_pivot_value(
 			wide_row,
-			f"extraction_notes_{segment_id}",
+			f"extraction_notes_{column_suffix}",
 			padded_row[index_by_name["extraction_notes"]].strip(),
 			segment_id,
 		)
+		if "confidence" in index_by_name:
+			set_pivot_value(
+				wide_row,
+				f"confidence_{column_suffix}",
+				padded_row[index_by_name["confidence"]].strip(),
+				segment_id,
+			)
+		if "flags" in index_by_name:
+			set_pivot_value(
+				wide_row,
+				f"flags_{column_suffix}",
+				padded_row[index_by_name["flags"]].strip(),
+				segment_id,
+			)
 
 	for wide_row in wide_rows.values():
-		wide_row["missing_audit"] = build_missing_audit(wide_row, segment_ids)
+		component_id = wide_row["component_id"]
+		wide_row["missing_audit"] = build_missing_audit(
+			wide_row,
+			segment_descriptors_by_component.get(component_id, []),
+		)
 
 	wide_data_rows = [[wide_row.get(column_name, "") for column_name in wide_header] for wide_row in wide_rows.values()]
 	return wide_header, wide_data_rows
