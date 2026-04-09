@@ -1,17 +1,29 @@
 #!/usr/bin/env python3
-"""Merge scoring output CSV files into one combined CSV artifact.
+"""Merge scoring output CSV files and pivot them into one wide CSV artifact.
 
-This utility is intentionally simple. It consumes one input path and one output
-path, with an optional glob filter when the input path is a directory:
+This utility consumes one input path and one output path, with an optional glob
+filter when the input path is a directory:
 
 - if ``--input-path`` is a file, that file is treated as the sole CSV input
-- if ``--input-path`` is a directory, all ``.csv`` files under that directory
-  are discovered recursively and merged in lexical path order
+- if ``--input-path`` is a directory, matching ``.csv`` files are discovered
+  recursively and merged in lexical path order
 - if ``--input-glob`` is provided with a directory input, only matching CSV
-	files are included
+  files are included
 
-All input CSV files must share the same header row. The merged output contains
-the header once followed by all data rows from all matched files.
+All input CSV files must share the same header row. The utility first merges the
+matched long-format rows, then pivots them into one wide row per
+``submission_id`` × ``component_id``.
+
+Wide-format behavior:
+
+- one output column is created for each unique ``segment_id`` using the name
+	``segment_text_<segment_id>``
+- the value written to each ``segment_text_<segment_id>`` column is the source
+	row's ``segment_text`` value
+- the remaining non-key fields are suffixed with the segment id, for example
+	``operator_id_DemandA`` or ``extraction_notes_DemandA``
+- wide columns are grouped by field prefix, with spacer columns named ``.``
+	inserted between groups
 """
 
 from __future__ import annotations
@@ -19,11 +31,12 @@ from __future__ import annotations
 import argparse
 import csv
 import sys
+from collections import OrderedDict
 from pathlib import Path
 
 
 def parse_args() -> argparse.Namespace:
-	parser = argparse.ArgumentParser(description="Merge scoring output CSV files into one CSV.")
+	parser = argparse.ArgumentParser(description="Merge scoring output CSV files into one wide CSV.")
 	parser.add_argument(
 		"--input-path",
 		type=Path,
@@ -34,7 +47,7 @@ def parse_args() -> argparse.Namespace:
 		"--output-path",
 		type=Path,
 		required=True,
-		help="Path for the merged CSV output file.",
+		help="Path for the merged wide-format CSV output file.",
 	)
 	parser.add_argument(
 		"--input-glob",
@@ -76,7 +89,7 @@ def read_csv_rows(csv_path: Path) -> list[list[str]]:
 		return list(csv.reader(handle))
 
 
-def merge_csv_files(input_paths: list[Path], output_path: Path) -> tuple[int, list[str]]:
+def merge_csv_files(input_paths: list[Path]) -> tuple[list[str], list[list[str]]]:
 	merged_header: list[str] | None = None
 	merged_rows: list[list[str]] = []
 
@@ -99,20 +112,123 @@ def merge_csv_files(input_paths: list[Path], output_path: Path) -> tuple[int, li
 	if merged_header is None:
 		raise ValueError("No non-empty CSV content was found to merge.")
 
+	return merged_header, merged_rows
+
+
+def build_wide_header(segment_ids: list[str]) -> list[str]:
+	header = ["submission_id", "component_id"]
+	column_groups = [
+		"segment_text",
+		"operator_id",
+		"extraction_status",
+		"extraction_notes",
+	]
+	for group_index, column_prefix in enumerate(column_groups):
+		if group_index > 0:
+			header.append(".")
+		for segment_id in segment_ids:
+			header.append(f"{column_prefix}_{segment_id}")
+	return header
+
+
+def set_pivot_value(target_row: dict[str, str], field_name: str, value: str, segment_id: str) -> None:
+	existing = target_row.get(field_name, "")
+	if existing and value and existing != value:
+		raise ValueError(
+			f"Conflicting values for {field_name!r} in segment_id={segment_id!r}: "
+			f"{existing!r} vs {value!r}"
+		)
+	if value:
+		target_row[field_name] = value
+
+
+def pivot_rows_to_wide(header: list[str], rows: list[list[str]]) -> tuple[list[str], list[list[str]]]:
+	required_columns = {
+		"submission_id",
+		"component_id",
+		"operator_id",
+		"segment_id",
+		"segment_text",
+		"extraction_status",
+		"extraction_notes",
+	}
+	missing = required_columns.difference(header)
+	if missing:
+		raise ValueError(f"Cannot pivot merged CSV; missing required columns: {sorted(missing)!r}")
+
+	index_by_name = {name: idx for idx, name in enumerate(header)}
+	segment_ids = sorted(
+		{
+			row[index_by_name["segment_id"]].strip()
+			for row in rows
+			if len(row) > index_by_name["segment_id"] and row[index_by_name["segment_id"]].strip()
+		}
+	)
+	wide_header = build_wide_header(segment_ids)
+	wide_rows: OrderedDict[tuple[str, str], dict[str, str]] = OrderedDict()
+
+	for row in rows:
+		padded_row = row + [""] * (len(header) - len(row))
+		submission_id = padded_row[index_by_name["submission_id"]].strip()
+		component_id = padded_row[index_by_name["component_id"]].strip()
+		segment_id = padded_row[index_by_name["segment_id"]].strip()
+		if not submission_id or not component_id or not segment_id:
+			continue
+
+		key = (submission_id, component_id)
+		wide_row = wide_rows.setdefault(
+			key,
+			{
+				"submission_id": submission_id,
+				"component_id": component_id,
+			},
+		)
+
+		set_pivot_value(
+			wide_row,
+			f"segment_text_{segment_id}",
+			padded_row[index_by_name["segment_text"]].strip(),
+			segment_id,
+		)
+		set_pivot_value(
+			wide_row,
+			f"operator_id_{segment_id}",
+			padded_row[index_by_name["operator_id"]].strip(),
+			segment_id,
+		)
+		set_pivot_value(
+			wide_row,
+			f"extraction_status_{segment_id}",
+			padded_row[index_by_name["extraction_status"]].strip(),
+			segment_id,
+		)
+		set_pivot_value(
+			wide_row,
+			f"extraction_notes_{segment_id}",
+			padded_row[index_by_name["extraction_notes"]].strip(),
+			segment_id,
+		)
+
+	wide_data_rows = [[wide_row.get(column_name, "") for column_name in wide_header] for wide_row in wide_rows.values()]
+	return wide_header, wide_data_rows
+
+
+def write_csv_file(output_path: Path, header: list[str], rows: list[list[str]]) -> int:
 	output_path.parent.mkdir(parents=True, exist_ok=True)
 	with output_path.open("w", encoding="utf-8-sig", newline="") as handle:
 		writer = csv.writer(handle)
-		writer.writerow(merged_header)
-		writer.writerows(merged_rows)
-
-	return len(merged_rows), merged_header
+		writer.writerow(header)
+		writer.writerows(rows)
+	return len(rows)
 
 
 def main() -> int:
 	args = parse_args()
 	try:
 		input_paths = resolve_input_csv_paths(args.input_path, args.output_path, args.input_glob)
-		row_count, header = merge_csv_files(input_paths, args.output_path)
+		merged_header, merged_rows = merge_csv_files(input_paths)
+		wide_header, wide_rows = pivot_rows_to_wide(merged_header, merged_rows)
+		row_count = write_csv_file(args.output_path, wide_header, wide_rows)
 	except (FileNotFoundError, ValueError) as exc:
 		print(f"Error: {exc}", file=sys.stderr)
 		return 1
@@ -122,7 +238,7 @@ def main() -> int:
 		f"input_count={len(input_paths)}\n"
 		f"input_glob={args.input_glob}\n"
 		f"row_count={row_count}\n"
-		f"header_columns={len(header)}\n"
+		f"header_columns={len(wide_header)}\n"
 		f"output_path={args.output_path.resolve()}"
 	)
 	return 0
