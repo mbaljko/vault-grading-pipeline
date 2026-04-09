@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parse a Layer 0 segmentation registry markdown file into raw tabular JSON.
+"""Parse a Layer 0 segmentation registry markdown file into raw and normalized registry artifacts.
 
 This script currently implements Step 1 of the schema-generation workflow:
 
@@ -8,12 +8,11 @@ This script currently implements Step 1 of the schema-generation workflow:
 - parse Markdown tables into normalized row dictionaries
 - preserve multiline field/value records
 - validate required columns for known Layer 0 table types
-- emit raw JSON structures including registry_metadata, reuse_rules,
-  component_block_rules, and operator_rows
+- emit a raw registry plus a normalized registry that is ready for compilation
 
 The command-line contract mostly mirrors
 generate_rubric_and_manifest_from_indicator_registry.py, but this step writes
-one JSON artifact.
+raw and normalized registry JSON artifacts.
 """
 
 from __future__ import annotations
@@ -58,6 +57,16 @@ OPERATOR_REQUIRED_FIELDS = {
 	"segment_id",
 	"status",
 }
+IDENTIFIER_RULE_SOURCE_TEXT_FIELDS = {"rule"}
+COMPONENT_BLOCK_SOURCE_TEXT_FIELDS = {"component_block"}
+OPERATOR_SOURCE_TEXT_FIELDS = {
+	"operator_short_description",
+	"operator_definition",
+	"operator_guidance",
+	"failure_mode_guidance",
+	"decision_procedure",
+}
+PROVENANCE_ONLY_FIELDS = {"operator_block_heading", "heading_path"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -84,14 +93,18 @@ def parse_args() -> argparse.Namespace:
 		help="Directory for generated outputs. Defaults to the registry file directory.",
 	)
 	parser.add_argument(
+		"--raw-output",
 		"--rubric-output",
+		dest="raw_output",
 		type=Path,
-		help="Explicit primary JSON output file path.",
+		help="Explicit raw registry JSON output file path.",
 	)
 	parser.add_argument(
+		"--normalized-output",
 		"--manifest-output",
+		dest="normalized_output",
 		type=Path,
-		help="Explicit secondary JSON output file path.",
+		help="Explicit normalized registry JSON output file path.",
 	)
 	parser.add_argument(
 		"--include-inactive",
@@ -391,19 +404,339 @@ def infer_registry_layer(registry_path: Path, requested_layer: str) -> str:
 	raise ValueError("Could not infer a Layer 0 segmentation registry. Pass --registry-layer layer0 explicitly.")
 
 
-def resolve_output_path(
+def collapse_internal_whitespace(value: str) -> str:
+	return re.sub(r"\s+", " ", value.strip())
+
+
+def normalize_multiline_text(value: str) -> dict[str, object]:
+	raw_text = value.strip()
+	lines = [collapse_internal_whitespace(line) for line in raw_text.splitlines() if line.strip()]
+	return {
+		"raw": raw_text,
+		"lines": lines,
+		"single_line": " | ".join(lines),
+	}
+
+
+def normalize_scalar_value(field_name: str, value: str) -> str:
+	normalized = collapse_internal_whitespace(value)
+	if field_name == "status":
+		return normalized.lower()
+	return normalized
+
+
+def coerce_heading_path(value: object) -> list[str]:
+	if isinstance(value, list):
+		return [collapse_internal_whitespace(str(item)) for item in value if str(item).strip()]
+	if isinstance(value, str):
+		return [part.strip() for part in value.split(">") if part.strip()]
+	return []
+
+
+def normalize_registry_metadata(registry_metadata: dict[str, str]) -> dict[str, str]:
+	return {
+		field_name: normalize_scalar_value(field_name, value)
+		for field_name, value in registry_metadata.items()
+	}
+
+
+def build_normalized_row(
+	row: dict[str, str],
+	*,
+	section_name: str,
+	source_table_type: str,
+	source_heading: str,
+	source_heading_path: list[str],
+	source_row_index: int,
+	source_text_fields: set[str],
+	provenance_only_fields: set[str] | None = None,
+) -> dict[str, object]:
+	provenance_only_fields = provenance_only_fields or set()
+	execution_fields: dict[str, str] = {}
+	source_text: dict[str, dict[str, object]] = {}
+	missing_execution_fields: list[str] = []
+	missing_source_text_fields: list[str] = []
+
+	for field_name, value in row.items():
+		if field_name in provenance_only_fields:
+			continue
+		if field_name in source_text_fields:
+			normalized_text = normalize_multiline_text(value)
+			source_text[field_name] = normalized_text
+			if not normalized_text["single_line"]:
+				missing_source_text_fields.append(field_name)
+			continue
+		normalized_value = normalize_scalar_value(field_name, value)
+		execution_fields[field_name] = normalized_value
+		if not normalized_value:
+			missing_execution_fields.append(field_name)
+
+	if execution_fields.get("block_rule_id", "") and execution_fields.get("component_id", ""):
+		row_identifier = f"{execution_fields['block_rule_id']}::{execution_fields['component_id']}"
+	else:
+		row_identifier = next(
+			(
+				execution_fields.get(candidate, "")
+				for candidate in ("rule_id", "block_rule_id", "segment_id", "field", "template_id")
+				if execution_fields.get(candidate, "")
+			),
+			f"{section_name}_row_{source_row_index}",
+		)
+
+	return {
+		"row_id": row_identifier,
+		"meta": {
+			"section_name": section_name,
+			"source_table_type": source_table_type,
+			"source_heading": source_heading,
+			"source_heading_path": source_heading_path,
+			"source_row_index": source_row_index,
+		},
+		"execution_fields": execution_fields,
+		"source_text": source_text,
+		"validation": {
+			"missing_execution_fields": missing_execution_fields,
+			"missing_source_text_fields": missing_source_text_fields,
+			"is_complete": not missing_execution_fields and not missing_source_text_fields,
+		},
+	}
+
+
+def normalize_identifier_construction_rules(rows: list[dict[str, str]]) -> list[dict[str, object]]:
+	return [
+		build_normalized_row(
+			row,
+			section_name="identifier_construction_rules",
+			source_table_type="markdown_table",
+			source_heading="identifier construction rules",
+			source_heading_path=["identifier construction rules"],
+			source_row_index=row_index,
+			source_text_fields=IDENTIFIER_RULE_SOURCE_TEXT_FIELDS,
+		)
+		for row_index, row in enumerate(rows, start=1)
+	]
+
+
+def normalize_reuse_rules(rows: list[dict[str, str]]) -> list[dict[str, object]]:
+	return [
+		build_normalized_row(
+			row,
+			section_name="reuse_rules",
+			source_table_type="markdown_table",
+			source_heading="reuse rule table",
+			source_heading_path=["reuse rule table"],
+			source_row_index=row_index,
+			source_text_fields=set(),
+		)
+		for row_index, row in enumerate(rows, start=1)
+	]
+
+
+def normalize_component_block_rules(rows: list[dict[str, str]]) -> list[dict[str, object]]:
+	return [
+		build_normalized_row(
+			row,
+			section_name="component_block_rules",
+			source_table_type="markdown_table",
+			source_heading="component block rule table",
+			source_heading_path=["component block rule table"],
+			source_row_index=row_index,
+			source_text_fields=COMPONENT_BLOCK_SOURCE_TEXT_FIELDS,
+		)
+		for row_index, row in enumerate(rows, start=1)
+	]
+
+
+def normalize_operator_rows(rows: list[dict[str, str]]) -> list[dict[str, object]]:
+	normalized_rows: list[dict[str, object]] = []
+	for row_index, row in enumerate(rows, start=1):
+		normalized_rows.append(
+			build_normalized_row(
+				row,
+				section_name="operator_rows",
+				source_table_type="field_value_record",
+				source_heading=row.get("operator_block_heading", ""),
+				source_heading_path=coerce_heading_path(row.get("heading_path", [])),
+				source_row_index=row_index,
+				source_text_fields=OPERATOR_SOURCE_TEXT_FIELDS,
+				provenance_only_fields=PROVENANCE_ONLY_FIELDS,
+			)
+		)
+	return normalized_rows
+
+
+def validate_unique_execution_field(
+	rows: list[dict[str, object]],
+	field_name: str,
+	section_name: str,
+) -> list[str]:
+	seen_values: dict[str, str] = {}
+	errors: list[str] = []
+	for row in rows:
+		execution_fields = row.get("execution_fields", {})
+		if not isinstance(execution_fields, dict):
+			continue
+		value = str(execution_fields.get(field_name, "")).strip()
+		if not value:
+			continue
+		if value in seen_values:
+			errors.append(
+				f"Duplicate {field_name} in {section_name}: {value!r} appears in {seen_values[value]!r} and {row.get('row_id', '')!r}."
+			)
+			continue
+		seen_values[value] = str(row.get("row_id", ""))
+	return errors
+
+
+def validate_unique_execution_tuple(
+	rows: list[dict[str, object]],
+	field_names: tuple[str, ...],
+	section_name: str,
+) -> list[str]:
+	seen_values: dict[tuple[str, ...], str] = {}
+	errors: list[str] = []
+	for row in rows:
+		execution_fields = row.get("execution_fields", {})
+		if not isinstance(execution_fields, dict):
+			continue
+		value_tuple = tuple(str(execution_fields.get(field_name, "")).strip() for field_name in field_names)
+		if not all(value_tuple):
+			continue
+		if value_tuple in seen_values:
+			errors.append(
+				f"Duplicate {field_names!r} in {section_name}: {value_tuple!r} appears in {seen_values[value_tuple]!r} and {row.get('row_id', '')!r}."
+			)
+			continue
+		seen_values[value_tuple] = str(row.get("row_id", ""))
+	return errors
+
+
+def validate_normalized_registry_payload(payload: dict[str, object]) -> dict[str, object]:
+	errors: list[str] = []
+	warnings: list[str] = []
+
+	section_rows: dict[str, list[dict[str, object]]] = {
+		"identifier_construction_rules": list(payload.get("identifier_construction_rules", [])),
+		"reuse_rules": list(payload.get("reuse_rules", [])),
+		"component_block_rules": list(payload.get("component_block_rules", [])),
+		"operator_rows": list(payload.get("operator_rows", [])),
+	}
+
+	for section_name, rows in section_rows.items():
+		for row in rows:
+			validation = row.get("validation", {})
+			if not isinstance(validation, dict):
+				errors.append(f"{section_name} row {row.get('row_id', '')!r} is missing validation metadata.")
+				continue
+			if not bool(validation.get("is_complete", False)):
+				errors.append(
+					f"{section_name} row {row.get('row_id', '')!r} is incomplete: "
+					f"missing execution fields={validation.get('missing_execution_fields', [])}, "
+					f"missing source text fields={validation.get('missing_source_text_fields', [])}."
+				)
+
+	errors.extend(validate_unique_execution_field(section_rows["identifier_construction_rules"], "field", "identifier_construction_rules"))
+	errors.extend(validate_unique_execution_field(section_rows["reuse_rules"], "rule_id", "reuse_rules"))
+	errors.extend(
+		validate_unique_execution_tuple(
+			section_rows["component_block_rules"],
+			("block_rule_id", "component_id"),
+			"component_block_rules",
+		)
+	)
+	errors.extend(validate_unique_execution_field(section_rows["operator_rows"], "segment_id", "operator_rows"))
+
+	operator_slot_pairs: set[tuple[str, str]] = set()
+	for row in section_rows["operator_rows"]:
+		execution_fields = row.get("execution_fields", {})
+		if not isinstance(execution_fields, dict):
+			continue
+		pair = (
+			str(execution_fields.get("template_id", "")).strip(),
+			str(execution_fields.get("local_slot", "")).strip(),
+		)
+		if not pair[0] or not pair[1]:
+			continue
+		if pair in operator_slot_pairs:
+			errors.append(f"Duplicate operator template/local_slot pair detected: {pair!r}.")
+			continue
+		operator_slot_pairs.add(pair)
+
+	component_block_rule_ids = {
+		str(row.get("execution_fields", {}).get("block_rule_id", "")).strip()
+		for row in section_rows["component_block_rules"]
+		if isinstance(row.get("execution_fields", {}), dict)
+	}
+	for row in section_rows["reuse_rules"]:
+		execution_fields = row.get("execution_fields", {})
+		if not isinstance(execution_fields, dict):
+			continue
+		component_block_rule = str(execution_fields.get("component_block_rule", "")).strip()
+		if component_block_rule and component_block_rule not in component_block_rule_ids:
+			errors.append(
+				f"Reuse rule {row.get('row_id', '')!r} references unknown component_block_rule {component_block_rule!r}."
+			)
+
+	registry_metadata = payload.get("registry_metadata", {})
+	if not isinstance(registry_metadata, dict):
+		errors.append("registry_metadata must be a JSON object.")
+	else:
+		for field_name in sorted(REGISTRY_METADATA_REQUIRED_FIELDS):
+			if not str(registry_metadata.get(field_name, "")).strip():
+				errors.append(f"registry_metadata is missing required field {field_name!r}.")
+
+	if not section_rows["operator_rows"]:
+		warnings.append("No operator rows were produced in the normalized registry.")
+
+	return {
+		"is_valid": not errors,
+		"errors": errors,
+		"warnings": warnings,
+		"counts": {section_name: len(rows) for section_name, rows in section_rows.items()},
+	}
+
+
+def build_normalized_registry_payload(raw_payload: dict[str, object]) -> dict[str, object]:
+	normalized_payload = {
+		"generated_at_utc": datetime.now(timezone.utc).isoformat(),
+		"registry_path": raw_payload["registry_path"],
+		"registry_layer": raw_payload["registry_layer"],
+		"normalization_version": "v1",
+		"registry_metadata": normalize_registry_metadata(dict(raw_payload["registry_metadata"])),
+		"identifier_construction_rules": normalize_identifier_construction_rules(
+			list(raw_payload.get("identifier_construction_rules", []))
+		),
+		"reuse_rules": normalize_reuse_rules(list(raw_payload.get("reuse_rules", []))),
+		"component_block_rules": normalize_component_block_rules(
+			list(raw_payload.get("component_block_rules", []))
+		),
+		"operator_rows": normalize_operator_rows(list(raw_payload.get("operator_rows", []))),
+	}
+	validation = validate_normalized_registry_payload(normalized_payload)
+	normalized_payload["validation"] = validation
+	if not validation["is_valid"]:
+		raise ValueError("Normalized registry validation failed:\n- " + "\n- ".join(validation["errors"]))
+	return normalized_payload
+
+
+def resolve_output_paths(
 	registry_path: Path,
 	output_dir: Path | None,
-	rubric_output: Path | None,
-	manifest_output: Path | None,
-) -> Path:
+	raw_output: Path | None,
+	normalized_output: Path | None,
+) -> tuple[Path, Path]:
 	resolved_output_dir = output_dir.resolve() if output_dir else registry_path.parent.resolve()
 	resolved_output_dir.mkdir(parents=True, exist_ok=True)
 	base_stem = registry_path.stem
-	output_path = rubric_output or manifest_output or (resolved_output_dir / f"{base_stem}_schema.json")
-	resolved_output_path = output_path.resolve()
-	resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
-	return resolved_output_path
+	resolved_raw_output = (raw_output or (resolved_output_dir / f"{base_stem}_raw_registry.json")).resolve()
+	resolved_normalized_output = (
+		normalized_output or (resolved_output_dir / f"{base_stem}_normalized_registry.json")
+	).resolve()
+	resolved_raw_output.parent.mkdir(parents=True, exist_ok=True)
+	resolved_normalized_output.parent.mkdir(parents=True, exist_ok=True)
+	if resolved_raw_output == resolved_normalized_output:
+		raise ValueError("Raw and normalized registry outputs must resolve to different file paths.")
+	return resolved_raw_output, resolved_normalized_output
 
 
 def build_raw_schema_payload(registry_path: Path, include_inactive: bool, registry_layer: str) -> dict[str, object]:
@@ -462,17 +795,20 @@ def main() -> int:
 		include_inactive=args.include_inactive,
 		registry_layer=registry_layer,
 	)
-	output_path = resolve_output_path(
+	normalized_payload = build_normalized_registry_payload(payload)
+	raw_output_path, normalized_output_path = resolve_output_paths(
 		registry_path=registry_path,
 		output_dir=args.output_dir,
-		rubric_output=args.rubric_output,
-		manifest_output=args.manifest_output,
+		raw_output=args.raw_output,
+		normalized_output=args.normalized_output,
 	)
-	write_json_output(output_path, payload)
+	write_json_output(raw_output_path, payload)
+	write_json_output(normalized_output_path, normalized_payload)
 
 	print(f"Registry: {registry_path}")
 	print(f"Registry layer: {registry_layer}")
-	print(f"JSON output: {output_path}")
+	print(f"Raw registry output: {raw_output_path}")
+	print(f"Normalized registry output: {normalized_output_path}")
 	print(f"Reuse rules written: {len(payload['reuse_rules'])}")
 	print(f"Component block rules written: {len(payload['component_block_rules'])}")
 	print(f"Operator rows written: {len(payload['operator_rows'])}")
