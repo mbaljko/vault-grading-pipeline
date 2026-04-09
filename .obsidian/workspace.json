@@ -488,6 +488,8 @@
   },
   "active": "fe3cb8bfbc96d736",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/python/compile_operator_specs_from_expanded_registry.py",
+    "01_units/pipelines/pl1C_rubric_devt/python/expand_normalized_registry_to_operator_instances.py",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate_schema_from_segmentation_registry.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/generate_schema_from_segmentation_registry.py",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/merge-scoring-output-csvs.cpython-313.pyc",
@@ -501,8 +503,6 @@
     "01_units/pipelines/pl1B_derive_calibration/python/pl1B_prepare_calibration_samples.py",
     "01_units/pipelines/pl1B_derive_calibration/__pycache__/pl1B_prepare_calibration_samples.cpython-313.pyc",
     "01_units/pipelines/pl1B_derive_calibration/__pycache__",
-    "01_units/pipelines/pl1B_derive_calibration/pl1B_prepare_calibration_samples.py",
-    "01_units/pipelines/pl1A_canonical_population_prep/python/__pycache__/pl1A_canonical_population_validation.cpython-313.pyc",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP3B.md",
     "01_units/pipelines/pl1A_canonical_population_prep/excel/README.md",
     "01_units/pipelines/pl1A_canonical_population_prep/excel/Pipeline1A_Excel_Implementation_Standard.md",

@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
-"""Parse a Layer 0 segmentation registry into raw, normalized, expanded, and compiled artifacts.
+"""Parse a Layer 0 segmentation registry into raw and normalized artifacts.
 
 This script currently implements:
 
 - Step 1: parse registry Markdown into a raw registry JSON artifact
 - Step 1: emit a normalized registry JSON artifact that separates execution
   fields from source text while preserving provenance
-- Step 2.1: expand normalized operator templates into concrete
-  component-specific registry instances
-- Step 2.2: compile expanded instances into typed OperatorSpec objects ready
-  for execution by a deterministic runtime
 """
 
 from __future__ import annotations
@@ -242,16 +238,6 @@ def parse_args() -> argparse.Namespace:
 		dest="normalized_output",
 		type=Path,
 		help="Explicit normalized registry JSON output file path.",
-	)
-	parser.add_argument(
-		"--expanded-output",
-		type=Path,
-		help="Explicit expanded registry instance JSON output file path.",
-	)
-	parser.add_argument(
-		"--operator-specs-output",
-		type=Path,
-		help="Explicit compiled operator spec JSON output file path.",
 	)
 	parser.add_argument(
 		"--include-inactive",
@@ -1446,6 +1432,26 @@ def write_json_output(output_path: Path, payload: dict[str, object]) -> None:
 	output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def resolve_step1_output_paths(
+	registry_path: Path,
+	output_dir: Path | None,
+	raw_output: Path | None,
+	normalized_output: Path | None,
+) -> tuple[Path, Path]:
+	resolved_output_dir = output_dir.resolve() if output_dir else registry_path.parent.resolve()
+	resolved_output_dir.mkdir(parents=True, exist_ok=True)
+	base_stem = registry_path.stem
+	resolved_raw_output = (raw_output or (resolved_output_dir / f"{base_stem}_raw_registry.json")).resolve()
+	resolved_normalized_output = (
+		normalized_output or (resolved_output_dir / f"{base_stem}_normalized_registry.json")
+	).resolve()
+	resolved_raw_output.parent.mkdir(parents=True, exist_ok=True)
+	resolved_normalized_output.parent.mkdir(parents=True, exist_ok=True)
+	if resolved_raw_output == resolved_normalized_output:
+		raise ValueError("Raw and normalized registry outputs must resolve to different file paths.")
+	return resolved_raw_output, resolved_normalized_output
+
+
 def main() -> int:
 	args = parse_args()
 	registry_path = args.registry_path.resolve()
@@ -1459,37 +1465,22 @@ def main() -> int:
 		registry_layer=registry_layer,
 	)
 	normalized_payload = build_normalized_registry_payload(raw_payload)
-	expanded_payload = expand_registry_instances(normalized_payload)
-	operator_specs_payload = build_operator_specs_payload(expanded_payload)
-	(
-		raw_output_path,
-		normalized_output_path,
-		expanded_output_path,
-		operator_specs_output_path,
-	) = resolve_output_paths(
+	raw_output_path, normalized_output_path = resolve_step1_output_paths(
 		registry_path=registry_path,
 		output_dir=args.output_dir,
 		raw_output=args.raw_output,
 		normalized_output=args.normalized_output,
-		expanded_output=args.expanded_output,
-		operator_specs_output=args.operator_specs_output,
 	)
 	write_json_output(raw_output_path, raw_payload)
 	write_json_output(normalized_output_path, normalized_payload)
-	write_json_output(expanded_output_path, expanded_payload)
-	write_json_output(operator_specs_output_path, operator_specs_payload)
 
 	print(f"Registry: {registry_path}")
 	print(f"Registry layer: {registry_layer}")
 	print(f"Raw registry output: {raw_output_path}")
 	print(f"Normalized registry output: {normalized_output_path}")
-	print(f"Expanded registry output: {expanded_output_path}")
-	print(f"Operator specs output: {operator_specs_output_path}")
 	print(f"Reuse rules written: {len(raw_payload['reuse_rules'])}")
 	print(f"Component block rules written: {len(raw_payload['component_block_rules'])}")
 	print(f"Operator templates written: {len(normalized_payload['operator_templates'])}")
-	print(f"Expanded instances written: {len(expanded_payload['expanded_instances'])}")
-	print(f"Operator specs written: {len(operator_specs_payload['operator_specs'])}")
 	return 0
 
 
