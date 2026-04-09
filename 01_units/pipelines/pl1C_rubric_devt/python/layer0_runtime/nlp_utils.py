@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
@@ -11,6 +12,11 @@ except ImportError:  # pragma: no cover
 
 
 _NLP = None
+
+
+@dataclass(frozen=True)
+class _FallbackDoc:
+	text: str
 
 
 def _get_nlp() -> Any:
@@ -32,12 +38,12 @@ def _get_nlp() -> Any:
 def parse_text(text: str):
 	nlp = _get_nlp()
 	if nlp is None:
-		return None
+		return _FallbackDoc(text)
 	return nlp(text)
 
 
 def noun_chunks_with_offsets(doc) -> list[tuple[int, int, str]]:
-	if doc is None:
+	if doc is None or not hasattr(doc, "noun_chunks"):
 		return []
 	chunks: list[tuple[int, int, str]] = []
 	for chunk in doc.noun_chunks:

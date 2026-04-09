@@ -1,0 +1,121 @@
+{
+  "cases": [
+    {
+      "case_id": "happy_path_json",
+      "spec_file": "operator_engine_fixture_specs.json",
+      "rows": [
+        {
+          "submission_id": "sample-001",
+          "component_id": "SectionB1Response",
+          "response_text": "Institutional policy interacts with community expectations through iterative planning shaping implementation by clarifying decision pathways."
+        }
+      ],
+      "expected_results": [
+        {"submission_id": "sample-001", "component_id": "SectionB1Response", "operator_id": "S101", "segment_id": "DemandA", "segment_text": "Institutional policy", "extraction_status": "ok", "extraction_notes": "", "confidence": "high", "flags": "none"},
+        {"submission_id": "sample-001", "component_id": "SectionB1Response", "operator_id": "S102", "segment_id": "DemandB", "segment_text": "community expectations", "extraction_status": "ok", "extraction_notes": "", "confidence": "high", "flags": "none"},
+        {"submission_id": "sample-001", "component_id": "SectionB1Response", "operator_id": "S103", "segment_id": "Mechanism", "segment_text": "iterative planning", "extraction_status": "ok", "extraction_notes": "", "confidence": "high", "flags": "none"},
+        {"submission_id": "sample-001", "component_id": "SectionB1Response", "operator_id": "S104", "segment_id": "Workflow", "segment_text": "implementation", "extraction_status": "ok", "extraction_notes": "", "confidence": "high", "flags": "none"},
+        {"submission_id": "sample-001", "component_id": "SectionB1Response", "operator_id": "S105", "segment_id": "Effect", "segment_text": "clarifying decision pathways", "extraction_status": "ok", "extraction_notes": "", "confidence": "medium", "flags": "none"}
+      ],
+      "expected_diagnostics": []
+    },
+    {
+      "case_id": "happy_path_python",
+      "spec_file": "operator_engine_fixture_specs.py",
+      "rows": [
+        {
+          "submission_id": "sample-002",
+          "component_id": "SectionB1Response",
+          "response_text": "Institutional policy interacts with community expectations through iterative planning shaping implementation by clarifying decision pathways."
+        }
+      ],
+      "expected_results": [
+        {"submission_id": "sample-002", "component_id": "SectionB1Response", "operator_id": "S101", "segment_id": "DemandA", "segment_text": "Institutional policy", "extraction_status": "ok", "extraction_notes": "", "confidence": "high", "flags": "none"},
+        {"submission_id": "sample-002", "component_id": "SectionB1Response", "operator_id": "S102", "segment_id": "DemandB", "segment_text": "community expectations", "extraction_status": "ok", "extraction_notes": "", "confidence": "high", "flags": "none"},
+        {"submission_id": "sample-002", "component_id": "SectionB1Response", "operator_id": "S103", "segment_id": "Mechanism", "segment_text": "iterative planning", "extraction_status": "ok", "extraction_notes": "", "confidence": "high", "flags": "none"},
+        {"submission_id": "sample-002", "component_id": "SectionB1Response", "operator_id": "S104", "segment_id": "Workflow", "segment_text": "implementation", "extraction_status": "ok", "extraction_notes": "", "confidence": "high", "flags": "none"},
+        {"submission_id": "sample-002", "component_id": "SectionB1Response", "operator_id": "S105", "segment_id": "Effect", "segment_text": "clarifying decision pathways", "extraction_status": "ok", "extraction_notes": "", "confidence": "medium", "flags": "none"}
+      ],
+      "expected_diagnostics": []
+    },
+    {
+      "case_id": "missing_anchor_json",
+      "spec_file": "operator_engine_fixture_specs.json",
+      "rows": [
+        {
+          "submission_id": "sample-003",
+          "component_id": "SectionB1Response",
+          "response_text": "Institutional policy influences community expectations."
+        }
+      ],
+      "expected_results": [
+        {"submission_id": "sample-003", "component_id": "SectionB1Response", "operator_id": "S101", "segment_id": "DemandA", "segment_text": "", "extraction_status": "missing", "extraction_notes": "anchor not found", "confidence": "high", "flags": "needs_review"},
+        {"submission_id": "sample-003", "component_id": "SectionB1Response", "operator_id": "S102", "segment_id": "DemandB", "segment_text": "", "extraction_status": "missing", "extraction_notes": "anchor not found", "confidence": "high", "flags": "needs_review"},
+        {"submission_id": "sample-003", "component_id": "SectionB1Response", "operator_id": "S103", "segment_id": "Mechanism", "segment_text": "", "extraction_status": "missing", "extraction_notes": "anchor not found", "confidence": "high", "flags": "needs_review"},
+        {"submission_id": "sample-003", "component_id": "SectionB1Response", "operator_id": "S104", "segment_id": "Workflow", "segment_text": "", "extraction_status": "missing", "extraction_notes": "anchor not found", "confidence": "high", "flags": "needs_review"},
+        {"submission_id": "sample-003", "component_id": "SectionB1Response", "operator_id": "S105", "segment_id": "Effect", "segment_text": "", "extraction_status": "missing", "extraction_notes": "workflow/effect anchor sequence not found", "confidence": "high", "flags": "needs_review"}
+      ],
+      "expected_diagnostics": [
+        {"submission_id": "sample-003", "component_id": "SectionB1Response", "operator_id": "S101", "event_type": "missing", "message": "anchor not found"},
+        {"submission_id": "sample-003", "component_id": "SectionB1Response", "operator_id": "S102", "event_type": "missing", "message": "anchor not found"},
+        {"submission_id": "sample-003", "component_id": "SectionB1Response", "operator_id": "S103", "event_type": "missing", "message": "anchor not found"},
+        {"submission_id": "sample-003", "component_id": "SectionB1Response", "operator_id": "S104", "event_type": "missing", "message": "anchor not found"},
+        {"submission_id": "sample-003", "component_id": "SectionB1Response", "operator_id": "S105", "event_type": "missing", "message": "workflow/effect anchor sequence not found"}
+      ]
+    },
+    {
+      "case_id": "missing_object_phrase_json",
+      "spec_file": "operator_engine_fixture_specs.json",
+      "rows": [
+        {
+          "submission_id": "sample-004",
+          "component_id": "SectionB1Response",
+          "response_text": "Institutional policy interacts with through iterative planning shaping implementation by clarifying decision pathways."
+        }
+      ],
+      "expected_results": [
+        {"submission_id": "sample-004", "component_id": "SectionB1Response", "operator_id": "S101", "segment_id": "DemandA", "segment_text": "Institutional policy", "extraction_status": "ok", "extraction_notes": "", "confidence": "high", "flags": "none"},
+        {"submission_id": "sample-004", "component_id": "SectionB1Response", "operator_id": "S102", "segment_id": "DemandB", "segment_text": "", "extraction_status": "missing", "extraction_notes": "anchor found but no recoverable post-anchor noun phrase", "confidence": "high", "flags": "needs_review"},
+        {"submission_id": "sample-004", "component_id": "SectionB1Response", "operator_id": "S103", "segment_id": "Mechanism", "segment_text": "iterative planning", "extraction_status": "ok", "extraction_notes": "", "confidence": "high", "flags": "none"},
+        {"submission_id": "sample-004", "component_id": "SectionB1Response", "operator_id": "S104", "segment_id": "Workflow", "segment_text": "implementation", "extraction_status": "ok", "extraction_notes": "", "confidence": "high", "flags": "none"},
+        {"submission_id": "sample-004", "component_id": "SectionB1Response", "operator_id": "S105", "segment_id": "Effect", "segment_text": "clarifying decision pathways", "extraction_status": "ok", "extraction_notes": "", "confidence": "medium", "flags": "none"}
+      ],
+      "expected_diagnostics": [
+        {"submission_id": "sample-004", "component_id": "SectionB1Response", "operator_id": "S102", "event_type": "missing", "message": "anchor found but no recoverable post-anchor noun phrase"}
+      ]
+    },
+    {
+      "case_id": "ambiguous_mechanism_json",
+      "spec_file": "operator_engine_fixture_specs.json",
+      "rows": [
+        {
+          "submission_id": "sample-005",
+          "component_id": "SectionB1Response",
+          "response_text": "Institutional policy interacts with community expectations through a deliberately expansive and highly iterative planning apparatus with several nested procedural and administrative layers across multiple committees shaping implementation by clarifying decision pathways."
+        }
+      ],
+      "expected_results": [
+        {"submission_id": "sample-005", "component_id": "SectionB1Response", "operator_id": "S101", "segment_id": "DemandA", "segment_text": "Institutional policy", "extraction_status": "ok", "extraction_notes": "", "confidence": "high", "flags": "none"},
+        {"submission_id": "sample-005", "component_id": "SectionB1Response", "operator_id": "S102", "segment_id": "DemandB", "segment_text": "community expectations", "extraction_status": "ok", "extraction_notes": "", "confidence": "high", "flags": "none"},
+        {"submission_id": "sample-005", "component_id": "SectionB1Response", "operator_id": "S103", "segment_id": "Mechanism", "segment_text": "", "extraction_status": "ambiguous", "extraction_notes": "marker span boundary unclear", "confidence": "medium", "flags": "needs_review"},
+        {"submission_id": "sample-005", "component_id": "SectionB1Response", "operator_id": "S104", "segment_id": "Workflow", "segment_text": "implementation", "extraction_status": "ok", "extraction_notes": "", "confidence": "high", "flags": "none"},
+        {"submission_id": "sample-005", "component_id": "SectionB1Response", "operator_id": "S105", "segment_id": "Effect", "segment_text": "clarifying decision pathways", "extraction_status": "ok", "extraction_notes": "", "confidence": "medium", "flags": "none"}
+      ],
+      "expected_diagnostics": [
+        {"submission_id": "sample-005", "component_id": "SectionB1Response", "operator_id": "S103", "event_type": "ambiguous", "message": "marker span boundary unclear"}
+      ]
+    },
+    {
+      "case_id": "invalid_missing_response_text",
+      "spec_file": "operator_engine_fixture_specs.json",
+      "rows": [
+        {
+          "submission_id": "sample-006",
+          "component_id": "SectionB1Response",
+          "response_text": ""
+        }
+      ],
+      "expected_error": "Runtime row is missing response_text"
+    }
+  ]
+}
