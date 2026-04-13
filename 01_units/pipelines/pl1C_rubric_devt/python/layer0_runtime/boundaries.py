@@ -8,7 +8,8 @@ def find_anchor_occurrences(text: str, anchor_patterns: list[str]) -> list[tuple
 	for pattern in anchor_patterns:
 		if not pattern.strip():
 			continue
-		for match in re.finditer(re.escape(pattern), text, flags=re.IGNORECASE):
+		compiled = re.compile(rf"(?<!\w){re.escape(pattern)}(?!\w)", flags=re.IGNORECASE)
+		for match in compiled.finditer(text):
 			occurrences.append((match.start(), match.end(), pattern))
 	occurrences.sort(key=lambda item: (item[0], item[1], item[2].lower()))
 	return occurrences

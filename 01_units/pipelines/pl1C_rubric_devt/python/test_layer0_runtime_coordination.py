@@ -2,6 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from layer0_runtime.boundaries import find_anchor_occurrences
 from layer0_runtime.families import run_right_np_after_anchor_before_marker, run_span_after_marker_before_marker
 from layer0_runtime.models import OperatorSpec
 
@@ -110,6 +111,48 @@ class Layer0RuntimeCoordinationTests(unittest.TestCase):
 
 		self.assertEqual(result.extraction_status, "ok")
 		self.assertEqual(result.segment_text, "tutoring and mentoring")
+
+	@patch("layer0_runtime.families.parse_text")
+	def test_span_after_marker_stops_before_clause_comma(self, mock_parse_text) -> None:
+		text = "Institutions interact with communities through the AI generated condensed summary, directly shaping reviewer attention."
+		mock_parse_text.side_effect = self._fallback_doc
+		spec = make_spec(
+			operator_id="S103",
+			family="span_after_marker_before_marker",
+			anchor_patterns=["through"],
+			stop_markers=["shaping", "comma", "clause_boundary"],
+			allow_coordination=True,
+		)
+
+		result = run_span_after_marker_before_marker(text, spec)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "the AI generated condensed summary")
+
+	@patch("layer0_runtime.families.parse_text")
+	def test_span_after_marker_stops_before_infinitive_extension(self, mock_parse_text) -> None:
+		text = "Institutions interact with communities through the structured scoring rubric interface to influence reviewer assessment."
+		mock_parse_text.side_effect = self._fallback_doc
+		spec = make_spec(
+			operator_id="S103",
+			family="span_after_marker_before_marker",
+			anchor_patterns=["through"],
+			stop_markers=["shaping", "comma", "clause_boundary"],
+			allow_coordination=True,
+		)
+
+		result = run_span_after_marker_before_marker(text, spec)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "the structured scoring rubric interface")
+
+	def test_anchor_matching_does_not_fire_inside_throughput(self) -> None:
+		text = "Reporting obligations interact with throughput expectations through scoring rubric."
+
+		occurrences = find_anchor_occurrences(text, ["through"])
+
+		self.assertEqual(len(occurrences), 1)
+		self.assertEqual(text[occurrences[0][0]:occurrences[0][1]].lower(), "through")
 
 
 if __name__ == "__main__":

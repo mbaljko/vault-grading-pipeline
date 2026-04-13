@@ -10,6 +10,7 @@ _RIGHT_NP_BLOCKING_TOKENS = {
 	"and",
 	"or",
 	"but",
+	"to",
 	"through",
 	"shaping",
 	"by",
@@ -26,6 +27,8 @@ _RIGHT_NP_BLOCKING_TOKENS = {
 	"as",
 	"whereas",
 	"unless",
+	"directly",
+	"then",
 }
 
 try:
@@ -117,6 +120,9 @@ def _extend_compact_coordination(text: str, start: int, end: int, right_limit: i
 		conjunction_connector = re.match(r"\s+(?:and|or)\s+", remainder, flags=re.IGNORECASE)
 		connector = None
 		if comma_connector is not None and "," in comma_connector.group(0):
+			remainder_after_comma = remainder[comma_connector.end():]
+			if not re.search(r"(?:,\s*(?:and|or)\s+|\s+(?:and|or)\s+)", remainder_after_comma, flags=re.IGNORECASE):
+				break
 			connector = comma_connector
 		elif conjunction_connector is not None:
 			connector = conjunction_connector
