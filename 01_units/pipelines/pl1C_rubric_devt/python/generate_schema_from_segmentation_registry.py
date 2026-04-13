@@ -169,6 +169,31 @@ FAMILY_BEHAVIOR = {
 	},
 }
 
+ALLOW_COORDINATION_TEMPLATE_OVERRIDES = {
+	"B_claim_seg_01": False,
+	"B_claim_seg_02": True,
+	"B_claim_seg_03": True,
+	"B_claim_seg_04": True,
+	"B_claim_seg_05": True,
+}
+
+ALLOW_COORDINATION_TEXT_FIELDS = (
+	"operator_definition",
+	"operator_guidance",
+	"decision_procedure",
+)
+
+ALLOW_COORDINATION_SIGNAL_PHRASES = (
+	"coordination",
+	"compact coordination",
+	"x and y",
+	"comma-separated",
+	"extend the span",
+	"full coordinated phrase",
+	"include the full coordinated phrase",
+	"continues through compact coordination",
+)
+
 
 @dataclass(frozen=True)
 class OperatorSpec:
@@ -245,6 +270,42 @@ def parse_args() -> argparse.Namespace:
 		help="Include rows whose status is not 'active'.",
 	)
 	return parser.parse_args()
+
+
+def collect_coordination_text(row: dict[str, object]) -> str:
+	parts: list[str] = []
+	for field_name in ALLOW_COORDINATION_TEXT_FIELDS:
+		value = str(row.get(field_name, "")).strip().lower()
+		if value:
+			parts.append(value)
+	return "\n".join(parts)
+
+
+def detect_coordination_support(row: dict[str, object]) -> bool:
+	coordination_text = collect_coordination_text(row)
+	if not coordination_text:
+		return False
+	return any(signal_phrase in coordination_text for signal_phrase in ALLOW_COORDINATION_SIGNAL_PHRASES)
+
+
+def default_allow_coordination_for_family(family: str) -> bool:
+	default_by_family = {
+		"left_np_before_anchor": False,
+		"right_np_after_anchor_before_marker": False,
+		"span_after_marker_before_marker": False,
+		"local_effect_phrase_after_marker": True,
+		"status_only_anchor_detector": False,
+	}
+	return default_by_family.get(family, False)
+
+
+def derive_allow_coordination(row: dict[str, object], family: str) -> bool:
+	template_id = str(row.get("template_id", "")).strip()
+	if template_id in ALLOW_COORDINATION_TEMPLATE_OVERRIDES:
+		return ALLOW_COORDINATION_TEMPLATE_OVERRIDES[template_id]
+	if detect_coordination_support(row):
+		return True
+	return default_allow_coordination_for_family(family)
 
 
 def normalize_markdown_cell(value: str) -> str:
@@ -1259,6 +1320,7 @@ def compile_operator_spec(row: dict[str, object]) -> OperatorSpec:
 	behavior = FAMILY_BEHAVIOR.get(family)
 	if behavior is None:
 		raise ValueError(f"No runtime behavior defaults found for family {family!r}.")
+	allow_coordination = derive_allow_coordination(row, family)
 
 	output_mode = str(row["output_mode"]).strip().lower()
 	if family == "status_only_anchor_detector":
@@ -1287,7 +1349,7 @@ def compile_operator_spec(row: dict[str, object]) -> OperatorSpec:
 		end_rule=str(behavior["end_rule"]),
 		stop_markers=stop_markers,
 		target_type=target_type,
-		allow_coordination=bool(behavior["allow_coordination"]),
+		allow_coordination=allow_coordination,
 		skip_later_candidates=bool(behavior["skip_later_candidates"]),
 		operator_definition=str(row["operator_definition"]),
 		operator_guidance=str(row["operator_guidance"]),

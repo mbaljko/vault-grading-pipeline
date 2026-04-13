@@ -486,8 +486,10 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "fe3cb8bfbc96d736",
+  "active": "e5174a9fca7b05c1",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/test_allow_coordination_derivation.cpython-313.pyc",
+    "01_units/pipelines/pl1C_rubric_devt/python/test_allow_coordination_derivation.py",
     "01_units/pipelines/pl1C_rubric_devt/python/layer0_runtime/fixtures/__pycache__/operator_engine_fixture_specs.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/layer0_runtime/fixtures/__pycache__",
     "01_units/pipelines/pl1C_rubric_devt/python/run_layer0_operator_engine_regression.py",
@@ -497,8 +499,6 @@
     "01_units/pipelines/pl1C_rubric_devt/python/layer0_runtime/fixtures",
     "01_units/pipelines/pl1C_rubric_devt/python/layer0_runtime/__pycache__/writers.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/layer0_runtime/__pycache__/loader.cpython-313.pyc",
-    "01_units/pipelines/pl1C_rubric_devt/python/layer0_runtime/__pycache__/nlp_utils.cpython-313.pyc",
-    "01_units/pipelines/pl1C_rubric_devt/python/layer0_runtime/__pycache__/boundaries.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1C_scaffold_stage13_Layer0_Segmentation_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage00_Generate_Layer0_Segmentation_Prompt.md",
