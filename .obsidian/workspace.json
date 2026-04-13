@@ -488,6 +488,8 @@
   },
   "active": "e5174a9fca7b05c1",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/test_layer0_runtime_coordination.cpython-313.pyc",
+    "01_units/pipelines/pl1C_rubric_devt/python/test_layer0_runtime_coordination.py",
     "01_units/pipelines/pl1C_rubric_devt/python/test_ap2b_l0_anchor_and_regression.py",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/test_allow_coordination_derivation.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/test_allow_coordination_derivation.py",
@@ -497,8 +499,6 @@
     "01_units/pipelines/pl1C_rubric_devt/python/layer0_runtime/fixtures/operator_engine_regression_manifest.json",
     "01_units/pipelines/pl1C_rubric_devt/python/layer0_runtime/fixtures/operator_engine_fixture_specs.json",
     "01_units/pipelines/pl1C_rubric_devt/python/layer0_runtime/fixtures/operator_engine_fixture_specs.py",
-    "01_units/pipelines/pl1C_rubric_devt/python/layer0_runtime/fixtures",
-    "01_units/pipelines/pl1C_rubric_devt/python/layer0_runtime/__pycache__/writers.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1C_scaffold_stage13_Layer0_Segmentation_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage00_Generate_Layer0_Segmentation_Prompt.md",

@@ -53,6 +53,19 @@ def _first_anchor(text: str, spec: OperatorSpec) -> tuple[int, int, str] | None:
 	return occurrences[0]
 
 
+def _right_scan_stop_index(text: str, anchor_end: int, spec: OperatorSpec) -> int | None:
+	if not spec.allow_coordination:
+		return find_first_stop_marker(text, anchor_end, spec.stop_markers)
+	filtered_markers = [
+		marker
+		for marker in spec.stop_markers
+		if marker not in {"comma", "clause_boundary", "comma_new_clause"}
+	]
+	if not filtered_markers:
+		return None
+	return find_first_stop_marker(text, anchor_end, filtered_markers)
+
+
 def run_left_np_before_anchor(text: str, spec: OperatorSpec) -> FamilyExecution:
 	anchor = _first_anchor(text, spec)
 	if anchor is None:
@@ -83,9 +96,9 @@ def run_right_np_after_anchor_before_marker(text: str, spec: OperatorSpec) -> Fa
 	if anchor is None:
 		return _missing_result("anchor not found")
 	_, anchor_end, _ = anchor
-	stop_index = find_first_stop_marker(text, anchor_end, spec.stop_markers)
+	stop_index = _right_scan_stop_index(text, anchor_end, spec)
 	doc = parse_text(text)
-	chunk = first_right_noun_chunk(doc, anchor_end, stop_index)
+	chunk = first_right_noun_chunk(doc, anchor_end, stop_index, allow_coordination=spec.allow_coordination)
 	if chunk is not None:
 		chunk_start, chunk_end, chunk_text = chunk
 		segment_text = trim_span(text[chunk_start:chunk_end])
@@ -105,9 +118,16 @@ def run_span_after_marker_before_marker(text: str, spec: OperatorSpec) -> Family
 	if anchor is None:
 		return _missing_result("anchor not found")
 	_, anchor_end, _ = anchor
-	stop_index = find_first_stop_marker(text, anchor_end, spec.stop_markers)
-	span_end = stop_index if stop_index is not None else len(text)
-	segment_text = trim_span(text[anchor_end:span_end])
+	stop_index = _right_scan_stop_index(text, anchor_end, spec)
+	doc = parse_text(text)
+	chunk = first_right_noun_chunk(doc, anchor_end, stop_index, allow_coordination=spec.allow_coordination)
+	segment_text = ""
+	if chunk is not None:
+		chunk_start, chunk_end, chunk_text = chunk
+		segment_text = trim_span(text[chunk_start:chunk_end])
+	if not segment_text:
+		span_end = stop_index if stop_index is not None else len(text)
+		segment_text = trim_span(text[anchor_end:span_end])
 	if not segment_text:
 		return _missing_result("anchor found but no recoverable span after marker")
 	if len(segment_text.split()) > 14:
