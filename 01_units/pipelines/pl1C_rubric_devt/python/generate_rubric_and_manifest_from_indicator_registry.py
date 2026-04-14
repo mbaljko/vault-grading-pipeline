@@ -74,6 +74,16 @@ LAYER1_BASE_TABLE_REQUIRED_COLUMNS = {
     "assessment_guidance",
     "evaluation_notes",
 }
+LAYER1_MACHINE_NORMALIZED_BASE_REQUIRED_COLUMNS = {
+    "template_id",
+    "local_slot",
+    "scoring_mode",
+    "dependency_type",
+    "required_layer0_records",
+    "bound_segment_id",
+    "match_policy",
+    "decision_rule",
+}
 LAYER2_REQUIRED_REGISTRY_COLUMNS = {
     "dimension_id",
     *COMMON_EXPLICIT_REQUIRED_COLUMNS,
@@ -440,9 +450,9 @@ def collect_markdown_sections(registry_path: Path) -> list[dict[str, object]]:
 
 
 def find_table_by_heading(tables: list[dict[str, object]], heading_text: str) -> dict[str, object] | None:
-    normalized_heading = heading_text.strip().lower()
+    normalized_heading = normalize_heading_text(heading_text)
     for table in tables:
-        if str(table["heading"]).strip().lower() == normalized_heading:
+        if headings_match(str(table["heading"]), normalized_heading):
             return table
     return None
 
@@ -452,12 +462,12 @@ def find_tables_by_heading(
     heading_text: str,
     include_descendants: bool = False,
 ) -> list[dict[str, object]]:
-    normalized_heading = heading_text.strip().lower()
+    normalized_heading = normalize_heading_text(heading_text)
     matches: list[dict[str, object]] = []
     for table in tables:
-        heading = str(table.get("heading", "")).strip().lower()
-        heading_path = [str(item).strip().lower() for item in table.get("heading_path", [])]
-        if heading == normalized_heading:
+        heading = normalize_heading_text(str(table.get("heading", "")))
+        heading_path = [normalize_heading_text(str(item)) for item in table.get("heading_path", [])]
+        if heading == normalized_heading or heading.startswith(f"{normalized_heading} "):
             matches.append(table)
             continue
         if include_descendants and normalized_heading in heading_path:
@@ -466,11 +476,23 @@ def find_tables_by_heading(
 
 
 def find_section_by_title(sections: list[dict[str, object]], section_title: str) -> dict[str, object] | None:
-    normalized_title = section_title.strip().lower()
+    normalized_title = normalize_heading_text(section_title)
     for section in sections:
-        if str(section.get("title", "")).strip().lower() == normalized_title:
+        if headings_match(str(section.get("title", "")), normalized_title):
             return section
     return None
+
+
+def normalize_heading_text(value: str) -> str:
+    normalized = re.sub(r"\s*\([^)]*\)\s*", " ", value.strip().lower())
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized.strip()
+
+
+def headings_match(candidate: str, expected: str) -> bool:
+    normalized_candidate = normalize_heading_text(candidate)
+    normalized_expected = normalize_heading_text(expected)
+    return normalized_candidate == normalized_expected or normalized_candidate.startswith(f"{normalized_expected} ")
 
 
 def extract_section_text(section: dict[str, object] | None) -> str:
@@ -705,6 +727,141 @@ def collect_field_value_records(
     return rows
 
 
+def collect_component_patterns_from_reuse_rows(reuse_rows: list[dict[str, str]]) -> list[str]:
+    patterns: list[str] = []
+    seen: set[str] = set()
+    for reuse_row in reuse_rows:
+        raw_pattern = reuse_row.get("applies_to_component_pattern", "").strip()
+        if raw_pattern:
+            pattern = raw_pattern
+        else:
+            layer0_pattern = reuse_row.get("applies_to_layer0_record_pattern", "").strip()
+            match = re.search(r"source_component_id\s*=\s*([^\s].*?)$", layer0_pattern)
+            if match is None:
+                continue
+            pattern = match.group(1).strip()
+        if pattern and pattern not in seen:
+            seen.add(pattern)
+            patterns.append(pattern)
+    return patterns
+
+
+def derive_component_block(component_id: str) -> str:
+    match = re.search(r"Section([A-Za-z]+)(\d+)Response", component_id)
+    if match is not None:
+        return match.group(2)
+    compact = component_id.strip().replace("Section", "").replace("Response", "")
+    return compact or component_id.strip()
+
+
+def build_machine_normalized_indicator_definition(record: dict[str, str]) -> str:
+    parts: list[str] = []
+    bound_segment_id = record.get("bound_segment_id", "").strip()
+    required_layer0_records = record.get("required_layer0_records", "").strip()
+    dependency_type = record.get("dependency_type", "").strip()
+    match_policy = record.get("match_policy", "").strip()
+    if bound_segment_id:
+        parts.append(f"Evaluate Layer 0 extracted evidence bound to segment {bound_segment_id}.")
+    if required_layer0_records:
+        parts.append(f"Required Layer 0 records: {required_layer0_records}.")
+    if dependency_type:
+        parts.append(f"Dependency type: {dependency_type}.")
+    if match_policy:
+        parts.append(f"Match policy: {match_policy}.")
+    for field_name in ["allowed_terms", "allowed_aliases", "allowed_roles", "required_term_groups", "minimum_match_count_per_group"]:
+        field_value = record.get(field_name, "").strip()
+        if field_value:
+            parts.append(f"{field_name}: {field_value}.")
+    return " ".join(parts).strip()
+
+
+def build_machine_normalized_indicator_guidance(record: dict[str, str]) -> str:
+    parts: list[str] = []
+    scoring_mode = record.get("scoring_mode", "").strip()
+    normalisation_rule = record.get("normalisation_rule", "").strip()
+    excluded_terms = record.get("excluded_terms", "").strip()
+    if scoring_mode:
+        parts.append(f"Execute in scoring_mode={scoring_mode}.")
+    if normalisation_rule:
+        parts.append(f"Apply normalisation_rule={normalisation_rule} before matching.")
+    if excluded_terms:
+        parts.append(f"Excluded terms: {excluded_terms}.")
+    parts.append("Consume only Layer 0-derived evidence; do not reconstruct omitted source text.")
+    return " ".join(parts).strip()
+
+
+def build_machine_normalized_decision_procedure(record: dict[str, str]) -> str:
+    parts: list[str] = []
+    decision_rule = record.get("decision_rule", "").strip()
+    match_policy = record.get("match_policy", "").strip()
+    if decision_rule:
+        parts.append(f"Apply decision_rule={decision_rule}.")
+    if match_policy:
+        parts.append(f"Use match_policy={match_policy}.")
+    return " ".join(parts).strip()
+
+
+def build_registry_rows_from_machine_normalized_layer1_tables(
+    base_rows: list[dict[str, str]],
+    reuse_rows: list[dict[str, str]],
+    registry_metadata: dict[str, str],
+    include_inactive: bool,
+    layer_config: RegistryLayerConfig,
+) -> list[RegistryRow]:
+    assessment_id = registry_metadata.get("assessment_id", "").strip()
+    component_patterns = collect_component_patterns_from_reuse_rows(reuse_rows)
+    if not component_patterns:
+        raise ValueError(
+            "Machine-normalised Layer 1 registry must declare component patterns in applies_to_component_pattern or applies_to_layer0_record_pattern."
+        )
+
+    rows: list[RegistryRow] = []
+    for component_pattern in component_patterns:
+        for component_id, _ in expand_component_pattern(component_pattern):
+            component_block = derive_component_block(component_id)
+            for base_row in base_rows:
+                effective_status = base_row.get("status", "").strip()
+                if not include_inactive and effective_status and effective_status.lower() != "active":
+                    continue
+
+                local_slot = base_row.get("local_slot", "").strip()
+                item_id = local_slot
+                sbo_identifier = f"I_{assessment_id}_B{component_block}_CX_{local_slot}" if assessment_id else f"I_B{component_block}_CX_{local_slot}"
+                merged_record = dict(base_row)
+                merged_record.update(
+                    {
+                        "assessment_id": assessment_id,
+                        "component_id": component_id,
+                        "indicator_id": item_id,
+                        "sbo_identifier": sbo_identifier,
+                        "sbo_identifier_shortid": item_id,
+                        "sbo_short_description": f"Indicator {item_id} over {base_row.get('bound_segment_id', '').strip() or 'Layer 0 evidence'}",
+                        "indicator_definition": build_machine_normalized_indicator_definition(base_row),
+                        "assessment_guidance": build_machine_normalized_indicator_guidance(base_row),
+                        "evaluation_notes": "Follow the machine-normalised registry fields exactly; do not infer undeclared semantics.",
+                        "decision_procedure": build_machine_normalized_decision_procedure(base_row),
+                        "status": effective_status,
+                    }
+                )
+                rows.append(
+                    RegistryRow(
+                        item_id=item_id,
+                        assessment_id=assessment_id,
+                        component_id=component_id,
+                        segment_id="",
+                        sbo_identifier=resolve_sbo_identifier(merged_record),
+                        sbo_identifier_shortid=resolve_sbo_identifier_shortid(merged_record),
+                        sbo_short_description=resolve_short_description(merged_record, layer_config),
+                        definition_text=resolve_definition_text(merged_record, layer_config),
+                        guidance_text=resolve_guidance_text(merged_record, layer_config),
+                        evaluation_notes=resolve_evaluation_notes(merged_record, layer_config),
+                        decision_procedure=resolve_decision_procedure(merged_record),
+                        status=effective_status,
+                    )
+                )
+    return rows
+
+
 def validate_required_columns(
     table_name: str,
     rows: list[dict[str, str]],
@@ -720,6 +877,12 @@ def validate_required_columns(
                 or str(row_index)
             )
             raise ValueError(f"{table_name} row {row_label!r} is missing required column(s): {missing_columns}")
+
+
+def rows_satisfy_required_columns(rows: list[dict[str, str]], required_columns: set[str]) -> bool:
+    if not rows:
+        return False
+    return all(required_columns.issubset(set(row)) for row in rows)
 
 
 def resolve_definition_text(record: dict[str, str], layer_config: RegistryLayerConfig) -> str:
@@ -1634,6 +1797,7 @@ def load_registry_rows(
         if layer_config.name == "layer0"
         else LAYER1_BASE_TABLE_REQUIRED_COLUMNS
     )
+    machine_normalized_layer1_base_rows: list[dict[str, str]] = []
     layer2_base_rows = collect_section_rows(
         tables,
         "dimension base table",
@@ -1651,6 +1815,20 @@ def load_registry_rows(
             tables,
             required_columns=layer_base_required_columns,
         )
+    if layer_config.name == "layer1":
+        machine_normalized_layer1_base_rows = collect_section_rows(
+            tables,
+            "base table",
+            required_columns=LAYER1_MACHINE_NORMALIZED_BASE_REQUIRED_COLUMNS,
+            allow_field_value_records=True,
+        )
+        if not machine_normalized_layer1_base_rows:
+            machine_normalized_layer1_base_rows = collect_field_value_records(
+                tables,
+                required_columns=LAYER1_MACHINE_NORMALIZED_BASE_REQUIRED_COLUMNS,
+            )
+        if base_rows and not rows_satisfy_required_columns(base_rows, layer_base_required_columns):
+            base_rows = []
     reuse_table = find_table_by_heading(tables, "reuse rule table")
     component_block_rule_table = find_table_by_heading(tables, "component block rule table")
 
@@ -1725,6 +1903,19 @@ def load_registry_rows(
                 layer_config=layer_config,
                 enrichment_lookup=enrichment_lookup,
             )
+    elif layer_config.name == "layer1" and machine_normalized_layer1_base_rows and reuse_table is not None:
+        validate_required_columns(
+            "Machine-normalised Layer 1 base table",
+            machine_normalized_layer1_base_rows,
+            LAYER1_MACHINE_NORMALIZED_BASE_REQUIRED_COLUMNS,
+        )
+        rows = build_registry_rows_from_machine_normalized_layer1_tables(
+            base_rows=machine_normalized_layer1_base_rows,
+            reuse_rows=list(reuse_table["rows"]),
+            registry_metadata=registry_metadata,
+            include_inactive=include_inactive,
+            layer_config=layer_config,
+        )
     else:
         raise ValueError(
             f"Could not locate a usable {layer_config.item_label.lower()} source in the registry. Expected either a flat {layer_config.item_label.lower()} table "
