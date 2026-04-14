@@ -49,6 +49,7 @@ LAYER1_SCAFFOLD_REQUIRED_TOKENS = [
 	"[[TARGET_COMPONENT_ID]]",
 	"[[TARGET_INDICATOR_ID]]",
 	"[[SUBMISSION_IDENTIFIER_FIELD]]",
+	"[[EVIDENCE_FIELD_NAME]]",
 	"[[WRAPPER_HANDLING_RULE_BULLETS]]",
 	"[[INDICATOR_ID]]",
 	"[[SBO_SHORT_DESCRIPTION]]",
@@ -136,17 +137,17 @@ def extract_single_fenced_value(text: str, label: str) -> str:
 
 
 def validate_assignment_payload_block(assignment_payload_block: str) -> None:
-	if "AssignmentPayloadSpec" not in assignment_payload_block:
-		raise ValueError("Assignment payload block does not look like an AssignmentPayloadSpec artefact.")
+	if "AssignmentPayloadSpec" not in assignment_payload_block and "Layer1InputContract" not in assignment_payload_block:
+		raise ValueError(
+			"Assignment payload block does not look like an AssignmentPayloadSpec or Layer1InputContract artefact."
+		)
 	assessment_id = extract_single_fenced_value(assignment_payload_block, "assessment_id") if "assessment_id\n```" in assignment_payload_block else None
 	if assessment_id is None:
 		if "assessment_id" not in assignment_payload_block:
 			raise ValueError("Assignment payload block is missing assessment_id.")
 	_ = extract_single_fenced_value(assignment_payload_block, "canonical_submission_level_identifier_field")
 	response_field_name = extract_single_fenced_value(assignment_payload_block, "response_field_name")
-	if response_field_name != "response_text":
-		raise ValueError("Assignment payload block must declare response_field_name as response_text.")
-	for required_token in ["component_id", "response_text"]:
+	for required_token in ["component_id", response_field_name]:
 		if required_token not in assignment_payload_block:
 			raise ValueError(f"Assignment payload block is missing required token: {required_token}")
 
@@ -157,19 +158,26 @@ def parse_assignment_payload_metadata(assignment_payload_block: str) -> dict[str
 		assignment_payload_block,
 		"canonical_submission_level_identifier_field",
 	)
-	wrapper_handling_rule_bullets = extract_wrapper_handling_rule_bullets(assignment_payload_block)
+	response_field_name = extract_single_fenced_value(assignment_payload_block, "response_field_name")
+	wrapper_handling_rule_bullets = extract_wrapper_handling_rule_bullets(
+		assignment_payload_block,
+		response_field_name,
+	)
 	return {
 		"assessment_id": assessment_id,
 		"submission_identifier_field": submission_identifier_field,
+		"evidence_field_name": response_field_name,
 		"wrapper_handling_rule_bullets": wrapper_handling_rule_bullets,
 	}
 
 
-def extract_wrapper_handling_rule_bullets(assignment_payload_block: str) -> str:
-	heading = "### Wrapper Handling Rules for response_text"
+def extract_wrapper_handling_rule_bullets(assignment_payload_block: str, response_field_name: str) -> str:
+	heading = f"### Wrapper Handling Rules for {response_field_name}"
 	start_index = assignment_payload_block.find(heading)
 	if start_index == -1:
-		raise ValueError("Assignment payload block is missing the wrapper handling rules section.")
+		raise ValueError(
+			f"Assignment payload block is missing the wrapper handling rules section for {response_field_name}."
+		)
 	section_lines = assignment_payload_block[start_index:].splitlines()[1:]
 	bullet_lines: list[str] = []
 	for line in section_lines:
@@ -315,6 +323,7 @@ def build_token_values(
 		"[[TARGET_COMPONENT_ID]]": target_component_id,
 		"[[TARGET_INDICATOR_ID]]": row["indicator_id"],
 		"[[SUBMISSION_IDENTIFIER_FIELD]]": assignment_payload_metadata["submission_identifier_field"],
+		"[[EVIDENCE_FIELD_NAME]]": assignment_payload_metadata["evidence_field_name"],
 		"[[WRAPPER_HANDLING_RULE_BULLETS]]": assignment_payload_metadata["wrapper_handling_rule_bullets"],
 		"[[INDICATOR_ID]]": row["indicator_id"],
 		"[[SBO_SHORT_DESCRIPTION]]": row["sbo_short_description"],

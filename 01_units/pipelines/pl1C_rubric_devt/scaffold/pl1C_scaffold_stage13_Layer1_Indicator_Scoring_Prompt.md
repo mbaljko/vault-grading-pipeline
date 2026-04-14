@@ -9,6 +9,7 @@ required_tokens:
   - TARGET_COMPONENT_ID
   - TARGET_INDICATOR_ID
   - SUBMISSION_IDENTIFIER_FIELD
+  - EVIDENCE_FIELD_NAME
   - WRAPPER_HANDLING_RULE_BULLETS
   - INDICATOR_ID
   - SBO_SHORT_DESCRIPTION
@@ -31,6 +32,8 @@ notes: |
 [[TARGET_INDICATOR_ID]]
 
 [[SUBMISSION_IDENTIFIER_FIELD]]
+
+[[EVIDENCE_FIELD_NAME]]
 
 [[WRAPPER_HANDLING_RULE_BULLETS]]
 
@@ -103,13 +106,19 @@ Runtime row identifier rule:
 - The canonical submission-level identifier field is `[[SUBMISSION_IDENTIFIER_FIELD]]`.
 - In output, copy the runtime row value from `[[SUBMISSION_IDENTIFIER_FIELD]]` into the CSV field named `submission_id`.
 
+Canonical evidence field:
+
+```text
+[[EVIDENCE_FIELD_NAME]]
+```
+
 Evidence rule:
 
 ```text
 explicit textual evidence only
 ```
 
-Wrapper-handling rule for response text:
+Wrapper-handling rule for the canonical evidence field:
 
 [[WRAPPER_HANDLING_RULE_BULLETS]]
 
@@ -138,7 +147,7 @@ Field rules:
 Use only:
 
 - the runtime dataset rows
-- canonical `response_text`
+- canonical `[[EVIDENCE_FIELD_NAME]]`
 - the embedded indicator definition
 - the embedded assessment guidance
 - the embedded evaluator guidance derived from the manifest `evaluation_notes` field
@@ -182,9 +191,9 @@ Each runtime row must contain:
 
 - a submission identifier field
 - `component_id`
-- the response text field `response_text`
+- the canonical evidence field `[[EVIDENCE_FIELD_NAME]]`
 
-For all later instructions in this prompt, the selected field must be treated as the canonical `response_text` for that runtime row.
+For all later instructions in this prompt, the selected field must be treated as the canonical evidence field for that runtime row.
 
 Wrapper handling is applied per runtime row.
 
@@ -207,7 +216,7 @@ A valid runtime row is a row whose:
 
 - submission identifier field is present
 - `component_id` is present
-- the response text field `response_text` is present
+- the canonical evidence field `[[EVIDENCE_FIELD_NAME]]` is present
 - `component_id` equals `[[TARGET_COMPONENT_ID]]`
 
 Do not stop after the first valid runtime row.  
@@ -219,10 +228,10 @@ Layer 1 SBO scoring must follow this exact sequence:
 
 1. Construct a single internal representation of the runtime input dataset.
 2. Identify the valid runtime rows whose `component_id = [[TARGET_COMPONENT_ID]]`.
-3. For each valid runtime row, treat the field `response_text` as the row’s canonical response text.
+3. For each valid runtime row, treat the field `[[EVIDENCE_FIELD_NAME]]` as the row’s canonical evidence text.
 4. Apply wrapper-handling rules to each valid runtime row before evaluation.
 5. For each valid runtime row:
-   - construct a single internal representation of that row’s canonical `response_text`
+  - construct a single internal representation of that row’s canonical evidence text
    - identify candidate supporting fragments for the embedded indicator without inferring unstated meaning
    - if an embedded decision procedure is present, apply it exactly as written
    - evaluate the indicator against the explicit threshold stated in the embedded indicator specification
