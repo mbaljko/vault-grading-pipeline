@@ -40,6 +40,9 @@ COMPONENT_BLOCK_RULE_REQUIRED_COLUMNS = {
 	"component_id",
 	"component_block",
 }
+COMPONENT_BLOCK_RULE_COMPATIBILITY_ALIASES = {
+	"source_component_id": "component_id",
+}
 OPERATOR_REQUIRED_FIELDS = {
 	"template_id",
 	"local_slot",
@@ -545,6 +548,35 @@ def validate_table_headers(table_name: str, table: dict[str, object] | None, req
 		raise ValueError(f"Table {table_name!r} is missing required columns: {missing}")
 
 
+def normalize_component_block_rules_table(table: dict[str, object] | None) -> dict[str, object] | None:
+	if table is None:
+		return None
+	headers = [str(header).strip().lower() for header in table.get("headers", [])]
+	if "component_id" in headers:
+		return table
+	if "source_component_id" not in headers:
+		return table
+
+	normalized_headers = [
+		COMPONENT_BLOCK_RULE_COMPATIBILITY_ALIASES.get(header, header)
+		for header in headers
+	]
+	normalized_rows: list[dict[str, str]] = []
+	for raw_row in table.get("rows", []):
+		normalized_row: dict[str, str] = {}
+		for key, value in raw_row.items():
+			normalized_key = COMPONENT_BLOCK_RULE_COMPATIBILITY_ALIASES.get(str(key).strip().lower(), str(key).strip().lower())
+			normalized_row[normalized_key] = str(value).strip()
+		normalized_rows.append(normalized_row)
+
+	return {
+		"heading": table.get("heading", ""),
+		"heading_path": list(table.get("heading_path", [])),
+		"headers": normalized_headers,
+		"rows": normalized_rows,
+	}
+
+
 def validate_record_fields(record_name: str, record: dict[str, str], required_fields: set[str]) -> None:
 	missing = sorted(field for field in required_fields if not record.get(field, "").strip())
 	if missing:
@@ -963,6 +995,8 @@ def build_identifier_rule_lookup(registry: dict[str, object]) -> dict[str, str]:
 		if not field_name or not rule_text:
 			raise ValueError(f"Malformed identifier construction row: {row!r}")
 		lookup[field_name] = rule_text
+	if "cid derivation rule" not in lookup and "legacy cid derivation note" in lookup:
+		lookup["cid derivation rule"] = lookup["legacy cid derivation note"]
 	return lookup
 
 
@@ -1035,11 +1069,21 @@ def build_operator_id(component_block: str, local_slot: str, fmt: str) -> str:
 	return operator_id.strip()
 
 
-def build_operator_identifier(assessment_id: str, cid: str, operator_id: str, rule_text: str) -> str:
+def build_operator_identifier(
+	assessment_id: str,
+	cid: str,
+	operator_id: str,
+	rule_text: str,
+	*,
+	component_block: str = "",
+	claim_index: str = "X",
+) -> str:
 	try:
 		operator_identifier = rule_text.format(
 			assessment_id=assessment_id,
 			cid=cid,
+			component_block=component_block,
+			claim_index=claim_index,
 			operator_id=operator_id,
 		)
 	except KeyError as exc:
@@ -1161,6 +1205,8 @@ def expand_registry_instances(registry: dict[str, object]) -> dict[str, object]:
 				cid=cid,
 				operator_id=operator_id,
 				rule_text=identifier_rules["operator_identifier"],
+				component_block=component_block,
+				claim_index="X",
 			)
 			operator_identifier_shortid = build_operator_identifier_shortid(
 				operator_id=operator_id,
@@ -1459,6 +1505,7 @@ def build_raw_schema_payload(registry_path: Path, include_inactive: bool, regist
 	identifier_rules_table = find_first_table_by_heading(tables, "identifier construction rules")
 	reuse_rules_table = find_first_table_by_heading(tables, "reuse rule table")
 	component_block_rules_table = find_first_table_by_heading(tables, "component block rule table")
+	component_block_rules_table = normalize_component_block_rules_table(component_block_rules_table)
 
 	if registry_metadata_table is None or not is_field_value_table(registry_metadata_table):
 		raise ValueError("registry metadata must be present as a field/value table")
