@@ -7,6 +7,7 @@ import argparse
 import csv
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -132,6 +133,24 @@ def build_evidence_text(segment_items: list[tuple[str, str]]) -> str:
 	return "\n\n".join(parts)
 
 
+def format_timestamp(timestamp_seconds: float) -> str:
+	return datetime.fromtimestamp(timestamp_seconds, tz=timezone.utc).isoformat(timespec="seconds")
+
+
+def render_derived_file_header(source_paths: list[Path]) -> str:
+	source_descriptors = []
+	for source_path in source_paths:
+		source_stat = source_path.stat()
+		source_descriptors.append(
+			f"{source_path} (SOURCE_TIMESTAMP_UTC: {format_timestamp(source_stat.st_mtime)})"
+		)
+	generated_timestamp = format_timestamp(datetime.now(tz=timezone.utc).timestamp())
+	return (
+		"<!-- DO NOT EDIT DIRECTLY. THIS IS A DERIVED FILE. "
+		f"SOURCES: {' ; '.join(source_descriptors)} | GENERATED_AT_UTC: {generated_timestamp} -->"
+	)
+
+
 def write_component_payload(
 	output_path: Path,
 	identifier_field: str,
@@ -156,13 +175,14 @@ def write_component_payload(
 
 
 def render_contract_markdown(
+	title_stem: str,
 	assessment_id: str,
 	identifier_field: str,
 	component_ids: list[str],
 	segment_columns_by_component: dict[str, list[str]],
 ) -> str:
 	lines = [
-		f"## {assessment_id}_Layer1InputContract_v01",
+		f"## {title_stem}",
 		"### Purpose",
 		"This document defines the Layer 1 input contract derived from deterministic Layer 0 stitched outputs.",
 		"",
@@ -318,14 +338,25 @@ def main() -> int:
 			row_count = write_component_payload(output_path, identifier_field, component_segment_columns, component_rows)
 			print(f"Wrote {row_count} rows to {output_path}")
 
+		output_contract_path = args.output_contract_file.resolve()
 		contract_text = render_contract_markdown(
+			output_contract_path.stem,
 			assessment_id,
 			identifier_field,
 			component_ids,
 			segment_columns_by_component,
 		)
-		output_contract_path = args.output_contract_file.resolve()
 		output_contract_path.parent.mkdir(parents=True, exist_ok=True)
+		contract_text = (
+			render_derived_file_header(
+				[
+					args.assignment_payload_file.resolve(),
+					args.layer1_manifest_file.resolve(),
+				]
+			)
+			+ "\n\n"
+			+ contract_text
+		)
 		output_contract_path.write_text(contract_text + "\n", encoding="utf-8")
 		print(f"Wrote contract to {output_contract_path}")
 	except (FileNotFoundError, ValueError, KeyError) as exc:
