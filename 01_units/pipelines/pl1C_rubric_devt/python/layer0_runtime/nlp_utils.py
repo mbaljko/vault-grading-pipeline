@@ -10,7 +10,6 @@ _RIGHT_NP_BLOCKING_TOKENS = {
 	"and",
 	"or",
 	"but",
-	"to",
 	"through",
 	"shaping",
 	"by",
@@ -29,6 +28,27 @@ _RIGHT_NP_BLOCKING_TOKENS = {
 	"unless",
 	"directly",
 	"then",
+}
+
+_LIKELY_VERB_TOKENS = {
+	"advance",
+	"align",
+	"allocate",
+	"categorize",
+	"categorise",
+	"determine",
+	"formalise",
+	"formalize",
+	"guide",
+	"heighten",
+	"impose",
+	"influence",
+	"organise",
+	"organize",
+	"record",
+	"sequence",
+	"shape",
+	"structure",
 }
 
 try:
@@ -112,6 +132,15 @@ def _leading_nounish_span(text: str) -> tuple[int, int, str] | None:
 	return (start, end, candidate)
 
 
+def _find_infinitive_boundary(text: str, start: int, right_limit: int) -> int | None:
+	search_text = text[start:right_limit]
+	for match in re.finditer(r"\bto\s+([A-Za-z][A-Za-z\-']*)\b", search_text, flags=re.IGNORECASE):
+		verb_token = match.group(1).lower()
+		if verb_token in _LIKELY_VERB_TOKENS:
+			return start + match.start()
+	return None
+
+
 def _extend_compact_coordination(text: str, start: int, end: int, right_limit: int) -> tuple[int, int, str]:
 	current_end = end
 	while current_end < right_limit:
@@ -120,10 +149,13 @@ def _extend_compact_coordination(text: str, start: int, end: int, right_limit: i
 		conjunction_connector = re.match(r"\s+(?:and|or)\s+", remainder, flags=re.IGNORECASE)
 		connector = None
 		if comma_connector is not None and "," in comma_connector.group(0):
-			remainder_after_comma = remainder[comma_connector.end():]
-			if not re.search(r"(?:,\s*(?:and|or)\s+|\s+(?:and|or)\s+)", remainder_after_comma, flags=re.IGNORECASE):
-				break
-			connector = comma_connector
+			if re.search(r"(?:and|or)", comma_connector.group(0), flags=re.IGNORECASE):
+				connector = comma_connector
+			else:
+				remainder_after_comma = remainder[comma_connector.end():]
+				if not re.search(r"(?:,\s*(?:and|or)\s+|\s+(?:and|or)\s+)", remainder_after_comma, flags=re.IGNORECASE):
+					break
+				connector = comma_connector
 		elif conjunction_connector is not None:
 			connector = conjunction_connector
 		if connector is None:
@@ -160,22 +192,26 @@ def first_right_noun_chunk(
 	stop_index: int | None,
 	*,
 	allow_coordination: bool = False,
+	stop_on_infinitive: bool = False,
 ) -> tuple[int, int, str] | None:
 	chunks = noun_chunks_with_offsets(doc) if doc is not None else []
+	right_limit = stop_index if stop_index is not None else len(doc.text)
+	if stop_on_infinitive:
+		infinitive_boundary = _find_infinitive_boundary(doc.text, anchor_end, right_limit)
+		if infinitive_boundary is not None:
+			right_limit = infinitive_boundary
 	eligible = [
 		chunk
 		for chunk in chunks
-		if chunk[0] >= anchor_end and (stop_index is None or chunk[1] <= stop_index)
+		if chunk[0] >= anchor_end and chunk[1] <= right_limit
 	]
 	if eligible:
 		chunk_start, chunk_end, chunk_text = min(eligible, key=lambda chunk: (chunk[0], chunk[1]))
 		if allow_coordination:
-			right_limit = stop_index if stop_index is not None else len(doc.text)
 			chunk_start, chunk_end, chunk_text = _extend_compact_coordination(doc.text, chunk_start, chunk_end, right_limit)
 		return (chunk_start, chunk_end, chunk_text)
 	if doc is None:
 		return None
-	right_limit = stop_index if stop_index is not None else len(doc.text)
 	fallback_span = _leading_nounish_span(doc.text[anchor_end:right_limit])
 	if fallback_span is None:
 		return None

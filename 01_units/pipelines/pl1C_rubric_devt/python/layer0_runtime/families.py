@@ -120,7 +120,13 @@ def run_span_after_marker_before_marker(text: str, spec: OperatorSpec) -> Family
 	_, anchor_end, _ = anchor
 	stop_index = _right_scan_stop_index(text, anchor_end, spec)
 	doc = parse_text(text)
-	chunk = first_right_noun_chunk(doc, anchor_end, stop_index, allow_coordination=spec.allow_coordination)
+	chunk = first_right_noun_chunk(
+		doc,
+		anchor_end,
+		stop_index,
+		allow_coordination=spec.allow_coordination,
+		stop_on_infinitive=True,
+	)
 	segment_text = ""
 	if chunk is not None:
 		chunk_start, chunk_end, chunk_text = chunk
