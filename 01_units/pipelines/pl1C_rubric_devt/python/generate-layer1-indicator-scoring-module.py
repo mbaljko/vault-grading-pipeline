@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -122,9 +123,17 @@ def resolve_output_path(output_dir: Path, output_file_stem: str, output_format: 
 	return output_dir / f"{output_file_stem}_{indicator_id}.{output_format.lstrip('.')}"
 
 
+def derive_version_family_prefix(output_file_stem: str) -> str:
+	match = re.match(r"^(.*)_v\d+$", output_file_stem)
+	if match is None:
+		return output_file_stem
+	return match.group(1)
+
+
 def remove_stale_generated_modules(output_dir: Path, output_file_stem: str, output_format: str) -> None:
 	extension = output_format.lstrip('.')
-	for existing_path in output_dir.glob(f"{output_file_stem}_*.{extension}"):
+	family_prefix = derive_version_family_prefix(output_file_stem)
+	for existing_path in output_dir.glob(f"{family_prefix}_v*.{extension}"):
 		if existing_path.is_file():
 			existing_path.unlink()
 

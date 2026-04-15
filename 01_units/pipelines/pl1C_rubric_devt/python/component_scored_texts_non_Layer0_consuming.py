@@ -20,6 +20,25 @@ def derive_expected_version_label(input_ref: Path, fallback_label: str | None = 
 	return fallback_match.group(1)
 
 
+def normalize_version_label(value: str | None) -> str | None:
+	if value is None:
+		return None
+	match = re.search(r"(\d+)", value)
+	if match is None:
+		return None
+	return match.group(1)
+
+
+def matches_expected_version_label(candidate: Path, expected_version_label: str | None) -> bool:
+	if not expected_version_label:
+		return True
+	candidate_version = derive_expected_version_label(candidate)
+	expected_version = normalize_version_label(expected_version_label)
+	if expected_version is None:
+		return True
+	return candidate_version == expected_version
+
+
 def discover_component_py_scored_csv_paths_in_dir(
 	directory: Path,
 	component_id: str,
@@ -31,26 +50,53 @@ def discover_component_py_scored_csv_paths_in_dir(
 		pattern = f"*{component_id}*_Layer1_SBO_scoring_prompt_py_v{expected_version_label}_*_output_output.csv"
 	else:
 		pattern = f"*{component_id}*_Layer1_SBO_scoring_prompt_py_v*_*_output_output.csv"
-	return sorted(candidate for candidate in directory.glob(pattern) if candidate.is_file())
+	return sorted(
+		candidate
+		for candidate in directory.glob(pattern)
+		if candidate.is_file() and matches_expected_version_label(candidate, expected_version_label)
+	)
 
 
-def discover_component_single_scored_csv_paths_in_dir(directory: Path, component_id: str) -> list[Path]:
+def discover_component_single_scored_csv_paths_in_dir(
+	directory: Path,
+	component_id: str,
+	expected_version_label: str | None = None,
+) -> list[Path]:
 	if not directory.exists() or not directory.is_dir():
 		return []
 	exact_matches = sorted(
 		candidate
 		for candidate in directory.glob(f"*{component_id}*_Layer1_SBO_scoring_prompt_v*_output.csv")
-		if candidate.is_file()
+		if candidate.is_file() and matches_expected_version_label(candidate, expected_version_label)
 	)
 	if exact_matches:
 		return exact_matches
 	duplicated_suffix_matches = sorted(
 		candidate
 		for candidate in directory.glob(f"*{component_id}*_Layer1_SBO_scoring_prompt_v*_output_output.csv")
-		if candidate.is_file()
+		if candidate.is_file() and matches_expected_version_label(candidate, expected_version_label)
 	)
 	if duplicated_suffix_matches:
 		return duplicated_suffix_matches
+	return []
+
+
+def discover_component_deterministic_scored_csv_paths_in_dir(
+	directory: Path,
+	component_id: str,
+	expected_version_label: str | None = None,
+) -> list[Path]:
+	if not directory.exists() or not directory.is_dir():
+		return []
+	combined_matches = sorted(
+		candidate
+		for candidate in directory.glob(f"*{component_id}*_Layer1_indicator_scoring_v*_output.csv")
+		if candidate.is_file()
+		and "-wide" not in candidate.stem
+		and matches_expected_version_label(candidate, expected_version_label)
+	)
+	if combined_matches:
+		return combined_matches
 	return []
 
 
@@ -62,11 +108,16 @@ def discover_component_scored_csv_paths_in_dir(
 	py_matches = discover_component_py_scored_csv_paths_in_dir(directory, component_id, expected_version_label)
 	if py_matches:
 		return py_matches
-	single_matches = discover_component_single_scored_csv_paths_in_dir(directory, component_id)
+	deterministic_matches = discover_component_deterministic_scored_csv_paths_in_dir(directory, component_id, expected_version_label)
+	if deterministic_matches:
+		return deterministic_matches
+	single_matches = discover_component_single_scored_csv_paths_in_dir(directory, component_id, expected_version_label)
 	if single_matches:
 		return single_matches
 	return sorted(
-		candidate for candidate in directory.glob(f"*{component_id}*output*.csv") if candidate.is_file()
+		candidate
+		for candidate in directory.glob(f"*{component_id}*output*.csv")
+		if candidate.is_file() and matches_expected_version_label(candidate, expected_version_label)
 	)
 
 

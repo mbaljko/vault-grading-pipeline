@@ -116,9 +116,33 @@ def derive_wide_output_path(output_path: Path) -> Path:
 	return output_path.with_name(f"{output_path.stem}-wide{output_path.suffix}")
 
 
+def derive_version_family_prefix(output_file_stem: str) -> str:
+	match = re.match(r"^(.*)_v\d+$", output_file_stem)
+	if match is None:
+		return output_file_stem
+	return match.group(1)
+
+
 def remove_stale_indicator_outputs(output_dir: Path, output_file_stem: str, output_format: str) -> None:
 	extension = output_format.lstrip('.')
-	for existing_path in output_dir.glob(f"{output_file_stem}_*_output.{extension}"):
+	family_prefix = derive_version_family_prefix(output_file_stem)
+	for existing_path in output_dir.glob(f"{family_prefix}_v*_*_output.{extension}"):
+		if existing_path.is_file():
+			existing_path.unlink()
+
+
+def remove_stale_combined_outputs(combined_output_path: Path) -> None:
+	match = re.match(r"^(.*)_v\d+_output$", combined_output_path.stem)
+	if match is None:
+		for existing_path in [combined_output_path, derive_wide_output_path(combined_output_path)]:
+			if existing_path.exists() and existing_path.is_file():
+				existing_path.unlink()
+		return
+	family_prefix = match.group(1)
+	for existing_path in combined_output_path.parent.glob(f"{family_prefix}_v*_output{combined_output_path.suffix}"):
+		if existing_path.is_file():
+			existing_path.unlink()
+	for existing_path in combined_output_path.parent.glob(f"{family_prefix}_v*_output-wide{combined_output_path.suffix}"):
 		if existing_path.is_file():
 			existing_path.unlink()
 
@@ -165,6 +189,8 @@ def main() -> int:
 		output_dir = args.output_dir.resolve()
 		output_dir.mkdir(parents=True, exist_ok=True)
 		remove_stale_indicator_outputs(output_dir, args.output_file_stem, args.output_format)
+		if args.combined_output_file is not None:
+			remove_stale_combined_outputs(args.combined_output_file.resolve())
 		combined_rows: list[dict[str, str]] = []
 		for module in modules:
 			indicator_id = str(getattr(module, "INDICATOR_ID", "")).strip()
