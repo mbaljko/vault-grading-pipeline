@@ -1666,6 +1666,19 @@ def append_source_submission_entry(
 	bucket_entries.setdefault(segment_bucket, []).append(entry)
 
 
+def append_segment_detail_row(
+	detail_rows: list[tuple[str, str]],
+	detail_row_seen: set[tuple[str, str]],
+	entry: str,
+	segment_bucket: str,
+) -> None:
+	row_key = (entry, segment_bucket)
+	if row_key in detail_row_seen:
+		return
+	detail_row_seen.add(row_key)
+	detail_rows.append(row_key)
+
+
 def normalize_segment_bucket_label(value: str) -> str:
 	text = value.strip()
 	if text:
@@ -1677,15 +1690,24 @@ def escape_markdown_table_cell(value: str) -> str:
 	return value.replace("|", "\\|").replace("\n", "<br>")
 
 
-def build_segment_count_rows(
-	segment_counts: Counter[str],
-	source_submission_entries_by_segment: dict[str, list[str]],
-) -> list[list[str]]:
+def build_segment_summary_rows(segment_counts: Counter[str], evidence_status: str) -> list[list[str]]:
 	rows: list[list[str]] = []
 	for segment_text, count in sorted(segment_counts.items(), key=lambda item: (-item[1], item[0].lower())):
-		source_entries = source_submission_entries_by_segment.get(segment_text, [])
-		source_cell = escape_markdown_table_cell("\n\n---\n\n".join(source_entries)) if source_entries else ""
-		rows.append([escape_markdown_table_cell(segment_text), str(count), source_cell])
+		rows.append([
+			escape_markdown_table_cell(evidence_status),
+			escape_markdown_table_cell(segment_text),
+			str(count),
+		])
+	return rows
+
+
+def build_segment_detail_rows(detail_rows: list[tuple[str, str]]) -> list[list[str]]:
+	rows: list[list[str]] = []
+	for source_entry, segment_text in sorted(detail_rows, key=lambda item: (item[0].lower(), item[1].lower())):
+		rows.append([
+			escape_markdown_table_cell(source_entry),
+			escape_markdown_table_cell(segment_text),
+		])
 	return rows
 
 
@@ -1760,8 +1782,8 @@ def render_indicator_segment_report(
 	status_counts: Counter[str],
 	matching_segment_counts: Counter[str],
 	non_matching_segment_counts: Counter[str],
-	matching_source_submission_entries_by_segment: dict[str, list[str]],
-	non_matching_source_submission_entries_by_segment: dict[str, list[str]],
+	matching_detail_entries: list[tuple[str, str]],
+	non_matching_detail_entries: list[tuple[str, str]],
 	matching_row_count: int,
 	non_matching_row_count: int,
 	missing_input_row_count: int,
@@ -1817,30 +1839,44 @@ def render_indicator_segment_report(
 		parts.append("No scored rows.")
 	parts.extend([
 		"",
-		"### Matching Segment Texts",
+		"### Indicator-Segment Texts Summary",
 		"",
 	])
-	matching_rows = build_segment_count_rows(
-		matching_segment_counts,
-		matching_source_submission_entries_by_segment,
-	)
-	if matching_rows:
-		parts.append(render_markdown_table(["segment_text", "count", "original_submission"], matching_rows))
+	matching_summary_rows = build_segment_summary_rows(matching_segment_counts, "present")
+	if matching_summary_rows:
+		parts.append(render_markdown_table(["evidence_status", "segment_text", "count"], matching_summary_rows))
 	else:
 		parts.append("No matching segment texts.")
 	parts.extend([
 		"",
-		"### Non-Matching Segment Texts",
-		"",
 	])
-	non_matching_rows = build_segment_count_rows(
-		non_matching_segment_counts,
-		non_matching_source_submission_entries_by_segment,
-	)
-	if non_matching_rows:
-		parts.append(render_markdown_table(["segment_text", "count", "original_submission"], non_matching_rows))
+	non_matching_summary_rows = build_segment_summary_rows(non_matching_segment_counts, "not_present")
+	if non_matching_summary_rows:
+		parts.append(render_markdown_table(["evidence_status", "segment_text", "count"], non_matching_summary_rows))
 	else:
 		parts.append("No non-matching segment texts.")
+	parts.extend([
+		"",
+		"### Indicator-Segment Texts Detail",
+		"",
+		"#### Matching Segment Texts Detail",
+		"",
+	])
+	matching_detail_rows = build_segment_detail_rows(matching_detail_entries)
+	if matching_detail_rows:
+		parts.append(render_markdown_table(["original_submission", "segment_text"], matching_detail_rows))
+	else:
+		parts.append("No matching segment details.")
+	parts.extend([
+		"",
+		"#### Non-Matching Segment Texts Detail",
+		"",
+	])
+	non_matching_detail_rows = build_segment_detail_rows(non_matching_detail_entries)
+	if non_matching_detail_rows:
+		parts.append(render_markdown_table(["original_submission", "segment_text"], non_matching_detail_rows))
+	else:
+		parts.append("No non-matching segment details.")
 	parts.append("")
 	return "\n".join(parts)
 
@@ -1857,8 +1893,8 @@ def render_indicator_slot_group_segment_report(
 	status_counts: Counter[str],
 	matching_segment_counts: Counter[str],
 	non_matching_segment_counts: Counter[str],
-	matching_source_submission_entries_by_segment: dict[str, list[str]],
-	non_matching_source_submission_entries_by_segment: dict[str, list[str]],
+	matching_detail_entries: list[tuple[str, str]],
+	non_matching_detail_entries: list[tuple[str, str]],
 	matching_row_count: int,
 	non_matching_row_count: int,
 	missing_input_row_count: int,
@@ -1924,30 +1960,44 @@ def render_indicator_slot_group_segment_report(
 		parts.append("No scored rows.")
 	parts.extend([
 		"",
-		"### Matching Segment Texts",
+		"### Indicator-Segment Texts Summary",
 		"",
 	])
-	matching_rows = build_segment_count_rows(
-		matching_segment_counts,
-		matching_source_submission_entries_by_segment,
-	)
-	if matching_rows:
-		parts.append(render_markdown_table(["segment_text", "count", "original_submission"], matching_rows))
+	matching_summary_rows = build_segment_summary_rows(matching_segment_counts, "present")
+	if matching_summary_rows:
+		parts.append(render_markdown_table(["evidence_status", "segment_text", "count"], matching_summary_rows))
 	else:
 		parts.append("No matching segment texts.")
 	parts.extend([
 		"",
-		"### Non-Matching Segment Texts",
-		"",
 	])
-	non_matching_rows = build_segment_count_rows(
-		non_matching_segment_counts,
-		non_matching_source_submission_entries_by_segment,
-	)
-	if non_matching_rows:
-		parts.append(render_markdown_table(["segment_text", "count", "original_submission"], non_matching_rows))
+	non_matching_summary_rows = build_segment_summary_rows(non_matching_segment_counts, "not_present")
+	if non_matching_summary_rows:
+		parts.append(render_markdown_table(["evidence_status", "segment_text", "count"], non_matching_summary_rows))
 	else:
 		parts.append("No non-matching segment texts.")
+	parts.extend([
+		"",
+		"### Indicator-Segment Texts Detail",
+		"",
+		"#### Matching Segment Texts Detail",
+		"",
+	])
+	matching_detail_rows = build_segment_detail_rows(matching_detail_entries)
+	if matching_detail_rows:
+		parts.append(render_markdown_table(["original_submission", "segment_text"], matching_detail_rows))
+	else:
+		parts.append("No matching segment details.")
+	parts.extend([
+		"",
+		"#### Non-Matching Segment Texts Detail",
+		"",
+	])
+	non_matching_detail_rows = build_segment_detail_rows(non_matching_detail_entries)
+	if non_matching_detail_rows:
+		parts.append(render_markdown_table(["original_submission", "segment_text"], non_matching_detail_rows))
+	else:
+		parts.append("No non-matching segment details.")
 	parts.append("")
 	return "\n".join(parts)
 
@@ -3175,10 +3225,10 @@ def main() -> int:
 		status_counts: Counter[str] = Counter()
 		matching_segment_counts: Counter[str] = Counter()
 		non_matching_segment_counts: Counter[str] = Counter()
-		matching_source_submission_entries_by_segment: dict[str, list[str]] = {}
-		non_matching_source_submission_entries_by_segment: dict[str, list[str]] = {}
-		matching_source_submission_seen_entries: dict[str, set[str]] = {}
-		non_matching_source_submission_seen_entries: dict[str, set[str]] = {}
+		matching_detail_entries: list[tuple[str, str]] = []
+		non_matching_detail_entries: list[tuple[str, str]] = []
+		matching_detail_seen_entries: set[tuple[str, str]] = set()
+		non_matching_detail_seen_entries: set[tuple[str, str]] = set()
 		matching_row_count = 0
 		non_matching_row_count = 0
 		missing_input_row_count = 0
@@ -3205,20 +3255,20 @@ def main() -> int:
 				segment_bucket = normalize_segment_bucket_label(segment_value)
 			if is_positive_scored_row(scored_row):
 				matching_segment_counts[segment_bucket] += 1
-				append_source_submission_entry(
-					matching_source_submission_entries_by_segment,
-					matching_source_submission_seen_entries,
-					segment_bucket,
+				append_segment_detail_row(
+					matching_detail_entries,
+					matching_detail_seen_entries,
 					source_submission_entry,
+					segment_bucket,
 				)
 				matching_row_count += 1
 			else:
 				non_matching_segment_counts[segment_bucket] += 1
-				append_source_submission_entry(
-					non_matching_source_submission_entries_by_segment,
-					non_matching_source_submission_seen_entries,
-					segment_bucket,
+				append_segment_detail_row(
+					non_matching_detail_entries,
+					non_matching_detail_seen_entries,
 					source_submission_entry,
+					segment_bucket,
 				)
 				non_matching_row_count += 1
 		indicator_output_path = output_dir / derive_indicator_segment_report_filename(
@@ -3247,8 +3297,8 @@ def main() -> int:
 				status_counts=status_counts,
 				matching_segment_counts=matching_segment_counts,
 				non_matching_segment_counts=non_matching_segment_counts,
-				matching_source_submission_entries_by_segment=matching_source_submission_entries_by_segment,
-				non_matching_source_submission_entries_by_segment=non_matching_source_submission_entries_by_segment,
+				matching_detail_entries=matching_detail_entries,
+				non_matching_detail_entries=non_matching_detail_entries,
 				matching_row_count=matching_row_count,
 				non_matching_row_count=non_matching_row_count,
 				missing_input_row_count=missing_input_row_count,
@@ -3264,10 +3314,10 @@ def main() -> int:
 					"status_counts": Counter(),
 					"matching_segment_counts": Counter(),
 					"non_matching_segment_counts": Counter(),
-					"matching_source_submission_entries_by_segment": {},
-					"non_matching_source_submission_entries_by_segment": {},
-					"matching_source_submission_seen_entries": {},
-					"non_matching_source_submission_seen_entries": {},
+					"matching_detail_entries": [],
+					"non_matching_detail_entries": [],
+					"matching_detail_seen_entries": set(),
+					"non_matching_detail_seen_entries": set(),
 					"matching_row_count": 0,
 					"non_matching_row_count": 0,
 					"missing_input_row_count": 0,
@@ -3288,22 +3338,20 @@ def main() -> int:
 			group_report["status_counts"].update(status_counts)
 			group_report["matching_segment_counts"].update(matching_segment_counts)
 			group_report["non_matching_segment_counts"].update(non_matching_segment_counts)
-			for segment_bucket, entries in matching_source_submission_entries_by_segment.items():
-				for entry in entries:
-					append_source_submission_entry(
-						group_report["matching_source_submission_entries_by_segment"],
-						group_report["matching_source_submission_seen_entries"],
-						segment_bucket,
-						entry,
-					)
-			for segment_bucket, entries in non_matching_source_submission_entries_by_segment.items():
-				for entry in entries:
-					append_source_submission_entry(
-						group_report["non_matching_source_submission_entries_by_segment"],
-						group_report["non_matching_source_submission_seen_entries"],
-						segment_bucket,
-						entry,
-					)
+			for entry, segment_bucket in matching_detail_entries:
+				append_segment_detail_row(
+					group_report["matching_detail_entries"],
+					group_report["matching_detail_seen_entries"],
+					entry,
+					segment_bucket,
+				)
+			for entry, segment_bucket in non_matching_detail_entries:
+				append_segment_detail_row(
+					group_report["non_matching_detail_entries"],
+					group_report["non_matching_detail_seen_entries"],
+					entry,
+					segment_bucket,
+				)
 			group_report["matching_row_count"] += matching_row_count
 			group_report["non_matching_row_count"] += non_matching_row_count
 			group_report["missing_input_row_count"] += missing_input_row_count
@@ -3335,8 +3383,8 @@ def main() -> int:
 				status_counts=group_report["status_counts"],
 				matching_segment_counts=group_report["matching_segment_counts"],
 				non_matching_segment_counts=group_report["non_matching_segment_counts"],
-				matching_source_submission_entries_by_segment=group_report["matching_source_submission_entries_by_segment"],
-				non_matching_source_submission_entries_by_segment=group_report["non_matching_source_submission_entries_by_segment"],
+				matching_detail_entries=group_report["matching_detail_entries"],
+				non_matching_detail_entries=group_report["non_matching_detail_entries"],
 				matching_row_count=int(group_report["matching_row_count"]),
 				non_matching_row_count=int(group_report["non_matching_row_count"]),
 				missing_input_row_count=int(group_report["missing_input_row_count"]),
