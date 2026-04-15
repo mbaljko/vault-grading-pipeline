@@ -801,6 +801,71 @@ def build_machine_normalized_decision_procedure(record: dict[str, str]) -> str:
     return " ".join(parts).strip()
 
 
+def parse_semicolon_separated_values(raw_value: str) -> list[str]:
+    values: list[str] = []
+    seen: set[str] = set()
+    for part in raw_value.split(";"):
+        normalized = normalize_markdown_cell(part).strip().strip("`")
+        if not normalized:
+            continue
+        key = normalized.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        values.append(normalized)
+    return values
+
+
+def parse_alias_mapping(raw_value: str) -> dict[str, str]:
+    alias_mapping: dict[str, str] = {}
+    for part in raw_value.split(";"):
+        normalized = normalize_markdown_cell(part).strip().strip("`")
+        if not normalized or "->" not in normalized:
+            continue
+        alias_raw, canonical_raw = normalized.split("->", 1)
+        alias = alias_raw.strip()
+        canonical = canonical_raw.strip()
+        if not alias or not canonical:
+            continue
+        alias_mapping[alias] = canonical
+    return alias_mapping
+
+
+def parse_integer_value(raw_value: str, default: int = 0) -> int:
+    normalized = raw_value.strip()
+    if not normalized:
+        return default
+    try:
+        return int(normalized)
+    except ValueError:
+        return default
+
+
+def build_layer1_indicator_scoring_payload(record: dict[str, str]) -> str:
+    required_term_group_names = parse_semicolon_separated_values(record.get("required_term_groups", ""))
+    required_term_groups = {
+        group_name: parse_semicolon_separated_values(record.get(group_name, ""))
+        for group_name in required_term_group_names
+        if parse_semicolon_separated_values(record.get(group_name, ""))
+    }
+    payload = {
+        "scoring_mode": record.get("scoring_mode", "").strip(),
+        "dependency_type": record.get("dependency_type", "").strip(),
+        "required_layer0_records": parse_semicolon_separated_values(record.get("required_layer0_records", "")),
+        "bound_segment_id": record.get("bound_segment_id", "").strip(),
+        "normalisation_rule": record.get("normalisation_rule", "").strip(),
+        "match_policy": record.get("match_policy", "").strip(),
+        "allowed_terms": parse_semicolon_separated_values(record.get("allowed_terms", "")),
+        "allowed_aliases": parse_alias_mapping(record.get("allowed_aliases", "")),
+        "allowed_roles": parse_semicolon_separated_values(record.get("allowed_roles", "")),
+        "excluded_terms": parse_semicolon_separated_values(record.get("excluded_terms", "")),
+        "required_term_groups": required_term_groups,
+        "minimum_match_count_per_group": parse_integer_value(record.get("minimum_match_count_per_group", ""), default=0),
+        "decision_rule": record.get("decision_rule", "").strip(),
+    }
+    return serialize_scoring_payload(payload)
+
+
 def build_registry_rows_from_machine_normalized_layer1_tables(
     base_rows: list[dict[str, str]],
     reuse_rows: list[dict[str, str]],
@@ -840,6 +905,7 @@ def build_registry_rows_from_machine_normalized_layer1_tables(
                         "assessment_guidance": build_machine_normalized_indicator_guidance(base_row),
                         "evaluation_notes": "Follow the machine-normalised registry fields exactly; do not infer undeclared semantics.",
                         "decision_procedure": build_machine_normalized_decision_procedure(base_row),
+                        "indicator_scoring_payload_json": build_layer1_indicator_scoring_payload(base_row),
                         "status": effective_status,
                     }
                 )
@@ -857,6 +923,7 @@ def build_registry_rows_from_machine_normalized_layer1_tables(
                         evaluation_notes=resolve_evaluation_notes(merged_record, layer_config),
                         decision_procedure=resolve_decision_procedure(merged_record),
                         status=effective_status,
+                        scoring_payload_json=resolve_scoring_payload_json(merged_record, layer_config),
                     )
                 )
     return rows
@@ -916,6 +983,8 @@ def resolve_scale_text(record: dict[str, str], layer_config: RegistryLayerConfig
 
 
 def resolve_scoring_payload_json(record: dict[str, str], layer_config: RegistryLayerConfig) -> str:
+    if layer_config.name == "layer1":
+        return record.get("indicator_scoring_payload_json", "").strip()
     if layer_config.name == "layer2":
         return record.get("dimension_scoring_payload_json", "").strip()
     if layer_config.name == "layer3":
@@ -2669,6 +2738,10 @@ def render_manifest_document(
                 row.evidence_scale,
                 row.scoring_payload_json,
             ])
+        if layer_config.name == "layer1":
+            if "indicator_scoring_payload_json" not in manifest_headers:
+                manifest_headers.append("indicator_scoring_payload_json")
+            manifest_row.append(row.scoring_payload_json)
         if layer_config.name == "layer3":
             if "component_performance_scale" not in manifest_headers:
                 manifest_headers.extend([

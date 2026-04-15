@@ -133,6 +133,30 @@ def build_evidence_text(segment_items: list[tuple[str, str]]) -> str:
 	return "\n\n".join(parts)
 
 
+def validate_single_row_per_submission_component(
+	identifier_field: str,
+	component_id: str,
+	rows: list[dict[str, str]],
+) -> None:
+	seen_identifiers: set[str] = set()
+	duplicate_identifiers: list[str] = []
+	for row in rows:
+		runtime_identifier = row.get("source_submission_id") or row.get(identifier_field) or row.get("submission_id")
+		normalized_identifier = str(runtime_identifier or "").strip()
+		if not normalized_identifier:
+			continue
+		if normalized_identifier in seen_identifiers:
+			duplicate_identifiers.append(normalized_identifier)
+			continue
+		seen_identifiers.add(normalized_identifier)
+	if duplicate_identifiers:
+		raise ValueError(
+			"Layer 1-on-Layer0 flattened input contract assumes exactly one Layer 0 stitched row per "
+			f"{identifier_field} × component_id. Found duplicate rows for component_id={component_id!r}: "
+			+ ", ".join(sorted(set(duplicate_identifiers)))
+		)
+
+
 def format_timestamp(timestamp_seconds: float) -> str:
 	return datetime.fromtimestamp(timestamp_seconds, tz=timezone.utc).isoformat(timespec="seconds")
 
@@ -273,9 +297,11 @@ def render_contract_markdown(
 			"",
 			"### Structural Invariants",
 			"1. Every Layer 1 runtime row must represent exactly one canonical submission identifier and one component.",
-			"2. `evidence_text` must be derived only from non-empty Layer 0 `segment_text_<segment_id>` values for that row.",
-			"3. `evidence_segment_ids` must preserve the same ordering used to construct `evidence_text`.",
-			"4. The raw source response text is not part of this contract.",
+			"2. This flattened Layer 1-on-Layer0 contract assumes exactly one claim-like Layer 0 stitched row per canonical submission identifier and component.",
+			"3. If Layer 0 emits multiple stitched rows for the same canonical submission identifier and component, this builder must fail rather than merge them silently.",
+			"4. `evidence_text` must be derived only from non-empty Layer 0 `segment_text_<segment_id>` values for that row.",
+			"5. `evidence_segment_ids` must preserve the same ordering used to construct `evidence_text`.",
+			"6. The raw source response text is not part of this contract.",
 		]
 	)
 	return "\n".join(lines)
@@ -302,6 +328,8 @@ def main() -> int:
 		segment_columns_by_component: dict[str, list[str]] = {}
 		for component_id in component_ids:
 			component_rows: list[dict[str, str]] = []
+			component_source_rows = [row for row in stitched_rows if row.get("component_id", "") == component_id]
+			validate_single_row_per_submission_component(identifier_field, component_id, component_source_rows)
 			component_segment_columns = [
 				column
 				for column in segment_columns
@@ -311,9 +339,7 @@ def main() -> int:
 				)
 			]
 			segment_columns_by_component[component_id] = component_segment_columns
-			for row in stitched_rows:
-				if row.get("component_id", "") != component_id:
-					continue
+			for row in component_source_rows:
 				runtime_identifier = row.get("source_submission_id") or row.get(identifier_field) or row.get("submission_id")
 				if not runtime_identifier:
 					raise ValueError(
