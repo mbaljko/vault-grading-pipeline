@@ -262,18 +262,25 @@ def format_band_value(value: float) -> str:
     return f"{value:.1f}"
 
 
+def format_band_label(band_min: float, band_max: float) -> str:
+    return f"{format_band_value(band_min)}-{format_band_value(band_max)}"
+
+
+def render_histogram_bar(count: int) -> str:
+    return "█" * max(count, 0)
+
+
 def score_in_band(score: float, band_min: float, band_max: float) -> bool:
     if band_max >= 100.0:
         return band_min <= score <= band_max
     return band_min <= score < band_max
 
 
-def build_cutpoint_percentage_table(
+def collect_cutpoint_percentage_series(
     scale_info: Layer4ScaleInfo,
     input_rows: list[dict[str, str]],
-) -> tuple[list[str], list[list[str]]]:
+) -> tuple[list[float], dict[str, list[float]]]:
     component_ids = scale_info.bound_component_ids
-    table_rows: list[list[str]] = []
     submission_percentages: list[float] = []
     component_percentages: dict[str, list[float]] = defaultdict(list)
     for row in input_rows:
@@ -292,42 +299,38 @@ def build_cutpoint_percentage_table(
                 normalize_to_percent(component_numeric_value, scale_info.maximum_component_numeric_score)
             )
 
-    total_submission_scores = len(submission_percentages)
-    component_totals = {component_id: len(component_percentages[component_id]) for component_id in component_ids}
+    return submission_percentages, component_percentages
+
+
+def build_histogram_rows(percentages: list[float]) -> list[list[str]]:
+    table_rows: list[list[str]] = []
     for band_min, band_max in build_band_edges():
-        row_cells = [f"{format_band_value(band_min)}-{format_band_value(band_max)}"]
-        submission_band_count = sum(
-            1 for normalized_percentage in submission_percentages
+        band_count = sum(
+            1 for normalized_percentage in percentages
             if score_in_band(normalized_percentage, band_min, band_max)
         )
-        submission_band_percent = (
-            f"{(submission_band_count / total_submission_scores * 100) if total_submission_scores else 0:.1f}%"
-        )
-        row_cells.extend([str(submission_band_count), submission_band_percent])
+        table_rows.append([
+            format_band_label(band_min, band_max),
+            str(band_count),
+            render_histogram_bar(band_count),
+        ])
+    return table_rows
 
-        for component_id in component_ids:
-            component_band_count = sum(
-                1 for normalized_percentage in component_percentages[component_id]
+
+def build_multi_histogram_rows(
+    series_by_label: list[tuple[str, list[float]]],
+) -> list[list[str]]:
+    table_rows: list[list[str]] = []
+    for band_min, band_max in build_band_edges():
+        row_cells = [format_band_label(band_min, band_max)]
+        for _, percentages in series_by_label:
+            band_count = sum(
+                1 for normalized_percentage in percentages
                 if score_in_band(normalized_percentage, band_min, band_max)
             )
-            component_total = component_totals[component_id]
-            component_band_percent = (
-                f"{(component_band_count / component_total * 100) if component_total else 0:.1f}%"
-            )
-            row_cells.extend([str(component_band_count), component_band_percent])
-
+            row_cells.extend([str(band_count), render_histogram_bar(band_count)])
         table_rows.append(row_cells)
-
-    totals_row = ["Total", str(total_submission_scores), "100.0%" if total_submission_scores else "0.0%"]
-    for component_id in component_ids:
-        component_total = component_totals[component_id]
-        totals_row.extend([str(component_total), "100.0%" if component_total else "0.0%"])
-    table_rows.append(totals_row)
-
-    headers = ["percent_band", "submission_count", "submission_% of scores"]
-    for component_id in component_ids:
-        headers.extend([f"{component_id}_count", f"{component_id}_% of scores"])
-    return headers, table_rows
+    return table_rows
 
 
 def build_percentage_distribution_rows(percentages: list[float]) -> list[list[str]]:
@@ -449,17 +452,37 @@ def generate_report(args: argparse.Namespace) -> Path:
     ]
 
     if scale_info is not None:
-        cutpoint_headers, cutpoint_rows = build_cutpoint_percentage_table(scale_info, rows)
+        submission_percentages, component_percentages = collect_cutpoint_percentage_series(scale_info, rows)
         sections.extend(
             [
                 "## Grade Band Mapping to 0-100%",
+                "### Submission",
                 render_markdown_table(
-                    cutpoint_headers,
-                    cutpoint_rows,
+                    ["Bin", "Count", "Bar"],
+                    build_histogram_rows(submission_percentages),
                 ),
+                "",
                 "",
             ]
         )
+        component_series = [
+            (component_id, component_percentages.get(component_id, []))
+            for component_id in scale_info.bound_component_ids
+        ]
+        if component_series:
+            component_headers = ["Bin"]
+            for component_id, _ in component_series:
+                component_headers.extend([f"{component_id} Count", f"{component_id} Bar"])
+            sections.extend(
+                [
+                    "### Components",
+                    render_markdown_table(
+                        component_headers,
+                        build_multi_histogram_rows(component_series),
+                    ),
+                    "",
+                ]
+            )
 
     if numeric_summary is not None:
         sections.extend(
