@@ -60,6 +60,7 @@ import argparse
 import csv
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from os.path import commonpath
 import re
 import sys
 from pathlib import Path
@@ -1667,6 +1668,25 @@ def render_markdown_table(headers: list[str], rows: list[list[str]]) -> str:
 	return "\n".join([header_line, separator_line, *body_lines])
 
 
+def format_source_scored_csvs_label(scored_csv_paths: list[Path]) -> str:
+	if not scored_csv_paths:
+		return ""
+	if len(scored_csv_paths) == 1:
+		common_prefix = scored_csv_paths[0].parent
+	else:
+		common_prefix = Path(commonpath([str(path) for path in scored_csv_paths]))
+	prefix_label = str(common_prefix)
+	if not prefix_label.endswith("/"):
+		prefix_label = f"{prefix_label}/"
+	suffix_labels: list[str] = []
+	for path in scored_csv_paths:
+		try:
+			suffix_labels.append(str(path.relative_to(common_prefix)))
+		except ValueError:
+			suffix_labels.append(path.name)
+	return "<br>".join([prefix_label, *suffix_labels])
+
+
 def insert_blank_rows_between_groups(rows: list[list[str]], group_keys: list[object]) -> list[list[str]]:
 	if not rows:
 		return rows
@@ -1923,7 +1943,7 @@ def render_consolidated_scoring_stats_document(
 	historical_rows_by_label: dict[str, dict[str, list[dict[str, str]]]],
 ) -> str:
 	component_label = component_ids[0] if len(component_ids) == 1 else ", ".join(component_ids)
-	source_csv_label = "\n".join(str(path) for path in scored_csv_paths)
+	source_csv_label = format_source_scored_csvs_label(scored_csv_paths)
 	comparison_axis_label = "run" if comparison_scope == "run" else "iteration endpoint"
 	stability_title = "Run Repeatability Flags" if comparison_scope == "run" else "Stability Flags"
 	if comparison_scope == "run":
@@ -1956,6 +1976,8 @@ def render_consolidated_scoring_stats_document(
 		"Important: the Base Table saturation section and the co-incidence matrices use different counting semantics.",
 		"The Base Table saturation section aggregates summed indicator-instance counts across the expanded indicators mapped to each template.",
 		"The co-incidence matrices instead operate at the submission level: for a template, a submission counts as positive only if it is positive for every expanded indicator mapped to that template across the included components.",
+		"",
+		"### Overview",
 		"",
 		render_markdown_table(
 			["metric", "value"],
