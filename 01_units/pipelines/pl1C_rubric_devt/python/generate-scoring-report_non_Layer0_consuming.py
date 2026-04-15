@@ -1686,6 +1686,13 @@ def normalize_segment_bucket_label(value: str) -> str:
 	return "(blank segment text)"
 
 
+def segment_text_sort_key(value: str) -> tuple[int, str]:
+	normalized = normalize_segment_bucket_label(value)
+	if normalized == "(blank segment text)":
+		return (0, "")
+	return (1, normalized.lower())
+
+
 def escape_markdown_table_cell(value: str) -> str:
 	normalized = value.replace("\r\n", "\n").replace("\r", "\n")
 	return normalized.replace("|", "\\|").replace("\n", "<br>")
@@ -1709,7 +1716,7 @@ def highlight_segment_text_in_submission(source_entry: str, segment_text: str) -
 
 def build_segment_summary_rows(segment_counts: Counter[str], evidence_status: str) -> list[list[str]]:
 	rows: list[list[str]] = []
-	for segment_text, count in sorted(segment_counts.items(), key=lambda item: (-item[1], item[0].lower())):
+	for segment_text, count in sorted(segment_counts.items(), key=lambda item: (segment_text_sort_key(item[0]), item[0])):
 		rows.append([
 			escape_markdown_table_cell(evidence_status),
 			escape_markdown_table_cell(segment_text),
@@ -1720,7 +1727,7 @@ def build_segment_summary_rows(segment_counts: Counter[str], evidence_status: st
 
 def build_segment_detail_rows(detail_rows: list[tuple[str, str]]) -> list[list[str]]:
 	rows: list[list[str]] = []
-	for source_entry, segment_text in sorted(detail_rows, key=lambda item: (item[0].lower(), item[1].lower())):
+	for source_entry, segment_text in sorted(detail_rows, key=lambda item: (segment_text_sort_key(item[1]), item[1], item[0].lower())):
 		highlighted_source_entry = highlight_segment_text_in_submission(source_entry, segment_text)
 		rows.append([
 			escape_markdown_table_cell(highlighted_source_entry),
