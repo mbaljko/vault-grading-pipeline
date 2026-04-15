@@ -57,9 +57,11 @@ Output naming:
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import csv
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import json
 from os.path import commonpath
 import re
 import sys
@@ -86,6 +88,9 @@ RUNNER_OUTPUT_SUBDIR = "Level1-CalibrationTesting-Outputs"
 SCORING_OUTPUT_VERSION_RE = re.compile(r"_v(\d+)(?=_)")
 REGISTRY_VERSION_PATH_RE = re.compile(r"(/registry_v)(\d+)(/)", re.IGNORECASE)
 COMPONENT_ID_RANGE_RE = re.compile(r"Section([A-Za-z])(\{\d+\.\.\d+\}|\d+)Response")
+LAYER1_SCORED_OUTPUT_RE = re.compile(
+	r"^RUN_(?P<assignment>[A-Za-z0-9]+)_(?P<component_id>.+?)_Layer1_indicator_scoring_(?P<version>v\d+)_output(?:_output)?\.csv$"
+)
 POSITIVE_EVIDENCE_STATUS_VALUES = {
 	"positive",
 	"present",
@@ -1577,6 +1582,376 @@ def load_scored_rows(input_path: Path) -> list[dict[str, str]]:
 	return rows
 
 
+def parse_json_object(value: str) -> dict[str, object]:
+	text = value.strip()
+	if not text:
+		return {}
+	try:
+		parsed = json.loads(text)
+	except json.JSONDecodeError:
+		return {}
+	return parsed if isinstance(parsed, dict) else {}
+
+
+def resolve_submission_id_from_row(row: dict[str, str]) -> str:
+	for field_name in ["submission_id", "participant_id"]:
+		value = (row.get(field_name) or "").strip()
+		if value:
+			return value
+	return ""
+
+
+def derive_layer1_input_csv_path_from_scored_csv(scored_csv_path: Path, component_id: str) -> Path | None:
+	match = LAYER1_SCORED_OUTPUT_RE.match(scored_csv_path.name)
+	if match is None:
+		return None
+	if match.group("component_id") != component_id:
+		return None
+	if len(scored_csv_path.parents) < 4:
+		return None
+	registry_dir = scored_csv_path.parents[3]
+	run_label = scored_csv_path.parents[1].name
+	assignment = match.group("assignment")
+	version = match.group("version")
+	return (
+		registry_dir
+		/ "02_scoring_inputs"
+		/ run_label
+		/ "layer1_from_layer0"
+		/ f"{assignment}_Layer1_input_from_Layer0_{component_id}_{version}.csv"
+	)
+
+
+def derive_layer0_stitched_csv_path_from_scored_csv(scored_csv_path: Path) -> Path | None:
+	if len(scored_csv_path.parents) < 4:
+		return None
+	registry_dir = scored_csv_path.parents[3]
+	run_label = scored_csv_path.parents[1].name
+	stitched_dir = registry_dir / "03_diagnostics" / run_label / "layer0_runtime"
+	if not stitched_dir.exists() or not stitched_dir.is_dir():
+		return None
+	matches = sorted(stitched_dir.glob("*output-wide-stitched.csv"))
+	if not matches:
+		return None
+	return matches[0]
+
+
+def index_input_rows_by_component_submission(rows: list[dict[str, str]]) -> dict[tuple[str, str], dict[str, str]]:
+	indexed_rows: dict[tuple[str, str], dict[str, str]] = {}
+	for row in rows:
+		component_id = (row.get("component_id") or "").strip()
+		submission_id = resolve_submission_id_from_row(row)
+		if not component_id or not submission_id:
+			continue
+		indexed_rows[(component_id, submission_id)] = row
+	return indexed_rows
+
+
+def format_source_submission_entry(component_id: str, submission_id: str, source_response_text: str) -> str:
+	identifier = f"{component_id} / submission_id={submission_id}" if component_id else f"submission_id={submission_id}"
+	text = source_response_text.strip() or "(missing source submission text)"
+	return f"{identifier}\n{text}"
+
+
+def append_source_submission_entry(
+	bucket_entries: dict[str, list[str]],
+	bucket_seen_entries: dict[str, set[str]],
+	segment_bucket: str,
+	entry: str,
+) -> None:
+	seen = bucket_seen_entries.setdefault(segment_bucket, set())
+	if entry in seen:
+		return
+	seen.add(entry)
+	bucket_entries.setdefault(segment_bucket, []).append(entry)
+
+
+def normalize_segment_bucket_label(value: str) -> str:
+	text = value.strip()
+	if text:
+		return text
+	return "(blank segment text)"
+
+
+def escape_markdown_table_cell(value: str) -> str:
+	return value.replace("|", "\\|").replace("\n", "<br>")
+
+
+def build_segment_count_rows(
+	segment_counts: Counter[str],
+	source_submission_entries_by_segment: dict[str, list[str]],
+) -> list[list[str]]:
+	rows: list[list[str]] = []
+	for segment_text, count in sorted(segment_counts.items(), key=lambda item: (-item[1], item[0].lower())):
+		source_entries = source_submission_entries_by_segment.get(segment_text, [])
+		source_cell = escape_markdown_table_cell("\n\n---\n\n".join(source_entries)) if source_entries else ""
+		rows.append([escape_markdown_table_cell(segment_text), str(count), source_cell])
+	return rows
+
+
+def derive_indicator_segment_report_filename(
+	manifest_path: Path,
+	component_id: str,
+	indicator_id: str,
+	comparison_scope: str,
+	current_label: str,
+	current_iteration_label: str,
+	current_run_label: str | None,
+) -> str:
+	prefix = derive_assignment_output_prefix(manifest_path)
+	if comparison_scope == "run":
+		suffix = (
+			f"intra_{sanitize_label_for_filename(current_iteration_label)}"
+			f"_{sanitize_label_for_filename(current_run_label or current_label)}"
+		)
+	else:
+		suffix = (
+			f"inter_{sanitize_label_for_filename(current_iteration_label)}"
+			f"_{sanitize_label_for_filename(current_run_label or current_label)}"
+		)
+	return f"{prefix}_{component_id}_{indicator_id}_segment_report_{suffix}.md"
+
+
+def format_slot_group_label(local_slot: str) -> str:
+	slot_match = re.fullmatch(r"0?(\d+)", local_slot.strip())
+	if slot_match is None:
+		return local_slot.strip() or "slot"
+	return f"I*{slot_match.group(1)}"
+
+
+def derive_indicator_slot_group_report_filename(
+	manifest_path: Path,
+	local_slot: str,
+	comparison_scope: str,
+	current_label: str,
+	current_iteration_label: str,
+	current_run_label: str | None,
+) -> str:
+	prefix = derive_assignment_output_prefix(manifest_path)
+	slot_match = re.fullmatch(r"0?(\d+)", local_slot.strip())
+	slot_token = slot_match.group(1) if slot_match is not None else sanitize_label_for_filename(local_slot)
+	if comparison_scope == "run":
+		suffix = (
+			f"intra_{sanitize_label_for_filename(current_iteration_label)}"
+			f"_{sanitize_label_for_filename(current_run_label or current_label)}"
+		)
+	else:
+		suffix = (
+			f"inter_{sanitize_label_for_filename(current_iteration_label)}"
+			f"_{sanitize_label_for_filename(current_run_label or current_label)}"
+		)
+	return f"{prefix}_Ix{slot_token}_segment_report_{suffix}.md"
+
+
+def render_indicator_segment_report(
+	*,
+	output_path: Path,
+	manifest_path: Path,
+	comparison_scope: str,
+	current_label: str,
+	component_id: str,
+	indicator_id: str,
+	sbo_identifier: str,
+	sbo_short_description: str,
+	bound_segment_id: str,
+	segment_field: str,
+	scored_csv_path: Path | None,
+	input_csv_path: Path | None,
+	status_counts: Counter[str],
+	matching_segment_counts: Counter[str],
+	non_matching_segment_counts: Counter[str],
+	matching_source_submission_entries_by_segment: dict[str, list[str]],
+	non_matching_source_submission_entries_by_segment: dict[str, list[str]],
+	matching_row_count: int,
+	non_matching_row_count: int,
+	missing_input_row_count: int,
+) -> str:
+	parts = [
+		"---",
+		f'generated_at_utc: "{datetime.now(timezone.utc).isoformat(timespec="seconds")}"',
+		"generator:",
+		f'  script: "{Path(__file__).resolve()}"',
+		"output_file:",
+		f'  path: "{output_path}"',
+		f'  name: "{output_path.name}"',
+		f'comparison_scope: "{comparison_scope}"',
+		f'current_label: "{current_label}"',
+		f'manifest_input: "{manifest_path}"',
+		f'component_id: "{component_id}"',
+		f'indicator_id: "{indicator_id}"',
+		f'sbo_identifier: "{sbo_identifier}"',
+		f'bound_segment_id: "{bound_segment_id}"',
+		"---",
+		"",
+		f"## {output_path.name.removesuffix('.md')}",
+		"",
+		render_markdown_table(
+			["metric", "value"],
+			[
+				["component_id", component_id],
+				["indicator_id", indicator_id],
+				["sbo_identifier", sbo_identifier],
+				["sbo_short_description", sbo_short_description],
+				["bound_segment_id", bound_segment_id or "(unbound)"],
+				["segment_field", segment_field or "evidence_text"],
+				["scored_csv", str(scored_csv_path) if scored_csv_path is not None else ""],
+				["layer1_input_csv", str(input_csv_path) if input_csv_path is not None else ""],
+				["matching_row_count", str(matching_row_count)],
+				["non_matching_row_count", str(non_matching_row_count)],
+				["missing_input_row_count", str(missing_input_row_count)],
+				["unique_matching_segment_texts", str(len(matching_segment_counts))],
+				["unique_non_matching_segment_texts", str(len(non_matching_segment_counts))],
+			],
+		),
+		"",
+		"### Evidence Status Counts",
+		"",
+	]
+	status_rows = [
+		[escape_markdown_table_cell(status or "(blank evidence_status)"), str(count)]
+		for status, count in sorted(status_counts.items(), key=lambda item: (-item[1], item[0].lower()))
+	]
+	if status_rows:
+		parts.append(render_markdown_table(["evidence_status", "count"], status_rows))
+	else:
+		parts.append("No scored rows.")
+	parts.extend([
+		"",
+		"### Matching Segment Texts",
+		"",
+	])
+	matching_rows = build_segment_count_rows(
+		matching_segment_counts,
+		matching_source_submission_entries_by_segment,
+	)
+	if matching_rows:
+		parts.append(render_markdown_table(["segment_text", "count", "original_submission"], matching_rows))
+	else:
+		parts.append("No matching segment texts.")
+	parts.extend([
+		"",
+		"### Non-Matching Segment Texts",
+		"",
+	])
+	non_matching_rows = build_segment_count_rows(
+		non_matching_segment_counts,
+		non_matching_source_submission_entries_by_segment,
+	)
+	if non_matching_rows:
+		parts.append(render_markdown_table(["segment_text", "count", "original_submission"], non_matching_rows))
+	else:
+		parts.append("No non-matching segment texts.")
+	parts.append("")
+	return "\n".join(parts)
+
+
+def render_indicator_slot_group_segment_report(
+	*,
+	output_path: Path,
+	manifest_path: Path,
+	comparison_scope: str,
+	current_label: str,
+	local_slot: str,
+	template_ids: list[str],
+	indicator_members: list[list[str]],
+	status_counts: Counter[str],
+	matching_segment_counts: Counter[str],
+	non_matching_segment_counts: Counter[str],
+	matching_source_submission_entries_by_segment: dict[str, list[str]],
+	non_matching_source_submission_entries_by_segment: dict[str, list[str]],
+	matching_row_count: int,
+	non_matching_row_count: int,
+	missing_input_row_count: int,
+) -> str:
+	group_label = format_slot_group_label(local_slot)
+	parts = [
+		"---",
+		f'generated_at_utc: "{datetime.now(timezone.utc).isoformat(timespec="seconds")}"',
+		"generator:",
+		f'  script: "{Path(__file__).resolve()}"',
+		"output_file:",
+		f'  path: "{output_path}"',
+		f'  name: "{output_path.name}"',
+		f'comparison_scope: "{comparison_scope}"',
+		f'current_label: "{current_label}"',
+		f'manifest_input: "{manifest_path}"',
+		f'local_slot: "{local_slot}"',
+		f'group_label: "{group_label}"',
+		"---",
+		"",
+		f"## {output_path.name.removesuffix('.md')}",
+		"",
+		render_markdown_table(
+			["metric", "value"],
+			[
+				["group_label", group_label],
+				["local_slot", local_slot],
+				["template_ids", ", ".join(template_ids)],
+				["indicator_ids", ", ".join(row[1] for row in indicator_members)],
+				["component_ids", ", ".join(row[0] for row in indicator_members)],
+				["matching_row_count", str(matching_row_count)],
+				["non_matching_row_count", str(non_matching_row_count)],
+				["missing_input_row_count", str(missing_input_row_count)],
+				["unique_matching_segment_texts", str(len(matching_segment_counts))],
+				["unique_non_matching_segment_texts", str(len(non_matching_segment_counts))],
+			],
+		),
+		"",
+		"### Indicator Members",
+		"",
+		render_markdown_table(
+			[
+				"component_id",
+				"indicator_id",
+				"bound_segment_id",
+				"matching_rows",
+				"non_matching_rows",
+				"sbo_short_description",
+			],
+			indicator_members,
+		),
+		"",
+		"### Evidence Status Counts",
+		"",
+	]
+	status_rows = [
+		[escape_markdown_table_cell(status or "(blank evidence_status)"), str(count)]
+		for status, count in sorted(status_counts.items(), key=lambda item: (-item[1], item[0].lower()))
+	]
+	if status_rows:
+		parts.append(render_markdown_table(["evidence_status", "count"], status_rows))
+	else:
+		parts.append("No scored rows.")
+	parts.extend([
+		"",
+		"### Matching Segment Texts",
+		"",
+	])
+	matching_rows = build_segment_count_rows(
+		matching_segment_counts,
+		matching_source_submission_entries_by_segment,
+	)
+	if matching_rows:
+		parts.append(render_markdown_table(["segment_text", "count", "original_submission"], matching_rows))
+	else:
+		parts.append("No matching segment texts.")
+	parts.extend([
+		"",
+		"### Non-Matching Segment Texts",
+		"",
+	])
+	non_matching_rows = build_segment_count_rows(
+		non_matching_segment_counts,
+		non_matching_source_submission_entries_by_segment,
+	)
+	if non_matching_rows:
+		parts.append(render_markdown_table(["segment_text", "count", "original_submission"], non_matching_rows))
+	else:
+		parts.append("No non-matching segment texts.")
+	parts.append("")
+	return "\n".join(parts)
+
+
 def build_comparison_diff_rows(
 	component_ids: list[str],
 	current_rows_by_component: dict[str, list[dict[str, str]]],
@@ -2568,6 +2943,7 @@ def main() -> int:
 	total_scored_rows = sum(len(rows) for rows in scored_rows_by_component.values())
 	lines = manifest_path.read_text(encoding="utf-8").splitlines()
 	indicator_summary_rows: dict[str, list[str]] = {}
+	indicator_segment_specs: dict[tuple[str, str], dict[str, str]] = {}
 	base_summary_rows: dict[str, dict[str, object]] = {}
 	positive_observation_keys_by_template: dict[str, list[tuple[str, str]]] = {}
 	positive_presence_keys_by_template: dict[str, set[tuple[str, str]]] = {}
@@ -2602,6 +2978,14 @@ def main() -> int:
 				padded = row_cells + [""] * (len(header_cells) - len(row_cells))
 				components = {header_cells[idx]: padded[idx] for idx in range(len(header_cells))}
 				indicator_id = (components.get("indicator_id") or "").strip() or "<missing>"
+				payload = parse_json_object((components.get("indicator_scoring_payload_json") or "").strip())
+				indicator_segment_specs[(matching_component_id, indicator_id)] = {
+					"component_id": matching_component_id,
+					"indicator_id": indicator_id,
+					"sbo_identifier": (components.get("sbo_identifier") or "").strip(),
+					"sbo_short_description": (components.get("sbo_short_description") or "").strip(),
+					"bound_segment_id": str(payload.get("bound_segment_id") or "").strip(),
+				}
 				matching_scored_rows = find_matching_scored_rows(
 					components,
 					scored_rows_by_component[matching_component_id],
@@ -2747,6 +3131,218 @@ def main() -> int:
 		),
 		encoding="utf-8",
 	)
+	input_rows_by_component_submission: dict[str, dict[tuple[str, str], dict[str, str]]] = {}
+	input_csv_path_by_component: dict[str, Path] = {}
+	scored_csv_path_by_component: dict[str, Path] = {}
+	stitched_csv_path_by_component: dict[str, Path] = {}
+	source_rows_by_component_submission: dict[str, dict[tuple[str, str], dict[str, str]]] = {}
+	stitched_rows_by_path: dict[Path, dict[tuple[str, str], dict[str, str]]] = {}
+	slot_group_reports: dict[str, dict[str, object]] = {}
+	for component_id in component_ids:
+		resolved_scored_paths = component_scored_csv_paths.get(component_id, [])
+		if not resolved_scored_paths:
+			continue
+		scored_csv_path_by_component[component_id] = resolved_scored_paths[0]
+		input_csv_path = derive_layer1_input_csv_path_from_scored_csv(resolved_scored_paths[0], component_id)
+		if input_csv_path is None or not input_csv_path.exists() or not input_csv_path.is_file():
+			continue
+		input_csv_path_by_component[component_id] = input_csv_path
+		input_rows_by_component_submission[component_id] = index_input_rows_by_component_submission(
+			load_scored_rows(input_csv_path)
+		)
+		stitched_csv_path = derive_layer0_stitched_csv_path_from_scored_csv(resolved_scored_paths[0])
+		if stitched_csv_path is None or not stitched_csv_path.exists() or not stitched_csv_path.is_file():
+			continue
+		stitched_csv_path_by_component[component_id] = stitched_csv_path
+		stitched_index = stitched_rows_by_path.get(stitched_csv_path)
+		if stitched_index is None:
+			stitched_index = index_input_rows_by_component_submission(load_scored_rows(stitched_csv_path))
+			stitched_rows_by_path[stitched_csv_path] = stitched_index
+		source_rows_by_component_submission[component_id] = stitched_index
+	for component_id, indicator_id in sorted(
+		indicator_segment_specs,
+		key=lambda key: component_indicator_order.get(
+			key,
+			(10**9, 10**9, 10**9, key[1].lower(), key[0].lower()),
+		),
+	):
+		indicator_spec = indicator_segment_specs[(component_id, indicator_id)]
+		base_row_info = base_row_reverse_lookup.get((component_id, indicator_id), {})
+		local_slot = (base_row_info.get("local_slot") or "").strip()
+		template_id = (base_row_info.get("template_id") or "").strip()
+		bound_segment_id = indicator_spec.get("bound_segment_id", "")
+		segment_field = f"segment_text_{component_id}__{bound_segment_id}" if bound_segment_id else ""
+		status_counts: Counter[str] = Counter()
+		matching_segment_counts: Counter[str] = Counter()
+		non_matching_segment_counts: Counter[str] = Counter()
+		matching_source_submission_entries_by_segment: dict[str, list[str]] = {}
+		non_matching_source_submission_entries_by_segment: dict[str, list[str]] = {}
+		matching_source_submission_seen_entries: dict[str, set[str]] = {}
+		non_matching_source_submission_seen_entries: dict[str, set[str]] = {}
+		matching_row_count = 0
+		non_matching_row_count = 0
+		missing_input_row_count = 0
+		input_rows_index = input_rows_by_component_submission.get(component_id, {})
+		source_rows_index = source_rows_by_component_submission.get(component_id, {})
+		for scored_row in scored_rows_by_component.get(component_id, []):
+			if (scored_row.get("indicator_id") or "").strip() != indicator_id:
+				continue
+			evidence_status = (scored_row.get("evidence_status") or "").strip()
+			status_counts[evidence_status or "(blank evidence_status)"] += 1
+			submission_id = resolve_submission_id_from_row(scored_row)
+			input_row = input_rows_index.get((component_id, submission_id))
+			source_row = source_rows_index.get((component_id, submission_id))
+			source_submission_entry = format_source_submission_entry(
+				component_id,
+				submission_id,
+				(source_row.get("source_response_text") or "") if source_row is not None else "",
+			)
+			if input_row is None:
+				segment_bucket = "(missing Layer 1 input row)"
+				missing_input_row_count += 1
+			else:
+				segment_value = (input_row.get(segment_field) or "").strip() if segment_field else (input_row.get("evidence_text") or "").strip()
+				segment_bucket = normalize_segment_bucket_label(segment_value)
+			if is_positive_scored_row(scored_row):
+				matching_segment_counts[segment_bucket] += 1
+				append_source_submission_entry(
+					matching_source_submission_entries_by_segment,
+					matching_source_submission_seen_entries,
+					segment_bucket,
+					source_submission_entry,
+				)
+				matching_row_count += 1
+			else:
+				non_matching_segment_counts[segment_bucket] += 1
+				append_source_submission_entry(
+					non_matching_source_submission_entries_by_segment,
+					non_matching_source_submission_seen_entries,
+					segment_bucket,
+					source_submission_entry,
+				)
+				non_matching_row_count += 1
+		indicator_output_path = output_dir / derive_indicator_segment_report_filename(
+			manifest_path,
+			component_id,
+			indicator_id,
+			comparison_scope,
+			current_label,
+			iteration_label,
+			run_label,
+		)
+		indicator_output_path.write_text(
+			render_indicator_segment_report(
+				output_path=indicator_output_path,
+				manifest_path=manifest_path,
+				comparison_scope=comparison_scope,
+				current_label=current_label,
+				component_id=component_id,
+				indicator_id=indicator_id,
+				sbo_identifier=indicator_spec.get("sbo_identifier", ""),
+				sbo_short_description=indicator_spec.get("sbo_short_description", ""),
+				bound_segment_id=bound_segment_id,
+				segment_field=segment_field,
+				scored_csv_path=scored_csv_path_by_component.get(component_id),
+				input_csv_path=input_csv_path_by_component.get(component_id),
+				status_counts=status_counts,
+				matching_segment_counts=matching_segment_counts,
+				non_matching_segment_counts=non_matching_segment_counts,
+				matching_source_submission_entries_by_segment=matching_source_submission_entries_by_segment,
+				non_matching_source_submission_entries_by_segment=non_matching_source_submission_entries_by_segment,
+				matching_row_count=matching_row_count,
+				non_matching_row_count=non_matching_row_count,
+				missing_input_row_count=missing_input_row_count,
+			),
+			encoding="utf-8",
+		)
+		if local_slot:
+			group_report = slot_group_reports.setdefault(
+				local_slot,
+				{
+					"template_ids": set(),
+					"indicator_members": [],
+					"status_counts": Counter(),
+					"matching_segment_counts": Counter(),
+					"non_matching_segment_counts": Counter(),
+					"matching_source_submission_entries_by_segment": {},
+					"non_matching_source_submission_entries_by_segment": {},
+					"matching_source_submission_seen_entries": {},
+					"non_matching_source_submission_seen_entries": {},
+					"matching_row_count": 0,
+					"non_matching_row_count": 0,
+					"missing_input_row_count": 0,
+				},
+			)
+			if template_id:
+				group_report["template_ids"].add(template_id)
+			group_report["indicator_members"].append(
+				[
+					component_id,
+					indicator_id,
+					bound_segment_id,
+					str(matching_row_count),
+					str(non_matching_row_count),
+					indicator_spec.get("sbo_short_description", ""),
+				]
+			)
+			group_report["status_counts"].update(status_counts)
+			group_report["matching_segment_counts"].update(matching_segment_counts)
+			group_report["non_matching_segment_counts"].update(non_matching_segment_counts)
+			for segment_bucket, entries in matching_source_submission_entries_by_segment.items():
+				for entry in entries:
+					append_source_submission_entry(
+						group_report["matching_source_submission_entries_by_segment"],
+						group_report["matching_source_submission_seen_entries"],
+						segment_bucket,
+						entry,
+					)
+			for segment_bucket, entries in non_matching_source_submission_entries_by_segment.items():
+				for entry in entries:
+					append_source_submission_entry(
+						group_report["non_matching_source_submission_entries_by_segment"],
+						group_report["non_matching_source_submission_seen_entries"],
+						segment_bucket,
+						entry,
+					)
+			group_report["matching_row_count"] += matching_row_count
+			group_report["non_matching_row_count"] += non_matching_row_count
+			group_report["missing_input_row_count"] += missing_input_row_count
+	for local_slot, group_report in sorted(slot_group_reports.items(), key=lambda item: item[0]):
+		group_report_output_path = output_dir / derive_indicator_slot_group_report_filename(
+			manifest_path,
+			local_slot,
+			comparison_scope,
+			current_label,
+			iteration_label,
+			run_label,
+		)
+		group_members = sorted(
+			group_report["indicator_members"],
+			key=lambda row: component_indicator_order.get(
+				(row[0], row[1]),
+				(10**9, 10**9, 10**9, row[1].lower(), row[0].lower()),
+			),
+		)
+		group_report_output_path.write_text(
+			render_indicator_slot_group_segment_report(
+				output_path=group_report_output_path,
+				manifest_path=manifest_path,
+				comparison_scope=comparison_scope,
+				current_label=current_label,
+				local_slot=local_slot,
+				template_ids=sorted(group_report["template_ids"]),
+				indicator_members=group_members,
+				status_counts=group_report["status_counts"],
+				matching_segment_counts=group_report["matching_segment_counts"],
+				non_matching_segment_counts=group_report["non_matching_segment_counts"],
+				matching_source_submission_entries_by_segment=group_report["matching_source_submission_entries_by_segment"],
+				non_matching_source_submission_entries_by_segment=group_report["non_matching_source_submission_entries_by_segment"],
+				matching_row_count=int(group_report["matching_row_count"]),
+				non_matching_row_count=int(group_report["non_matching_row_count"]),
+				missing_input_row_count=int(group_report["missing_input_row_count"]),
+			),
+			encoding="utf-8",
+		)
 	print(consolidated_output_path)
 	return 0
 
