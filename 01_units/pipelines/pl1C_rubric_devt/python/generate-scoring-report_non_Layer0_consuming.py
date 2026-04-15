@@ -1687,7 +1687,24 @@ def normalize_segment_bucket_label(value: str) -> str:
 
 
 def escape_markdown_table_cell(value: str) -> str:
-	return value.replace("|", "\\|").replace("\n", "<br>")
+	normalized = value.replace("\r\n", "\n").replace("\r", "\n")
+	return normalized.replace("|", "\\|").replace("\n", "<br>")
+
+
+def highlight_segment_text_in_submission(source_entry: str, segment_text: str) -> str:
+	normalized_entry = source_entry.replace("\r\n", "\n").replace("\r", "\n")
+	normalized_segment = segment_text.replace("\r\n", "\n").replace("\r", "\n").strip()
+	if not normalized_segment:
+		return normalized_entry
+	if normalized_segment in {"(blank segment text)", "(missing Layer 1 input row)"}:
+		return normalized_entry
+	exact_pattern = re.compile(re.escape(normalized_segment))
+	if exact_pattern.search(normalized_entry):
+		return exact_pattern.sub(lambda match: f"<mark>{match.group(0)}</mark>", normalized_entry)
+	ignore_case_pattern = re.compile(re.escape(normalized_segment), re.IGNORECASE)
+	if ignore_case_pattern.search(normalized_entry):
+		return ignore_case_pattern.sub(lambda match: f"<mark>{match.group(0)}</mark>", normalized_entry)
+	return normalized_entry
 
 
 def build_segment_summary_rows(segment_counts: Counter[str], evidence_status: str) -> list[list[str]]:
@@ -1704,8 +1721,9 @@ def build_segment_summary_rows(segment_counts: Counter[str], evidence_status: st
 def build_segment_detail_rows(detail_rows: list[tuple[str, str]]) -> list[list[str]]:
 	rows: list[list[str]] = []
 	for source_entry, segment_text in sorted(detail_rows, key=lambda item: (item[0].lower(), item[1].lower())):
+		highlighted_source_entry = highlight_segment_text_in_submission(source_entry, segment_text)
 		rows.append([
-			escape_markdown_table_cell(source_entry),
+			escape_markdown_table_cell(highlighted_source_entry),
 			escape_markdown_table_cell(segment_text),
 		])
 	return rows
@@ -1841,6 +1859,8 @@ def render_indicator_segment_report(
 		"",
 		"### Indicator-Segment Texts Summary",
 		"",
+		"#### Matching Segment Texts Summary",
+		"",
 	])
 	matching_summary_rows = build_segment_summary_rows(matching_segment_counts, "present")
 	if matching_summary_rows:
@@ -1848,6 +1868,8 @@ def render_indicator_segment_report(
 	else:
 		parts.append("No matching segment texts.")
 	parts.extend([
+		"",
+		"#### Non-Matching Segment Texts Summary",
 		"",
 	])
 	non_matching_summary_rows = build_segment_summary_rows(non_matching_segment_counts, "not_present")
@@ -1962,6 +1984,8 @@ def render_indicator_slot_group_segment_report(
 		"",
 		"### Indicator-Segment Texts Summary",
 		"",
+		"#### Matching Segment Texts Summary",
+		"",
 	])
 	matching_summary_rows = build_segment_summary_rows(matching_segment_counts, "present")
 	if matching_summary_rows:
@@ -1969,6 +1993,8 @@ def render_indicator_slot_group_segment_report(
 	else:
 		parts.append("No matching segment texts.")
 	parts.extend([
+		"",
+		"#### Non-Matching Segment Texts Summary",
 		"",
 	])
 	non_matching_summary_rows = build_segment_summary_rows(non_matching_segment_counts, "not_present")
