@@ -18,6 +18,7 @@ from generate_rubric_and_manifest_from_indicator_registry import collect_markdow
 
 ITERATION_RE = re.compile(r"\b(iter\d+)\b", re.IGNORECASE)
 RUN_RE = re.compile(r"\b(run\d+)\b", re.IGNORECASE)
+DIMENSION_ID_RE = re.compile(r"^D\d+(\d)$")
 
 
 @dataclass(frozen=True)
@@ -236,6 +237,82 @@ def parse_layer4_scale_info(manifest_path: Path) -> Layer4ScaleInfo | None:
     )
 
 
+def discover_layer3_component_output_paths(layer4_scored_csv: Path) -> list[Path]:
+    layer4_dir = layer4_scored_csv.resolve().parent
+    layer3_dir = layer4_dir.parent / "layer3"
+    if not layer3_dir.is_dir():
+        return []
+    return sorted(layer3_dir.glob("*_Layer3_component_scoring_*_output.csv"))
+
+
+def aggregate_layer3_dimension_counts(layer4_scored_csv: Path) -> dict[str, Counter[str]]:
+    aggregate_counts: dict[str, Counter[str]] = defaultdict(Counter)
+    for csv_path in discover_layer3_component_output_paths(layer4_scored_csv):
+        for row in load_rows(csv_path):
+            dimension_values = parse_json_object(row.get("source_dimension_values_json", ""))
+            for dimension_id, dimension_value in dimension_values.items():
+                match = DIMENSION_ID_RE.match(dimension_id)
+                if not match:
+                    continue
+                aggregate_dimension_id = f"D*{match.group(1)}"
+                aggregate_counts[aggregate_dimension_id][dimension_value] += 1
+    return aggregate_counts
+
+
+def build_layer3_dimension_rows(aggregate_counts: dict[str, Counter[str]]) -> list[list[str]]:
+    dimension_ids = [dimension_id for dimension_id in ("D*1", "D*2", "D*3") if dimension_id in aggregate_counts]
+    if not dimension_ids:
+        return []
+
+    ordered_bins = [
+        ("0-little_to_no_demonstration", "little_to_no_demonstration"),
+        ("1-partially_demonstrated", "partially_demonstrated"),
+        ("2-demonstrated", "demonstrated"),
+    ]
+    table_rows: list[list[str]] = []
+    for display_label, raw_label in ordered_bins:
+        table_rows.append(
+            [display_label, *[str(aggregate_counts[dimension_id].get(raw_label, 0)) for dimension_id in dimension_ids]]
+        )
+    table_rows.append(
+        ["Total", *[str(sum(aggregate_counts[dimension_id].values())) for dimension_id in dimension_ids]]
+    )
+    return table_rows
+
+
+def build_layer3_dimension_histogram_rows(
+    aggregate_counts: dict[str, Counter[str]],
+) -> list[list[str]]:
+    dimension_ids = [dimension_id for dimension_id in ("D*1", "D*2", "D*3") if dimension_id in aggregate_counts]
+    if not dimension_ids:
+        return []
+
+    ordered_bins = [
+        ("0-little_to_no_demonstration", "little_to_no_demonstration"),
+        ("1-partially_demonstrated", "partially_demonstrated"),
+        ("2-demonstrated", "demonstrated"),
+    ]
+    table_rows: list[list[str]] = []
+    for display_label, raw_label in ordered_bins:
+        count_lines: list[str] = []
+        bar_lines: list[str] = []
+        for dimension_id in dimension_ids:
+            bin_count = aggregate_counts[dimension_id].get(raw_label, 0)
+            count_lines.append(str(bin_count))
+            bar_lines.append(render_histogram_bar(bin_count))
+        table_rows.append([
+            display_label,
+            "<br>".join(count_lines),
+            "<br>".join(bar_lines),
+        ])
+    table_rows.append([
+        "Total",
+        "<br>".join(str(sum(aggregate_counts[dimension_id].values())) for dimension_id in dimension_ids),
+        "",
+    ])
+    return table_rows
+
+
 def normalize_to_percent(value: float, maximum_numeric_score: float) -> float:
     if maximum_numeric_score <= 0:
         return 0.0
@@ -314,6 +391,7 @@ def build_histogram_rows(percentages: list[float]) -> list[list[str]]:
             str(band_count),
             render_histogram_bar(band_count),
         ])
+    table_rows.append(["Total", str(len(percentages)), ""])
     return table_rows
 
 
@@ -322,14 +400,25 @@ def build_multi_histogram_rows(
 ) -> list[list[str]]:
     table_rows: list[list[str]] = []
     for band_min, band_max in build_band_edges():
-        row_cells = [format_band_label(band_min, band_max)]
+        count_lines: list[str] = []
+        bar_lines: list[str] = []
         for _, percentages in series_by_label:
             band_count = sum(
                 1 for normalized_percentage in percentages
                 if score_in_band(normalized_percentage, band_min, band_max)
             )
-            row_cells.extend([str(band_count), render_histogram_bar(band_count)])
-        table_rows.append(row_cells)
+            count_lines.append(str(band_count))
+            bar_lines.append(render_histogram_bar(band_count))
+        table_rows.append([
+            format_band_label(band_min, band_max),
+            "<br>".join(count_lines),
+            "<br>".join(bar_lines),
+        ])
+    table_rows.append([
+        "Total",
+        "<br>".join(str(len(percentages)) for _, percentages in series_by_label),
+        "",
+    ])
     return table_rows
 
 
@@ -421,6 +510,10 @@ def generate_report(args: argparse.Namespace) -> Path:
     normalized_percentage_summary = summarize_numeric(normalized_percentages) if normalized_percentages else None
     component_grade_headers, component_grade_rows = build_component_grade_rows(rows)
     component_numeric_rows = build_component_numeric_rows(rows)
+    layer3_dimension_counts = aggregate_layer3_dimension_counts(args.file_with_scored_texts)
+    layer3_dimension_ids = [dimension_id for dimension_id in ("D*1", "D*2", "D*3") if dimension_id in layer3_dimension_counts]
+    layer3_dimension_rows = build_layer3_dimension_rows(layer3_dimension_counts)
+    layer3_dimension_histogram_rows = build_layer3_dimension_histogram_rows(layer3_dimension_counts)
 
     metadata_rows = [
         ["assignment_id", assignment_id],
@@ -438,12 +531,12 @@ def generate_report(args: argparse.Namespace) -> Path:
         metadata_rows.append(["maximum_numeric_score", format_float(scale_info.maximum_numeric_score)])
 
     sections = [
-        f"# Layer 4 Grade Award Report: {assignment_id}",
+        f"## Layer 4 Grade Award Report: {assignment_id}",
         "",
-        "## Metadata",
+        "### Metadata",
         render_markdown_table(["field", "value"], metadata_rows),
         "",
-        "## Final Grade Award Distribution",
+        "### Final Grade Award Distribution",
         render_markdown_table(
             ["submission_score", "count", "percent"],
             build_distribution_rows(grade_scale, grade_counts, total_rows),
@@ -455,8 +548,8 @@ def generate_report(args: argparse.Namespace) -> Path:
         submission_percentages, component_percentages = collect_cutpoint_percentage_series(scale_info, rows)
         sections.extend(
             [
-                "## Grade Band Mapping to 0-100%",
-                "### Submission",
+                "### Grade Band Mapping to 0-100%",
+                "#### Submission",
                 render_markdown_table(
                     ["Bin", "Count", "Bar"],
                     build_histogram_rows(submission_percentages),
@@ -470,14 +563,13 @@ def generate_report(args: argparse.Namespace) -> Path:
             for component_id in scale_info.bound_component_ids
         ]
         if component_series:
-            component_headers = ["Bin"]
-            for component_id, _ in component_series:
-                component_headers.extend([f"{component_id} Count", f"{component_id} Bar"])
             sections.extend(
                 [
-                    "### Components",
+                    "#### Components",
+                    "Component order: " + ", ".join(component_id for component_id, _ in component_series),
+                    "",
                     render_markdown_table(
-                        component_headers,
+                        ["Bin", "Count", "Bar"],
                         build_multi_histogram_rows(component_series),
                     ),
                     "",
@@ -487,7 +579,7 @@ def generate_report(args: argparse.Namespace) -> Path:
     if numeric_summary is not None:
         sections.extend(
             [
-                "## Submission Numeric Score Summary",
+                "### Submission Numeric Score Summary",
                 render_markdown_table(
                     ["count", "min", "q1", "median", "mean", "q3", "max", "stdev"],
                     [[
@@ -508,7 +600,7 @@ def generate_report(args: argparse.Namespace) -> Path:
     if normalized_percentage_summary is not None:
         sections.extend(
             [
-                "## Submission Percentage Score Summary",
+                "### Submission Percentage Score Summary",
                 render_markdown_table(
                     ["count", "min", "q1", "median", "mean", "q3", "max", "stdev"],
                     [[
@@ -523,7 +615,7 @@ def generate_report(args: argparse.Namespace) -> Path:
                     ]],
                 ),
                 "",
-                "## Exact Percentage Distribution",
+                "### Exact Percentage Distribution",
                 render_markdown_table(
                     ["normalized_grade_value", "count", "percent"],
                     build_percentage_distribution_rows(normalized_percentages),
@@ -535,7 +627,7 @@ def generate_report(args: argparse.Namespace) -> Path:
     if confidence_counts:
         sections.extend(
             [
-                "## Minimum Component Confidence Distribution",
+                "### Minimum Component Confidence Distribution",
                 render_markdown_table(
                     ["min_confidence_component", "count", "percent"],
                     build_distribution_rows([], confidence_counts, total_rows),
@@ -547,7 +639,7 @@ def generate_report(args: argparse.Namespace) -> Path:
     if flags_counts:
         sections.extend(
             [
-                "## Flags Distribution",
+                "### Flags Distribution",
                 render_markdown_table(
                     ["flags_any_component", "count", "percent"],
                     build_distribution_rows([], flags_counts, total_rows),
@@ -559,7 +651,7 @@ def generate_report(args: argparse.Namespace) -> Path:
     if component_grade_headers and component_grade_rows:
         sections.extend(
             [
-                "## Component Grade Award Counts",
+                "### Component Grade Award Counts",
                 render_markdown_table(component_grade_headers, component_grade_rows),
                 "",
             ]
@@ -568,7 +660,7 @@ def generate_report(args: argparse.Namespace) -> Path:
     if component_numeric_rows:
         sections.extend(
             [
-                "## Component Numeric Score Summary",
+                "### Component Numeric Score Summary",
                 render_markdown_table(
                     ["component_id", "count", "min", "mean", "median", "max"],
                     component_numeric_rows,
@@ -576,6 +668,27 @@ def generate_report(args: argparse.Namespace) -> Path:
                 "",
             ]
         )
+
+    if layer3_dimension_rows:
+        sections.extend(
+            [
+                f"## Layer 3 Grade Award Report: {assignment_id}",
+                "",
+                "### Aggregate Dimension Distribution",
+                render_markdown_table(["Bin", *layer3_dimension_ids], layer3_dimension_rows),
+                "",
+            ]
+        )
+        if layer3_dimension_histogram_rows:
+            sections.extend(
+                [
+                    "### Aggregate Dimension Histogram",
+                    "Dimension order: " + ", ".join(layer3_dimension_ids),
+                    "",
+                    render_markdown_table(["Bin", "Count", "Bar"], layer3_dimension_histogram_rows),
+                    "",
+                ]
+            )
 
     output_path.write_text("\n".join(sections), encoding="utf-8")
     return output_path
