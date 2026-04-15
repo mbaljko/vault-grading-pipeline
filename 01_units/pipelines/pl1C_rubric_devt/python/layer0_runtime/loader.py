@@ -16,6 +16,7 @@ KNOWN_FAMILIES = {
 	"span_after_marker_before_marker",
 	"local_effect_phrase_after_marker",
 	"status_only_anchor_detector",
+	"claim_text_passthrough_if_anchor",
 }
 
 

@@ -114,6 +114,7 @@ KNOWN_STOP_MARKERS = {
 	"sentence_end",
 }
 FAMILY_BY_LOCAL_SLOT = {
+	"00": "claim_text_passthrough_if_anchor",
 	"01": "left_np_before_anchor",
 	"02": "right_np_after_anchor_before_marker",
 	"03": "span_after_marker_before_marker",
@@ -167,6 +168,13 @@ FAMILY_BEHAVIOR = {
 		"direction": "none",
 		"start_rule": "anchor_match_only",
 		"end_rule": "none",
+		"allow_coordination": False,
+		"skip_later_candidates": False,
+	},
+	"claim_text_passthrough_if_anchor": {
+		"direction": "none",
+		"start_rule": "full_text_if_anchor_match",
+		"end_rule": "full_text",
 		"allow_coordination": False,
 		"skip_later_candidates": False,
 	},
@@ -1310,6 +1318,10 @@ def derive_anchor_patterns(row: dict[str, object], family: str) -> list[str]:
 		if any(pattern in text for pattern in INTERACT_ANCHOR_PATTERNS):
 			return INTERACT_ANCHOR_PATTERNS
 		raise ValueError(f"Anchor patterns cannot be derived for status-only operator {row.get('template_id', '')!r}.")
+	if local_slot == "00":
+		if any(pattern in text for pattern in INTERACT_ANCHOR_PATTERNS):
+			return INTERACT_ANCHOR_PATTERNS
+		raise ValueError(f"Anchor patterns cannot be derived for template {row.get('template_id', '')!r}.")
 	if local_slot in {"01", "02"}:
 		if any(pattern in text for pattern in INTERACT_ANCHOR_PATTERNS):
 			return INTERACT_ANCHOR_PATTERNS
@@ -1333,6 +1345,8 @@ def derive_stop_markers(row: dict[str, object], family: str) -> list[str]:
 	if family == "status_only_anchor_detector":
 		return []
 	local_slot = str(row.get("local_slot", "")).strip()
+	if local_slot == "00":
+		return []
 	if local_slot not in STOP_MARKERS_BY_LOCAL_SLOT:
 		raise ValueError(f"Stop markers cannot be derived for local_slot {local_slot!r}.")
 	stop_markers = STOP_MARKERS_BY_LOCAL_SLOT[local_slot]
@@ -1346,6 +1360,8 @@ def derive_target_type(row: dict[str, object], family: str) -> str:
 	if family == "status_only_anchor_detector":
 		return "status_only"
 	local_slot = str(row.get("local_slot", "")).strip()
+	if local_slot == "00":
+		return "claim_text"
 	target_type = TARGET_TYPE_BY_LOCAL_SLOT.get(local_slot, "")
 	if not target_type:
 		raise ValueError(f"Target type cannot be derived for local_slot {local_slot!r}.")

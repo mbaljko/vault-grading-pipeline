@@ -165,10 +165,21 @@ def run_status_only_anchor_detector(text: str, spec: OperatorSpec) -> FamilyExec
 	return _ok_result("")
 
 
+def run_claim_text_passthrough_if_anchor(text: str, spec: OperatorSpec) -> FamilyExecution:
+	anchor = _first_anchor(text, spec)
+	if anchor is None:
+		return _missing_result("anchor not found")
+	segment_text = trim_span(text)
+	if not segment_text:
+		return _missing_result("anchor found but claim text is empty")
+	return _ok_result(segment_text)
+
+
 FAMILY_EXECUTORS = {
 	"left_np_before_anchor": run_left_np_before_anchor,
 	"right_np_after_anchor_before_marker": run_right_np_after_anchor_before_marker,
 	"span_after_marker_before_marker": run_span_after_marker_before_marker,
 	"local_effect_phrase_after_marker": run_local_effect_phrase_after_marker,
 	"status_only_anchor_detector": run_status_only_anchor_detector,
+	"claim_text_passthrough_if_anchor": run_claim_text_passthrough_if_anchor,
 }

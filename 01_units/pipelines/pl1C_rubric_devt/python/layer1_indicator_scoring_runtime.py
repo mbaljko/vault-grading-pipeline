@@ -66,8 +66,7 @@ def resolve_component_id(row: Mapping[str, object], component_id: str) -> str:
 
 def resolve_indicator_text(row: Mapping[str, object], component_id: str, payload: Mapping[str, object]) -> str:
 	bound_segment_id = str(payload.get("bound_segment_id", "") or "").strip()
-	dependency_type = str(payload.get("dependency_type", "") or "").strip()
-	if dependency_type == "slot_primary" and bound_segment_id:
+	if bound_segment_id:
 		segment_field = f"segment_text_{component_id}__{bound_segment_id}"
 		segment_value = str(row.get(segment_field, "") or "").strip()
 		if segment_value:
