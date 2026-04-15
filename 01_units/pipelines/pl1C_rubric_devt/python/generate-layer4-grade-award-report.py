@@ -261,6 +261,20 @@ def indicator_sort_key(indicator_id: str) -> tuple[int, str]:
     return 10**9, indicator_id
 
 
+def wildcard_indicator_id(indicator_id: str) -> str:
+    match = re.match(r"^I\d*(\d)$", indicator_id)
+    if match:
+        return f"I*{match.group(1)}"
+    return indicator_id
+
+
+def wildcard_indicator_sort_key(indicator_id: str) -> tuple[int, str]:
+    match = re.match(r"^I\*(\d)$", indicator_id)
+    if match:
+        return int(match.group(1)), indicator_id
+    return indicator_sort_key(indicator_id)
+
+
 def aggregate_layer2_indicator_counts(layer4_scored_csv: Path) -> dict[str, dict[str, Counter[str]]]:
     aggregate_counts: dict[str, dict[str, Counter[str]]] = defaultdict(lambda: defaultdict(Counter))
     for csv_path in discover_layer2_dimension_output_paths(layer4_scored_csv):
@@ -389,20 +403,25 @@ def build_single_layer3_dimension_histogram_rows(
 def build_layer2_indicator_histogram_rows(
     indicator_counts: dict[str, Counter[str]],
 ) -> tuple[list[str], list[list[str]], str]:
-    indicator_ids = sorted(indicator_counts, key=indicator_sort_key)
+    wildcard_counts: dict[str, Counter[str]] = defaultdict(Counter)
+    for indicator_id, counts in indicator_counts.items():
+        wildcard_id = wildcard_indicator_id(indicator_id)
+        wildcard_counts[wildcard_id].update(counts)
+
+    indicator_ids = sorted(wildcard_counts, key=wildcard_indicator_sort_key)
     if not indicator_ids:
         return [], [], build_histogram_resolution_note(1)
 
     preferred_bins = ["not_present", "present"]
     observed_bins = {
         indicator_value
-        for counts in indicator_counts.values()
+        for counts in wildcard_counts.values()
         for indicator_value in counts
     }
     ordered_bins = preferred_bins + sorted(observed_bins - set(preferred_bins))
     max_count = max(
         (
-            indicator_counts[indicator_id].get(indicator_value, 0)
+            wildcard_counts[indicator_id].get(indicator_value, 0)
             for indicator_id in indicator_ids
             for indicator_value in ordered_bins
         ),
@@ -410,24 +429,139 @@ def build_layer2_indicator_histogram_rows(
     )
     resolution = compute_histogram_resolution(max_count)
     table_rows: list[list[str]] = []
+    indicator_lines = "<br>".join(f"`{indicator_id}`" for indicator_id in indicator_ids)
     for indicator_value in ordered_bins:
         count_lines: list[str] = []
         bar_lines: list[str] = []
         for indicator_id in indicator_ids:
-            bin_count = indicator_counts[indicator_id].get(indicator_value, 0)
+            bin_count = wildcard_counts[indicator_id].get(indicator_value, 0)
             count_lines.append(str(bin_count))
             bar_lines.append(render_histogram_bar(bin_count, resolution))
         table_rows.append([
             indicator_value,
+            indicator_lines,
             "<br>".join(count_lines),
             "<br>".join(bar_lines),
         ])
     table_rows.append([
         "Total",
-        "<br>".join(str(sum(indicator_counts[indicator_id].values())) for indicator_id in indicator_ids),
+        indicator_lines,
+        "<br>".join(str(sum(wildcard_counts[indicator_id].values())) for indicator_id in indicator_ids),
         "",
     ])
     return indicator_ids, table_rows, build_histogram_resolution_note(resolution)
+
+
+def parse_registry_field_value_table(table: dict[str, object]) -> dict[str, str]:
+    headers = table.get("headers", [])
+    if headers != ["field", "value"]:
+        return {}
+    return {
+        str(row.get("field", "")).strip(): str(row.get("value", "")).strip()
+        for row in table.get("rows", [])
+    }
+
+
+def parse_registry_list_value(raw_value: str) -> list[str]:
+    return [item.strip().strip("`") for item in str(raw_value).split(",") if item.strip()]
+
+
+def discover_registry_snapshot_file(snapshot_dir: Path, pattern: str) -> Path | None:
+    matches = sorted(snapshot_dir.glob(pattern))
+    if not matches:
+        return None
+    return matches[0]
+
+
+def load_layer3_description_groups(snapshot_dir: Path) -> dict[str, list[tuple[str, str]]]:
+    registry_path = discover_registry_snapshot_file(snapshot_dir, "*_Registry_Layer3_Component_*.md")
+    if registry_path is None:
+        return {}
+
+    tables = collect_markdown_tables(registry_path)
+    component_rows = next(
+        (
+            table.get("rows", [])
+            for table in tables
+            if {"component_id", "sbo_short_description"}.issubset(set(table.get("headers", [])))
+        ),
+        [],
+    )
+    binding_rows = next(
+        (
+            table.get("rows", [])
+            for table in tables
+            if {"component_id", "d*1", "d*2", "d*3"}.issubset(set(table.get("headers", [])))
+        ),
+        [],
+    )
+
+    component_display_by_id: dict[str, tuple[str, str]] = {}
+    for row in component_rows:
+        component_id = str(row.get("component_id", "")).strip()
+        display_id = str(row.get("sbo_identifier_shortid", "")).strip() or component_id
+        short_description = str(row.get("sbo_short_description", "")).strip()
+        if component_id and short_description:
+            component_display_by_id[component_id] = (display_id, short_description)
+
+    descriptions_by_dimension: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for row in binding_rows:
+        component_id = str(row.get("component_id", "")).strip()
+        display_item = component_display_by_id.get(component_id)
+        if display_item is None:
+            continue
+        for aggregate_dimension_id in ("D*1", "D*2", "D*3"):
+            if str(row.get(aggregate_dimension_id.lower(), "")).strip():
+                descriptions_by_dimension[aggregate_dimension_id].append(display_item)
+
+    return {
+        aggregate_dimension_id: descriptions
+        for aggregate_dimension_id, descriptions in descriptions_by_dimension.items()
+    }
+
+
+def load_indicator_description_groups(snapshot_dir: Path) -> dict[str, list[tuple[str, str]]]:
+    layer1_registry_path = discover_registry_snapshot_file(snapshot_dir, "*_Registry_Layer1_Indicator_*.md")
+    layer2_registry_path = discover_registry_snapshot_file(snapshot_dir, "*_Registry_Layer2_Dimension_*.md")
+    if layer1_registry_path is None or layer2_registry_path is None:
+        return {}
+
+    layer1_short_descriptions_by_slot: dict[str, str] = {}
+    for table in collect_markdown_tables(layer1_registry_path):
+        row_map = parse_registry_field_value_table(table)
+        local_slot = row_map.get("local_slot", "").strip()
+        short_description = row_map.get("sbo_short_description", "").strip()
+        if local_slot and short_description:
+            layer1_short_descriptions_by_slot[local_slot] = short_description
+
+    descriptions_by_dimension: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    seen_by_dimension: dict[str, set[str]] = defaultdict(set)
+    for table in collect_markdown_tables(layer2_registry_path):
+        row_map = parse_registry_field_value_table(table)
+        dimension_local_id = row_map.get("dimension_local_id", "").strip()
+        input_indicators = parse_registry_list_value(row_map.get("input_indicators", ""))
+        if not dimension_local_id or not input_indicators:
+            continue
+        aggregate_dimension_id = f"D*{dimension_local_id[-1]}"
+        for indicator_id in input_indicators:
+            local_slot = indicator_id.removeprefix("I*").strip()
+            wildcard_id = f"I*{local_slot[-1]}" if local_slot else indicator_id
+            short_description = layer1_short_descriptions_by_slot.get(local_slot, "")
+            if not short_description or wildcard_id in seen_by_dimension[aggregate_dimension_id]:
+                continue
+            descriptions_by_dimension[aggregate_dimension_id].append((wildcard_id, short_description))
+            seen_by_dimension[aggregate_dimension_id].add(wildcard_id)
+
+    return {
+        aggregate_dimension_id: descriptions
+        for aggregate_dimension_id, descriptions in descriptions_by_dimension.items()
+    }
+
+
+def render_description_line(label: str, items: list[tuple[str, str]]) -> str:
+    if not items:
+        return ""
+    return label + ": " + "; ".join(f"`{item_id}` {description}" for item_id, description in items)
 
 
 def normalize_to_percent(value: float, maximum_numeric_score: float) -> float:
@@ -660,6 +794,9 @@ def generate_report(args: argparse.Namespace) -> Path:
     component_numeric_rows = build_component_numeric_rows(rows)
     layer2_indicator_counts = aggregate_layer2_indicator_counts(args.file_with_scored_texts)
     layer3_dimension_counts = aggregate_layer3_dimension_counts(args.file_with_scored_texts)
+    snapshot_dir = args.sbo_manifest_file.resolve().parent
+    layer3_description_groups = load_layer3_description_groups(snapshot_dir)
+    indicator_description_groups = load_indicator_description_groups(snapshot_dir)
     layer3_dimension_ids = [dimension_id for dimension_id in ("D*1", "D*2", "D*3") if dimension_id in layer3_dimension_counts]
     layer3_dimension_display_ids = [f"`{dimension_id}`" for dimension_id in layer3_dimension_ids]
     layer3_dimension_rows = build_layer3_dimension_rows(layer3_dimension_counts)
@@ -823,16 +960,21 @@ def generate_report(args: argparse.Namespace) -> Path:
             ]
         )
 
-    if layer3_dimension_rows:
+    if layer3_dimension_rows or layer3_dimension_histogram_rows:
         sections.extend(
             [
-                f"## Layer 3 Grade Award Report: {assignment_id}",
-                "",
-                "### Aggregate Dimension Distribution",
-                render_markdown_table(["Bin", *layer3_dimension_display_ids], layer3_dimension_rows),
+                "## Layer 1/2/3 Report, Aggregate",
                 "",
             ]
         )
+        if layer3_dimension_rows:
+            sections.extend(
+                [
+                    "### Aggregate Dimension Distribution",
+                    render_markdown_table(["Bin", *layer3_dimension_display_ids], layer3_dimension_rows),
+                    "",
+                ]
+            )
         if layer3_dimension_histogram_rows:
             sections.extend(
                 [
@@ -844,46 +986,64 @@ def generate_report(args: argparse.Namespace) -> Path:
                     "",
                 ]
             )
-            for dimension_id in layer3_dimension_ids:
-                single_dimension_rows, single_dimension_note = build_single_layer3_dimension_histogram_rows(
-                    layer3_dimension_counts,
-                    dimension_id,
-                )
-                if not single_dimension_rows:
-                    continue
+
+    disaggregate_dimension_ids = [
+        dimension_id
+        for dimension_id in ("D*1", "D*2", "D*3")
+        if dimension_id in layer3_dimension_counts or dimension_id in layer2_indicator_counts
+    ]
+    if disaggregate_dimension_ids:
+        sections.extend(
+            [
+                "## Layer 1/2/3 Report, Disaggregate",
+                "",
+            ]
+        )
+        for dimension_id in disaggregate_dimension_ids:
+            layer3_description_line = render_description_line(
+                "Layer 3 SBOs",
+                layer3_description_groups.get(dimension_id, []),
+            )
+            indicator_description_line = render_description_line(
+                "Indicators",
+                indicator_description_groups.get(dimension_id, []),
+            )
+            sections.extend(
+                [
+                    f"### `{dimension_id}`",
+                    layer3_description_line,
+                    indicator_description_line,
+                    "",
+                ]
+            )
+            single_dimension_rows, single_dimension_note = build_single_layer3_dimension_histogram_rows(
+                layer3_dimension_counts,
+                dimension_id,
+            )
+            if single_dimension_rows:
                 sections.extend(
                     [
-                        f"#### `{dimension_id}`",
+                        "#### Aggregate Dimension Histogram",
                         render_markdown_table(["Bin", "Count", "Bar"], single_dimension_rows),
                         single_dimension_note,
                         "",
                     ]
                 )
 
-    layer2_dimension_ids = [dimension_id for dimension_id in ("D*1", "D*2", "D*3") if dimension_id in layer2_indicator_counts]
-    if layer2_dimension_ids:
-        sections.extend(
-            [
-                f"## Layer 2 Grade Award Report: {assignment_id}",
-                "",
-            ]
-        )
-        for aggregate_dimension_id in layer2_dimension_ids:
             indicator_ids, layer2_histogram_rows, layer2_histogram_note = build_layer2_indicator_histogram_rows(
-                layer2_indicator_counts[aggregate_dimension_id]
+                layer2_indicator_counts.get(dimension_id, {})
             )
-            if not indicator_ids:
-                continue
-            sections.extend(
-                [
-                    f"### `{aggregate_dimension_id}` Indicator Histogram",
-                    "Indicator order: " + ", ".join(f"`{indicator_id}`" for indicator_id in indicator_ids),
-                    "",
-                    render_markdown_table(["Bin", "Count", "Bar"], layer2_histogram_rows),
-                    layer2_histogram_note,
-                    "",
-                ]
-            )
+            if indicator_ids:
+                sections.extend(
+                    [
+                        f"#### `{dimension_id}` Indicator Histogram",
+                        "Indicator order: " + ", ".join(f"`{indicator_id}`" for indicator_id in indicator_ids),
+                        "",
+                        render_markdown_table(["Bin", "Indicator", "Count", "Bar"], layer2_histogram_rows),
+                        layer2_histogram_note,
+                        "",
+                    ]
+                )
 
     output_path.write_text("\n".join(sections), encoding="utf-8")
     return output_path
