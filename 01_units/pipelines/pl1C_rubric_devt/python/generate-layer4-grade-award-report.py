@@ -473,7 +473,7 @@ def discover_registry_snapshot_file(snapshot_dir: Path, pattern: str) -> Path | 
     return matches[0]
 
 
-def load_layer3_description_groups(snapshot_dir: Path) -> dict[str, list[tuple[str, str]]]:
+def load_layer3_description_groups(snapshot_dir: Path) -> dict[str, list[tuple[str, str, str]]]:
     registry_path = discover_registry_snapshot_file(snapshot_dir, "*_Registry_Layer3_Component_*.md")
     if registry_path is None:
         return {}
@@ -504,15 +504,18 @@ def load_layer3_description_groups(snapshot_dir: Path) -> dict[str, list[tuple[s
         if component_id and short_description:
             component_display_by_id[component_id] = (display_id, short_description)
 
-    descriptions_by_dimension: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    descriptions_by_dimension: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
     for row in binding_rows:
         component_id = str(row.get("component_id", "")).strip()
         display_item = component_display_by_id.get(component_id)
         if display_item is None:
             continue
         for aggregate_dimension_id in ("D*1", "D*2", "D*3"):
-            if str(row.get(aggregate_dimension_id.lower(), "")).strip():
-                descriptions_by_dimension[aggregate_dimension_id].append(display_item)
+            concrete_dimension_id = str(row.get(aggregate_dimension_id.lower(), "")).strip()
+            if concrete_dimension_id:
+                descriptions_by_dimension[aggregate_dimension_id].append(
+                    (concrete_dimension_id, display_item[0], display_item[1])
+                )
 
     return {
         aggregate_dimension_id: descriptions
@@ -558,10 +561,26 @@ def load_indicator_description_groups(snapshot_dir: Path) -> dict[str, list[tupl
     }
 
 
-def render_description_line(label: str, items: list[tuple[str, str]]) -> str:
+def render_bullet_description_block(label: str, items: list[str]) -> list[str]:
     if not items:
-        return ""
-    return label + ": " + "; ".join(f"`{item_id}` {description}" for item_id, description in items)
+        return []
+    if label:
+        return [f"{label}:", *items]
+    return items
+
+
+def render_layer3_description_block(items: list[tuple[str, str, str]]) -> list[str]:
+    return render_bullet_description_block(
+        "Layer 3 SBOs",
+        [f"- `{dimension_id}` - `{component_shortid}` {description}" for dimension_id, component_shortid, description in items],
+    )
+
+
+def render_indicator_description_block(items: list[tuple[str, str]]) -> list[str]:
+    return render_bullet_description_block(
+        "",
+        [f"- `{indicator_id}` {description}" for indicator_id, description in items],
+    )
 
 
 def normalize_to_percent(value: float, maximum_numeric_score: float) -> float:
@@ -794,7 +813,7 @@ def generate_report(args: argparse.Namespace) -> Path:
     component_numeric_rows = build_component_numeric_rows(rows)
     layer2_indicator_counts = aggregate_layer2_indicator_counts(args.file_with_scored_texts)
     layer3_dimension_counts = aggregate_layer3_dimension_counts(args.file_with_scored_texts)
-    snapshot_dir = args.sbo_manifest_file.resolve().parent
+    snapshot_dir = args.submission_registry.resolve().parent
     layer3_description_groups = load_layer3_description_groups(snapshot_dir)
     indicator_description_groups = load_indicator_description_groups(snapshot_dir)
     layer3_dimension_ids = [dimension_id for dimension_id in ("D*1", "D*2", "D*3") if dimension_id in layer3_dimension_counts]
@@ -1000,22 +1019,13 @@ def generate_report(args: argparse.Namespace) -> Path:
             ]
         )
         for dimension_id in disaggregate_dimension_ids:
-            layer3_description_line = render_description_line(
-                "Layer 3 SBOs",
-                layer3_description_groups.get(dimension_id, []),
-            )
-            indicator_description_line = render_description_line(
-                "Indicators",
-                indicator_description_groups.get(dimension_id, []),
-            )
             sections.extend(
                 [
                     f"### `{dimension_id}`",
-                    layer3_description_line,
-                    indicator_description_line,
-                    "",
                 ]
             )
+            sections.extend(render_layer3_description_block(layer3_description_groups.get(dimension_id, [])))
+            sections.append("")
             single_dimension_rows, single_dimension_note = build_single_layer3_dimension_histogram_rows(
                 layer3_dimension_counts,
                 dimension_id,
@@ -1038,6 +1048,13 @@ def generate_report(args: argparse.Namespace) -> Path:
                     [
                         f"#### `{dimension_id}` Indicator Histogram",
                         "Indicator order: " + ", ".join(f"`{indicator_id}`" for indicator_id in indicator_ids),
+                    ]
+                )
+                sections.extend(
+                    render_indicator_description_block(indicator_description_groups.get(dimension_id, []))
+                )
+                sections.extend(
+                    [
                         "",
                         render_markdown_table(["Bin", "Indicator", "Count", "Bar"], layer2_histogram_rows),
                         layer2_histogram_note,
