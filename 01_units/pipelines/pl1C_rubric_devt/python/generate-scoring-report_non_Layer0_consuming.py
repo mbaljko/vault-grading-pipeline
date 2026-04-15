@@ -85,6 +85,7 @@ RUN_RE = re.compile(r"\b(run\d+)\b", re.IGNORECASE)
 RUNNER_OUTPUT_SUBDIR = "Level1-CalibrationTesting-Outputs"
 SCORING_OUTPUT_VERSION_RE = re.compile(r"_v(\d+)(?=_)")
 REGISTRY_VERSION_PATH_RE = re.compile(r"(/registry_v)(\d+)(/)", re.IGNORECASE)
+COMPONENT_ID_RANGE_RE = re.compile(r"Section([A-Za-z])(\{\d+\.\.\d+\}|\d+)Response")
 POSITIVE_EVIDENCE_STATUS_VALUES = {
 	"positive",
 	"present",
@@ -440,11 +441,47 @@ def discover_component_legacy_scored_csv_paths_in_dir(directory: Path, component
 	return []
 
 
+def discover_component_deterministic_scored_csv_paths_in_dir(
+	directory: Path,
+	component_id: str,
+	expected_version_label: str | None = None,
+) -> list[Path]:
+	if not directory.exists() or not directory.is_dir():
+		return []
+	if expected_version_label:
+		combined_pattern = f"*{component_id}*_Layer1_indicator_scoring_v{expected_version_label}_output.csv"
+	else:
+		combined_pattern = f"*{component_id}*_Layer1_indicator_scoring_v*_output.csv"
+	combined_matches = sorted(
+		candidate_path
+		for candidate_path in directory.glob(combined_pattern)
+		if candidate_path.is_file() and not candidate_path.name.endswith("-wide.csv")
+	)
+	if combined_matches:
+		return combined_matches
+	if expected_version_label:
+		per_indicator_pattern = f"*{component_id}*_Layer1_indicator_module_v{expected_version_label}_*_output.csv"
+	else:
+		per_indicator_pattern = f"*{component_id}*_Layer1_indicator_module_v*_*_output.csv"
+	return sorted(
+		candidate_path
+		for candidate_path in directory.glob(per_indicator_pattern)
+		if candidate_path.is_file() and not candidate_path.name.endswith("-wide.csv")
+	)
+
+
 def discover_component_scored_csv_paths_in_dir(
 	directory: Path,
 	component_id: str,
 	expected_version_label: str | None = None,
 ) -> list[Path]:
+	deterministic_matches = discover_component_deterministic_scored_csv_paths_in_dir(
+		directory,
+		component_id,
+		expected_version_label,
+	)
+	if deterministic_matches:
+		return deterministic_matches
 	py_matches = discover_component_py_scored_csv_paths_in_dir(directory, component_id, expected_version_label)
 	if py_matches:
 		return py_matches
@@ -1344,30 +1381,20 @@ def render_yaml_frontmatter(
 
 def build_base_row_reverse_lookup(registry_path: Path) -> dict[tuple[str, str], dict[str, str]]:
 	tables = collect_markdown_tables(registry_path)
+	base_row_required_columns = {
+		"template_id",
+		"local_slot",
+	}
 	base_rows = collect_section_rows(
 		tables,
 		"base table",
-		required_columns={
-			"template_id",
-			"local_slot",
-			"sbo_short_description",
-			"indicator_definition",
-			"assessment_guidance",
-			"evaluation_notes",
-		},
+		required_columns=base_row_required_columns,
 		allow_field_value_records=True,
 	)
 	if not base_rows:
 		base_rows = collect_field_value_records(
 			tables,
-			required_columns={
-				"template_id",
-				"local_slot",
-				"sbo_short_description",
-				"indicator_definition",
-				"assessment_guidance",
-				"evaluation_notes",
-			},
+			required_columns=base_row_required_columns,
 		)
 	reuse_table = find_table_by_heading(tables, "reuse rule table")
 	component_block_rule_table = find_table_by_heading(tables, "component block rule table")
@@ -1391,6 +1418,29 @@ def build_base_row_reverse_lookup(registry_path: Path) -> dict[tuple[str, str], 
 			"sbo_short_description": base_row.get("sbo_short_description", "").strip(),
 			"expansion_mode": reuse_row.get("expansion_mode", "").strip() or "<unspecified>",
 		}
+
+	def expand_component_ids_from_layer0_pattern(pattern: str) -> list[str]:
+		matches = COMPONENT_ID_RANGE_RE.findall(pattern)
+		component_ids: list[str] = []
+		for block_prefix, range_token in matches:
+			if range_token.startswith("{") and range_token.endswith("}") and ".." in range_token:
+				start_text, end_text = range_token[1:-1].split("..", 1)
+				start = int(start_text)
+				end = int(end_text)
+				for block_number in range(start, end + 1):
+					component_ids.append(f"Section{block_prefix}{block_number}Response")
+			else:
+				component_ids.append(f"Section{block_prefix}{int(range_token)}Response")
+		return component_ids
+
+	def derive_legacy_layer1_indicator_id(component_id: str, local_slot: str) -> str:
+		match = re.fullmatch(r"SectionB(\d+)Response", component_id)
+		if match is None:
+			return local_slot
+		slot_match = re.fullmatch(r"0?(\d+)", local_slot)
+		if slot_match is None:
+			return local_slot
+		return f"I{match.group(1)}{slot_match.group(1)}"
 
 	if {"indicator_id", "component_id"}.issubset(reuse_headers):
 		for reuse_row in reuse_rows:
@@ -1457,6 +1507,33 @@ def build_base_row_reverse_lookup(registry_path: Path) -> dict[tuple[str, str], 
 						{**template_values, "local_slot": base_row.get("local_slot", "").strip()},
 					)
 					register_mapping(component_id, indicator_id, base_row, reuse_row)
+		return reverse_lookup
+
+	if {
+		"template_group",
+		"applies_to_layer0_record_pattern",
+		"component_block_rule",
+		"local_slot_source",
+		"sbo_identifier_format",
+	}.issubset(reuse_headers):
+		for reuse_row in reuse_rows:
+			template_group = reuse_row.get("template_group", "").strip()
+			layer0_pattern = reuse_row.get("applies_to_layer0_record_pattern", "").strip()
+			local_slot_source = reuse_row.get("local_slot_source", "").strip()
+			if local_slot_source not in {"template.local_slot", "local_slot", "template_local_slot"}:
+				continue
+			matching_base_rows = [
+				row for row in base_rows if row.get("template_id", "").strip().startswith(f"{template_group}_")
+			]
+			for component_id in expand_component_ids_from_layer0_pattern(layer0_pattern):
+				for base_row in matching_base_rows:
+					local_slot = base_row.get("local_slot", "").strip()
+					if not local_slot:
+						continue
+					register_mapping(component_id, local_slot, base_row, reuse_row)
+					legacy_indicator_id = derive_legacy_layer1_indicator_id(component_id, local_slot)
+					if legacy_indicator_id != local_slot:
+						register_mapping(component_id, legacy_indicator_id, base_row, reuse_row)
 	return reverse_lookup
 
 
