@@ -280,6 +280,19 @@ def build_passthrough_row(representative_row: dict[str, str]) -> dict[str, str]:
 	return output_row
 
 
+def select_passthrough_representative_row(rows: list[dict[str, str]]) -> dict[str, str]:
+	if not rows:
+		return {}
+
+	def representative_sort_key(row: dict[str, str]) -> tuple[int, int]:
+		passthrough_row = build_passthrough_row(row)
+		non_empty_passthrough_fields = sum(1 for value in passthrough_row.values() if str(value).strip())
+		has_no_indicator_id = 1 if not (row.get("indicator_id") or "").strip() else 0
+		return (non_empty_passthrough_fields, has_no_indicator_id)
+
+	return max(rows, key=representative_sort_key)
+
+
 def build_output_row(
 	representative_row: dict[str, str],
 	rows: list[dict[str, str]],
@@ -370,7 +383,7 @@ def score_submission_rows(
 ) -> list[dict[str, str]]:
 	indicator_values = build_indicator_value_map(submission_id, rows, indicator_id_field, value_field)
 	indicator_confidences = build_indicator_confidence_map(rows, indicator_id_field)
-	representative_row = rows[0]
+	representative_row = select_passthrough_representative_row(rows)
 	output_rows: list[dict[str, str]] = []
 	for module in modules:
 		try:
@@ -418,7 +431,7 @@ def build_wide_output_rows(
 		dimension_rows_by_submission.setdefault(submission_id, {})[dimension_id] = row
 
 	representative_submission_rows = next(iter(grouped_rows.values()), [])
-	base_fieldnames = list(build_passthrough_row(representative_submission_rows[0]).keys()) if representative_submission_rows else []
+	base_fieldnames = list(build_passthrough_row(select_passthrough_representative_row(representative_submission_rows)).keys()) if representative_submission_rows else []
 	if "component_id" not in base_fieldnames:
 		base_fieldnames.append("component_id")
 	headers = list(base_fieldnames)
@@ -436,7 +449,7 @@ def build_wide_output_rows(
 	wide_rows: list[list[str]] = []
 	for submission_id in sorted(grouped_rows):
 		submission_rows = grouped_rows[submission_id]
-		representative_row = submission_rows[0]
+		representative_row = select_passthrough_representative_row(submission_rows)
 		indicator_values = build_indicator_value_map(
 			submission_id,
 			submission_rows,
