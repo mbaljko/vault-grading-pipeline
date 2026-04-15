@@ -796,6 +796,41 @@ def build_machine_normalized_indicator_definition(record: dict[str, str]) -> str
     return " ".join(parts).strip()
 
 
+def build_machine_normalized_short_description(record: dict[str, str], item_id: str = "") -> str:
+    existing_description = record.get("sbo_short_description", "").strip()
+    if existing_description:
+        return existing_description
+
+    bound_segment_id = record.get("bound_segment_id", "").strip()
+    match_policy = record.get("match_policy", "").strip().lower()
+    decision_rule = record.get("decision_rule", "").strip().lower()
+    allowed_terms = {value.lower() for value in parse_semicolon_separated_values(record.get("allowed_terms", ""))}
+    allowed_roles = {value.lower() for value in parse_semicolon_separated_values(record.get("allowed_roles", ""))}
+    required_term_groups = parse_semicolon_separated_values(record.get("required_term_groups", ""))
+
+    if {"interact with", "interacts with", "intersect with", "intersects with"} & allowed_terms:
+        return "Claim interaction phrasing"
+    if bound_segment_id in {"DemandA", "DemandB"}:
+        return f"Program criteria or constraints in {bound_segment_id}"
+    if bound_segment_id == "Mechanism":
+        return "Named administrative or review mechanisms"
+    if bound_segment_id == "Workflow":
+        return "Workflow stages or human roles"
+    if bound_segment_id == "Effect" or match_policy == "co_occurrence" or required_term_groups:
+        return "Structural effects on review visibility or discretion"
+    if match_policy == "absence_check" or decision_rule == "present_if_no_excluded_terms_found":
+        return "Non-normative descriptive framing"
+    if allowed_roles & {"administrative staff", "reviewer", "individual reviewer", "committee", "review committee"}:
+        return "Human decision actors named in claim"
+    if allowed_terms & {"administrative staff", "reviewer", "individual reviewer", "committee", "review committee"}:
+        return "Human decision actors named in claim"
+    if bound_segment_id:
+        return f"Indicator over {bound_segment_id}"
+    if item_id:
+        return f"Indicator {item_id}"
+    return "Layer 1 indicator"
+
+
 def build_machine_normalized_indicator_guidance(record: dict[str, str]) -> str:
     parts: list[str] = []
     scoring_mode = record.get("scoring_mode", "").strip()
@@ -920,7 +955,7 @@ def build_registry_rows_from_machine_normalized_layer1_tables(
                         "indicator_id": item_id,
                         "sbo_identifier": sbo_identifier,
                         "sbo_identifier_shortid": item_id,
-                        "sbo_short_description": f"Indicator {item_id} over {base_row.get('bound_segment_id', '').strip() or 'Layer 0 evidence'}",
+                        "sbo_short_description": build_machine_normalized_short_description(base_row, item_id),
                         "indicator_definition": build_machine_normalized_indicator_definition(base_row),
                         "assessment_guidance": build_machine_normalized_indicator_guidance(base_row),
                         "evaluation_notes": "Follow the machine-normalised registry fields exactly; do not infer undeclared semantics.",
