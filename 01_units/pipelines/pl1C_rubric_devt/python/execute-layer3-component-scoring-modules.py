@@ -313,13 +313,18 @@ def score_submission_rows(
 	submission_rows: list[dict[str, str]],
 	dimension_id_field: str,
 	value_field: str,
+	dimension_scale_lookup: dict[str, dict[str, int]],
 	confidence_field: str,
 	flags_field: str,
 ) -> dict[str, str]:
 	dimension_values = build_dimension_value_map(submission_rows, dimension_id_field=dimension_id_field, value_field=value_field)
 	bound_dimension_ids = [str(dimension_id) for dimension_id in getattr(module, "BOUND_DIMENSION_IDS", [])]
 	source_dimension_values = {dimension_id: dimension_values.get(dimension_id, "") for dimension_id in bound_dimension_ids}
-	component_score = str(module.score_component(source_dimension_values))
+	scale_lookup_for_component = {
+		dimension_id: dimension_scale_lookup.get(dimension_id, {})
+		for dimension_id in bound_dimension_ids
+	}
+	component_score = str(module.score_component(source_dimension_values, dimension_scale_lookup=scale_lookup_for_component))
 	output_row = build_passthrough_row(submission_rows)
 	output_row["component_id"] = str(getattr(module, "COMPONENT_ID", "")).strip()
 	output_row["sbo_identifier"] = str(getattr(module, "SBO_IDENTIFIER", "")).strip()
@@ -345,12 +350,14 @@ def main() -> int:
 		if not target_rows:
 			raise ValueError(f"No Layer 2 rows found for component_id={args.target_component_id}")
 		submission_groups = build_submission_groups(target_rows, submission_id_field=args.submission_id_field)
+		dimension_scale_lookup = build_dimension_scale_lookup(target_rows, args.dimension_id_field)
 		output_rows = [
 			score_submission_rows(
 				module,
 				submission_rows,
 				dimension_id_field=args.dimension_id_field,
 				value_field=args.value_field,
+				dimension_scale_lookup=dimension_scale_lookup,
 				confidence_field=args.confidence_field,
 				flags_field=args.flags_field,
 			)
@@ -359,7 +366,6 @@ def main() -> int:
 		output_path = args.output_file.resolve()
 		write_scored_rows(output_rows, output_path)
 		bound_dimension_ids = [str(dimension_id) for dimension_id in getattr(module, "BOUND_DIMENSION_IDS", [])]
-		dimension_scale_lookup = build_dimension_scale_lookup(target_rows, args.dimension_id_field)
 		wide_output_path = derive_wide_output_path(output_path)
 		wide_headers, wide_output_rows = build_wide_output_rows(
 			submission_groups,
