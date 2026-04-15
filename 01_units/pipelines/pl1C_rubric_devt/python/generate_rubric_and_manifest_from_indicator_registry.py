@@ -754,6 +754,27 @@ def derive_component_block(component_id: str) -> str:
     return compact or component_id.strip()
 
 
+def derive_legacy_layer1_indicator_id(component_id: str, local_slot: str) -> str:
+    component_block = derive_component_block(component_id)
+    compact_slot = local_slot.strip().lstrip("0")
+    if compact_slot == "":
+        compact_slot = "0"
+    return f"I{component_block}{compact_slot}"
+
+
+def derive_legacy_layer1_sbo_identifier(assessment_id: str, component_id: str, indicator_id: str) -> str:
+    match = re.search(r"Section([A-Za-z]+)(\d+)Response", component_id)
+    if match is not None:
+        section_prefix = match.group(1)
+        section_number = match.group(2)
+        component_token = f"Sec{section_prefix}{section_number}"
+    else:
+        component_token = component_id.strip()
+    if assessment_id:
+        return f"I_{assessment_id}_{component_token}_{indicator_id}"
+    return f"I_{component_token}_{indicator_id}"
+
+
 def build_machine_normalized_indicator_definition(record: dict[str, str]) -> str:
     parts: list[str] = []
     bound_segment_id = record.get("bound_segment_id", "").strip()
@@ -883,15 +904,14 @@ def build_registry_rows_from_machine_normalized_layer1_tables(
     rows: list[RegistryRow] = []
     for component_pattern in component_patterns:
         for component_id, _ in expand_component_pattern(component_pattern):
-            component_block = derive_component_block(component_id)
             for base_row in base_rows:
                 effective_status = base_row.get("status", "").strip()
                 if not include_inactive and effective_status and effective_status.lower() != "active":
                     continue
 
                 local_slot = base_row.get("local_slot", "").strip()
-                item_id = local_slot
-                sbo_identifier = f"I_{assessment_id}_B{component_block}_CX_{local_slot}" if assessment_id else f"I_B{component_block}_CX_{local_slot}"
+                item_id = derive_legacy_layer1_indicator_id(component_id, local_slot)
+                sbo_identifier = derive_legacy_layer1_sbo_identifier(assessment_id, component_id, item_id)
                 merged_record = dict(base_row)
                 merged_record.update(
                     {
