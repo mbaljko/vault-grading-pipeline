@@ -857,11 +857,24 @@ def build_machine_normalized_decision_procedure(record: dict[str, str]) -> str:
     return " ".join(parts).strip()
 
 
+HTML_BREAK_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
+LEADING_LIST_MARKER_RE = re.compile(r"^\s*[-*]\s*")
+
+
+def normalize_semicolon_delimited_part(raw_part: str) -> str:
+    normalized = normalize_markdown_cell(raw_part).strip().strip("`")
+    if not normalized:
+        return ""
+    normalized = HTML_BREAK_RE.sub(" ", normalized)
+    normalized = LEADING_LIST_MARKER_RE.sub("", normalized)
+    return " ".join(normalized.split())
+
+
 def parse_semicolon_separated_values(raw_value: str) -> list[str]:
     values: list[str] = []
     seen: set[str] = set()
     for part in raw_value.split(";"):
-        normalized = normalize_markdown_cell(part).strip().strip("`")
+        normalized = normalize_semicolon_delimited_part(part)
         if not normalized:
             continue
         key = normalized.lower()
@@ -875,7 +888,7 @@ def parse_semicolon_separated_values(raw_value: str) -> list[str]:
 def parse_alias_mapping(raw_value: str) -> dict[str, str]:
     alias_mapping: dict[str, str] = {}
     for part in raw_value.split(";"):
-        normalized = normalize_markdown_cell(part).strip().strip("`")
+        normalized = normalize_semicolon_delimited_part(part)
         if not normalized or "->" not in normalized:
             continue
         alias_raw, canonical_raw = normalized.split("->", 1)
