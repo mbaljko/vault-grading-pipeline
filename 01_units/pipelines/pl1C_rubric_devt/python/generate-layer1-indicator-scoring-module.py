@@ -122,6 +122,13 @@ def resolve_output_path(output_dir: Path, output_file_stem: str, output_format: 
 	return output_dir / f"{output_file_stem}_{indicator_id}.{output_format.lstrip('.')}"
 
 
+def remove_stale_generated_modules(output_dir: Path, output_file_stem: str, output_format: str) -> None:
+	extension = output_format.lstrip('.')
+	for existing_path in output_dir.glob(f"{output_file_stem}_*.{extension}"):
+		if existing_path.is_file():
+			existing_path.unlink()
+
+
 def build_module_source(row: dict[str, str], payload: dict[str, object]) -> str:
 	docstring = (
 		f'"""Deterministic Layer 1 scorer for {row["indicator_id"]} ({row["component_id"]}).\n\n'
@@ -183,6 +190,7 @@ def main() -> int:
 		filtered_rows = filter_manifest_rows(manifest_rows, args.target_component_id)
 		output_dir = args.output_dir.resolve()
 		output_dir.mkdir(parents=True, exist_ok=True)
+		remove_stale_generated_modules(output_dir, args.output_file_stem, args.output_format)
 		output_paths: list[Path] = []
 		for row in filtered_rows:
 			indicator_id = row["indicator_id"].strip()

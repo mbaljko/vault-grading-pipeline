@@ -99,6 +99,13 @@ def resolve_output_path(output_dir: Path, output_file_stem: str, output_format: 
 	return output_dir / f"{output_file_stem}_{item_id}.{output_format.lstrip('.')}"
 
 
+def remove_stale_generated_outputs(output_dir: Path, output_file_stem: str, output_format: str) -> None:
+	extension = output_format.lstrip('.')
+	for existing_path in output_dir.glob(f"{output_file_stem}_*.{extension}"):
+		if existing_path.is_file():
+			existing_path.unlink()
+
+
 def split_payload_blocks(payload_text: str) -> tuple[str, str, str]:
 	lines = payload_text.splitlines()
 	if not lines:
@@ -363,6 +370,7 @@ def main() -> int:
 		filtered_rows = filter_manifest_rows(manifest_rows, target_component_id, item_id_field)
 		output_dir = args.output_dir.resolve()
 		output_dir.mkdir(parents=True, exist_ok=True)
+		remove_stale_generated_outputs(output_dir, args.output_file_stem, args.output_format)
 		output_paths: list[Path] = []
 		for row in filtered_rows:
 			item_id = row[item_id_field].strip()

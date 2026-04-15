@@ -113,6 +113,13 @@ def derive_wide_output_path(output_path: Path) -> Path:
 	return output_path.with_name(f"{output_path.stem}-wide{output_path.suffix}")
 
 
+def remove_stale_indicator_outputs(output_dir: Path, output_file_stem: str, output_format: str) -> None:
+	extension = output_format.lstrip('.')
+	for existing_path in output_dir.glob(f"{output_file_stem}_*_output.{extension}"):
+		if existing_path.is_file():
+			existing_path.unlink()
+
+
 def write_grouped_wide_csv(headers: list[str], rows: list[list[str]], output_path: Path) -> None:
 	output_path.parent.mkdir(parents=True, exist_ok=True)
 	with output_path.open("w", encoding="utf-8", newline="") as handle:
@@ -154,6 +161,7 @@ def main() -> int:
 		modules = load_indicator_modules(args.module_dir.resolve(), args.target_component_id)
 		output_dir = args.output_dir.resolve()
 		output_dir.mkdir(parents=True, exist_ok=True)
+		remove_stale_indicator_outputs(output_dir, args.output_file_stem, args.output_format)
 		combined_rows: list[dict[str, str]] = []
 		for module in modules:
 			indicator_id = str(getattr(module, "INDICATOR_ID", "")).strip()
