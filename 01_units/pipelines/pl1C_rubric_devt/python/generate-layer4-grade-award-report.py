@@ -19,6 +19,7 @@ from generate_rubric_and_manifest_from_indicator_registry import collect_markdow
 ITERATION_RE = re.compile(r"\b(iter\d+)\b", re.IGNORECASE)
 RUN_RE = re.compile(r"\b(run\d+)\b", re.IGNORECASE)
 DIMENSION_ID_RE = re.compile(r"^D\d+(\d)$")
+MAX_HISTOGRAM_BAR_WIDTH = 20
 
 
 @dataclass(frozen=True)
@@ -245,6 +246,42 @@ def discover_layer3_component_output_paths(layer4_scored_csv: Path) -> list[Path
     return sorted(layer3_dir.glob("*_Layer3_component_scoring_*_output.csv"))
 
 
+def discover_layer2_dimension_output_paths(layer4_scored_csv: Path) -> list[Path]:
+    layer4_dir = layer4_scored_csv.resolve().parent
+    layer2_dir = layer4_dir.parent / "layer2"
+    if not layer2_dir.is_dir():
+        return []
+    return sorted(layer2_dir.glob("*_Layer2_dimension_scoring_*_output.csv"))
+
+
+def indicator_sort_key(indicator_id: str) -> tuple[int, str]:
+    match = re.match(r"^I(\d+)$", indicator_id)
+    if match:
+        return int(match.group(1)), indicator_id
+    return 10**9, indicator_id
+
+
+def aggregate_layer2_indicator_counts(layer4_scored_csv: Path) -> dict[str, dict[str, Counter[str]]]:
+    aggregate_counts: dict[str, dict[str, Counter[str]]] = defaultdict(lambda: defaultdict(Counter))
+    for csv_path in discover_layer2_dimension_output_paths(layer4_scored_csv):
+        for row in load_rows(csv_path):
+            dimension_id = str(row.get("dimension_id", "")).strip()
+            match = DIMENSION_ID_RE.match(dimension_id)
+            if not match:
+                continue
+            aggregate_dimension_id = f"D*{match.group(1)}"
+            indicator_values = parse_json_object(row.get("source_indicator_values_json", ""))
+            for indicator_id, indicator_value in indicator_values.items():
+                aggregate_counts[aggregate_dimension_id][indicator_id][indicator_value] += 1
+    return {
+        aggregate_dimension_id: {
+            indicator_id: counts
+            for indicator_id, counts in sorted(indicator_counts.items(), key=lambda item: indicator_sort_key(item[0]))
+        }
+        for aggregate_dimension_id, indicator_counts in sorted(aggregate_counts.items())
+    }
+
+
 def aggregate_layer3_dimension_counts(layer4_scored_csv: Path) -> dict[str, Counter[str]]:
     aggregate_counts: dict[str, Counter[str]] = defaultdict(Counter)
     for csv_path in discover_layer3_component_output_paths(layer4_scored_csv):
@@ -282,16 +319,25 @@ def build_layer3_dimension_rows(aggregate_counts: dict[str, Counter[str]]) -> li
 
 def build_layer3_dimension_histogram_rows(
     aggregate_counts: dict[str, Counter[str]],
-) -> list[list[str]]:
+) -> tuple[list[list[str]], str]:
     dimension_ids = [dimension_id for dimension_id in ("D*1", "D*2", "D*3") if dimension_id in aggregate_counts]
     if not dimension_ids:
-        return []
+        return [], build_histogram_resolution_note(1)
 
     ordered_bins = [
         ("0-little_to_no_demonstration", "little_to_no_demonstration"),
         ("1-partially_demonstrated", "partially_demonstrated"),
         ("2-demonstrated", "demonstrated"),
     ]
+    max_count = max(
+        (
+            aggregate_counts[dimension_id].get(raw_label, 0)
+            for dimension_id in dimension_ids
+            for _, raw_label in ordered_bins
+        ),
+        default=0,
+    )
+    resolution = compute_histogram_resolution(max_count)
     table_rows: list[list[str]] = []
     for display_label, raw_label in ordered_bins:
         count_lines: list[str] = []
@@ -299,7 +345,7 @@ def build_layer3_dimension_histogram_rows(
         for dimension_id in dimension_ids:
             bin_count = aggregate_counts[dimension_id].get(raw_label, 0)
             count_lines.append(str(bin_count))
-            bar_lines.append(render_histogram_bar(bin_count))
+            bar_lines.append(render_histogram_bar(bin_count, resolution))
         table_rows.append([
             display_label,
             "<br>".join(count_lines),
@@ -310,7 +356,78 @@ def build_layer3_dimension_histogram_rows(
         "<br>".join(str(sum(aggregate_counts[dimension_id].values())) for dimension_id in dimension_ids),
         "",
     ])
-    return table_rows
+    return table_rows, build_histogram_resolution_note(resolution)
+
+
+def build_single_layer3_dimension_histogram_rows(
+    aggregate_counts: dict[str, Counter[str]],
+    dimension_id: str,
+) -> tuple[list[list[str]], str]:
+    if dimension_id not in aggregate_counts:
+        return [], build_histogram_resolution_note(1)
+
+    ordered_bins = [
+        ("0-little_to_no_demonstration", "little_to_no_demonstration"),
+        ("1-partially_demonstrated", "partially_demonstrated"),
+        ("2-demonstrated", "demonstrated"),
+    ]
+    counts = aggregate_counts[dimension_id]
+    max_count = max((counts.get(raw_label, 0) for _, raw_label in ordered_bins), default=0)
+    resolution = compute_histogram_resolution(max_count)
+    table_rows: list[list[str]] = []
+    for display_label, raw_label in ordered_bins:
+        bin_count = counts.get(raw_label, 0)
+        table_rows.append([
+            display_label,
+            str(bin_count),
+            render_histogram_bar(bin_count, resolution),
+        ])
+    table_rows.append(["Total", str(sum(counts.values())), ""])
+    return table_rows, build_histogram_resolution_note(resolution)
+
+
+def build_layer2_indicator_histogram_rows(
+    indicator_counts: dict[str, Counter[str]],
+) -> tuple[list[str], list[list[str]], str]:
+    indicator_ids = sorted(indicator_counts, key=indicator_sort_key)
+    if not indicator_ids:
+        return [], [], build_histogram_resolution_note(1)
+
+    preferred_bins = ["not_present", "present"]
+    observed_bins = {
+        indicator_value
+        for counts in indicator_counts.values()
+        for indicator_value in counts
+    }
+    ordered_bins = preferred_bins + sorted(observed_bins - set(preferred_bins))
+    max_count = max(
+        (
+            indicator_counts[indicator_id].get(indicator_value, 0)
+            for indicator_id in indicator_ids
+            for indicator_value in ordered_bins
+        ),
+        default=0,
+    )
+    resolution = compute_histogram_resolution(max_count)
+    table_rows: list[list[str]] = []
+    for indicator_value in ordered_bins:
+        count_lines: list[str] = []
+        bar_lines: list[str] = []
+        for indicator_id in indicator_ids:
+            bin_count = indicator_counts[indicator_id].get(indicator_value, 0)
+            count_lines.append(str(bin_count))
+            bar_lines.append(render_histogram_bar(bin_count, resolution))
+        table_rows.append([
+            indicator_value,
+            "<br>".join(count_lines),
+            "<br>".join(bar_lines),
+        ])
+    table_rows.append([
+        "Total",
+        "<br>".join(str(sum(indicator_counts[indicator_id].values())) for indicator_id in indicator_ids),
+        "",
+    ])
+    return indicator_ids, table_rows, build_histogram_resolution_note(resolution)
 
 
 def normalize_to_percent(value: float, maximum_numeric_score: float) -> float:
@@ -343,8 +460,23 @@ def format_band_label(band_min: float, band_max: float) -> str:
     return f"{format_band_value(band_min)}-{format_band_value(band_max)}"
 
 
-def render_histogram_bar(count: int) -> str:
-    return "█" * max(count, 0)
+def compute_histogram_resolution(max_count: int, max_width: int = MAX_HISTOGRAM_BAR_WIDTH) -> int:
+    if max_count <= 0:
+        return 1
+    return max(1, (max_count + max_width - 1) // max_width)
+
+
+def render_histogram_bar(count: int, resolution: int) -> str:
+    if count <= 0:
+        return ""
+    bar_width = max(1, (count + resolution - 1) // resolution)
+    return "█" * bar_width
+
+
+def build_histogram_resolution_note(resolution: int, max_width: int = MAX_HISTOGRAM_BAR_WIDTH) -> str:
+    if resolution == 1:
+        return f"Resolution: 1 block = 1 count; max width = {max_width} blocks."
+    return f"Resolution: 1 block ~= {resolution} counts; max width = {max_width} blocks."
 
 
 def score_in_band(score: float, band_min: float, band_max: float) -> bool:
@@ -379,36 +511,52 @@ def collect_cutpoint_percentage_series(
     return submission_percentages, component_percentages
 
 
-def build_histogram_rows(percentages: list[float]) -> list[list[str]]:
-    table_rows: list[list[str]] = []
-    for band_min, band_max in build_band_edges():
-        band_count = sum(
+def build_histogram_rows(percentages: list[float]) -> tuple[list[list[str]], str]:
+    band_edges = build_band_edges()
+    band_counts = [
+        sum(
             1 for normalized_percentage in percentages
             if score_in_band(normalized_percentage, band_min, band_max)
         )
+        for band_min, band_max in band_edges
+    ]
+    resolution = compute_histogram_resolution(max(band_counts, default=0))
+    table_rows: list[list[str]] = []
+    for (band_min, band_max), band_count in zip(band_edges, band_counts):
         table_rows.append([
             format_band_label(band_min, band_max),
             str(band_count),
-            render_histogram_bar(band_count),
+            render_histogram_bar(band_count, resolution),
         ])
     table_rows.append(["Total", str(len(percentages)), ""])
-    return table_rows
+    return table_rows, build_histogram_resolution_note(resolution)
 
 
 def build_multi_histogram_rows(
     series_by_label: list[tuple[str, list[float]]],
-) -> list[list[str]]:
-    table_rows: list[list[str]] = []
-    for band_min, band_max in build_band_edges():
-        count_lines: list[str] = []
-        bar_lines: list[str] = []
-        for _, percentages in series_by_label:
-            band_count = sum(
+) -> tuple[list[list[str]], str]:
+    band_edges = build_band_edges()
+    band_counts_by_series: list[list[int]] = []
+    max_count = 0
+    for _, percentages in series_by_label:
+        series_counts = [
+            sum(
                 1 for normalized_percentage in percentages
                 if score_in_band(normalized_percentage, band_min, band_max)
             )
+            for band_min, band_max in band_edges
+        ]
+        band_counts_by_series.append(series_counts)
+        max_count = max(max_count, max(series_counts, default=0))
+    resolution = compute_histogram_resolution(max_count)
+    table_rows: list[list[str]] = []
+    for band_index, (band_min, band_max) in enumerate(band_edges):
+        count_lines: list[str] = []
+        bar_lines: list[str] = []
+        for series_counts in band_counts_by_series:
+            band_count = series_counts[band_index]
             count_lines.append(str(band_count))
-            bar_lines.append(render_histogram_bar(band_count))
+            bar_lines.append(render_histogram_bar(band_count, resolution))
         table_rows.append([
             format_band_label(band_min, band_max),
             "<br>".join(count_lines),
@@ -419,7 +567,7 @@ def build_multi_histogram_rows(
         "<br>".join(str(len(percentages)) for _, percentages in series_by_label),
         "",
     ])
-    return table_rows
+    return table_rows, build_histogram_resolution_note(resolution)
 
 
 def build_percentage_distribution_rows(percentages: list[float]) -> list[list[str]]:
@@ -510,10 +658,12 @@ def generate_report(args: argparse.Namespace) -> Path:
     normalized_percentage_summary = summarize_numeric(normalized_percentages) if normalized_percentages else None
     component_grade_headers, component_grade_rows = build_component_grade_rows(rows)
     component_numeric_rows = build_component_numeric_rows(rows)
+    layer2_indicator_counts = aggregate_layer2_indicator_counts(args.file_with_scored_texts)
     layer3_dimension_counts = aggregate_layer3_dimension_counts(args.file_with_scored_texts)
     layer3_dimension_ids = [dimension_id for dimension_id in ("D*1", "D*2", "D*3") if dimension_id in layer3_dimension_counts]
+    layer3_dimension_display_ids = [f"`{dimension_id}`" for dimension_id in layer3_dimension_ids]
     layer3_dimension_rows = build_layer3_dimension_rows(layer3_dimension_counts)
-    layer3_dimension_histogram_rows = build_layer3_dimension_histogram_rows(layer3_dimension_counts)
+    layer3_dimension_histogram_rows, layer3_dimension_histogram_note = build_layer3_dimension_histogram_rows(layer3_dimension_counts)
 
     metadata_rows = [
         ["assignment_id", assignment_id],
@@ -546,14 +696,16 @@ def generate_report(args: argparse.Namespace) -> Path:
 
     if scale_info is not None:
         submission_percentages, component_percentages = collect_cutpoint_percentage_series(scale_info, rows)
+        submission_histogram_rows, submission_histogram_note = build_histogram_rows(submission_percentages)
         sections.extend(
             [
                 "### Grade Band Mapping to 0-100%",
                 "#### Submission",
                 render_markdown_table(
                     ["Bin", "Count", "Bar"],
-                    build_histogram_rows(submission_percentages),
+                    submission_histogram_rows,
                 ),
+                submission_histogram_note,
                 "",
                 "",
             ]
@@ -563,6 +715,7 @@ def generate_report(args: argparse.Namespace) -> Path:
             for component_id in scale_info.bound_component_ids
         ]
         if component_series:
+            component_histogram_rows, component_histogram_note = build_multi_histogram_rows(component_series)
             sections.extend(
                 [
                     "#### Components",
@@ -570,8 +723,9 @@ def generate_report(args: argparse.Namespace) -> Path:
                     "",
                     render_markdown_table(
                         ["Bin", "Count", "Bar"],
-                        build_multi_histogram_rows(component_series),
+                        component_histogram_rows,
                     ),
+                    component_histogram_note,
                     "",
                 ]
             )
@@ -675,7 +829,7 @@ def generate_report(args: argparse.Namespace) -> Path:
                 f"## Layer 3 Grade Award Report: {assignment_id}",
                 "",
                 "### Aggregate Dimension Distribution",
-                render_markdown_table(["Bin", *layer3_dimension_ids], layer3_dimension_rows),
+                render_markdown_table(["Bin", *layer3_dimension_display_ids], layer3_dimension_rows),
                 "",
             ]
         )
@@ -683,9 +837,50 @@ def generate_report(args: argparse.Namespace) -> Path:
             sections.extend(
                 [
                     "### Aggregate Dimension Histogram",
-                    "Dimension order: " + ", ".join(layer3_dimension_ids),
+                    "Dimension order: " + ", ".join(layer3_dimension_display_ids),
                     "",
                     render_markdown_table(["Bin", "Count", "Bar"], layer3_dimension_histogram_rows),
+                    layer3_dimension_histogram_note,
+                    "",
+                ]
+            )
+            for dimension_id in layer3_dimension_ids:
+                single_dimension_rows, single_dimension_note = build_single_layer3_dimension_histogram_rows(
+                    layer3_dimension_counts,
+                    dimension_id,
+                )
+                if not single_dimension_rows:
+                    continue
+                sections.extend(
+                    [
+                        f"#### `{dimension_id}`",
+                        render_markdown_table(["Bin", "Count", "Bar"], single_dimension_rows),
+                        single_dimension_note,
+                        "",
+                    ]
+                )
+
+    layer2_dimension_ids = [dimension_id for dimension_id in ("D*1", "D*2", "D*3") if dimension_id in layer2_indicator_counts]
+    if layer2_dimension_ids:
+        sections.extend(
+            [
+                f"## Layer 2 Grade Award Report: {assignment_id}",
+                "",
+            ]
+        )
+        for aggregate_dimension_id in layer2_dimension_ids:
+            indicator_ids, layer2_histogram_rows, layer2_histogram_note = build_layer2_indicator_histogram_rows(
+                layer2_indicator_counts[aggregate_dimension_id]
+            )
+            if not indicator_ids:
+                continue
+            sections.extend(
+                [
+                    f"### `{aggregate_dimension_id}` Indicator Histogram",
+                    "Indicator order: " + ", ".join(f"`{indicator_id}`" for indicator_id in indicator_ids),
+                    "",
+                    render_markdown_table(["Bin", "Count", "Bar"], layer2_histogram_rows),
+                    layer2_histogram_note,
                     "",
                 ]
             )
