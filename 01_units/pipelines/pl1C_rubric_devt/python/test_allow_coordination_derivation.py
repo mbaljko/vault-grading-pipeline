@@ -3,8 +3,10 @@ import unittest
 from generate_schema_from_segmentation_registry import (
 	collect_coordination_text,
 	default_allow_coordination_for_family,
+	derive_anchor_patterns,
 	detect_coordination_support,
 	derive_allow_coordination,
+	derive_stop_markers,
 )
 
 
@@ -50,6 +52,40 @@ class AllowCoordinationDerivationTests(unittest.TestCase):
 		self.assertIn("definition text.", collected)
 		self.assertIn("guidance text.", collected)
 		self.assertIn("decision text.", collected)
+
+	def test_explicit_anchor_patterns_override_prose_inference(self) -> None:
+		row = {
+			"template_id": "B_claim_seg_01",
+			"local_slot": "01",
+			"anchor_patterns": "custom anchor, fallback anchor",
+			"operator_definition": "This prose no longer needs to carry the runtime anchor text.",
+		}
+
+		self.assertEqual(
+			derive_anchor_patterns(row, "left_np_before_anchor"),
+			["custom anchor", "fallback anchor"],
+		)
+
+	def test_explicit_stop_markers_override_slot_defaults(self) -> None:
+		row = {
+			"template_id": "B_claim_seg_03",
+			"local_slot": "03",
+			"stop_markers": "sentence_end, comma",
+		}
+
+		self.assertEqual(
+			derive_stop_markers(row, "span_after_marker_before_marker"),
+			["sentence_end", "comma"],
+		)
+
+	def test_explicit_allow_coordination_override_beats_template_default(self) -> None:
+		row = {
+			"template_id": "B_claim_seg_02",
+			"allow_coordination": "false",
+			"operator_definition": "This template normally defaults true.",
+		}
+
+		self.assertFalse(derive_allow_coordination(row, "right_np_after_anchor_before_marker"))
 
 
 if __name__ == "__main__":

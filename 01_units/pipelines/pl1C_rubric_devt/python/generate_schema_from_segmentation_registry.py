@@ -205,6 +205,9 @@ ALLOW_COORDINATION_SIGNAL_PHRASES = (
 	"continues through compact coordination",
 )
 
+TRUTHY_VALUES = {"1", "true", "yes", "y", "on"}
+FALSY_VALUES = {"0", "false", "no", "n", "off"}
+
 
 @dataclass(frozen=True)
 class OperatorSpec:
@@ -283,6 +286,35 @@ def parse_args() -> argparse.Namespace:
 	return parser.parse_args()
 
 
+def parse_runtime_list(value: object, *, lowercase: bool = False) -> list[str]:
+	raw_value = str(value).strip()
+	if not raw_value:
+		return []
+	normalized = (
+		raw_value.replace("<br>", "\n")
+		.replace("<br/>", "\n")
+		.replace("<br />", "\n")
+	)
+	items: list[str] = []
+	for part in re.split(r"[,;\n]+", normalized):
+		item = collapse_internal_whitespace(part)
+		if not item:
+			continue
+		items.append(item.lower() if lowercase else item)
+	return items
+
+
+def parse_optional_bool(value: object) -> bool | None:
+	raw_value = str(value).strip().lower()
+	if not raw_value:
+		return None
+	if raw_value in TRUTHY_VALUES:
+		return True
+	if raw_value in FALSY_VALUES:
+		return False
+	raise ValueError(f"Boolean override must be one of {sorted(TRUTHY_VALUES | FALSY_VALUES)!r}; got {value!r}.")
+
+
 def collect_coordination_text(row: dict[str, object]) -> str:
 	parts: list[str] = []
 	for field_name in ALLOW_COORDINATION_TEXT_FIELDS:
@@ -311,6 +343,9 @@ def default_allow_coordination_for_family(family: str) -> bool:
 
 
 def derive_allow_coordination(row: dict[str, object], family: str) -> bool:
+	explicit_allow_coordination = parse_optional_bool(row.get("allow_coordination", ""))
+	if explicit_allow_coordination is not None:
+		return explicit_allow_coordination
 	template_id = str(row.get("template_id", "")).strip()
 	if template_id in ALLOW_COORDINATION_TEMPLATE_OVERRIDES:
 		return ALLOW_COORDINATION_TEMPLATE_OVERRIDES[template_id]
@@ -1246,6 +1281,10 @@ def expand_registry_instances(registry: dict[str, object]) -> dict[str, object]:
 					"_source_template_order": int(template_row.get("meta", {}).get("source_row_index", 0)),
 				}
 			)
+			for optional_field in ["runtime_family", "anchor_patterns", "stop_markers", "target_type", "allow_coordination"]:
+				optional_value = extract_normalized_row_value(template_row, optional_field)
+				if optional_value:
+					expanded_instances[-1][optional_field] = optional_value
 
 	expanded_instances.sort(
 		key=lambda row: (
@@ -1294,6 +1333,9 @@ def validate_expanded_instances(data: dict[str, object]) -> None:
 
 
 def assign_family(row: dict[str, object]) -> str:
+	explicit_family = collapse_internal_whitespace(str(row.get("runtime_family", ""))).lower()
+	if explicit_family:
+		return explicit_family
 	output_mode = str(row.get("output_mode", "")).strip().lower()
 	local_slot = str(row.get("local_slot", "")).strip()
 	if output_mode == "status_only":
@@ -1312,6 +1354,9 @@ def combined_instruction_text(row: dict[str, object]) -> str:
 
 
 def derive_anchor_patterns(row: dict[str, object], family: str) -> list[str]:
+	explicit_anchor_patterns = parse_runtime_list(row.get("anchor_patterns", ""), lowercase=True)
+	if explicit_anchor_patterns:
+		return explicit_anchor_patterns
 	text = combined_instruction_text(row)
 	local_slot = str(row.get("local_slot", "")).strip()
 	if family == "status_only_anchor_detector":
@@ -1342,6 +1387,12 @@ def derive_anchor_patterns(row: dict[str, object], family: str) -> list[str]:
 
 
 def derive_stop_markers(row: dict[str, object], family: str) -> list[str]:
+	explicit_stop_markers = parse_runtime_list(row.get("stop_markers", ""), lowercase=True)
+	if explicit_stop_markers:
+		unknown_markers = sorted(marker for marker in explicit_stop_markers if marker not in KNOWN_STOP_MARKERS)
+		if unknown_markers:
+			raise ValueError(f"Unknown explicit stop markers for {row.get('template_id', '')!r}: {unknown_markers}")
+		return explicit_stop_markers
 	if family == "status_only_anchor_detector":
 		return []
 	local_slot = str(row.get("local_slot", "")).strip()
@@ -1357,6 +1408,9 @@ def derive_stop_markers(row: dict[str, object], family: str) -> list[str]:
 
 
 def derive_target_type(row: dict[str, object], family: str) -> str:
+	explicit_target_type = collapse_internal_whitespace(str(row.get("target_type", ""))).lower()
+	if explicit_target_type:
+		return explicit_target_type
 	if family == "status_only_anchor_detector":
 		return "status_only"
 	local_slot = str(row.get("local_slot", "")).strip()

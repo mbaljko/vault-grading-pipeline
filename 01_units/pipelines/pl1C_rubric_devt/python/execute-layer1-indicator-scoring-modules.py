@@ -65,12 +65,13 @@ def validate_indicator_module(module: ModuleType, module_path: Path, target_comp
 		raise ValueError(f"Module {module_path} does not expose a callable score_indicator_row function")
 
 
-def load_indicator_modules(module_dir: Path, target_component_id: str) -> list[ModuleType]:
+def load_indicator_modules(module_dir: Path, target_component_id: str, module_file_stem: str) -> list[ModuleType]:
 	if not module_dir.exists() or not module_dir.is_dir():
 		raise FileNotFoundError(f"Module directory not found: {module_dir}")
 	loaded_modules: list[ModuleType] = []
 	seen_indicator_ids: set[str] = set()
-	for index, module_path in enumerate(sorted(module_dir.glob("*.py"))):
+	module_pattern = f"{module_file_stem}_*.py" if module_file_stem.strip() else "*.py"
+	for index, module_path in enumerate(sorted(module_dir.glob(module_pattern))):
 		module = load_module_from_path(module_path, f"layer1_indicator_module_{index}")
 		if str(getattr(module, "COMPONENT_ID", "")).strip() != target_component_id:
 			continue
@@ -83,7 +84,9 @@ def load_indicator_modules(module_dir: Path, target_component_id: str) -> list[M
 		seen_indicator_ids.add(indicator_id)
 		loaded_modules.append(module)
 	if not loaded_modules:
-		raise ValueError(f"No Layer 1 modules found for component_id={target_component_id} in {module_dir}")
+		raise ValueError(
+			f"No Layer 1 modules found for component_id={target_component_id} in {module_dir} matching {module_pattern}"
+		)
 	return sorted(loaded_modules, key=lambda module: indicator_sort_key(str(getattr(module, "INDICATOR_ID", ""))))
 
 
@@ -158,7 +161,7 @@ def main() -> int:
 		input_rows = load_scored_rows(args.layer1_input_csv.resolve())
 		validate_input_rows(input_rows, args.layer1_input_csv)
 		component_rows = filter_component_rows(input_rows, args.target_component_id)
-		modules = load_indicator_modules(args.module_dir.resolve(), args.target_component_id)
+		modules = load_indicator_modules(args.module_dir.resolve(), args.target_component_id, args.output_file_stem)
 		output_dir = args.output_dir.resolve()
 		output_dir.mkdir(parents=True, exist_ok=True)
 		remove_stale_indicator_outputs(output_dir, args.output_file_stem, args.output_format)
