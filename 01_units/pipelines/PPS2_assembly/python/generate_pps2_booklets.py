@@ -44,6 +44,11 @@ PAGE_BREAK_PATTERN = re.compile(
     r'<div\b[^>]*class\s*=\s*(["\'])[^"\']*\bpage-break\b[^"\']*\1[^>]*>\s*</div>',
     re.IGNORECASE,
 )
+UNICODE_LATEX_REPLACEMENTS = {
+    "☐": r"$\square$ ",
+    "☑": r"$\boxtimes$ ",
+    "☒": r"$\boxtimes$ ",
+}
 DEFAULT_LATEX_ENGINES = ("xelatex", "lualatex", "pdflatex")
 
 
@@ -382,7 +387,10 @@ def apply_rendering_conversions(rendered_text: str, student_data: dict[str, Any]
     into a raw LaTeX page break so PDF and emitted .tex output preserve pagination.
     It also appends a final even-numbered page showing the student's name.
     """
-    converted_text = PAGE_BREAK_PATTERN.sub(lambda _: "\n\n\\newpage\n\n", rendered_text)
+    converted_text = rendered_text
+    for source, replacement in UNICODE_LATEX_REPLACEMENTS.items():
+        converted_text = converted_text.replace(source, replacement)
+    converted_text = PAGE_BREAK_PATTERN.sub(lambda _: "\n\n\\newpage\n\n", converted_text)
     converted_text = converted_text.rstrip()
     final_page = (
         "\n\n"
