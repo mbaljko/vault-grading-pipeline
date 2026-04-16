@@ -4,6 +4,7 @@
 Usage:
     python generate_pps2_booklets.py \
         --template /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/master_PPS2_activity/PPS2_template.md \
+        --latex-template /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/master_PPS2_activity/PPS2_pdf_template.tex \
         --input-dir /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/student_data \
         --output-dir /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/generated_individualized_PPS2
 
@@ -72,6 +73,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         required=True,
         help="Directory where PDFs will be written.",
+    )
+    parser.add_argument(
+        "--latex-template",
+        type=Path,
+        help="Optional path to a custom LaTeX template passed to pandoc.",
     )
     parser.add_argument(
         "--keep-md",
@@ -170,11 +176,14 @@ def render_pdf(
     pdf_output_path: Path,
     pandoc_path: Path,
     latex_engine: str | None,
+    latex_template: Path | None,
     verbose: bool,
 ) -> tuple[bool, str]:
     """Convert a filled Markdown file to PDF using pandoc."""
     commands: list[list[str]] = []
     base_command = [str(pandoc_path), str(filled_markdown_path), "-o", str(pdf_output_path)]
+    if latex_template is not None:
+        base_command.extend(["--template", str(latex_template)])
     if latex_engine is not None:
         commands.append([*base_command, "--pdf-engine", latex_engine])
     commands.append(base_command)
@@ -227,6 +236,7 @@ def render_student(
     output_dir: Path,
     pandoc_path: Path,
     latex_engine: str | None,
+    latex_template: Path | None,
     keep_md: bool,
     allow_missing: bool,
     verbose: bool,
@@ -259,6 +269,7 @@ def render_student(
             pdf_output_path=pdf_output_path,
             pandoc_path=pandoc_path,
             latex_engine=latex_engine,
+            latex_template=latex_template,
             verbose=verbose,
         )
         if not success:
@@ -278,12 +289,19 @@ def render_student(
     return RenderResult(student_file, participant_id, "succeeded", "rendered successfully")
 
 
-def validate_paths(template_path: Path, input_dir: Path, output_dir: Path) -> None:
+def validate_paths(
+    template_path: Path,
+    input_dir: Path,
+    output_dir: Path,
+    latex_template_path: Path | None,
+) -> None:
     """Validate required paths before processing."""
     if not template_path.is_file():
         raise FileNotFoundError(f"Template file not found: {template_path}")
     if not input_dir.is_dir():
         raise FileNotFoundError(f"Input directory not found: {input_dir}")
+    if latex_template_path is not None and not latex_template_path.is_file():
+        raise FileNotFoundError(f"LaTeX template file not found: {latex_template_path}")
     output_dir.mkdir(parents=True, exist_ok=True)
 
 
@@ -306,7 +324,7 @@ def main() -> int:
     args = parse_args()
 
     try:
-        validate_paths(args.template, args.input_dir, args.output_dir)
+        validate_paths(args.template, args.input_dir, args.output_dir, args.latex_template)
     except FileNotFoundError as error:
         print(str(error), file=sys.stderr)
         return 1
@@ -321,6 +339,8 @@ def main() -> int:
             print("Pandoc found, but no LaTeX engine detected. Pandoc will be tried without --pdf-engine.")
         else:
             print(f"Using pandoc at {pandoc_path} with LaTeX engine {latex_engine}.")
+        if args.latex_template is not None:
+            print(f"Using custom LaTeX template at {args.latex_template}.")
 
     try:
         template_text = args.template.read_text(encoding="utf-8")
@@ -343,6 +363,7 @@ def main() -> int:
             output_dir=args.output_dir,
             pandoc_path=pandoc_path,
             latex_engine=latex_engine,
+            latex_template=args.latex_template,
             keep_md=args.keep_md,
             allow_missing=args.allow_missing,
             verbose=args.verbose,

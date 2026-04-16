@@ -20,6 +20,7 @@ This directory contains a single-script generator for individualized PPS2 exam b
 ```bash
 python /Users/mb/Documents/vault-grading-pipeline/01_units/pipelines/PPS2_assembly/python/generate_pps2_booklets.py \
   --template /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/master_PPS2_activity/PPS2_template.md \
+  --latex-template /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/master_PPS2_activity/PPS2_pdf_template.tex \
   --input-dir /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/student_data \
   --output-dir /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/generated_individualized_PPS2
 ```
@@ -29,6 +30,19 @@ python /Users/mb/Documents/vault-grading-pipeline/01_units/pipelines/PPS2_assemb
 - `--keep-md`: also save the filled Markdown file for each student.
 - `--allow-missing`: render even if some placeholders remain unresolved.
 - `--verbose`: print dependency and pandoc command details.
+- `--latex-template`: pass a custom LaTeX template to pandoc for PDF styling.
+
+## Custom PDF styling
+
+This workflow can use a custom LaTeX template to control PDF appearance without changing the student JSON or the Markdown content template.
+
+Starter template location:
+
+```text
+/Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/master_PPS2_activity/PPS2_pdf_template.tex
+```
+
+That template currently provides a basic article layout with readable spacing and narrower margins than the Pandoc default.
 
 ## Placeholder behavior
 
