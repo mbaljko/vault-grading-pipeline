@@ -550,6 +550,13 @@ def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> st
             "development_type": "continuity/reinforcement",
         },
     }
+    matrix_column_labels = {
+        column_name: (
+            f"{metadata['position_state']} / "
+            f"{metadata['development_type'].replace('continuity/reinforcement', 'cont-reinf')}"
+        )
+        for column_name, metadata in position_state_matrix_labels.items()
+    }
 
     counts_by_dimension: dict[str, dict[str, int]] = {}
     for dimension in schema.dimensions:
@@ -628,16 +635,34 @@ def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> st
     saturation_total = 0.0
     saturation_distribution = {4: 0, 3: 0, 2: 0, 1: 0, 0: 0}
     coverage_group_counts: dict[tuple[str, str], int] = {}
+    missing_pattern_counts = {
+        3: {tuple([column_name]): 0 for column_name in matrix_columns},
+        2: {},
+        1: {},
+    }
+
+    for first_index, first_column in enumerate(matrix_columns):
+        for second_column in matrix_columns[first_index + 1 :]:
+            missing_pattern_counts[2][tuple([first_column, second_column])] = 0
+
+    for present_column in matrix_columns:
+        missing_columns = tuple(column_name for column_name in matrix_columns if column_name != present_column)
+        missing_pattern_counts[1][missing_columns] = 0
 
     for row in rows:
         specified_in_row = 0
+        missing_columns_in_row: list[str] = []
         for column_name in matrix_columns:
             if row.position_state_matrix_fields[column_name]:
                 specified_counts[column_name] += 1
                 specified_in_row += 1
+            else:
+                missing_columns_in_row.append(column_name)
         saturation_value = row.position_state_matrix_fields["Position-State Matrix Saturation Rate"]
         saturation_total += float(saturation_value.rstrip("%"))
         saturation_distribution[specified_in_row] += 1
+        if specified_in_row in (3, 2, 1):
+            missing_pattern_counts[specified_in_row][tuple(missing_columns_in_row)] += 1
 
     for column_name in matrix_columns:
         position_state = position_state_matrix_labels[column_name]["position_state"]
@@ -725,6 +750,37 @@ def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> st
         lines.append(
             f"| {position_state} | {development_type} | {group_count} | {group_percent:.1f}% |"
         )
+    recovery_rows = [
+        (
+            "*",
+            "shift",
+            coverage_group_counts[("stable", "shift")]
+            + coverage_group_counts[("in_tension", "shift")],
+            len(rows) * 2,
+        ),
+        (
+            "*",
+            "continuity/reinforcement",
+            coverage_group_counts[("stable", "continuity/reinforcement")]
+            + coverage_group_counts[("in_tension", "continuity/reinforcement")],
+            len(rows) * 2,
+        ),
+    ]
+    lines.extend(
+        [
+            "",
+            "### Position-State Matrix Recovery",
+            "",
+            "| position_state | development_type | Missing Entries | % Missing |",
+            "| --- | --- | ---: | ---: |",
+        ]
+    )
+    for position_state, development_type, group_count, denominator in recovery_rows:
+        missing_count = denominator - group_count
+        missing_percent = 0.0 if denominator == 0 else (missing_count / denominator) * 100
+        lines.append(
+            f"| {position_state} | {development_type} | {missing_count} | {missing_percent:.1f}% |"
+        )
     lines.extend(
         [
             "",
@@ -744,6 +800,84 @@ def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> st
         f"{((saturation_distribution[3] / len(rows)) * 100) if rows else 0.0:.1f}% | "
         f"{((saturation_distribution[2] / len(rows)) * 100) if rows else 0.0:.1f}% | "
         f"{((saturation_distribution[1] / len(rows)) * 100) if rows else 0.0:.1f}% |"
+    )
+    lines.extend(
+        [
+            "",
+            "#### Only 3 Specified: Missing Entry",
+            "",
+            f"| Missing Entry | {matrix_column_labels[matrix_columns[0]]} | {matrix_column_labels[matrix_columns[1]]} | {matrix_column_labels[matrix_columns[2]]} | {matrix_column_labels[matrix_columns[3]]} | Row Total | % of Students |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    only_3_column_totals = {column_name: 0 for column_name in matrix_columns}
+    only_3_row_total = 0
+    for missing_pattern, count in missing_pattern_counts[3].items():
+        row_cells = []
+        for column_name in matrix_columns:
+            if column_name in missing_pattern:
+                row_cells.append(str(count))
+                only_3_column_totals[column_name] += count
+            else:
+                row_cells.append("")
+        only_3_row_total += count
+        lines.append(
+            f"|  | {' | '.join(row_cells)} | {count} | {((count / len(rows)) * 100) if rows else 0.0:.1f}% |"
+        )
+    lines.append(
+        f"| Total | {only_3_column_totals[matrix_columns[0]]} | {only_3_column_totals[matrix_columns[1]]} | {only_3_column_totals[matrix_columns[2]]} | {only_3_column_totals[matrix_columns[3]]} | {only_3_row_total} | {((only_3_row_total / len(rows)) * 100) if rows else 0.0:.1f}% |"
+    )
+    lines.extend(
+        [
+            "",
+            "#### Only 2 Specified: Missing Entries",
+            "",
+            f"| Missing Entries | {matrix_column_labels[matrix_columns[0]]} | {matrix_column_labels[matrix_columns[1]]} | {matrix_column_labels[matrix_columns[2]]} | {matrix_column_labels[matrix_columns[3]]} | Row Total | % of Students |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    only_2_column_totals = {column_name: 0 for column_name in matrix_columns}
+    only_2_row_total = 0
+    for missing_pattern, count in missing_pattern_counts[2].items():
+        row_cells = []
+        for column_name in matrix_columns:
+            if column_name in missing_pattern:
+                row_cells.append(str(count))
+                only_2_column_totals[column_name] += count
+            else:
+                row_cells.append("")
+        only_2_row_total += count
+        lines.append(
+            f"|  | {' | '.join(row_cells)} | {count} | {((count / len(rows)) * 100) if rows else 0.0:.1f}% |"
+        )
+    lines.append(
+        f"| Total | {only_2_column_totals[matrix_columns[0]]} | {only_2_column_totals[matrix_columns[1]]} | {only_2_column_totals[matrix_columns[2]]} | {only_2_column_totals[matrix_columns[3]]} | {only_2_row_total} | {((only_2_row_total / len(rows)) * 100) if rows else 0.0:.1f}% |"
+    )
+    lines.extend(
+        [
+            "",
+            "#### Only 1 Specified: Present Entry",
+            "",
+            f"| Present Entry | {matrix_column_labels[matrix_columns[0]]} | {matrix_column_labels[matrix_columns[1]]} | {matrix_column_labels[matrix_columns[2]]} | {matrix_column_labels[matrix_columns[3]]} | Row Total | % of Students |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    only_1_column_totals = {column_name: 0 for column_name in matrix_columns}
+    only_1_row_total = 0
+    for missing_pattern, count in missing_pattern_counts[1].items():
+        row_cells = []
+        for column_name in matrix_columns:
+            if column_name not in missing_pattern:
+                row_cells.append(str(count))
+                only_1_column_totals[column_name] += count
+            else:
+                row_cells.append("")
+        only_1_row_total += count
+        lines.append(
+            f"|  | {' | '.join(row_cells)} | {count} | {((count / len(rows)) * 100) if rows else 0.0:.1f}% |"
+        )
+    lines.append(
+        f"| Total | {only_1_column_totals[matrix_columns[0]]} | {only_1_column_totals[matrix_columns[1]]} | {only_1_column_totals[matrix_columns[2]]} | {only_1_column_totals[matrix_columns[3]]} | {only_1_row_total} | {((only_1_row_total / len(rows)) * 100) if rows else 0.0:.1f}% |"
     )
 
     lines.append("")
