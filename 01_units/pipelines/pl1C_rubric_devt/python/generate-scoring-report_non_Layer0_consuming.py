@@ -1725,6 +1725,10 @@ def build_segment_summary_rows(segment_counts: Counter[str], evidence_status: st
 	return rows
 
 
+def append_total_count_row(rows: list[list[str]], label_columns: list[str], total_count: int) -> list[list[str]]:
+	return [*rows, [*label_columns, str(total_count)]]
+
+
 def build_segment_detail_rows(detail_rows: list[tuple[str, str]]) -> list[list[str]]:
 	rows: list[list[str]] = []
 	for source_entry, segment_text in sorted(detail_rows, key=lambda item: (segment_text_sort_key(item[1]), item[1], item[0].lower())):
@@ -1859,7 +1863,12 @@ def render_indicator_segment_report(
 		for status, count in sorted(status_counts.items(), key=lambda item: (-item[1], item[0].lower()))
 	]
 	if status_rows:
-		parts.append(render_markdown_table(["evidence_status", "count"], status_rows))
+		parts.append(
+			render_markdown_table(
+				["evidence_status", "count"],
+				append_total_count_row(status_rows, ["total"], sum(status_counts.values())),
+			)
+		)
 	else:
 		parts.append("No scored rows.")
 	parts.extend([
@@ -1871,7 +1880,12 @@ def render_indicator_segment_report(
 	])
 	matching_summary_rows = build_segment_summary_rows(matching_segment_counts, "present")
 	if matching_summary_rows:
-		parts.append(render_markdown_table(["evidence_status", "segment_text", "count"], matching_summary_rows))
+		parts.append(
+			render_markdown_table(
+				["evidence_status", "segment_text", "count"],
+				append_total_count_row(matching_summary_rows, ["present", "total"], sum(matching_segment_counts.values())),
+			)
+		)
 	else:
 		parts.append("No matching segment texts.")
 	parts.extend([
@@ -1881,7 +1895,12 @@ def render_indicator_segment_report(
 	])
 	non_matching_summary_rows = build_segment_summary_rows(non_matching_segment_counts, "not_present")
 	if non_matching_summary_rows:
-		parts.append(render_markdown_table(["evidence_status", "segment_text", "count"], non_matching_summary_rows))
+		parts.append(
+			render_markdown_table(
+				["evidence_status", "segment_text", "count"],
+				append_total_count_row(non_matching_summary_rows, ["not_present", "total"], sum(non_matching_segment_counts.values())),
+			)
+		)
 	else:
 		parts.append("No non-matching segment texts.")
 	parts.extend([
@@ -1984,7 +2003,12 @@ def render_indicator_slot_group_segment_report(
 		for status, count in sorted(status_counts.items(), key=lambda item: (-item[1], item[0].lower()))
 	]
 	if status_rows:
-		parts.append(render_markdown_table(["evidence_status", "count"], status_rows))
+		parts.append(
+			render_markdown_table(
+				["evidence_status", "count"],
+				append_total_count_row(status_rows, ["total"], sum(status_counts.values())),
+			)
+		)
 	else:
 		parts.append("No scored rows.")
 	parts.extend([
@@ -1996,7 +2020,12 @@ def render_indicator_slot_group_segment_report(
 	])
 	matching_summary_rows = build_segment_summary_rows(matching_segment_counts, "present")
 	if matching_summary_rows:
-		parts.append(render_markdown_table(["evidence_status", "segment_text", "count"], matching_summary_rows))
+		parts.append(
+			render_markdown_table(
+				["evidence_status", "segment_text", "count"],
+				append_total_count_row(matching_summary_rows, ["present", "total"], sum(matching_segment_counts.values())),
+			)
+		)
 	else:
 		parts.append("No matching segment texts.")
 	parts.extend([
@@ -2006,7 +2035,12 @@ def render_indicator_slot_group_segment_report(
 	])
 	non_matching_summary_rows = build_segment_summary_rows(non_matching_segment_counts, "not_present")
 	if non_matching_summary_rows:
-		parts.append(render_markdown_table(["evidence_status", "segment_text", "count"], non_matching_summary_rows))
+		parts.append(
+			render_markdown_table(
+				["evidence_status", "segment_text", "count"],
+				append_total_count_row(non_matching_summary_rows, ["not_present", "total"], sum(non_matching_segment_counts.values())),
+			)
+		)
 	else:
 		parts.append("No non-matching segment texts.")
 	parts.extend([
