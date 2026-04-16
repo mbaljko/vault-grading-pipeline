@@ -210,6 +210,8 @@ def build_final_page_block(student_data: dict[str, Any]) -> str:
         "\\thispagestyle{empty}\n"
         "\\begin{center}\n"
         "\\vspace*{\\fill}\n"
+        "{\\fontsize{18}{22}\\selectfont \\bfseries THIS IS AN INDIVIDUALIZED BOOKLET.\\par}\n"
+        "\\vspace{2em}\n"
         "{\\fontsize{20}{24}\\selectfont \\bfseries THIS BOOKLET IS FOR:\\par}\n"
         "\\vspace{2em}\n"
         "{\\fontsize{36}{44}\\selectfont \\bfseries "
