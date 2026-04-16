@@ -16,6 +16,7 @@ This workflow converts the exported PPS1 LMS CSV into one JSON file per student 
 - Populates the `Sec1_*`, `Sec2_*`, `Sec3Sec4_*`, and `CLM_*` fields heuristically from the available dimension data.
 - Writes one JSON per row into `student_data_all`.
 - Copies a random sample into `student_data`.
+- Augments that sample with three coverage cases: one random `_DOT` family-name file, the file with the longest family name, and the file with the longest given-name string.
 
 ## Configuration
 
@@ -52,6 +53,12 @@ If no participant match is found, the importer falls back to parsing the LMS `Us
 
 This matters because the LMS `User` field is not always a reliable given-name/family-name split, while the participants CSV usually is.
 
+Special handling:
+
+- If the authoritative participant last name is `.`, the JSON `FAMILY_NAME` is kept as `.`.
+- Filenames are built as `FAMILY_NAME` first, then `GIVEN_NAME`, with the family-name portion uppercased.
+- For filenames only, a family name of `.` is rendered as `_DOT` so the generated filename remains explicit and filesystem-safe.
+
 ## Typical Run
 
 ```bash
@@ -62,3 +69,4 @@ This matters because the LMS `User` field is not always a reliable given-name/fa
 
 - The importer preserves LMS HTML content as-is in mapped response fields.
 - Section-selection logic is heuristic. If the PPS2 booklet structure changes, update the schema first and only change Python when selection logic itself must change.
+- The sampled set can therefore be larger than `sampleSize`, because the three coverage cases are added on top of the random sample when they are not already included.

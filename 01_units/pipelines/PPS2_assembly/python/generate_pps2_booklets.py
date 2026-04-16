@@ -521,14 +521,23 @@ def split_name_tokens(raw_value: str) -> list[str]:
 
 def build_output_stem(student_data: dict[str, Any]) -> str:
     """Build the output filename stem from family and given name fields."""
-    family_tokens = split_name_tokens(str(student_data.get("FAMILY_NAME") or ""))
+    raw_family_name = str(student_data.get("FAMILY_NAME") or "").strip()
+    family_tokens = split_name_tokens(raw_family_name)
     given_tokens = split_name_tokens(str(student_data.get("GIVEN_NAME") or ""))
 
-    if not family_tokens or not given_tokens:
+    if raw_family_name == ".":
+        family_name = "_DOT"
+    elif family_tokens:
+        family_name = "_".join(token.upper() for token in family_tokens)
+    else:
+        family_name = ""
+
+    if not family_name or not given_tokens:
         raise ValueError("Output filename requires both FAMILY_NAME and GIVEN_NAME.")
 
-    family_name = "_".join(token.upper() for token in family_tokens)
     given_name = "_".join(token[:1].upper() + token[1:].lower() for token in given_tokens)
+    if family_name.startswith("_"):
+        return f"eecs3000w26{family_name}_{given_name}"
     return f"eecs3000w26_{family_name}_{given_name}"
 
 

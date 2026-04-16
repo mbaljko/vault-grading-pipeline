@@ -50,6 +50,13 @@ class ParticipantIdentity:
 
 
 @dataclass(frozen=True)
+class GeneratedRecord:
+    path: Path
+    given_name: str
+    family_name: str
+
+
+@dataclass(frozen=True)
 class ImportSchema:
     import_defaults: "ImportDefaults"
     record_defaults: dict[str, str]
@@ -160,10 +167,7 @@ def split_user_name(user_value: str, username_value: str) -> tuple[str, str]:
 
 
 def normalize_participant_name(value: str | None) -> str:
-    normalized = normalize_value(value)
-    if normalized == ".":
-        return ""
-    return normalized
+    return normalize_value(value)
 
 
 def load_participant_lookup(participants_csv_path: Path) -> dict[str, ParticipantIdentity]:
@@ -330,10 +334,41 @@ def build_record(
     return record
 
 
-def make_output_filename(row: dict[str, str], used_names: set[str], row_index: int) -> str:
-    user_value = normalize_value(row.get("User"))
+def build_filename_base(given_name: str, family_name: str, fallback: str) -> str:
+    given_component = sanitize_filename(given_name, "")
+    normalized_family_name = normalize_value(family_name)
+
+    if normalized_family_name == ".":
+        family_component = "_DOT"
+    else:
+        family_component = sanitize_filename(normalized_family_name, "").upper()
+
+    if given_component and family_component:
+        if family_component.startswith("_"):
+            return f"{family_component}_{given_component}"
+        return f"{family_component}_{given_component}"
+    if given_component:
+        return given_component
+    if family_component:
+        return family_component.lstrip("_") or fallback
+    return fallback
+
+
+def make_output_filename(
+    schema: ImportSchema,
+    record: dict[str, str],
+    row: dict[str, str],
+    used_names: set[str],
+    row_index: int,
+) -> str:
     username_value = normalize_value(row.get("Username"))
-    base_name = sanitize_filename(user_value, username_value or f"row_{row_index:04d}")
+    fallback_base_name = sanitize_filename(username_value, f"row_{row_index:04d}")
+    base_name = build_filename_base(
+        record.get(schema.identity_fields.given_name, ""),
+        record.get(schema.identity_fields.family_name, ""),
+        fallback_base_name,
+    )
+
     if base_name not in used_names:
         used_names.add(base_name)
         return f"{base_name}.json"
@@ -353,17 +388,64 @@ def write_json(path: Path, data: dict[str, Any]) -> None:
     path.write_text(json.dumps(data, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
 
-def duplicate_sample(all_paths: list[Path], sample_output_dir: Path, sample_size: int, sample_seed: int | None) -> list[Path]:
-    sample_output_dir.mkdir(parents=True, exist_ok=True)
-    if not all_paths or sample_size <= 0:
+def clear_existing_json_files(directory: Path) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    for json_path in directory.glob("*.json"):
+        json_path.unlink()
+
+
+def _select_augmented_sample(
+    generated_records: list[GeneratedRecord],
+    sample_size: int,
+    chooser: random.Random | random.SystemRandom,
+) -> list[GeneratedRecord]:
+    if not generated_records:
         return []
-    count = min(sample_size, len(all_paths))
+
+    count = min(sample_size, len(generated_records))
+    selected_records = list(chooser.sample(generated_records, count))
+    selected_paths = {record.path for record in selected_records}
+
+    dot_records = [record for record in generated_records if normalize_value(record.family_name) == "."]
+    if dot_records:
+        dot_record = chooser.choice(dot_records)
+        if dot_record.path not in selected_paths:
+            selected_records.append(dot_record)
+            selected_paths.add(dot_record.path)
+
+    longest_family_record = max(
+        generated_records,
+        key=lambda record: (len(normalize_value(record.family_name)), record.path.name),
+    )
+    if longest_family_record.path not in selected_paths:
+        selected_records.append(longest_family_record)
+        selected_paths.add(longest_family_record.path)
+
+    longest_given_record = max(
+        generated_records,
+        key=lambda record: (len(normalize_value(record.given_name)), record.path.name),
+    )
+    if longest_given_record.path not in selected_paths:
+        selected_records.append(longest_given_record)
+
+    return selected_records
+
+
+def duplicate_sample(
+    generated_records: list[GeneratedRecord],
+    sample_output_dir: Path,
+    sample_size: int,
+    sample_seed: int | None,
+) -> list[Path]:
+    sample_output_dir.mkdir(parents=True, exist_ok=True)
+    if not generated_records or sample_size <= 0:
+        return []
     chooser = random.Random(sample_seed) if sample_seed is not None else random.SystemRandom()
-    selected_paths = chooser.sample(all_paths, count)
+    selected_records = _select_augmented_sample(generated_records, sample_size, chooser)
     copied_paths: list[Path] = []
-    for source_path in selected_paths:
-        target_path = sample_output_dir / source_path.name
-        shutil.copy2(source_path, target_path)
+    for record in selected_records:
+        target_path = sample_output_dir / record.path.name
+        shutil.copy2(record.path, target_path)
         copied_paths.append(target_path)
     return copied_paths
 
@@ -384,9 +466,10 @@ def main() -> int:
     sample_size = resolve_runtime_value(args.sample_size, schema.import_defaults.sample_size)
 
     participant_lookup = load_participant_lookup(participants_csv_path)
-    all_output_dir.mkdir(parents=True, exist_ok=True)
+    clear_existing_json_files(all_output_dir)
+    clear_existing_json_files(sample_output_dir)
 
-    written_paths: list[Path] = []
+    generated_records: list[GeneratedRecord] = []
     used_names: set[str] = set()
 
     with csv_path.open(newline="", encoding="utf-8-sig") as csv_file:
@@ -396,21 +479,27 @@ def main() -> int:
 
         for row_index, row in enumerate(reader, start=1):
             record = build_record(schema, row, participant_lookup)
-            file_name = make_output_filename(row, used_names, row_index)
+            file_name = make_output_filename(schema, record, row, used_names, row_index)
             output_path = all_output_dir / file_name
             write_json(output_path, record)
-            written_paths.append(output_path)
+            generated_records.append(
+                GeneratedRecord(
+                    path=output_path,
+                    given_name=record.get(schema.identity_fields.given_name, ""),
+                    family_name=record.get(schema.identity_fields.family_name, ""),
+                )
+            )
             if args.verbose:
                 print(f"Wrote {output_path}")
 
     copied_paths = duplicate_sample(
-        all_paths=written_paths,
+        generated_records=generated_records,
         sample_output_dir=sample_output_dir,
         sample_size=sample_size,
         sample_seed=args.sample_seed,
     )
 
-    print(f"Wrote {len(written_paths)} JSON files to {all_output_dir}")
+    print(f"Wrote {len(generated_records)} JSON files to {all_output_dir}")
     print(f"Copied {len(copied_paths)} sampled JSON files to {sample_output_dir}")
     if args.verbose and copied_paths:
         for copied_path in copied_paths:
