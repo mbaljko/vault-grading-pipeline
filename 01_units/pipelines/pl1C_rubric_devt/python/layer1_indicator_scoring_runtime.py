@@ -211,6 +211,45 @@ def canonicalize_segment_text(
 	return ""
 
 
+def extract_canonical_mentions_from_text(
+	text: str,
+	allowed_terms: list[str],
+	allowed_aliases: Mapping[str, str],
+	rule: str,
+) -> list[str]:
+	normalized_text = normalize_text(text, rule)
+	if not normalized_text:
+		return []
+	variant_pairs: list[tuple[str, str]] = []
+	seen_pairs: set[tuple[str, str]] = set()
+	for term in allowed_terms:
+		normalized_term = normalize_text(term, rule)
+		if not normalized_term:
+			continue
+		for variant in (normalized_term, strip_leading_article(normalized_term)):
+			pair = (variant, normalized_term)
+			if variant and pair not in seen_pairs:
+				seen_pairs.add(pair)
+				variant_pairs.append(pair)
+	for alias, canonical in dict(allowed_aliases).items():
+		normalized_alias = normalize_text(alias, rule)
+		normalized_canonical = normalize_text(canonical, rule)
+		if not normalized_alias or not normalized_canonical:
+			continue
+		for variant in (normalized_alias, strip_leading_article(normalized_alias)):
+			pair = (variant, normalized_canonical)
+			if variant and pair not in seen_pairs:
+				seen_pairs.add(pair)
+				variant_pairs.append(pair)
+	found_canonicals: list[str] = []
+	seen_canonicals: set[str] = set()
+	for variant, canonical in sorted(variant_pairs, key=lambda item: (-len(item[0]), item[0])):
+		if variant and variant in normalized_text and canonical not in seen_canonicals:
+			seen_canonicals.add(canonical)
+			found_canonicals.append(canonical)
+	return found_canonicals
+
+
 def canonical_inequality_match(
 	row: Mapping[str, object],
 	component_id: str,
@@ -235,6 +274,19 @@ def canonical_inequality_match(
 	)
 	if left_canonical and right_canonical:
 		return left_canonical != right_canonical
+	source_response_text = str(row.get("source_response_text", "") or row.get("response_text", "") or "").strip()
+	if source_response_text:
+		fallback_canonicals = extract_canonical_mentions_from_text(
+			source_response_text,
+			list(payload.get("left_allowed_terms", [])) + list(payload.get("right_allowed_terms", [])),
+			{
+				**dict(payload.get("left_allowed_aliases", {})),
+				**dict(payload.get("right_allowed_aliases", {})),
+			},
+			rule,
+		)
+		if len(fallback_canonicals) >= 2:
+			return True
 	return bool(left_canonical or right_canonical)
 
 
@@ -339,7 +391,8 @@ def score_indicator_from_row(
 		right_segment_id = str(payload.get("right_segment_id", "DemandB") or "DemandB").strip()
 		left_text = resolve_segment_text_by_id(row, resolved_component_id, left_segment_id)
 		right_text = resolve_segment_text_by_id(row, resolved_component_id, right_segment_id)
-		if not left_text and not right_text:
+		source_response_text = str(row.get("source_response_text", "") or row.get("response_text", "") or "").strip()
+		if not left_text and not right_text and not source_response_text:
 			return {
 				"submission_id": resolve_submission_id(row),
 				"component_id": resolved_component_id,

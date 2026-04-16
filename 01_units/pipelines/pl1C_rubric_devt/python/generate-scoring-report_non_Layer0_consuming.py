@@ -1420,6 +1420,7 @@ def build_base_row_reverse_lookup(registry_path: Path) -> dict[tuple[str, str], 
 		reverse_lookup[(component_id, indicator_id)] = {
 			"template_id": base_row.get("template_id", "").strip() or "<missing_template_id>",
 			"local_slot": base_row.get("local_slot", "").strip(),
+			"required_layer0_records": base_row.get("required_layer0_records", "").strip(),
 			"sbo_short_description": base_row.get("sbo_short_description", "").strip(),
 			"expansion_mode": reuse_row.get("expansion_mode", "").strip() or "<unspecified>",
 		}
@@ -1690,6 +1691,19 @@ def parse_bound_segment_ids(bound_segment_id: str) -> list[str]:
 	return [segment_id.strip() for segment_id in bound_segment_id.split("+") if segment_id.strip()]
 
 
+def parse_required_layer0_record_ids(required_layer0_records: str) -> list[str]:
+	record_ids: list[str] = []
+	for raw_part in required_layer0_records.split(";"):
+		part = raw_part.strip()
+		if not part:
+			continue
+		record_id, _, _ = part.partition(":")
+		record_id = record_id.strip()
+		if record_id:
+			record_ids.append(record_id)
+	return record_ids
+
+
 def derive_segment_field_label(component_id: str, bound_segment_id: str) -> str:
 	segment_ids = parse_bound_segment_ids(bound_segment_id)
 	if not segment_ids:
@@ -1711,11 +1725,60 @@ def derive_segment_bucket_from_input_row(
 		segment_field = f"segment_text_{component_id}__{segment_ids[0]}"
 		return normalize_segment_bucket_label((input_row.get(segment_field) or "").strip())
 	segment_parts: list[str] = []
+	has_non_blank_segment = False
 	for segment_id in segment_ids:
 		segment_field = f"segment_text_{component_id}__{segment_id}"
-		segment_value = normalize_segment_bucket_label((input_row.get(segment_field) or "").strip())
+		raw_segment_value = (input_row.get(segment_field) or "").strip()
+		if raw_segment_value:
+			has_non_blank_segment = True
+		segment_value = normalize_segment_bucket_label(raw_segment_value)
 		segment_parts.append(f"{segment_id}: {segment_value}")
+	if not has_non_blank_segment:
+		return "(blank segment text)"
 	return " ; ".join(segment_parts)
+
+
+def parse_paired_segment_bucket(segment_text: str) -> list[tuple[str, str]]:
+	parts: list[tuple[str, str]] = []
+	for raw_part in segment_text.split(" ; "):
+		label, separator, value = raw_part.partition(":")
+		if not separator:
+			continue
+		parts.append((label.strip(), value.strip()))
+	return parts
+
+
+def derive_segment_report_column_labels(
+	required_layer0_records: str,
+	bound_segment_id: str,
+) -> list[str]:
+	record_ids = parse_required_layer0_record_ids(required_layer0_records)
+	segment_ids = parse_bound_segment_ids(bound_segment_id)
+	if len(record_ids) >= 2 and len(record_ids) == len(segment_ids):
+		return record_ids
+	if len(segment_ids) >= 2:
+		return segment_ids
+	return ["segment_text"]
+
+
+def map_segment_bucket_to_columns(
+	segment_bucket: str,
+	required_layer0_records: str,
+	bound_segment_id: str,
+) -> list[str]:
+	column_labels = derive_segment_report_column_labels(required_layer0_records, bound_segment_id)
+	if column_labels == ["segment_text"]:
+		return [segment_bucket]
+	if segment_bucket in {"(blank segment text)", "(missing Layer 1 input row)"}:
+		return [segment_bucket for _ in column_labels]
+	segment_pairs = parse_paired_segment_bucket(segment_bucket)
+	segment_values_by_label = {label: value for label, value in segment_pairs}
+	segment_ids = parse_bound_segment_ids(bound_segment_id)
+	values: list[str] = []
+	for index, column_label in enumerate(column_labels):
+		segment_id = segment_ids[index] if index < len(segment_ids) else column_label
+		values.append(segment_values_by_label.get(segment_id, "(blank segment text)"))
+	return values
 
 
 def segment_text_sort_key(value: str) -> tuple[int, str]:
@@ -1737,6 +1800,20 @@ def highlight_segment_text_in_submission(source_entry: str, segment_text: str) -
 		return normalized_entry
 	if normalized_segment in {"(blank segment text)", "(missing Layer 1 input row)"}:
 		return normalized_entry
+	paired_segments = parse_paired_segment_bucket(normalized_segment)
+	if paired_segments:
+		highlighted_entry = normalized_entry
+		for _, segment_value in paired_segments:
+			if not segment_value or segment_value == "(blank segment text)":
+				continue
+			exact_pattern = re.compile(re.escape(segment_value))
+			if exact_pattern.search(highlighted_entry):
+				highlighted_entry = exact_pattern.sub(lambda match: f"<mark>{match.group(0)}</mark>", highlighted_entry)
+				continue
+			ignore_case_pattern = re.compile(re.escape(segment_value), re.IGNORECASE)
+			if ignore_case_pattern.search(highlighted_entry):
+				highlighted_entry = ignore_case_pattern.sub(lambda match: f"<mark>{match.group(0)}</mark>", highlighted_entry)
+		return highlighted_entry
 	exact_pattern = re.compile(re.escape(normalized_segment))
 	if exact_pattern.search(normalized_entry):
 		return exact_pattern.sub(lambda match: f"<mark>{match.group(0)}</mark>", normalized_entry)
@@ -1746,12 +1823,19 @@ def highlight_segment_text_in_submission(source_entry: str, segment_text: str) -
 	return normalized_entry
 
 
-def build_segment_summary_rows(segment_counts: Counter[str], evidence_status: str) -> list[list[str]]:
+def build_segment_summary_rows(
+	segment_counts: Counter[str],
+	evidence_status: str,
+	*,
+	required_layer0_records: str = "",
+	bound_segment_id: str = "",
+) -> list[list[str]]:
 	rows: list[list[str]] = []
 	for segment_text, count in sorted(segment_counts.items(), key=lambda item: (segment_text_sort_key(item[0]), item[0])):
+		segment_columns = map_segment_bucket_to_columns(segment_text, required_layer0_records, bound_segment_id)
 		rows.append([
 			escape_markdown_table_cell(evidence_status),
-			escape_markdown_table_cell(segment_text),
+			*(escape_markdown_table_cell(value) for value in segment_columns),
 			str(count),
 		])
 	return rows
@@ -1761,13 +1845,19 @@ def append_total_count_row(rows: list[list[str]], label_columns: list[str], tota
 	return [*rows, [*label_columns, str(total_count)]]
 
 
-def build_segment_detail_rows(detail_rows: list[tuple[str, str]]) -> list[list[str]]:
+def build_segment_detail_rows(
+	detail_rows: list[tuple[str, str]],
+	*,
+	required_layer0_records: str = "",
+	bound_segment_id: str = "",
+) -> list[list[str]]:
 	rows: list[list[str]] = []
 	for source_entry, segment_text in sorted(detail_rows, key=lambda item: (segment_text_sort_key(item[1]), item[1], item[0].lower())):
 		highlighted_source_entry = highlight_segment_text_in_submission(source_entry, segment_text)
+		segment_columns = map_segment_bucket_to_columns(segment_text, required_layer0_records, bound_segment_id)
 		rows.append([
 			escape_markdown_table_cell(highlighted_source_entry),
-			escape_markdown_table_cell(segment_text),
+			*(escape_markdown_table_cell(value) for value in segment_columns),
 		])
 	return rows
 
@@ -1837,6 +1927,7 @@ def render_indicator_segment_report(
 	sbo_identifier: str,
 	sbo_short_description: str,
 	bound_segment_id: str,
+	required_layer0_records: str,
 	segment_field: str,
 	scored_csv_path: Path | None,
 	input_csv_path: Path | None,
@@ -1864,6 +1955,7 @@ def render_indicator_segment_report(
 		f'indicator_id: "{indicator_id}"',
 		f'sbo_identifier: "{sbo_identifier}"',
 		f'bound_segment_id: "{bound_segment_id}"',
+		f'required_layer0_records: "{required_layer0_records}"',
 		"---",
 		"",
 		f"## {output_path.name.removesuffix('.md')}",
@@ -1876,6 +1968,7 @@ def render_indicator_segment_report(
 				["sbo_identifier", sbo_identifier],
 				["sbo_short_description", sbo_short_description],
 				["bound_segment_id", bound_segment_id or "(unbound)"],
+				["required_layer0_records", required_layer0_records or "(none)"],
 				["segment_field", segment_field or "evidence_text"],
 				["scored_csv", str(scored_csv_path) if scored_csv_path is not None else ""],
 				["layer1_input_csv", str(input_csv_path) if input_csv_path is not None else ""],
@@ -1910,12 +2003,22 @@ def render_indicator_segment_report(
 		"#### Matching Segment Texts Summary",
 		"",
 	])
-	matching_summary_rows = build_segment_summary_rows(matching_segment_counts, "present")
+	segment_column_labels = derive_segment_report_column_labels(required_layer0_records, bound_segment_id)
+	matching_summary_rows = build_segment_summary_rows(
+		matching_segment_counts,
+		"present",
+		required_layer0_records=required_layer0_records,
+		bound_segment_id=bound_segment_id,
+	)
 	if matching_summary_rows:
 		parts.append(
 			render_markdown_table(
-				["evidence_status", "segment_text", "count"],
-				append_total_count_row(matching_summary_rows, ["present", "total"], sum(matching_segment_counts.values())),
+				["evidence_status", *segment_column_labels, "count"],
+				append_total_count_row(
+					matching_summary_rows,
+					["present", *("total" if index == 0 else "" for index, _ in enumerate(segment_column_labels))],
+					sum(matching_segment_counts.values()),
+				),
 			)
 		)
 	else:
@@ -1925,12 +2028,21 @@ def render_indicator_segment_report(
 		"#### Non-Matching Segment Texts Summary",
 		"",
 	])
-	non_matching_summary_rows = build_segment_summary_rows(non_matching_segment_counts, "not_present")
+	non_matching_summary_rows = build_segment_summary_rows(
+		non_matching_segment_counts,
+		"not_present",
+		required_layer0_records=required_layer0_records,
+		bound_segment_id=bound_segment_id,
+	)
 	if non_matching_summary_rows:
 		parts.append(
 			render_markdown_table(
-				["evidence_status", "segment_text", "count"],
-				append_total_count_row(non_matching_summary_rows, ["not_present", "total"], sum(non_matching_segment_counts.values())),
+				["evidence_status", *segment_column_labels, "count"],
+				append_total_count_row(
+					non_matching_summary_rows,
+					["not_present", *("total" if index == 0 else "" for index, _ in enumerate(segment_column_labels))],
+					sum(non_matching_segment_counts.values()),
+				),
 			)
 		)
 	else:
@@ -1942,9 +2054,13 @@ def render_indicator_segment_report(
 		"#### Matching Segment Texts Detail",
 		"",
 	])
-	matching_detail_rows = build_segment_detail_rows(matching_detail_entries)
+	matching_detail_rows = build_segment_detail_rows(
+		matching_detail_entries,
+		required_layer0_records=required_layer0_records,
+		bound_segment_id=bound_segment_id,
+	)
 	if matching_detail_rows:
-		parts.append(render_markdown_table(["original_submission", "segment_text"], matching_detail_rows))
+		parts.append(render_markdown_table(["original_submission", *segment_column_labels], matching_detail_rows))
 	else:
 		parts.append("No matching segment details.")
 	parts.extend([
@@ -1952,9 +2068,13 @@ def render_indicator_segment_report(
 		"#### Non-Matching Segment Texts Detail",
 		"",
 	])
-	non_matching_detail_rows = build_segment_detail_rows(non_matching_detail_entries)
+	non_matching_detail_rows = build_segment_detail_rows(
+		non_matching_detail_entries,
+		required_layer0_records=required_layer0_records,
+		bound_segment_id=bound_segment_id,
+	)
 	if non_matching_detail_rows:
-		parts.append(render_markdown_table(["original_submission", "segment_text"], non_matching_detail_rows))
+		parts.append(render_markdown_table(["original_submission", *segment_column_labels], non_matching_detail_rows))
 	else:
 		parts.append("No non-matching segment details.")
 	parts.append("")
@@ -1970,6 +2090,8 @@ def render_indicator_slot_group_segment_report(
 	local_slot: str,
 	template_ids: list[str],
 	indicator_members: list[list[str]],
+	required_layer0_records: str,
+	bound_segment_id: str,
 	status_counts: Counter[str],
 	matching_segment_counts: Counter[str],
 	non_matching_segment_counts: Counter[str],
@@ -1993,6 +2115,8 @@ def render_indicator_slot_group_segment_report(
 		f'manifest_input: "{manifest_path}"',
 		f'local_slot: "{local_slot}"',
 		f'group_label: "{group_label}"',
+		f'required_layer0_records: "{required_layer0_records}"',
+		f'bound_segment_id: "{bound_segment_id}"',
 		"---",
 		"",
 		f"## {output_path.name.removesuffix('.md')}",
@@ -2005,6 +2129,8 @@ def render_indicator_slot_group_segment_report(
 				["template_ids", ", ".join(template_ids)],
 				["indicator_ids", ", ".join(row[1] for row in indicator_members)],
 				["component_ids", ", ".join(row[0] for row in indicator_members)],
+				["required_layer0_records", required_layer0_records or "(none)"],
+				["bound_segment_id", bound_segment_id or "(unbound)"],
 				["matching_row_count", str(matching_row_count)],
 				["non_matching_row_count", str(non_matching_row_count)],
 				["missing_input_row_count", str(missing_input_row_count)],
@@ -2050,12 +2176,22 @@ def render_indicator_slot_group_segment_report(
 		"#### Matching Segment Texts Summary",
 		"",
 	])
-	matching_summary_rows = build_segment_summary_rows(matching_segment_counts, "present")
+	segment_column_labels = derive_segment_report_column_labels(required_layer0_records, bound_segment_id)
+	matching_summary_rows = build_segment_summary_rows(
+		matching_segment_counts,
+		"present",
+		required_layer0_records=required_layer0_records,
+		bound_segment_id=bound_segment_id,
+	)
 	if matching_summary_rows:
 		parts.append(
 			render_markdown_table(
-				["evidence_status", "segment_text", "count"],
-				append_total_count_row(matching_summary_rows, ["present", "total"], sum(matching_segment_counts.values())),
+				["evidence_status", *segment_column_labels, "count"],
+				append_total_count_row(
+					matching_summary_rows,
+					["present", *("total" if index == 0 else "" for index, _ in enumerate(segment_column_labels))],
+					sum(matching_segment_counts.values()),
+				),
 			)
 		)
 	else:
@@ -2065,12 +2201,21 @@ def render_indicator_slot_group_segment_report(
 		"#### Non-Matching Segment Texts Summary",
 		"",
 	])
-	non_matching_summary_rows = build_segment_summary_rows(non_matching_segment_counts, "not_present")
+	non_matching_summary_rows = build_segment_summary_rows(
+		non_matching_segment_counts,
+		"not_present",
+		required_layer0_records=required_layer0_records,
+		bound_segment_id=bound_segment_id,
+	)
 	if non_matching_summary_rows:
 		parts.append(
 			render_markdown_table(
-				["evidence_status", "segment_text", "count"],
-				append_total_count_row(non_matching_summary_rows, ["not_present", "total"], sum(non_matching_segment_counts.values())),
+				["evidence_status", *segment_column_labels, "count"],
+				append_total_count_row(
+					non_matching_summary_rows,
+					["not_present", *("total" if index == 0 else "" for index, _ in enumerate(segment_column_labels))],
+					sum(non_matching_segment_counts.values()),
+				),
 			)
 		)
 	else:
@@ -2082,9 +2227,13 @@ def render_indicator_slot_group_segment_report(
 		"#### Matching Segment Texts Detail",
 		"",
 	])
-	matching_detail_rows = build_segment_detail_rows(matching_detail_entries)
+	matching_detail_rows = build_segment_detail_rows(
+		matching_detail_entries,
+		required_layer0_records=required_layer0_records,
+		bound_segment_id=bound_segment_id,
+	)
 	if matching_detail_rows:
-		parts.append(render_markdown_table(["original_submission", "segment_text"], matching_detail_rows))
+		parts.append(render_markdown_table(["original_submission", *segment_column_labels], matching_detail_rows))
 	else:
 		parts.append("No matching segment details.")
 	parts.extend([
@@ -2092,9 +2241,13 @@ def render_indicator_slot_group_segment_report(
 		"#### Non-Matching Segment Texts Detail",
 		"",
 	])
-	non_matching_detail_rows = build_segment_detail_rows(non_matching_detail_entries)
+	non_matching_detail_rows = build_segment_detail_rows(
+		non_matching_detail_entries,
+		required_layer0_records=required_layer0_records,
+		bound_segment_id=bound_segment_id,
+	)
 	if non_matching_detail_rows:
-		parts.append(render_markdown_table(["original_submission", "segment_text"], non_matching_detail_rows))
+		parts.append(render_markdown_table(["original_submission", *segment_column_labels], non_matching_detail_rows))
 	else:
 		parts.append("No non-matching segment details.")
 	parts.append("")
@@ -3319,6 +3472,7 @@ def main() -> int:
 		base_row_info = base_row_reverse_lookup.get((component_id, indicator_id), {})
 		local_slot = (base_row_info.get("local_slot") or "").strip()
 		template_id = (base_row_info.get("template_id") or "").strip()
+		required_layer0_records = (base_row_info.get("required_layer0_records") or "").strip()
 		bound_segment_id = indicator_spec.get("bound_segment_id", "")
 		segment_field = derive_segment_field_label(component_id, bound_segment_id)
 		status_counts: Counter[str] = Counter()
@@ -3389,6 +3543,7 @@ def main() -> int:
 				sbo_identifier=indicator_spec.get("sbo_identifier", ""),
 				sbo_short_description=indicator_spec.get("sbo_short_description", ""),
 				bound_segment_id=bound_segment_id,
+				required_layer0_records=required_layer0_records,
 				segment_field=segment_field,
 				scored_csv_path=scored_csv_path_by_component.get(component_id),
 				input_csv_path=input_csv_path_by_component.get(component_id),
@@ -3409,6 +3564,8 @@ def main() -> int:
 				{
 					"template_ids": set(),
 					"indicator_members": [],
+					"required_layer0_records": "",
+					"bound_segment_id": "",
 					"status_counts": Counter(),
 					"matching_segment_counts": Counter(),
 					"non_matching_segment_counts": Counter(),
@@ -3423,6 +3580,10 @@ def main() -> int:
 			)
 			if template_id:
 				group_report["template_ids"].add(template_id)
+			if required_layer0_records and not group_report["required_layer0_records"]:
+				group_report["required_layer0_records"] = required_layer0_records
+			if bound_segment_id and not group_report["bound_segment_id"]:
+				group_report["bound_segment_id"] = bound_segment_id
 			group_report["indicator_members"].append(
 				[
 					component_id,
@@ -3478,6 +3639,8 @@ def main() -> int:
 				local_slot=local_slot,
 				template_ids=sorted(group_report["template_ids"]),
 				indicator_members=group_members,
+				required_layer0_records=str(group_report["required_layer0_records"]),
+				bound_segment_id=str(group_report["bound_segment_id"]),
 				status_counts=group_report["status_counts"],
 				matching_segment_counts=group_report["matching_segment_counts"],
 				non_matching_segment_counts=group_report["non_matching_segment_counts"],

@@ -108,6 +108,57 @@ def filter_component_rows(rows: list[dict[str, str]], target_component_id: str) 
 	return filtered_rows
 
 
+def resolve_submission_id_from_row(row: dict[str, str]) -> str:
+	for field_name in ["submission_id", "participant_id"]:
+		value = str(row.get(field_name, "") or "").strip()
+		if value:
+			return value
+	return ""
+
+
+def derive_layer0_stitched_csv_path_from_layer1_input(input_csv_path: Path) -> Path | None:
+	if len(input_csv_path.parents) < 4:
+		return None
+	registry_dir = input_csv_path.parents[3]
+	run_label = input_csv_path.parents[1].name
+	stitched_dir = registry_dir / "03_diagnostics" / run_label / "layer0_runtime"
+	if not stitched_dir.exists() or not stitched_dir.is_dir():
+		return None
+	matches = sorted(stitched_dir.glob("*output-wide-stitched.csv"))
+	if not matches:
+		return None
+	return matches[0]
+
+
+def index_rows_by_component_submission(rows: list[dict[str, str]]) -> dict[tuple[str, str], dict[str, str]]:
+	indexed_rows: dict[tuple[str, str], dict[str, str]] = {}
+	for row in rows:
+		component_id = str(row.get("component_id", "") or "").strip()
+		submission_id = resolve_submission_id_from_row(row)
+		if not component_id or not submission_id:
+			continue
+		indexed_rows[(component_id, submission_id)] = row
+	return indexed_rows
+
+
+def enrich_rows_with_source_response_text(rows: list[dict[str, str]], input_csv_path: Path) -> list[dict[str, str]]:
+	stitched_csv_path = derive_layer0_stitched_csv_path_from_layer1_input(input_csv_path)
+	if stitched_csv_path is None or not stitched_csv_path.exists() or not stitched_csv_path.is_file():
+		return rows
+	stitched_rows = load_scored_rows(stitched_csv_path.resolve())
+	stitched_index = index_rows_by_component_submission(stitched_rows)
+	enriched_rows: list[dict[str, str]] = []
+	for row in rows:
+		component_id = str(row.get("component_id", "") or "").strip()
+		submission_id = resolve_submission_id_from_row(row)
+		enriched_row = dict(row)
+		stitched_row = stitched_index.get((component_id, submission_id))
+		if stitched_row is not None:
+			enriched_row.setdefault("source_response_text", str(stitched_row.get("source_response_text", "") or ""))
+		enriched_rows.append(enriched_row)
+	return enriched_rows
+
+
 def resolve_output_path(output_dir: Path, output_file_stem: str, output_format: str, indicator_id: str) -> Path:
 	return output_dir / f"{output_file_stem}_{indicator_id}_output.{output_format.lstrip('.')}"
 
@@ -184,6 +235,7 @@ def main() -> int:
 	try:
 		input_rows = load_scored_rows(args.layer1_input_csv.resolve())
 		validate_input_rows(input_rows, args.layer1_input_csv)
+		input_rows = enrich_rows_with_source_response_text(input_rows, args.layer1_input_csv.resolve())
 		component_rows = filter_component_rows(input_rows, args.target_component_id)
 		modules = load_indicator_modules(args.module_dir.resolve(), args.target_component_id, args.output_file_stem)
 		output_dir = args.output_dir.resolve()
