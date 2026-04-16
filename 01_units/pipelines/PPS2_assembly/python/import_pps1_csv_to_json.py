@@ -29,6 +29,7 @@ from lms_text_cleaning import clean_lms_text, should_clean_lms_text_column
 DEFAULT_SCHEMA_PATH = Path(
     "/Users/mb/Documents/vault-grading-pipeline/01_units/pipelines/PPS2_assembly/python/pps1_import_schema.json"
 )
+NO_ENTRY_RECEIVED = "[NO ENTRY RECEIVED]"
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,8 @@ class AuditRow:
     output_json_path: str
     dimension_check_fields: dict[str, str]
     dimension_word_count_fields: dict[str, str]
+    concept_word_count_fields: dict[str, str]
+    no_entry_received_fields: dict[str, str]
     position_state_matrix_fields: dict[str, str]
 
 
@@ -179,9 +182,22 @@ def normalize_value(value: str | None) -> str:
 
 def count_words(value: str | None) -> int:
     text = normalize_value(value)
+    if text == NO_ENTRY_RECEIVED:
+        return 0
     if not text:
         return 0
     return len(re.findall(r"\S+", text))
+
+
+def should_fill_no_entry_received(json_key: str) -> bool:
+    if json_key in {"B3Interpretation", "B3Use", "C3Interpretation", "C3Use", "D3Interpretation", "D3Use"}:
+        return True
+
+    if not (json_key.endswith("-PPP") or json_key.endswith("-PPS1")):
+        return False
+
+    dimension_prefix = json_key.rsplit("-", 1)[0]
+    return dimension_prefix in {"B-1", "B-2", "B-3", "C-1", "C-2", "C-3", "D-1", "D-2", "D-3"}
 
 
 def sanitize_filename(raw_value: str, fallback: str) -> str:
@@ -330,6 +346,44 @@ def build_dimension_word_count_audit_fields(
     return audit_fields
 
 
+def build_concept_word_count_audit_fields(record: dict[str, str]) -> dict[str, str]:
+    audit_fields: dict[str, str] = {}
+    for field_name in (
+        "B3Interpretation",
+        "B3Use",
+        "C3Interpretation",
+        "C3Use",
+        "D3Interpretation",
+        "D3Use",
+    ):
+        audit_fields[f"{field_name}-word-count"] = str(count_words(record.get(field_name)))
+    return audit_fields
+
+
+def build_no_entry_received_audit_fields(
+    schema: ImportSchema,
+    record: dict[str, str],
+) -> dict[str, str]:
+    audit_fields: dict[str, str] = {}
+
+    for dimension in schema.dimensions:
+        for suffix in ("PPP", "PPS1"):
+            field_name = f"{dimension}-{suffix}"
+            audit_fields[f"{field_name}-no-entry"] = str(record.get(field_name) == NO_ENTRY_RECEIVED).lower()
+
+    for field_name in (
+        "B3Interpretation",
+        "B3Use",
+        "C3Interpretation",
+        "C3Use",
+        "D3Interpretation",
+        "D3Use",
+    ):
+        audit_fields[f"{field_name}-no-entry"] = str(record.get(field_name) == NO_ENTRY_RECEIVED).lower()
+
+    return audit_fields
+
+
 def populate_status_values(schema: ImportSchema, record: dict[str, str], row: dict[str, str]) -> None:
     dotted_to_short_dimension = {
         value: key for key, value in schema.short_to_dotted_dimension.items()
@@ -425,9 +479,14 @@ def build_record(
         if json_key in record:
             raw_value = row.get(csv_key)
             if should_clean_lms_text_column(csv_key):
-                record[json_key] = clean_lms_text(raw_value)
+                cleaned_value = clean_lms_text(raw_value)
             else:
-                record[json_key] = normalize_value(raw_value)
+                cleaned_value = normalize_value(raw_value)
+
+            if should_fill_no_entry_received(json_key) and not cleaned_value:
+                record[json_key] = NO_ENTRY_RECEIVED
+            else:
+                record[json_key] = cleaned_value
 
     populate_development_values(schema, record, row)
     populate_status_values(schema, record, row)
@@ -524,6 +583,17 @@ def build_audit_fieldnames(schema: ImportSchema) -> list[str]:
     fieldnames.append(".")
     fieldnames.extend(
         [
+            "B3Interpretation-word-count",
+            "B3Use-word-count",
+            "C3Interpretation-word-count",
+            "C3Use-word-count",
+            "D3Interpretation-word-count",
+            "D3Use-word-count",
+            ".",
+        ]
+    )
+    fieldnames.extend(
+        [
             ".",
             "E2_00_GridResponse",
             "E2_10_GridResponse",
@@ -557,11 +627,49 @@ def write_audit_csv(path: Path, schema: ImportSchema, rows: list[AuditRow]) -> N
             }
             row_values.update(row.dimension_check_fields)
             row_values.update(row.dimension_word_count_fields)
+            row_values.update(row.concept_word_count_fields)
             row_values.update(row.position_state_matrix_fields)
             writer.writerow(row_values)
 
 
 def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> str:
+    def summarize_numeric_values(values: list[int]) -> dict[str, float | int]:
+        if not values:
+            return {"avg": 0.0, "median": 0.0, "min": 0, "max": 0}
+
+        values = sorted(values)
+        count = len(values)
+        midpoint = count // 2
+        if count % 2 == 1:
+            median = float(values[midpoint])
+        else:
+            median = (values[midpoint - 1] + values[midpoint]) / 2
+
+        return {
+            "avg": sum(values) / count,
+            "median": median,
+            "min": values[0],
+            "max": values[-1],
+        }
+
+    def summarize_word_counts(field_name: str) -> dict[str, float | int]:
+        return summarize_numeric_values([int(row.dimension_word_count_fields[field_name]) for row in rows])
+
+    def summarize_concept_word_counts(field_name: str) -> dict[str, float | int]:
+        return summarize_numeric_values([int(row.concept_word_count_fields[field_name]) for row in rows])
+
+    def percent_over_threshold(field_name: str, threshold: int) -> float:
+        if not rows:
+            return 0.0
+        count = sum(1 for row in rows if int(row.concept_word_count_fields[field_name]) > threshold)
+        return (count / len(rows)) * 100
+
+    def count_over_threshold(field_name: str, threshold: int) -> int:
+        return sum(1 for row in rows if int(row.concept_word_count_fields[field_name]) > threshold)
+
+    def no_entry_count(field_name: str) -> int:
+        return sum(1 for row in rows if row.no_entry_received_fields[f"{field_name}-no-entry"] == "true")
+
     position_state_matrix_labels = {
         "E2_00_GridResponse": {
             "position_state": "stable",
@@ -984,6 +1092,138 @@ def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> st
         f"| Total | {only_1_column_totals[matrix_columns[0]]} | {only_1_column_totals[matrix_columns[1]]} | {only_1_column_totals[matrix_columns[2]]} | {only_1_column_totals[matrix_columns[3]]} | {only_1_row_total} | {((only_1_row_total / len(rows)) * 100) if rows else 0.0:.1f}% |"
     )
 
+    lines.extend(
+        [
+            "",
+            "## Dimension Word Count Distributions",
+            "",
+            "### PPP",
+            "",
+            f"| Metric | {' | '.join(schema.dimensions)} |",
+            f"| --- | {' | '.join('---:' for _ in schema.dimensions)} |",
+        ]
+    )
+    ppp_stats_by_dimension = {
+        dimension: summarize_word_counts(f"{dimension}-PPP-word-count") for dimension in schema.dimensions
+    }
+    for metric_label, stats_key, value_format in (
+        ("PPP Avg", "avg", "float"),
+        ("PPP Median", "median", "float"),
+        ("PPP Min", "min", "int"),
+        ("PPP Max", "max", "int"),
+    ):
+        row_cells = [metric_label]
+        for dimension in schema.dimensions:
+            value = ppp_stats_by_dimension[dimension][stats_key]
+            row_cells.append(f"{value:.1f}" if value_format == "float" else str(value))
+        lines.append(f"| {' | '.join(row_cells)} |")
+
+    for dimension in schema.dimensions:
+        pass
+
+    lines.extend(
+        [
+            "",
+            "### PPS1",
+            "",
+            f"| Metric | {' | '.join(schema.dimensions)} |",
+            f"| --- | {' | '.join('---:' for _ in schema.dimensions)} |",
+        ]
+    )
+    pps1_stats_by_dimension = {
+        dimension: summarize_word_counts(f"{dimension}-PPS1-word-count") for dimension in schema.dimensions
+    }
+    for metric_label, stats_key, value_format in (
+        ("PPS1 Avg", "avg", "float"),
+        ("PPS1 Median", "median", "float"),
+        ("PPS1 Min", "min", "int"),
+        ("PPS1 Max", "max", "int"),
+    ):
+        row_cells = [metric_label]
+        for dimension in schema.dimensions:
+            value = pps1_stats_by_dimension[dimension][stats_key]
+            row_cells.append(f"{value:.1f}" if value_format == "float" else str(value))
+        lines.append(f"| {' | '.join(row_cells)} |")
+
+    concept_fields = [
+        "B3Interpretation",
+        "B3Use",
+        "C3Interpretation",
+        "C3Use",
+        "D3Interpretation",
+        "D3Use",
+    ]
+    lines.extend(
+        [
+            "",
+            "### Concept Fields",
+            "",
+            f"| Metric | {' | '.join(concept_fields)} |",
+            f"| --- | {' | '.join('---:' for _ in concept_fields)} |",
+        ]
+    )
+    concept_stats_by_field = {
+        field_name: summarize_concept_word_counts(f"{field_name}-word-count") for field_name in concept_fields
+    }
+    for metric_label, stats_key, value_format in (
+        ("Avg", "avg", "float"),
+        ("Median", "median", "float"),
+        ("Min", "min", "int"),
+        ("Max", "max", "int"),
+    ):
+        row_cells = [metric_label]
+        for field_name in concept_fields:
+            value = concept_stats_by_field[field_name][stats_key]
+            row_cells.append(f"{value:.1f}" if value_format == "float" else str(value))
+        lines.append(f"| {' | '.join(row_cells)} |")
+    over_100_count_row = ["Count over 100 words"]
+    for field_name in concept_fields:
+        over_100_count_row.append(str(count_over_threshold(f'{field_name}-word-count', 100)))
+    lines.append(f"| {' | '.join(over_100_count_row)} |")
+
+    over_100_row = ["% over 100 words"]
+    for field_name in concept_fields:
+        over_100_row.append(f"{percent_over_threshold(f'{field_name}-word-count', 100):.1f}%")
+    lines.append(f"| {' | '.join(over_100_row)} |")
+
+    lines.extend(
+        [
+            "",
+            "### No Entry Received",
+            "",
+            f"| Metric | {' | '.join(schema.dimensions)} |",
+            f"| --- | {' | '.join('---:' for _ in schema.dimensions)} |",
+        ]
+    )
+    for suffix in ("PPP", "PPS1"):
+        count_row = [f"{suffix} Count"]
+        percent_row = [f"{suffix} % of Submissions"]
+        for dimension in schema.dimensions:
+            field_name = f"{dimension}-{suffix}"
+            count = no_entry_count(field_name)
+            percent = 0.0 if not rows else (count / len(rows)) * 100
+            count_row.append(str(count))
+            percent_row.append(f"{percent:.1f}%")
+        lines.append(f"| {' | '.join(count_row)} |")
+        lines.append(f"| {' | '.join(percent_row)} |")
+
+    lines.extend(
+        [
+            "",
+            f"| Metric | {' | '.join(concept_fields)} |",
+            f"| --- | {' | '.join('---:' for _ in concept_fields)} |",
+        ]
+    )
+    concept_count_row = ["Count"]
+    concept_percent_row = ["% of Submissions"]
+    for field_name in concept_fields:
+        count = no_entry_count(field_name)
+        percent = 0.0 if not rows else (count / len(rows)) * 100
+        concept_count_row.append(str(count))
+        concept_percent_row.append(f"{percent:.1f}%")
+    lines.append(f"| {' | '.join(concept_count_row)} |")
+    lines.append(f"| {' | '.join(concept_percent_row)} |")
+
     lines.append("")
     return "\n".join(lines)
 
@@ -1109,6 +1349,8 @@ def main() -> int:
                     output_json_path=str(output_path),
                     dimension_check_fields=build_dimension_development_audit_fields(schema, row),
                     dimension_word_count_fields=build_dimension_word_count_audit_fields(schema, record),
+                    concept_word_count_fields=build_concept_word_count_audit_fields(record),
+                    no_entry_received_fields=build_no_entry_received_audit_fields(schema, record),
                     position_state_matrix_fields=build_position_state_matrix_audit_fields(row),
                 )
             )
