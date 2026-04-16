@@ -30,9 +30,26 @@ python /Users/mb/Documents/vault-grading-pipeline/01_units/pipelines/PPS2_assemb
 
 - `--keep-md`: also save the filled Markdown file for each student.
 - `--keep-tex`: also save the pandoc-generated LaTeX file for each student.
+- `--dry-run`: validate JSON, placeholders, and duplicate participant IDs without rendering files.
 - `--allow-missing`: render even if some placeholders remain unresolved.
 - `--verbose`: print dependency and pandoc command details.
 - `--latex-template`: pass a custom LaTeX template to pandoc for PDF styling.
+
+## Manifest CSV
+
+Each run writes a manifest to:
+
+```text
+/Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/generated_individualized_PPS2/render_manifest.csv
+```
+
+Columns:
+
+- `participant_id`
+- `json_file`
+- `pdf_file`
+- `status`
+- `notes`
 
 ## Custom PDF styling
 
@@ -63,12 +80,34 @@ can resolve both `{participant_id}` and `{claims.CLM_01_text}`.
 
 Top-level scalar keys also remain directly addressable, so `{CLM_01_text}` works when the JSON includes that exact key.
 
+## Page breaks
+
+The generator also supports this source Markdown page-break marker:
+
+```html
+<div class="page-break" style="page-break-before: always;"></div>
+```
+
+Before Pandoc runs, the script converts that marker into a LaTeX page break so the generated PDF and `.tex` output preserve the intended pagination.
+
+The generator also appends a final page to every booklet. The current placeholder implementation prints `STAMP` centered on that last page.
+
 ## Output filenames
 
 Each rendered booklet is named:
 
 ```text
-<participant_id>_PPS2.pdf
+eecs3000w26_FAMILY_NAME_GIVEN_NAME.pdf
 ```
 
-If `participant_id` is missing, the JSON filename stem is used.
+Rules:
+
+- `FAMILY_NAME` is uppercased.
+- `GIVEN_NAME` is converted to first-letter caps.
+- Non-alphanumeric separators inside names are normalized to underscores.
+
+Example:
+
+```text
+eecs3000w26_SMITH_Alex.pdf
+```
