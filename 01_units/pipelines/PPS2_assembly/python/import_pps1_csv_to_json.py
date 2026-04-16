@@ -76,6 +76,7 @@ class AuditRow:
     family_name: str
     output_json_path: str
     dimension_check_fields: dict[str, str]
+    position_state_matrix_fields: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -287,6 +288,27 @@ def build_dimension_development_audit_fields(
     return audit_fields
 
 
+def build_position_state_matrix_audit_fields(row: dict[str, str]) -> dict[str, str]:
+    matrix_columns = [
+        "E2_00_GridResponse",
+        "E2_10_GridResponse",
+        "E2_01_GridResponse",
+        "E2_11_GridResponse",
+    ]
+    audit_fields: dict[str, str] = {}
+    specified_count = 0
+
+    for column_name in matrix_columns:
+        value = normalize_value(row.get(column_name))
+        audit_fields[column_name] = value
+        if value:
+            specified_count += 1
+
+    saturation_rate = (specified_count / len(matrix_columns)) * 100
+    audit_fields["Position-State Matrix Saturation Rate"] = f"{saturation_rate:.1f}%"
+    return audit_fields
+
+
 def populate_status_values(schema: ImportSchema, record: dict[str, str], row: dict[str, str]) -> None:
     dotted_to_short_dimension = {
         value: key for key, value in schema.short_to_dotted_dimension.items()
@@ -458,6 +480,7 @@ def build_audit_fieldnames(schema: ImportSchema) -> list[str]:
         "given_name",
         "family_name",
         "output_json_path",
+        ".",
     ]
     for dimension in schema.dimensions:
         fieldnames.extend(
@@ -469,6 +492,18 @@ def build_audit_fieldnames(schema: ImportSchema) -> list[str]:
                 f"{dimension}-err",
             ]
         )
+    fieldnames.append(".")
+    fieldnames.extend(
+        [
+            ".",
+            "E2_00_GridResponse",
+            "E2_10_GridResponse",
+            "E2_01_GridResponse",
+            "E2_11_GridResponse",
+            "Position-State Matrix Saturation Rate",
+            ".",
+        ]
+    )
     return fieldnames
 
 
@@ -489,12 +524,33 @@ def write_audit_csv(path: Path, schema: ImportSchema, rows: list[AuditRow]) -> N
                 "given_name": row.given_name,
                 "family_name": row.family_name,
                 "output_json_path": row.output_json_path,
+                ".": "",
             }
             row_values.update(row.dimension_check_fields)
+            row_values.update(row.position_state_matrix_fields)
             writer.writerow(row_values)
 
 
 def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> str:
+    position_state_matrix_labels = {
+        "E2_00_GridResponse": {
+            "position_state": "stable",
+            "development_type": "shift",
+        },
+        "E2_10_GridResponse": {
+            "position_state": "stable",
+            "development_type": "continuity/reinforcement",
+        },
+        "E2_01_GridResponse": {
+            "position_state": "in_tension",
+            "development_type": "shift",
+        },
+        "E2_11_GridResponse": {
+            "position_state": "in_tension",
+            "development_type": "continuity/reinforcement",
+        },
+    }
+
     counts_by_dimension: dict[str, dict[str, int]] = {}
     for dimension in schema.dimensions:
         passed = 0
@@ -525,7 +581,7 @@ def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> st
         "",
         f"- Total imported rows: {len(rows)}",
         "",
-        "## Dimension Checks",
+        "## Dimensions : Devt Type Uniqueness",
         "",
         f"| {' | '.join(header_cells)} |",
         f"| {' | '.join(divider_cells)} |",
@@ -535,6 +591,160 @@ def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> st
         row_cells = [status_label]
         row_cells.extend(str(counts_by_dimension[dimension][status_label]) for dimension in schema.dimensions)
         lines.append(f"| {' | '.join(row_cells)} |")
+
+    total_row_cells = ["Total"]
+    total_row_cells.extend(
+        str(
+            counts_by_dimension[dimension]["Passed"]
+            + counts_by_dimension[dimension]["None Selected"]
+            + counts_by_dimension[dimension]["Multiple Selected"]
+        )
+        for dimension in schema.dimensions
+    )
+    lines.append(f"| {' | '.join(total_row_cells)} |")
+
+    error_rate_row_cells = ["% Error Rate"]
+    for dimension in schema.dimensions:
+        total_count = (
+            counts_by_dimension[dimension]["Passed"]
+            + counts_by_dimension[dimension]["None Selected"]
+            + counts_by_dimension[dimension]["Multiple Selected"]
+        )
+        error_count = (
+            counts_by_dimension[dimension]["None Selected"]
+            + counts_by_dimension[dimension]["Multiple Selected"]
+        )
+        error_rate = 0.0 if total_count == 0 else (error_count / total_count) * 100
+        error_rate_row_cells.append(f"{error_rate:.1f}%")
+    lines.append(f"| {' | '.join(error_rate_row_cells)} |")
+
+    matrix_columns = [
+        "E2_00_GridResponse",
+        "E2_10_GridResponse",
+        "E2_01_GridResponse",
+        "E2_11_GridResponse",
+    ]
+    specified_counts = {column_name: 0 for column_name in matrix_columns}
+    saturation_total = 0.0
+    saturation_distribution = {4: 0, 3: 0, 2: 0, 1: 0, 0: 0}
+    coverage_group_counts: dict[tuple[str, str], int] = {}
+
+    for row in rows:
+        specified_in_row = 0
+        for column_name in matrix_columns:
+            if row.position_state_matrix_fields[column_name]:
+                specified_counts[column_name] += 1
+                specified_in_row += 1
+        saturation_value = row.position_state_matrix_fields["Position-State Matrix Saturation Rate"]
+        saturation_total += float(saturation_value.rstrip("%"))
+        saturation_distribution[specified_in_row] += 1
+
+    for column_name in matrix_columns:
+        position_state = position_state_matrix_labels[column_name]["position_state"]
+        development_type = position_state_matrix_labels[column_name]["development_type"]
+        coverage_group_counts[(position_state, development_type)] = specified_counts[column_name]
+
+    average_saturation_rate = 0.0 if not rows else saturation_total / len(rows)
+
+    lines.extend(
+        [
+            "",
+            "## Position-State Matrix",
+            "",
+            "### Coverage",
+            "",
+            "| Metric | position_state | development_type | Count | % of Students |",
+            "| --- | --- | --- | ---: | ---: |",
+        ]
+    )
+    for column_name in matrix_columns:
+        specified_percent = 0.0 if not rows else (specified_counts[column_name] / len(rows)) * 100
+        lines.append(
+            f"| {column_name} specified | {position_state_matrix_labels[column_name]['position_state']} | {position_state_matrix_labels[column_name]['development_type']} | {specified_counts[column_name]} | {specified_percent:.1f}% |"
+        )
+    lines.append(f"| Average Saturation Rate |  |  |  | {average_saturation_rate:.1f}% |")
+    lines.extend(
+        [
+            "",
+            "| position_state | development_type | Count | % of Students |",
+            "| --- | --- | ---: | ---: |",
+        ]
+    )
+    aggregate_rows = [
+        ("stable", "shift", coverage_group_counts[("stable", "shift")], len(rows)),
+        (
+            "stable",
+            "continuity/reinforcement",
+            coverage_group_counts[("stable", "continuity/reinforcement")],
+            len(rows),
+        ),
+        ("in_tension", "shift", coverage_group_counts[("in_tension", "shift")], len(rows)),
+        (
+            "in_tension",
+            "continuity/reinforcement",
+            coverage_group_counts[("in_tension", "continuity/reinforcement")],
+            len(rows),
+        ),
+        (
+            "stable",
+            "*",
+            coverage_group_counts[("stable", "shift")]
+            + coverage_group_counts[("stable", "continuity/reinforcement")],
+            len(rows) * 2,
+        ),
+        (
+            "in_tension",
+            "*",
+            coverage_group_counts[("in_tension", "shift")]
+            + coverage_group_counts[("in_tension", "continuity/reinforcement")],
+            len(rows) * 2,
+        ),
+        (
+            "*",
+            "shift",
+            coverage_group_counts[("stable", "shift")]
+            + coverage_group_counts[("in_tension", "shift")],
+            len(rows) * 2,
+        ),
+        (
+            "*",
+            "continuity/reinforcement",
+            coverage_group_counts[("stable", "continuity/reinforcement")]
+            + coverage_group_counts[("in_tension", "continuity/reinforcement")],
+            len(rows) * 2,
+        ),
+        (
+            "*",
+            "*",
+            sum(coverage_group_counts.values()),
+            len(rows) * 4,
+        ),
+    ]
+    for position_state, development_type, group_count, denominator in aggregate_rows:
+        group_percent = 0.0 if denominator == 0 else (group_count / denominator) * 100
+        lines.append(
+            f"| {position_state} | {development_type} | {group_count} | {group_percent:.1f}% |"
+        )
+    lines.extend(
+        [
+            "",
+            "### Saturation Distribution",
+            "",
+            "| Metric | All 4 | Only 3 | Only 2 | Only 1 |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    lines.append(
+        "| Count | "
+        f"{saturation_distribution[4]} | {saturation_distribution[3]} | {saturation_distribution[2]} | {saturation_distribution[1]} |"
+    )
+    lines.append(
+        "| % of Students | "
+        f"{((saturation_distribution[4] / len(rows)) * 100) if rows else 0.0:.1f}% | "
+        f"{((saturation_distribution[3] / len(rows)) * 100) if rows else 0.0:.1f}% | "
+        f"{((saturation_distribution[2] / len(rows)) * 100) if rows else 0.0:.1f}% | "
+        f"{((saturation_distribution[1] / len(rows)) * 100) if rows else 0.0:.1f}% |"
+    )
 
     lines.append("")
     return "\n".join(lines)
@@ -660,6 +870,7 @@ def main() -> int:
                     family_name=record.get(schema.identity_fields.family_name, ""),
                     output_json_path=str(output_path),
                     dimension_check_fields=build_dimension_development_audit_fields(schema, row),
+                    position_state_matrix_fields=build_position_state_matrix_audit_fields(row),
                 )
             )
             if args.verbose:

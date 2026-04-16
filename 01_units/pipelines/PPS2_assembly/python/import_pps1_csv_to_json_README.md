@@ -73,8 +73,9 @@ This also writes the audit CSV configured at `auditPath` and a Markdown sidecar 
 ## Notes
 
 - The importer cleans mapped LMS response fields and the rich-text concept interpretation/use and attestation fields before writing JSON.
-- The audit CSV currently contains one row per imported LMS row with the source CSV path, row index, user identifiers, resolved participant identity, output JSON path, and per-dimension development-type checks.
+- The audit CSV currently contains one row per imported LMS row with the source CSV path, row index, user identifiers, resolved participant identity, output JSON path, per-dimension development-type checks, and Position-State Matrix audit fields.
 - For each dimension `B-1` through `D-3`, the audit includes `*-shift`, `*-cont-reinf`, `*-intro`, `*-check`, and `*-err` columns. `*-check` is `true` only when exactly one development-type box is selected; otherwise `*-err` is `none selected` or `multiple selected`.
-- The Markdown sidecar summary report counts, for each dimension, how many rows passed the check, had no development type selected, or had multiple development types selected.
+- The audit also records the four Position-State Matrix columns `E2_00_GridResponse`, `E2_10_GridResponse`, `E2_01_GridResponse`, and `E2_11_GridResponse`, plus a per-row `Position-State Matrix Saturation Rate` showing what percentage of those four fields are specified.
+- The Markdown sidecar summary report counts, for each dimension, how many rows passed the check, had no development type selected, or had multiple development types selected, and it also summarizes Position-State Matrix coverage and saturation distribution with both counts and percentages.
 - Section-selection logic is heuristic. If the PPS2 booklet structure changes, update the schema first and only change Python when selection logic itself must change.
 - The sampled set can therefore be larger than `sampleSize`, because the three coverage cases are added on top of the random sample when they are not already included.
