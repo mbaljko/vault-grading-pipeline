@@ -274,6 +274,8 @@ def canonical_inequality_match(
 	)
 	if left_canonical and right_canonical:
 		return left_canonical != right_canonical
+	if left_text and right_text:
+		return True
 	source_response_text = str(row.get("source_response_text", "") or row.get("response_text", "") or "").strip()
 	if source_response_text:
 		fallback_canonicals = extract_canonical_mentions_from_text(

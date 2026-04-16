@@ -1704,6 +1704,22 @@ def parse_required_layer0_record_ids(required_layer0_records: str) -> list[str]:
 	return record_ids
 
 
+def derive_segment_report_column_specs(
+	required_layer0_records: str,
+	bound_segment_id: str,
+) -> list[tuple[str, str]]:
+	record_ids = parse_required_layer0_record_ids(required_layer0_records)
+	segment_ids = parse_bound_segment_ids(bound_segment_id)
+	if record_ids and len(record_ids) == len(segment_ids):
+		return [
+			(segment_id, f"{record_id} ({segment_id})")
+			for record_id, segment_id in zip(record_ids, segment_ids)
+		]
+	if len(segment_ids) >= 2:
+		return [(segment_id, segment_id) for segment_id in segment_ids]
+	return [("segment_text", "segment_text")]
+
+
 def derive_segment_field_label(component_id: str, bound_segment_id: str) -> str:
 	segment_ids = parse_bound_segment_ids(bound_segment_id)
 	if not segment_ids:
@@ -1752,13 +1768,7 @@ def derive_segment_report_column_labels(
 	required_layer0_records: str,
 	bound_segment_id: str,
 ) -> list[str]:
-	record_ids = parse_required_layer0_record_ids(required_layer0_records)
-	segment_ids = parse_bound_segment_ids(bound_segment_id)
-	if len(record_ids) >= 2 and len(record_ids) == len(segment_ids):
-		return record_ids
-	if len(segment_ids) >= 2:
-		return segment_ids
-	return ["segment_text"]
+	return [display_label for _, display_label in derive_segment_report_column_specs(required_layer0_records, bound_segment_id)]
 
 
 def map_segment_bucket_to_columns(
@@ -1766,17 +1776,17 @@ def map_segment_bucket_to_columns(
 	required_layer0_records: str,
 	bound_segment_id: str,
 ) -> list[str]:
-	column_labels = derive_segment_report_column_labels(required_layer0_records, bound_segment_id)
-	if column_labels == ["segment_text"]:
+	column_specs = derive_segment_report_column_specs(required_layer0_records, bound_segment_id)
+	if column_specs == [("segment_text", "segment_text")]:
+		return [segment_bucket]
+	if len(column_specs) == 1:
 		return [segment_bucket]
 	if segment_bucket in {"(blank segment text)", "(missing Layer 1 input row)"}:
-		return [segment_bucket for _ in column_labels]
+		return [segment_bucket for _ in column_specs]
 	segment_pairs = parse_paired_segment_bucket(segment_bucket)
 	segment_values_by_label = {label: value for label, value in segment_pairs}
-	segment_ids = parse_bound_segment_ids(bound_segment_id)
 	values: list[str] = []
-	for index, column_label in enumerate(column_labels):
-		segment_id = segment_ids[index] if index < len(segment_ids) else column_label
+	for segment_id, _ in column_specs:
 		values.append(segment_values_by_label.get(segment_id, "(blank segment text)"))
 	return values
 
