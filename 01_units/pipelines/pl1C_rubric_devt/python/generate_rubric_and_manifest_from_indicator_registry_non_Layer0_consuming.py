@@ -819,7 +819,16 @@ def build_machine_normalized_short_description(record: dict[str, str], item_id: 
     allowed_roles = {value.lower() for value in parse_semicolon_separated_values(record.get("allowed_roles", ""))}
     required_term_groups = parse_semicolon_separated_values(record.get("required_term_groups", ""))
 
-    if {"interact with", "interacts with", "intersect with", "intersects with"} & allowed_terms:
+    if {
+        "interact with",
+        "interacts with",
+        "connect with",
+        "connects with",
+        "interact",
+        "interacts",
+        "intersect with",
+        "intersects with",
+    } & allowed_terms:
         return "Claim interaction phrasing"
     if bound_segment_id in {"DemandA", "DemandB"}:
         return f"Program criteria or constraints in {bound_segment_id}"

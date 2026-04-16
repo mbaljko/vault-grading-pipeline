@@ -45,6 +45,40 @@ class Layer0RuntimeCoordinationTests(unittest.TestCase):
 		return SimpleNamespace(text=text)
 
 	@patch("layer0_runtime.families.parse_text")
+	def test_right_np_extracts_after_connects_with_anchor(self, mock_parse_text) -> None:
+		text = "Institutions connects with workload balancing requirements through reviewer assignment logic."
+		mock_parse_text.side_effect = self._fallback_doc
+		spec = make_spec(
+			operator_id="S102",
+			family="right_np_after_anchor_before_marker",
+			anchor_patterns=["connects with"],
+			stop_markers=["through", "comma", "clause_boundary"],
+			allow_coordination=True,
+		)
+
+		result = run_right_np_after_anchor_before_marker(text, spec)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "workload balancing requirements")
+
+	@patch("layer0_runtime.families.parse_text")
+	def test_right_np_extracts_after_bare_interacts_anchor(self, mock_parse_text) -> None:
+		text = "Institutions interacts human decision authority through scoring rubric shaping committee deliberation."
+		mock_parse_text.side_effect = self._fallback_doc
+		spec = make_spec(
+			operator_id="S102",
+			family="right_np_after_anchor_before_marker",
+			anchor_patterns=["interacts"],
+			stop_markers=["through", "comma", "clause_boundary"],
+			allow_coordination=True,
+		)
+
+		result = run_right_np_after_anchor_before_marker(text, spec)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "human decision authority")
+
+	@patch("layer0_runtime.families.parse_text")
 	def test_right_np_extends_through_and_coordination(self, mock_parse_text) -> None:
 		text = "Institutions interact with schools and families through mentorship."
 		mock_parse_text.side_effect = self._fallback_doc
@@ -153,6 +187,14 @@ class Layer0RuntimeCoordinationTests(unittest.TestCase):
 
 		self.assertEqual(len(occurrences), 1)
 		self.assertEqual(text[occurrences[0][0]:occurrences[0][1]].lower(), "through")
+
+	def test_anchor_matching_prefers_longer_anchor_at_same_position(self) -> None:
+		text = "The institutional demand interacts with documentation requirements through scoring rubric."
+
+		occurrences = find_anchor_occurrences(text, ["interacts", "interacts with"])
+
+		self.assertGreaterEqual(len(occurrences), 2)
+		self.assertEqual(text[occurrences[0][0]:occurrences[0][1]].lower(), "interacts with")
 
 
 if __name__ == "__main__":

@@ -98,6 +98,10 @@ EXPANDED_INSTANCE_REQUIRED_FIELDS = {
 INTERACT_ANCHOR_PATTERNS = [
 	"interact with",
 	"interacts with",
+	"connect with",
+	"connects with",
+	"interact",
+	"interacts",
 	"intersect with",
 	"intersects with",
 ]

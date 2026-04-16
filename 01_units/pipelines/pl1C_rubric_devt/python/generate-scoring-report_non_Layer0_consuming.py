@@ -88,6 +88,11 @@ RUNNER_OUTPUT_SUBDIR = "Level1-CalibrationTesting-Outputs"
 SCORING_OUTPUT_VERSION_RE = re.compile(r"_v(\d+)(?=_)")
 REGISTRY_VERSION_PATH_RE = re.compile(r"(/registry_v)(\d+)(/)", re.IGNORECASE)
 COMPONENT_ID_RANGE_RE = re.compile(r"Section([A-Za-z])(\{\d+\.\.\d+\}|\d+)Response")
+CLAIM_LABEL_RE = re.compile(r"\bclaim\W*\d+\s*:\s*", re.IGNORECASE)
+CROSS_SLOT_RELATION_RE = re.compile(
+	r"\b(?P<left>.+?)\s+(?:interacts?\s+with|interacts?|connects?\s+with|connects?\s+to|works?\s+with|work\s+with|links?\s+with|relates?\s+to)\s+(?P<right>.+?)\s+through\b",
+	re.IGNORECASE,
+)
 LAYER1_SCORED_OUTPUT_RE = re.compile(
 	r"^RUN_(?P<assignment>[A-Za-z0-9]+)_(?P<component_id>.+?)_Layer1_indicator_scoring_(?P<version>v\d+)_output(?:_output)?\.csv$"
 )
@@ -1691,6 +1696,37 @@ def parse_bound_segment_ids(bound_segment_id: str) -> list[str]:
 	return [segment_id.strip() for segment_id in bound_segment_id.split("+") if segment_id.strip()]
 
 
+def normalize_source_text_for_segment_fallback(source_response_text: str) -> str:
+	normalized = source_response_text.replace("\r\n", "\n").replace("\r", "\n").replace("+++", " ")
+	normalized = re.sub(r"submission_id=\S+", " ", normalized, flags=re.IGNORECASE)
+	normalized = " ".join(normalized.split())
+	normalized = CLAIM_LABEL_RE.sub("", normalized, count=1)
+	normalized = re.sub(r"^in\s+this\s+system,?\s*", "", normalized, flags=re.IGNORECASE)
+	return normalized.strip(" .")
+
+
+def derive_cross_slot_segment_fallbacks(
+	source_response_text: str,
+	segment_ids: list[str],
+) -> list[tuple[str, str]]:
+	if len(segment_ids) != 2:
+		return []
+	normalized_source_text = normalize_source_text_for_segment_fallback(source_response_text)
+	if not normalized_source_text:
+		return []
+	match = CROSS_SLOT_RELATION_RE.search(normalized_source_text)
+	if match is None:
+		return []
+	left_value = match.group("left").strip(" .,")
+	right_value = match.group("right").strip(" .,")
+	if not left_value or not right_value:
+		return []
+	return [
+		(segment_ids[0], left_value),
+		(segment_ids[1], right_value),
+	]
+
+
 def parse_required_layer0_record_ids(required_layer0_records: str) -> list[str]:
 	record_ids: list[str] = []
 	for raw_part in required_layer0_records.split(";"):
@@ -1733,6 +1769,7 @@ def derive_segment_bucket_from_input_row(
 	input_row: dict[str, str],
 	component_id: str,
 	bound_segment_id: str,
+	source_response_text: str = "",
 ) -> str:
 	segment_ids = parse_bound_segment_ids(bound_segment_id)
 	if not segment_ids:
@@ -1750,6 +1787,9 @@ def derive_segment_bucket_from_input_row(
 		segment_value = normalize_segment_bucket_label(raw_segment_value)
 		segment_parts.append(f"{segment_id}: {segment_value}")
 	if not has_non_blank_segment:
+		fallback_pairs = derive_cross_slot_segment_fallbacks(source_response_text, segment_ids)
+		if fallback_pairs:
+			return " ; ".join(f"{segment_id}: {segment_value}" for segment_id, segment_value in fallback_pairs)
 		return "(blank segment text)"
 	return " ; ".join(segment_parts)
 
@@ -3523,7 +3563,12 @@ def main() -> int:
 				segment_bucket = "(missing Layer 1 input row)"
 				missing_input_row_count += 1
 			else:
-				segment_bucket = derive_segment_bucket_from_input_row(input_row, component_id, bound_segment_id)
+				segment_bucket = derive_segment_bucket_from_input_row(
+					input_row,
+					component_id,
+					bound_segment_id,
+					(source_row.get("source_response_text") or "") if source_row is not None else "",
+				)
 			if is_positive_scored_row(scored_row):
 				matching_segment_counts[segment_bucket] += 1
 				append_segment_detail_row(
