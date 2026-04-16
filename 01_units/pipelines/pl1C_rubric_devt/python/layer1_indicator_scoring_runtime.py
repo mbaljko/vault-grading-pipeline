@@ -8,13 +8,30 @@ this runtime so the policy implementation stays centralized and auditable.
 
 from __future__ import annotations
 
+import logging
 import re
+from dataclasses import dataclass
 from typing import Mapping
 
 
+logger = logging.getLogger(__name__)
+
 LABEL_LINE_RE = re.compile(r"^\s*\[[^\]]+\]\s*$")
 LEADING_ARTICLE_RE = re.compile(r"^(?:the|a|an)\s+", re.IGNORECASE)
-CONJUNCTION_SPLIT_RE = re.compile(r"\s+(?:and|or|&)\s+", re.IGNORECASE)
+CONJUNCTION_SPLIT_RE = re.compile(r"\s+and\s+|\s*,\s*", re.IGNORECASE)
+MATCH_PREFIX_RE = re.compile(
+	r"^(?:rule\s+that|requirement\s+to|institutional\s+demand\s+for|institutional\s+demand\s+of|obligation\s+to)\s+",
+	re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True)
+class AliasMatch:
+	candidate: str
+	canonical: str
+	matched_text: str
+	matched_span: str
+	is_alias: bool
 
 
 def normalize_whitespace(value: str) -> str:
@@ -57,17 +74,161 @@ def strip_leading_article(value: str) -> str:
 	return LEADING_ARTICLE_RE.sub("", value, count=1).strip()
 
 
-def expand_candidates_with_conjuncts(candidates: list[str]) -> list[str]:
+def strip_leading_match_prefix(value: str) -> str:
+	stripped = strip_leading_article(value)
+	while stripped:
+		updated = MATCH_PREFIX_RE.sub("", stripped, count=1).strip()
+		if updated == stripped:
+			return stripped
+		stripped = strip_leading_article(updated)
+	return ""
+
+
+def singularize_token(token: str) -> str:
+	if len(token) > 3 and token.endswith("ies"):
+		return f"{token[:-3]}y"
+	if len(token) > 3 and token.endswith("s") and not token.endswith("ss"):
+		return token[:-1]
+	return token
+
+
+def normalize_inflectional_text(value: str) -> str:
+	return " ".join(singularize_token(token) for token in value.split())
+
+
+def build_match_variants(value: str, rule: str) -> list[str]:
+	normalized = normalize_text(value, rule)
+	variants: list[str] = []
+	seen: set[str] = set()
+	for variant in (normalized, strip_leading_article(normalized), strip_leading_match_prefix(normalized)):
+		if variant and variant not in seen:
+			seen.add(variant)
+			variants.append(variant)
+	return variants
+
+
+def expand_candidates_with_suffix_coordination(candidates: list[str]) -> list[str]:
 	expanded_candidates: list[str] = []
 	seen_candidates: set[str] = set()
 	for candidate in candidates:
 		candidate_variants = [candidate]
-		candidate_variants.extend(part.strip() for part in CONJUNCTION_SPLIT_RE.split(candidate))
+		parts = [part.strip() for part in CONJUNCTION_SPLIT_RE.split(candidate) if part.strip()]
+		candidate_variants.extend(parts)
+		if re.search(r"\s+and\s+", candidate, re.IGNORECASE):
+			left, right = re.split(r"\s+and\s+", candidate, maxsplit=1, flags=re.IGNORECASE)
+			left = left.strip()
+			right_tokens = right.strip().split()
+			for suffix_size in range(1, min(2, len(right_tokens)) + 1):
+				suffix = " ".join(right_tokens[-suffix_size:])
+				synthetic = normalize_whitespace(f"{left} {suffix}").strip()
+				if synthetic:
+					candidate_variants.append(synthetic)
 		for variant in candidate_variants:
 			if variant and variant not in seen_candidates:
 				seen_candidates.add(variant)
 				expanded_candidates.append(variant)
 	return expanded_candidates
+
+
+def expand_candidates_with_conjuncts(candidates: list[str]) -> list[str]:
+	return expand_candidates_with_suffix_coordination(candidates)
+
+
+def span_contains_excluded_term(span: str, excluded_terms: list[str], rule: str) -> bool:
+	normalized_span = normalize_text(span, rule)
+	for excluded_term in excluded_terms:
+		if not excluded_term:
+			continue
+		if normalize_inflectional_text(normalized_span) == normalize_inflectional_text(excluded_term):
+			return True
+	return False
+
+
+def build_allowed_match_entries(
+	allowed_terms: list[str],
+	allowed_aliases: Mapping[str, str],
+	rule: str,
+) -> list[tuple[str, str, bool]]:
+	entries: list[tuple[str, str, bool]] = []
+	seen_entries: set[tuple[str, str, bool]] = set()
+	for term in allowed_terms:
+		normalized_term = normalize_text(term, rule)
+		if not normalized_term:
+			continue
+		for variant in (normalized_term, strip_leading_article(normalized_term)):
+			entry = (variant, normalized_term, False)
+			if variant and entry not in seen_entries:
+				seen_entries.add(entry)
+				entries.append(entry)
+	for alias, canonical in dict(allowed_aliases).items():
+		normalized_alias = normalize_text(alias, rule)
+		normalized_canonical = normalize_text(canonical, rule)
+		if not normalized_alias or not normalized_canonical:
+			continue
+		for variant in (normalized_alias, strip_leading_article(normalized_alias)):
+			entry = (variant, normalized_canonical, True)
+			if variant and entry not in seen_entries:
+				seen_entries.add(entry)
+				entries.append(entry)
+	return entries
+
+
+def resolve_candidate_matches(
+	candidate: str,
+	allowed_terms: list[str],
+	allowed_aliases: Mapping[str, str],
+	rule: str,
+	excluded_terms: list[str] | None = None,
+) -> list[AliasMatch]:
+	excluded_terms = excluded_terms or []
+	resolved_matches: list[AliasMatch] = []
+	seen_matches: set[tuple[str, str, str]] = set()
+	entries = build_allowed_match_entries(allowed_terms, allowed_aliases, rule)
+	for candidate_variant in build_match_variants(candidate, rule):
+		candidate_variant_cmp = normalize_inflectional_text(candidate_variant)
+		candidate_matches: list[AliasMatch] = []
+		for pattern_text, canonical, is_alias in entries:
+			pattern_cmp = normalize_inflectional_text(pattern_text)
+			if not pattern_cmp or not candidate_variant_cmp:
+				continue
+			if pattern_cmp in candidate_variant_cmp:
+				matched_span = pattern_text
+			elif candidate_variant_cmp == pattern_cmp:
+				matched_span = candidate_variant
+			else:
+				continue
+			candidate_matches.append(
+				AliasMatch(
+					candidate=candidate_variant,
+					canonical=canonical,
+					matched_text=pattern_text,
+					matched_span=matched_span,
+					is_alias=is_alias,
+				)
+			)
+		for match in sorted(candidate_matches, key=lambda item: (-len(item.matched_text), -len(item.matched_span), item.matched_text)):
+			if span_contains_excluded_term(match.matched_span, excluded_terms, rule):
+				logger.debug(
+					"Rejected %s match for candidate '%s' because matched span '%s' contained an excluded term",
+					"alias" if match.is_alias else "canonical",
+					match.candidate,
+					match.matched_span,
+				)
+				continue
+			match_key = (match.canonical, match.matched_text, match.candidate)
+			if match_key in seen_matches:
+				continue
+			seen_matches.add(match_key)
+			logger.debug(
+				"Matched candidate '%s' via %s '%s' -> canonical '%s'",
+				match.candidate,
+				"alias" if match.is_alias else "canonical",
+				match.matched_text,
+				match.canonical,
+			)
+			resolved_matches.append(match)
+			break
+	return resolved_matches
 
 
 def resolve_submission_id(row: Mapping[str, object]) -> str:
@@ -128,38 +289,14 @@ def exact_or_alias_match(candidates: list[str], payload: Mapping[str, object], r
 
 
 def exact_or_alias_article_insensitive_match(candidates: list[str], payload: Mapping[str, object], rule: str) -> bool:
-	normalized_candidates = []
-	seen_candidates: set[str] = set()
-	for candidate in candidates:
-		for variant in (candidate, strip_leading_article(candidate)):
-			if variant and variant not in seen_candidates:
-				seen_candidates.add(variant)
-				normalized_candidates.append(variant)
-	allowed_terms = set()
-	for term in payload.get("allowed_terms", []):
-		normalized_term = normalize_text(term, rule)
-		if not normalized_term:
-			continue
-		allowed_terms.add(normalized_term)
-		stripped_term = strip_leading_article(normalized_term)
-		if stripped_term:
-			allowed_terms.add(stripped_term)
-	allowed_aliases = {}
-	for alias, canonical in dict(payload.get("allowed_aliases", {})).items():
-		normalized_alias = normalize_text(alias, rule)
-		normalized_canonical = normalize_text(canonical, rule)
-		if not normalized_alias or not normalized_canonical:
-			continue
-		for alias_variant in (normalized_alias, strip_leading_article(normalized_alias)):
-			if alias_variant:
-				allowed_aliases[alias_variant] = normalized_canonical
-	for candidate in normalized_candidates:
-		if candidate in allowed_terms:
-			return True
-		canonical = allowed_aliases.get(candidate)
-		if canonical and canonical in allowed_terms:
-			return True
-	return False
+	return bool(
+		resolve_candidate_matches(
+			"; ".join(candidates),
+			list(payload.get("allowed_terms", [])),
+			dict(payload.get("allowed_aliases", {})),
+			rule,
+		)
+	)
 
 
 def exact_or_alias_article_insensitive_any_conjunct_match(
@@ -167,11 +304,36 @@ def exact_or_alias_article_insensitive_any_conjunct_match(
 	payload: Mapping[str, object],
 	rule: str,
 ) -> bool:
-	return exact_or_alias_article_insensitive_match(
-		expand_candidates_with_conjuncts(candidates),
-		payload,
-		rule,
+	return bool(
+		resolve_matches_for_candidates(
+			expand_candidates_with_conjuncts(candidates),
+			payload,
+			rule,
+		)
 	)
+
+
+def resolve_matches_for_candidates(
+	candidates: list[str],
+	payload: Mapping[str, object],
+	rule: str,
+	excluded_terms: list[str] | None = None,
+) -> list[AliasMatch]:
+	all_matches: list[AliasMatch] = []
+	seen_canonicals: set[str] = set()
+	for candidate in candidates:
+		for match in resolve_candidate_matches(
+			candidate,
+			list(payload.get("allowed_terms", [])),
+			dict(payload.get("allowed_aliases", {})),
+			rule,
+			excluded_terms,
+		):
+			if match.canonical in seen_canonicals:
+				continue
+			seen_canonicals.add(match.canonical)
+			all_matches.append(match)
+	return all_matches
 
 
 def canonicalize_segment_text(
@@ -182,32 +344,16 @@ def canonicalize_segment_text(
 ) -> str:
 	if not text.strip():
 		return ""
-	canonical_terms: dict[str, str] = {}
-	for term in allowed_terms:
-		normalized_term = normalize_text(term, rule)
-		if not normalized_term:
-			continue
-		for variant in (normalized_term, strip_leading_article(normalized_term)):
-			if variant:
-				canonical_terms.setdefault(variant, normalized_term)
-	canonical_aliases: dict[str, str] = {}
-	for alias, canonical in dict(allowed_aliases).items():
-		normalized_alias = normalize_text(alias, rule)
-		normalized_canonical = normalize_text(canonical, rule)
-		if not normalized_alias or not normalized_canonical:
-			continue
-		for variant in (normalized_alias, strip_leading_article(normalized_alias)):
-			if variant:
-				canonical_aliases[variant] = normalized_canonical
-	for candidate in expand_candidates_with_conjuncts(extract_candidate_units(text, rule)):
-		for variant in (candidate, strip_leading_article(candidate)):
-			if not variant:
-				continue
-			if variant in canonical_terms:
-				return canonical_terms[variant]
-			canonical = canonical_aliases.get(variant)
-			if canonical:
-				return canonical
+	matches = resolve_matches_for_candidates(
+		expand_candidates_with_conjuncts(extract_candidate_units(text, rule)),
+		{
+			"allowed_terms": allowed_terms,
+			"allowed_aliases": dict(allowed_aliases),
+		},
+		rule,
+	)
+	if matches:
+		return sorted(matches, key=lambda item: (-len(item.matched_text), item.canonical))[0].canonical
 	return ""
 
 
@@ -217,37 +363,19 @@ def extract_canonical_mentions_from_text(
 	allowed_aliases: Mapping[str, str],
 	rule: str,
 ) -> list[str]:
-	normalized_text = normalize_text(text, rule)
-	if not normalized_text:
+	if not normalize_text(text, rule):
 		return []
-	variant_pairs: list[tuple[str, str]] = []
-	seen_pairs: set[tuple[str, str]] = set()
-	for term in allowed_terms:
-		normalized_term = normalize_text(term, rule)
-		if not normalized_term:
-			continue
-		for variant in (normalized_term, strip_leading_article(normalized_term)):
-			pair = (variant, normalized_term)
-			if variant and pair not in seen_pairs:
-				seen_pairs.add(pair)
-				variant_pairs.append(pair)
-	for alias, canonical in dict(allowed_aliases).items():
-		normalized_alias = normalize_text(alias, rule)
-		normalized_canonical = normalize_text(canonical, rule)
-		if not normalized_alias or not normalized_canonical:
-			continue
-		for variant in (normalized_alias, strip_leading_article(normalized_alias)):
-			pair = (variant, normalized_canonical)
-			if variant and pair not in seen_pairs:
-				seen_pairs.add(pair)
-				variant_pairs.append(pair)
-	found_canonicals: list[str] = []
-	seen_canonicals: set[str] = set()
-	for variant, canonical in sorted(variant_pairs, key=lambda item: (-len(item[0]), item[0])):
-		if variant and variant in normalized_text and canonical not in seen_canonicals:
-			seen_canonicals.add(canonical)
-			found_canonicals.append(canonical)
-	return found_canonicals
+	return [
+		match.canonical
+		for match in resolve_matches_for_candidates(
+			expand_candidates_with_conjuncts(extract_candidate_units(text, rule)),
+			{
+				"allowed_terms": allowed_terms,
+				"allowed_aliases": dict(allowed_aliases),
+			},
+			rule,
+		)
+	]
 
 
 def canonical_inequality_match(
@@ -357,6 +485,7 @@ def apply_decision_rule(
 ) -> tuple[str, str]:
 	rule = str(payload.get("normalisation_rule", "") or "").strip()
 	decision_rule = str(payload.get("decision_rule", "") or "").strip()
+	match_policy = str(payload.get("match_policy", "") or "").strip()
 	excluded_terms = [normalize_text(term, rule) for term in payload.get("excluded_terms", []) if normalize_text(term, rule)]
 	normalized_text = normalize_text(text, rule)
 	has_excluded = any(term in normalized_text for term in excluded_terms)
@@ -364,6 +493,16 @@ def apply_decision_rule(
 	if decision_rule == "present_if_any_allowed_term_found":
 		return ("present" if policy_match else "not_present", "none")
 	if decision_rule == "present_if_exact_match_or_alias_and_not_excluded":
+		if match_policy in {"exact_or_alias_article_insensitive", "exact_or_alias_article_insensitive_any_conjunct"}:
+			matches = resolve_matches_for_candidates(
+				expand_candidates_with_conjuncts(extract_candidate_units(text, rule))
+				if match_policy == "exact_or_alias_article_insensitive_any_conjunct"
+				else extract_candidate_units(text, rule),
+				payload,
+				rule,
+				excluded_terms,
+			)
+			return ("present" if matches else "not_present", "none")
 		return ("present" if policy_match and not has_excluded else "not_present", "none")
 	if decision_rule == "present_if_matches_stage_or_role_and_not_excluded":
 		return ("present" if policy_match and not has_excluded else "not_present", "none")

@@ -488,6 +488,8 @@
   },
   "active": "fe3cb8bfbc96d736",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/test_layer1_indicator_scoring_runtime.cpython-313.pyc",
+    "01_units/pipelines/pl1C_rubric_devt/python/test_layer1_indicator_scoring_runtime.py",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate-scoring-report_non_Layer0_consuming.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/component_scored_texts_non_Layer0_consuming.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate_rubric_and_manifest_from_indicator_registry_non_Layer0_consuming.cpython-313.pyc",
@@ -497,8 +499,6 @@
     "01_units/pipelines/pl1C_rubric_devt/python/layer1_indicator_scoring_runtime.py",
     "01_units/pipelines/pl1C_rubric_devt/python/build-layer1-input-from-layer0.py",
     "01_units/pipelines/pl1C_rubric_devt/python/materialize-component-scored-csv_non_Layer0_consuming.py",
-    "01_units/pipelines/pl1C_rubric_devt/python/component_scored_texts_non_Layer0_consuming.py",
-    "01_units/pipelines/pl1C_rubric_devt/python/extract-human-judge-notes-summary_non_Layer0_consuming.py",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1C_scaffold_stage13_Layer0_Segmentation_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage00_Generate_Layer0_Segmentation_Prompt.md",
