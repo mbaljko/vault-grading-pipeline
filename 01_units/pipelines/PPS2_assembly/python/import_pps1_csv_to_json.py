@@ -23,7 +23,7 @@ APPS_DIR = Path(__file__).resolve().parents[3] / "apps"
 if str(APPS_DIR) not in sys.path:
     sys.path.insert(0, str(APPS_DIR))
 
-from lms_text_cleaning import clean_lms_response_text, is_lms_response_column
+from lms_text_cleaning import clean_lms_text, should_clean_lms_text_column
 
 
 DEFAULT_SCHEMA_PATH = Path(
@@ -65,6 +65,20 @@ class GeneratedRecord:
 
 
 @dataclass(frozen=True)
+class AuditRow:
+    source_csv_path: str
+    row_index: int
+    user: str
+    username: str
+    email_address: str
+    participant_id: str
+    given_name: str
+    family_name: str
+    output_json_path: str
+    dimension_check_fields: dict[str, str]
+
+
+@dataclass(frozen=True)
 class ImportSchema:
     import_defaults: "ImportDefaults"
     record_defaults: dict[str, str]
@@ -85,6 +99,7 @@ class ImportDefaults:
     participants_csv_path: Path
     all_output_dir: Path
     sample_output_dir: Path
+    audit_path: Path
     sample_size: int
 
 
@@ -107,6 +122,7 @@ def load_schema(schema_path: Path) -> ImportSchema:
         participants_csv_path=Path(raw_schema["importDefaults"]["participantsCsvPath"]),
         all_output_dir=Path(raw_schema["importDefaults"]["allOutputDir"]),
         sample_output_dir=Path(raw_schema["importDefaults"]["sampleOutputDir"]),
+        audit_path=Path(raw_schema["importDefaults"]["auditPath"]),
         sample_size=int(raw_schema["importDefaults"]["sampleSize"]),
     )
 
@@ -142,6 +158,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--schema-path", type=Path, default=DEFAULT_SCHEMA_PATH)
     parser.add_argument("--all-output-dir", type=Path)
     parser.add_argument("--sample-output-dir", type=Path)
+    parser.add_argument("--audit-path", type=Path)
     parser.add_argument("--sample-size", type=int)
     parser.add_argument("--sample-seed", type=int)
     parser.add_argument("--verbose", action="store_true")
@@ -240,6 +257,36 @@ def derive_development_value(row: dict[str, str], prefix: str) -> str:
     return ""
 
 
+def build_dimension_development_audit_fields(
+    schema: ImportSchema,
+    row: dict[str, str],
+) -> dict[str, str]:
+    audit_fields: dict[str, str] = {}
+
+    for dimension in schema.dimensions:
+        prefix = schema.short_to_dotted_dimension[dimension].replace(".", "")
+        shift_selected = checked(normalize_value(row.get(f"{prefix}_shift")))
+        cont_reinf_selected = checked(normalize_value(row.get(f"{prefix}_cont")))
+        intro_selected = checked(normalize_value(row.get(f"{prefix}_intro")))
+        selected_count = sum((shift_selected, cont_reinf_selected, intro_selected))
+        check_passed = selected_count == 1
+
+        if check_passed:
+            error_value = ""
+        elif selected_count == 0:
+            error_value = "none selected"
+        else:
+            error_value = "multiple selected"
+
+        audit_fields[f"{dimension}-shift"] = str(shift_selected).lower()
+        audit_fields[f"{dimension}-cont-reinf"] = str(cont_reinf_selected).lower()
+        audit_fields[f"{dimension}-intro"] = str(intro_selected).lower()
+        audit_fields[f"{dimension}-check"] = str(check_passed).lower()
+        audit_fields[f"{dimension}-err"] = error_value
+
+    return audit_fields
+
+
 def populate_status_values(schema: ImportSchema, record: dict[str, str], row: dict[str, str]) -> None:
     dotted_to_short_dimension = {
         value: key for key, value in schema.short_to_dotted_dimension.items()
@@ -334,8 +381,8 @@ def build_record(
     for csv_key, json_key in schema.direct_field_map.items():
         if json_key in record:
             raw_value = row.get(csv_key)
-            if is_lms_response_column(csv_key):
-                record[json_key] = clean_lms_response_text(raw_value)
+            if should_clean_lms_text_column(csv_key):
+                record[json_key] = clean_lms_text(raw_value)
             else:
                 record[json_key] = normalize_value(raw_value)
 
@@ -398,6 +445,103 @@ def make_output_filename(
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
     path.write_text(json.dumps(data, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+
+
+def build_audit_fieldnames(schema: ImportSchema) -> list[str]:
+    fieldnames = [
+        "source_csv_path",
+        "row_index",
+        "user",
+        "username",
+        "email_address",
+        "participant_id",
+        "given_name",
+        "family_name",
+        "output_json_path",
+    ]
+    for dimension in schema.dimensions:
+        fieldnames.extend(
+            [
+                f"{dimension}-shift",
+                f"{dimension}-cont-reinf",
+                f"{dimension}-intro",
+                f"{dimension}-check",
+                f"{dimension}-err",
+            ]
+        )
+    return fieldnames
+
+
+def write_audit_csv(path: Path, schema: ImportSchema, rows: list[AuditRow]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = build_audit_fieldnames(schema)
+    with path.open("w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            row_values = {
+                "source_csv_path": row.source_csv_path,
+                "row_index": row.row_index,
+                "user": row.user,
+                "username": row.username,
+                "email_address": row.email_address,
+                "participant_id": row.participant_id,
+                "given_name": row.given_name,
+                "family_name": row.family_name,
+                "output_json_path": row.output_json_path,
+            }
+            row_values.update(row.dimension_check_fields)
+            writer.writerow(row_values)
+
+
+def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> str:
+    counts_by_dimension: dict[str, dict[str, int]] = {}
+    for dimension in schema.dimensions:
+        passed = 0
+        none_selected = 0
+        multiple_selected = 0
+
+        for row in rows:
+            check_value = row.dimension_check_fields[f"{dimension}-check"]
+            error_value = row.dimension_check_fields[f"{dimension}-err"]
+            if check_value == "true":
+                passed += 1
+            elif error_value == "none selected":
+                none_selected += 1
+            elif error_value == "multiple selected":
+                multiple_selected += 1
+
+        counts_by_dimension[dimension] = {
+            "Passed": passed,
+            "None Selected": none_selected,
+            "Multiple Selected": multiple_selected,
+        }
+
+    header_cells = ["Check Status", *schema.dimensions]
+    divider_cells = ["---", *("---:" for _ in schema.dimensions)]
+
+    lines = [
+        "# PPS1 Import Audit Summary",
+        "",
+        f"- Total imported rows: {len(rows)}",
+        "",
+        "## Dimension Checks",
+        "",
+        f"| {' | '.join(header_cells)} |",
+        f"| {' | '.join(divider_cells)} |",
+    ]
+
+    for status_label in ("Passed", "None Selected", "Multiple Selected"):
+        row_cells = [status_label]
+        row_cells.extend(str(counts_by_dimension[dimension][status_label]) for dimension in schema.dimensions)
+        lines.append(f"| {' | '.join(row_cells)} |")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_audit_summary_report(path: Path, schema: ImportSchema, rows: list[AuditRow]) -> None:
+    path.write_text(build_audit_summary_report(schema, rows), encoding="utf-8")
 
 
 def clear_existing_json_files(directory: Path) -> None:
@@ -475,6 +619,8 @@ def main() -> int:
         args.sample_output_dir,
         schema.import_defaults.sample_output_dir,
     )
+    audit_path = resolve_runtime_value(args.audit_path, schema.import_defaults.audit_path)
+    audit_summary_path = audit_path.with_suffix(".md")
     sample_size = resolve_runtime_value(args.sample_size, schema.import_defaults.sample_size)
 
     participant_lookup = load_participant_lookup(participants_csv_path)
@@ -482,6 +628,7 @@ def main() -> int:
     clear_existing_json_files(sample_output_dir)
 
     generated_records: list[GeneratedRecord] = []
+    audit_rows: list[AuditRow] = []
     used_names: set[str] = set()
 
     with csv_path.open(newline="", encoding="utf-8-sig") as csv_file:
@@ -501,8 +648,25 @@ def main() -> int:
                     family_name=record.get(schema.identity_fields.family_name, ""),
                 )
             )
+            audit_rows.append(
+                AuditRow(
+                    source_csv_path=str(csv_path),
+                    row_index=row_index,
+                    user=normalize_value(row.get("User")),
+                    username=normalize_value(row.get("Username")),
+                    email_address=normalize_value(row.get("Email address")),
+                    participant_id=record.get(schema.identity_fields.participant_id, ""),
+                    given_name=record.get(schema.identity_fields.given_name, ""),
+                    family_name=record.get(schema.identity_fields.family_name, ""),
+                    output_json_path=str(output_path),
+                    dimension_check_fields=build_dimension_development_audit_fields(schema, row),
+                )
+            )
             if args.verbose:
                 print(f"Wrote {output_path}")
+
+    write_audit_csv(audit_path, schema, audit_rows)
+    write_audit_summary_report(audit_summary_path, schema, audit_rows)
 
     copied_paths = duplicate_sample(
         generated_records=generated_records,
@@ -512,6 +676,8 @@ def main() -> int:
     )
 
     print(f"Wrote {len(generated_records)} JSON files to {all_output_dir}")
+    print(f"Wrote import audit CSV to {audit_path}")
+    print(f"Wrote import audit summary report to {audit_summary_path}")
     print(f"Copied {len(copied_paths)} sampled JSON files to {sample_output_dir}")
     if args.verbose and copied_paths:
         for copied_path in copied_paths:

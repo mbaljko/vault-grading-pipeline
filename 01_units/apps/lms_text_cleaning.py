@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Shared text cleaning helpers for LMS-exported response fields."""
+"""Shared text cleaning helpers for LMS-exported LMS text fields."""
 
 from __future__ import annotations
 
@@ -32,6 +32,17 @@ COMMON_MOJIBAKE_REPLACEMENTS = (
 HTML_BREAK_TOKENS = ("<br />", "<br/>", "<br>", "</p>", "</li>")
 TAG_RE = re.compile(r"<[^>]*>")
 LIST_ITEM_OPEN_RE = re.compile(r"<li\b[^>]*>", re.IGNORECASE)
+LMS_RICH_TEXT_COLUMNS = frozenset(
+    {
+        "GenAIAttestation",
+        "B3Interpretation",
+        "C3Interpretation",
+        "D3Interpretation",
+        "B3Use",
+        "C3Use",
+        "D3Use",
+    }
+)
 
 
 def _count_mojibake_markers(value: str) -> int:
@@ -135,5 +146,15 @@ def is_lms_response_column(column_name: str | None) -> bool:
     return column_name.casefold().endswith("response")
 
 
-def clean_lms_response_text(raw: Any) -> str:
+def should_clean_lms_text_column(column_name: str | None) -> bool:
+    if not column_name:
+        return False
+    return is_lms_response_column(column_name) or column_name in LMS_RICH_TEXT_COLUMNS
+
+
+def clean_lms_text(raw: Any) -> str:
     return strip_html_fast_plain(raw) or ""
+
+
+def clean_lms_response_text(raw: Any) -> str:
+    return clean_lms_text(raw)

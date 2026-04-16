@@ -15,6 +15,8 @@ This workflow converts the exported PPS1 LMS CSV into one JSON file per student 
 - Derives `*-status` fields from the `E2_*_GridResponse` columns.
 - Populates the `Sec1_*`, `Sec2_*`, `Sec3Sec4_*`, and `CLM_*` fields heuristically from the available dimension data.
 - Writes one JSON per row into `student_data_all`.
+- Writes an audit CSV with one row per imported LMS row.
+- Writes a Markdown sidecar summary report next to the audit CSV.
 - Copies a random sample into `student_data`.
 - Augments that sample with three coverage cases: one random `_DOT` family-name file, the file with the longest family name, and the file with the longest given-name string.
 
@@ -26,6 +28,7 @@ Default importer inputs are centralized in `pps1_import_schema.json` under `impo
 - `participantsCsvPath`
 - `allOutputDir`
 - `sampleOutputDir`
+- `auditPath`
 - `sampleSize`
 
 The same schema file also defines:
@@ -65,8 +68,13 @@ Special handling:
 /opt/homebrew/bin/python3 /Users/mb/Documents/vault-grading-pipeline/01_units/pipelines/PPS2_assembly/python/import_pps1_csv_to_json.py --sample-seed 3000
 ```
 
+This also writes the audit CSV configured at `auditPath` and a Markdown sidecar summary report next to it.
+
 ## Notes
 
-- The importer preserves LMS HTML content as-is in mapped response fields.
+- The importer cleans mapped LMS response fields and the rich-text concept interpretation/use and attestation fields before writing JSON.
+- The audit CSV currently contains one row per imported LMS row with the source CSV path, row index, user identifiers, resolved participant identity, output JSON path, and per-dimension development-type checks.
+- For each dimension `B-1` through `D-3`, the audit includes `*-shift`, `*-cont-reinf`, `*-intro`, `*-check`, and `*-err` columns. `*-check` is `true` only when exactly one development-type box is selected; otherwise `*-err` is `none selected` or `multiple selected`.
+- The Markdown sidecar summary report counts, for each dimension, how many rows passed the check, had no development type selected, or had multiple development types selected.
 - Section-selection logic is heuristic. If the PPS2 booklet structure changes, update the schema first and only change Python when selection logic itself must change.
 - The sampled set can therefore be larger than `sampleSize`, because the three coverage cases are added on top of the random sample when they are not already included.
