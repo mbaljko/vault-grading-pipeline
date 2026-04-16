@@ -1,0 +1,207 @@
+{
+  "identityFields": {
+    "participantId": "participant_id",
+    "familyName": "FAMILY_NAME",
+    "givenName": "GIVEN_NAME"
+  },
+  "recordDefaults": {
+    "participant_id": "",
+    "FAMILY_NAME": "",
+    "GIVEN_NAME": "",
+    "B-1-PPP": "Placeholder for B11Response.",
+    "B-1-PPS1": "Placeholder for B21Response.",
+    "B-2-PPP": "Placeholder for B12Response.",
+    "B-2-PPS1": "Placeholder for B22Response.",
+    "B-3-PPP": "Placeholder for B13Response.",
+    "B-3-PPS1": "Placeholder for B23Response.",
+    "B-1-devt": "",
+    "B-1-status": "",
+    "B-2-devt": "",
+    "B-2-status": "",
+    "B-3-devt": "",
+    "B-3-status": "",
+    "B3 PPS Concept List": "Placeholder for B3 PPS Concept List.",
+    "B3Interpretation": "Placeholder for B3Interpretation.",
+    "B3Use": "Placeholder for B3Use.",
+    "B3_CONCEPT_NOTE": "",
+    "C-1-PPP": "Placeholder for C11Response.",
+    "C-1-PPS1": "Placeholder for C21Response.",
+    "C-2-PPP": "Placeholder for C12Response.",
+    "C-2-PPS1": "Placeholder for C22Response.",
+    "C-3-PPP": "Placeholder for C13Response.",
+    "C-3-PPS1": "Placeholder for C23Response.",
+    "C-1-devt": "",
+    "C-1-status": "",
+    "C-2-devt": "",
+    "C-2-status": "",
+    "C-3-devt": "",
+    "C-3-status": "",
+    "C3 PPS Concept List": "Placeholder for C3 PPS Concept List.",
+    "C3Interpretation": "Placeholder for C3Interpretation.",
+    "C3Use": "Placeholder for C3Use.",
+    "C3_CONCEPT_NOTE": "",
+    "CLM_01_dimension": "",
+    "CLM_01_text": "",
+    "CLM_02_text": "",
+    "CLM_03_text": "",
+    "D-1-PPP": "Placeholder for D11Response.",
+    "D-1-PPS1": "Placeholder for D21Response.",
+    "D-2-PPP": "Placeholder for D12Response.",
+    "D-2-PPS1": "Placeholder for D22Response.",
+    "D-3-PPP": "Placeholder for D13Response.",
+    "D-3-PPS1": "Placeholder for D23Response.",
+    "D-1-devt": "",
+    "D-1-status": "",
+    "D-2-devt": "",
+    "D-2-status": "",
+    "D-3-devt": "",
+    "D-3-status": "",
+    "D3 PPS Concept List": "Placeholder for D3 PPS Concept List.",
+    "D3Interpretation": "Placeholder for D3Interpretation.",
+    "D3Use": "Placeholder for D3Use.",
+    "D3_CONCEPT_NOTE": "",
+    "E-1-PPS1": "Placeholder for E21Response.",
+    "E-2-PPS1": "Placeholder for E22Response.",
+    "E-3-PPS1": "Placeholder for E23Response.",
+    "E-4-PPS1": "Placeholder for E24Response.",
+    "E-5-PPS1": "Placeholder for E25Response.",
+    "GenAIAttestation": "Placeholder for GenAIAttestation.",
+    "Sec1_TS1_PPP": "Placeholder for Sec1_TS1_PPP.",
+    "Sec1_TS1_PPS1": "Placeholder for Sec1_TS1_PPS1.",
+    "Sec1_TS1_dim": "Placeholder for Sec1_TS1_dim.",
+    "Sec1_TS2_PPP": "Placeholder for Sec1_TS2_PPP.",
+    "Sec1_TS2_PPS1": "Placeholder for Sec1_TS2_PPS1.",
+    "Sec1_TS2_dim": "Placeholder for Sec1_TS2_dim.",
+    "Sec1_TS3_PPP": "Placeholder for Sec1_TS3_PPP.",
+    "Sec1_TS3_PPS1": "Placeholder for Sec1_TS3_PPS1.",
+    "Sec1_TS3_dim": "Placeholder for Sec1_TS3_dim.",
+    "Sec2_V1_PPP": "Placeholder for Sec2_V1_PPP.",
+    "Sec2_V1_PPS1": "Placeholder for Sec2_V1_PPS1.",
+    "Sec2_V1_dim": "Placeholder for Sec2_V1_dim.",
+    "Sec2_V2_PPP": "Placeholder for Sec2_V2_PPP.",
+    "Sec2_V2_PPS1": "Placeholder for Sec2_V2_PPS1.",
+    "Sec2_V2_dim": "Placeholder for Sec2_V2_dim.",
+    "Sec2_V3_PPP": "Placeholder for Sec2_V3_PPP.",
+    "Sec2_V3_PPS1": "Placeholder for Sec2_V3_PPS1.",
+    "Sec2_V3_dim": "Placeholder for Sec2_V3_dim.",
+    "Sec3Sec4_T1_dim": "Placeholder for Sec3Sec4_T1_dim.",
+    "Sec3Sec4_T1_PPS1": "Placeholder for Sec3Sec4_T1_PPS1.",
+    "Sec3Sec4_T2_dim": "Placeholder for Sec3Sec4_T2_dim.",
+    "Sec3Sec4_T2_PPS1": "Placeholder for Sec3Sec4_T2_PPS1."
+  },
+  "dimensions": [
+    "B-1",
+    "B-2",
+    "B-3",
+    "C-1",
+    "C-2",
+    "C-3",
+    "D-1",
+    "D-2",
+    "D-3"
+  ],
+  "shortToDottedDimension": {
+    "B-1": "B.2.1",
+    "B-2": "B.2.2",
+    "B-3": "B.2.3",
+    "C-1": "C.2.1",
+    "C-2": "C.2.2",
+    "C-3": "C.2.3",
+    "D-1": "D.2.1",
+    "D-2": "D.2.2",
+    "D-3": "D.2.3"
+  },
+  "directFieldMap": {
+    "B11Response": "B-1-PPP",
+    "B12Response": "B-2-PPP",
+    "B13Response": "B-3-PPP",
+    "B21Response": "B-1-PPS1",
+    "B22Response": "B-2-PPS1",
+    "B23Response": "B-3-PPS1",
+    "B3 PPS Concept List": "B3 PPS Concept List",
+    "B3Interpretation": "B3Interpretation",
+    "B3Use": "B3Use",
+    "C11Response": "C-1-PPP",
+    "C12Response": "C-2-PPP",
+    "C13Response": "C-3-PPP",
+    "C21Response": "C-1-PPS1",
+    "C22Response": "C-2-PPS1",
+    "C23Response": "C-3-PPS1",
+    "C3 PPS Concept List": "C3 PPS Concept List",
+    "C3Interpretation": "C3Interpretation",
+    "C3Use": "C3Use",
+    "D11Response": "D-1-PPP",
+    "D12Response": "D-2-PPP",
+    "D13Response": "D-3-PPP",
+    "D21Response": "D-1-PPS1",
+    "D22Response": "D-2-PPS1",
+    "D23Response": "D-3-PPS1",
+    "D3 PPS Concept List": "D3 PPS Concept List",
+    "D3Interpretation": "D3Interpretation",
+    "D3Use": "D3Use",
+    "E21Response": "E-1-PPS1",
+    "E22Response": "E-2-PPS1",
+    "E23Response": "E-3-PPS1",
+    "E24Response": "E-4-PPS1",
+    "E25Response": "E-5-PPS1",
+    "GenAIAttestation": "GenAIAttestation"
+  },
+  "gridStatusMap": {
+    "E2_00_GridResponse": "stable",
+    "E2_10_GridResponse": "stable",
+    "E2_01_GridResponse": "in tension",
+    "E2_11_GridResponse": "in tension"
+  },
+  "section1Slots": [
+    {
+      "dim": "Sec1_TS1_dim",
+      "ppp": "Sec1_TS1_PPP",
+      "pps1": "Sec1_TS1_PPS1"
+    },
+    {
+      "dim": "Sec1_TS2_dim",
+      "ppp": "Sec1_TS2_PPP",
+      "pps1": "Sec1_TS2_PPS1"
+    },
+    {
+      "dim": "Sec1_TS3_dim",
+      "ppp": "Sec1_TS3_PPP",
+      "pps1": "Sec1_TS3_PPS1"
+    }
+  ],
+  "section2Slots": [
+    {
+      "dim": "Sec2_V1_dim",
+      "ppp": "Sec2_V1_PPP",
+      "pps1": "Sec2_V1_PPS1"
+    },
+    {
+      "dim": "Sec2_V2_dim",
+      "ppp": "Sec2_V2_PPP",
+      "pps1": "Sec2_V2_PPS1"
+    },
+    {
+      "dim": "Sec2_V3_dim",
+      "ppp": "Sec2_V3_PPP",
+      "pps1": "Sec2_V3_PPS1"
+    }
+  ],
+  "section3Slots": [
+    {
+      "dim": "Sec3Sec4_T1_dim",
+      "pps1": "Sec3Sec4_T1_PPS1"
+    },
+    {
+      "dim": "Sec3Sec4_T2_dim",
+      "pps1": "Sec3Sec4_T2_PPS1"
+    }
+  ],
+  "claimFields": {
+    "dimension": "CLM_01_dimension",
+    "texts": [
+      "CLM_01_text",
+      "CLM_02_text",
+      "CLM_03_text"
+    ]
+  }
+}
