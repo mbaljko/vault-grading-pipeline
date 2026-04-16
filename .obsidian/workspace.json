@@ -291,12 +291,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage00_Generate_Layer0_Segmentation_Prompt.md",
+                "file": "01_units/pipelines/PPS2_assembly/python/generate_pps2_booklets_README.md",
                 "mode": "source",
                 "source": true
               },
               "icon": "lucide-file",
-              "title": "pl1B_prompt_stage00_Generate_Layer0_Segmentation_Prompt"
+              "title": "generate_pps2_booklets_README"
             }
           }
         ],
@@ -446,13 +446,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage00_Generate_Layer0_Segmentation_Prompt.md",
+                "file": "01_units/pipelines/PPS2_assembly/python/generate_pps2_booklets_README.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of pl1B_prompt_stage00_Generate_Layer0_Segmentation_Prompt"
+              "title": "Outline of generate_pps2_booklets_README"
             }
           },
           {
@@ -486,8 +486,9 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "e5174a9fca7b05c1",
+  "active": "fe3cb8bfbc96d736",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage00_Generate_Layer0_Segmentation_Prompt.md",
     "01_units/pipelines/PPS2_assembly/python/generate_pps2_booklets.py",
     "01_units/pipelines/PPS2_assembly/python/generate_pps2_booklets_README.md",
     "01_units/pipelines/PPS2_assembly/python",
@@ -499,10 +500,8 @@
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/component_scored_texts_non_Layer0_consuming.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate_rubric_and_manifest_from_indicator_registry_non_Layer0_consuming.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/layer1_indicator_scoring_runtime.cpython-313.pyc",
-    "01_units/pipelines/pl1C_rubric_devt/python/execute-layer1-indicator-scoring-modules.py",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1C_scaffold_stage13_Layer0_Segmentation_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage00_Generate_Layer0_Segmentation_Prompt.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2B.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP3B.md",
     "01_units/pipelines/pl1A_canonical_population_prep/excel/README.md",
