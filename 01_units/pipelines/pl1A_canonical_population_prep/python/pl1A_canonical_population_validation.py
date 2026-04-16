@@ -50,10 +50,22 @@ import csv
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
+import sys
 from typing import Any
 
 
-NON_BREAKING_SPACE = chr(160)
+APPS_DIR = Path(__file__).resolve().parents[3] / "apps"
+if str(APPS_DIR) not in sys.path:
+    sys.path.insert(0, str(APPS_DIR))
+
+from lms_text_cleaning import (
+    NON_BREAKING_SPACE,
+    normalise_html_quotes,
+    sanitise_mojibake,
+    strip_html_fast_plain,
+)
+
+
 LEADING_ALLOWED_RE = re.compile(r"[a-z0-9]")
 TRAILING_DIGITS_RE = re.compile(r"(\d+)$")
 
@@ -210,50 +222,10 @@ def build_output_rows(
     return output_rows
 
 
-def normalise_html_quotes(value: str | None) -> str | None:
-    if value is None:
-        return None
-    normalized = value
-    if len(normalized) >= 2 and normalized.startswith('"') and normalized.endswith('"'):
-        normalized = normalized[1:-1]
-    return normalized.replace('""', '"')
-
-
-def sanitise_mojibake(value: str | None) -> str | None:
-    if value is None:
-        return None
-    replacements = [
-        ("¬†", " "),
-        ("‚Äî", "—"),
-        ("‚Äú", "“"),
-        ("‚Äù", "”"),
-        ("‚Äò", "‘"),
-        ("‚Äô", "’"),
-        (NON_BREAKING_SPACE, " "),
-    ]
-    result = value
-    for source, target in replacements:
-        result = result.replace(source, target)
-    return result.strip()
-
-
 def strip_tags(value: str | None) -> str | None:
     if value is None:
         return None
     return re.sub(r"<[^>]*>", "", value).strip()
-
-
-def strip_html_fast_plain(raw: Any) -> str | None:
-    if raw is None:
-        return None
-    text = normalise_html_quotes(str(raw))
-    text = sanitise_mojibake(text)
-    if text is None:
-        return None
-    for token in ["<br />", "<br/>", "<br>", "</p>"]:
-        text = text.replace(token, "\n")
-    text = strip_tags(text)
-    return sanitise_mojibake(text)
 
 
 def remove_whitespace_and_zero_width(value: str | None) -> str | None:

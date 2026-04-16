@@ -15,7 +15,15 @@ import random
 import re
 import shutil
 from pathlib import Path
+import sys
 from typing import Any
+
+
+APPS_DIR = Path(__file__).resolve().parents[3] / "apps"
+if str(APPS_DIR) not in sys.path:
+    sys.path.insert(0, str(APPS_DIR))
+
+from lms_text_cleaning import clean_lms_response_text, is_lms_response_column
 
 
 DEFAULT_SCHEMA_PATH = Path(
@@ -325,7 +333,11 @@ def build_record(
 
     for csv_key, json_key in schema.direct_field_map.items():
         if json_key in record:
-            record[json_key] = normalize_value(row.get(csv_key))
+            raw_value = row.get(csv_key)
+            if is_lms_response_column(csv_key):
+                record[json_key] = clean_lms_response_text(raw_value)
+            else:
+                record[json_key] = normalize_value(raw_value)
 
     populate_development_values(schema, record, row)
     populate_status_values(schema, record, row)
