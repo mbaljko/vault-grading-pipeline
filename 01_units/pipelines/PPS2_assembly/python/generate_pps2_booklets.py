@@ -40,6 +40,8 @@ from typing import Any
 
 
 PLACEHOLDER_PATTERN = re.compile(r"\{([A-Za-z0-9_.-]+)\}")
+QUESTION_PLACEHOLDER_PATTERN = re.compile(r"Qx\.")
+FULL_WIDTH_RULE_PATTERN = re.compile(r"^[ \t]*---[ \t]*$", re.MULTILINE)
 PAGE_BREAK_PATTERN = re.compile(
     r'<div\b[^>]*class\s*=\s*(["\'])[^"\']*\bpage-break\b[^"\']*\1[^>]*>\s*</div>',
     re.IGNORECASE,
@@ -268,6 +270,26 @@ def replace_answer_box_markers(rendered_text: str) -> str:
     return ANSWER_BOX_PATTERN.sub(replacer, rendered_text)
 
 
+def number_question_placeholders(rendered_text: str) -> str:
+    """Replace each literal Qx. marker with an incrementing question number."""
+    question_number = 0
+
+    def replacer(_: re.Match[str]) -> str:
+        nonlocal question_number
+        question_number += 1
+        return f"Q{question_number}."
+
+    return QUESTION_PLACEHOLDER_PATTERN.sub(replacer, rendered_text)
+
+
+def replace_full_width_rules(rendered_text: str) -> str:
+    """Replace standalone markdown --- lines with a full-width raw LaTeX rule."""
+    return FULL_WIDTH_RULE_PATTERN.sub(
+        lambda _: "\\noindent\\rule{\\linewidth}{0.4pt}\\par",
+        rendered_text,
+    )
+
+
 def escape_latex_text(value: str) -> str:
     """Escape LaTeX-sensitive characters in dynamic text fragments."""
     replacements = {
@@ -441,6 +463,8 @@ def apply_rendering_conversions(rendered_text: str, student_data: dict[str, Any]
     It also appends a final even-numbered page showing the student's name.
     """
     converted_text = rendered_text
+    converted_text = number_question_placeholders(converted_text)
+    converted_text = replace_full_width_rules(converted_text)
     for source, replacement in UNICODE_LATEX_REPLACEMENTS.items():
         converted_text = converted_text.replace(source, replacement)
     converted_text = replace_answer_box_markers(converted_text)
@@ -454,7 +478,7 @@ def apply_rendering_conversions(rendered_text: str, student_data: dict[str, Any]
         "\\noindent This page deliberately left blank\\par\n"
         "\\clearpage\n"
         "\\fi\n"
-        f"{build_final_page_with_instructions(student_data, rendered_text)}"
+        f"{build_final_page_with_instructions(student_data, converted_text)}"
     )
     return f"{converted_text}{final_page}"
 
