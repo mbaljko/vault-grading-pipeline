@@ -201,6 +201,15 @@ def extract_markdown_section(markdown_text: str, heading_prefix: str) -> str:
     return "\n".join(section_lines).strip()
 
 
+def extract_markdown_heading(markdown_text: str, heading_prefix: str) -> str:
+    """Return the first markdown heading line matching the requested prefix."""
+    for line in markdown_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(heading_prefix):
+            return stripped
+    return ""
+
+
 def escape_latex_text(value: str) -> str:
     """Escape LaTeX-sensitive characters in dynamic text fragments."""
     replacements = {
@@ -311,14 +320,17 @@ def render_markdown_block_to_latex(markdown_block: str) -> str:
 
 def build_instructions_block_latex(rendered_text: str) -> str:
     """Extract and render the first-page Instructions block for reuse on the final page."""
+    instructions_heading = extract_markdown_heading(rendered_text, "### Instructions")
     instructions_markdown = extract_markdown_section(rendered_text, "### Instructions")
+    instructions_title = instructions_heading.removeprefix("### ").strip() if instructions_heading else "Instructions"
     if not instructions_markdown:
         return ""
     rendered_block = render_markdown_block_to_latex(instructions_markdown)
     if not rendered_block:
         return ""
     return (
-        "\\noindent{\\fontsize{16}{20}\\selectfont \\bfseries Instructions\\par}\n"
+        "\\noindent{\\fontsize{16}{20}\\selectfont \\bfseries "
+        f"{escape_latex_text(instructions_title)}\\par}}\n"
         "\\vspace{0.75em}\n"
         "\\begingroup\\fontsize{11}{14}\\selectfont\n"
         f"{rendered_block}\n"
