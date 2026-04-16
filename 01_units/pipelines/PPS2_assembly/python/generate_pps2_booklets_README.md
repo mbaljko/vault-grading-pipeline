@@ -22,12 +22,14 @@ python /Users/mb/Documents/vault-grading-pipeline/01_units/pipelines/PPS2_assemb
   --template /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/master_PPS2_activity/PPS2_template.md \
   --latex-template /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/master_PPS2_activity/PPS2_pdf_template.tex \
   --input-dir /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/student_data \
-  --output-dir /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/generated_individualized_PPS2
+  --output-dir /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/generated_individualized_PPS2 \
+  --keep-tex
 ```
 
 ## Useful flags
 
 - `--keep-md`: also save the filled Markdown file for each student.
+- `--keep-tex`: also save the pandoc-generated LaTeX file for each student.
 - `--allow-missing`: render even if some placeholders remain unresolved.
 - `--verbose`: print dependency and pandoc command details.
 - `--latex-template`: pass a custom LaTeX template to pandoc for PDF styling.

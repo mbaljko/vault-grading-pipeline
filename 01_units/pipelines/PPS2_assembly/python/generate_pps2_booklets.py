@@ -6,7 +6,8 @@ Usage:
         --template /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/master_PPS2_activity/PPS2_template.md \
         --latex-template /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/master_PPS2_activity/PPS2_pdf_template.tex \
         --input-dir /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/student_data \
-        --output-dir /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/generated_individualized_PPS2
+        --output-dir /Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/generated_individualized_PPS2 \
+        --keep-tex
 
 Expected placeholder format:
     {participant_id}
@@ -83,6 +84,11 @@ def parse_args() -> argparse.Namespace:
         "--keep-md",
         action="store_true",
         help="Keep the filled intermediate Markdown files next to the PDFs.",
+    )
+    parser.add_argument(
+        "--keep-tex",
+        action="store_true",
+        help="Keep the pandoc-generated LaTeX file next to the PDFs.",
     )
     parser.add_argument(
         "--allow-missing",
@@ -220,6 +226,41 @@ def render_pdf(
     return False, last_error
 
 
+def render_tex(
+    filled_markdown_path: Path,
+    tex_output_path: Path,
+    pandoc_path: Path,
+    latex_template: Path | None,
+    verbose: bool,
+) -> tuple[bool, str]:
+    """Convert a filled Markdown file to LaTeX using pandoc."""
+    command = [str(pandoc_path), str(filled_markdown_path), "-t", "latex", "-o", str(tex_output_path)]
+    if latex_template is not None:
+        command.extend(["--template", str(latex_template)])
+
+    if verbose:
+        print(f"Running: {' '.join(command)}")
+
+    try:
+        completed = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if verbose and completed.stdout.strip():
+            print(completed.stdout.strip())
+        return True, "saved LaTeX successfully"
+    except subprocess.CalledProcessError as error:
+        stderr = (error.stderr or "").strip()
+        stdout = (error.stdout or "").strip()
+        details = stderr or stdout or str(error)
+        if verbose:
+            print(details, file=sys.stderr)
+        return False, details
+
+
 def load_student_json(student_file: Path) -> dict[str, Any]:
     """Load and parse one student JSON file as UTF-8."""
     with student_file.open("r", encoding="utf-8") as handle:
@@ -238,6 +279,7 @@ def render_student(
     latex_engine: str | None,
     latex_template: Path | None,
     keep_md: bool,
+    keep_tex: bool,
     allow_missing: bool,
     verbose: bool,
 ) -> RenderResult:
@@ -258,6 +300,7 @@ def render_student(
 
     pdf_output_path = output_dir / f"{participant_id}_PPS2.pdf"
     md_output_path = output_dir / f"{participant_id}_PPS2.md"
+    tex_output_path = output_dir / f"{participant_id}_PPS2.tex"
 
     with TemporaryDirectory(prefix=f"pps2_{participant_id}_") as temp_dir_name:
         temp_dir = Path(temp_dir_name)
@@ -277,6 +320,17 @@ def render_student(
 
         if keep_md:
             md_output_path.write_text(rendered_text, encoding="utf-8")
+
+        if keep_tex:
+            tex_success, tex_message = render_tex(
+                filled_markdown_path=temp_markdown_path,
+                tex_output_path=tex_output_path,
+                pandoc_path=pandoc_path,
+                latex_template=latex_template,
+                verbose=verbose,
+            )
+            if not tex_success:
+                return RenderResult(student_file, participant_id, "failed", f"LaTeX conversion error: {tex_message}")
 
     if missing_placeholders:
         return RenderResult(
@@ -365,6 +419,7 @@ def main() -> int:
             latex_engine=latex_engine,
             latex_template=args.latex_template,
             keep_md=args.keep_md,
+            keep_tex=args.keep_tex,
             allow_missing=args.allow_missing,
             verbose=args.verbose,
         )
