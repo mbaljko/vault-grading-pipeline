@@ -76,12 +76,7 @@ def strip_leading_article(value: str) -> str:
 
 def strip_leading_match_prefix(value: str) -> str:
 	stripped = strip_leading_article(value)
-	while stripped:
-		updated = MATCH_PREFIX_RE.sub("", stripped, count=1).strip()
-		if updated == stripped:
-			return stripped
-		stripped = strip_leading_article(updated)
-	return ""
+	return MATCH_PREFIX_RE.sub("", stripped, count=1).strip()
 
 
 def singularize_token(token: str) -> str:
@@ -96,26 +91,26 @@ def normalize_inflectional_text(value: str) -> str:
 	return " ".join(singularize_token(token) for token in value.split())
 
 
-def build_match_variants(value: str, rule: str) -> list[str]:
+def preprocess_candidate_for_match(value: str, rule: str) -> str:
 	normalized = normalize_text(value, rule)
-	variants: list[str] = []
-	seen: set[str] = set()
-	for variant in (normalized, strip_leading_article(normalized), strip_leading_match_prefix(normalized)):
-		if variant and variant not in seen:
-			seen.add(variant)
-			variants.append(variant)
-	return variants
+	if not normalized:
+		return ""
+	return strip_leading_match_prefix(normalized)
 
 
-def expand_candidates_with_suffix_coordination(candidates: list[str]) -> list[str]:
+def expand_candidates_with_suffix_coordination(candidates: list[str], rule: str) -> list[str]:
 	expanded_candidates: list[str] = []
 	seen_candidates: set[str] = set()
 	for candidate in candidates:
-		candidate_variants = [candidate]
-		parts = [part.strip() for part in CONJUNCTION_SPLIT_RE.split(candidate) if part.strip()]
+		processed_candidate = preprocess_candidate_for_match(candidate, rule)
+		if not processed_candidate:
+			continue
+		logger.debug("Matching original segment '%s' stripped to '%s'", candidate, processed_candidate)
+		candidate_variants = [processed_candidate]
+		parts = [part.strip() for part in CONJUNCTION_SPLIT_RE.split(processed_candidate) if part.strip()]
 		candidate_variants.extend(parts)
-		if re.search(r"\s+and\s+", candidate, re.IGNORECASE):
-			left, right = re.split(r"\s+and\s+", candidate, maxsplit=1, flags=re.IGNORECASE)
+		if re.search(r"\s+and\s+", processed_candidate, re.IGNORECASE):
+			left, right = re.split(r"\s+and\s+", processed_candidate, maxsplit=1, flags=re.IGNORECASE)
 			left = left.strip()
 			right_tokens = right.strip().split()
 			for suffix_size in range(1, min(2, len(right_tokens)) + 1):
@@ -130,8 +125,8 @@ def expand_candidates_with_suffix_coordination(candidates: list[str]) -> list[st
 	return expanded_candidates
 
 
-def expand_candidates_with_conjuncts(candidates: list[str]) -> list[str]:
-	return expand_candidates_with_suffix_coordination(candidates)
+def expand_candidates_with_conjuncts(candidates: list[str], rule: str) -> list[str]:
+	return expand_candidates_with_suffix_coordination(candidates, rule)
 
 
 def span_contains_excluded_term(span: str, excluded_terms: list[str], rule: str) -> bool:
@@ -184,7 +179,11 @@ def resolve_candidate_matches(
 	resolved_matches: list[AliasMatch] = []
 	seen_matches: set[tuple[str, str, str]] = set()
 	entries = build_allowed_match_entries(allowed_terms, allowed_aliases, rule)
-	for candidate_variant in build_match_variants(candidate, rule):
+	candidate_variant = preprocess_candidate_for_match(candidate, rule)
+	if not candidate_variant:
+		return []
+	logger.debug("Matching original segment '%s' stripped to '%s'", candidate, candidate_variant)
+	for candidate_variant in [candidate_variant]:
 		candidate_variant_cmp = normalize_inflectional_text(candidate_variant)
 		candidate_matches: list[AliasMatch] = []
 		for pattern_text, canonical, is_alias in entries:
@@ -220,7 +219,8 @@ def resolve_candidate_matches(
 				continue
 			seen_matches.add(match_key)
 			logger.debug(
-				"Matched candidate '%s' via %s '%s' -> canonical '%s'",
+				"Matched original segment '%s' stripped to '%s' via %s '%s' -> canonical '%s'",
+				candidate,
 				match.candidate,
 				"alias" if match.is_alias else "canonical",
 				match.matched_text,
@@ -306,7 +306,7 @@ def exact_or_alias_article_insensitive_any_conjunct_match(
 ) -> bool:
 	return bool(
 		resolve_matches_for_candidates(
-			expand_candidates_with_conjuncts(candidates),
+			expand_candidates_with_conjuncts(candidates, rule),
 			payload,
 			rule,
 		)
@@ -345,7 +345,7 @@ def canonicalize_segment_text(
 	if not text.strip():
 		return ""
 	matches = resolve_matches_for_candidates(
-		expand_candidates_with_conjuncts(extract_candidate_units(text, rule)),
+		expand_candidates_with_conjuncts(extract_candidate_units(text, rule), rule),
 		{
 			"allowed_terms": allowed_terms,
 			"allowed_aliases": dict(allowed_aliases),
@@ -368,7 +368,7 @@ def extract_canonical_mentions_from_text(
 	return [
 		match.canonical
 		for match in resolve_matches_for_candidates(
-			expand_candidates_with_conjuncts(extract_candidate_units(text, rule)),
+			expand_candidates_with_conjuncts(extract_candidate_units(text, rule), rule),
 			{
 				"allowed_terms": allowed_terms,
 				"allowed_aliases": dict(allowed_aliases),
@@ -495,7 +495,7 @@ def apply_decision_rule(
 	if decision_rule == "present_if_exact_match_or_alias_and_not_excluded":
 		if match_policy in {"exact_or_alias_article_insensitive", "exact_or_alias_article_insensitive_any_conjunct"}:
 			matches = resolve_matches_for_candidates(
-				expand_candidates_with_conjuncts(extract_candidate_units(text, rule))
+				expand_candidates_with_conjuncts(extract_candidate_units(text, rule), rule)
 				if match_policy == "exact_or_alias_article_insensitive_any_conjunct"
 				else extract_candidate_units(text, rule),
 				payload,
