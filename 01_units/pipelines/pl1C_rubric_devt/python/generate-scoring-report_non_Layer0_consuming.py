@@ -1855,6 +1855,21 @@ def append_total_count_row(rows: list[list[str]], label_columns: list[str], tota
 	return [*rows, [*label_columns, str(total_count)]]
 
 
+def build_status_count_rows(status_counts: Counter[str]) -> list[list[str]]:
+	total_count = sum(status_counts.values())
+	rows = [
+		[
+			escape_markdown_table_cell(status or "(blank evidence_status)"),
+			str(count),
+			format_rate(count, total_count),
+		]
+		for status, count in sorted(status_counts.items(), key=lambda item: (-item[1], item[0].lower()))
+	]
+	if not rows:
+		return []
+	return [*rows, ["total", str(total_count), format_rate(total_count, total_count)]]
+
+
 def build_segment_detail_rows(
 	detail_rows: list[tuple[str, str]],
 	*,
@@ -1993,15 +2008,12 @@ def render_indicator_segment_report(
 		"### Evidence Status Counts",
 		"",
 	]
-	status_rows = [
-		[escape_markdown_table_cell(status or "(blank evidence_status)"), str(count)]
-		for status, count in sorted(status_counts.items(), key=lambda item: (-item[1], item[0].lower()))
-	]
+	status_rows = build_status_count_rows(status_counts)
 	if status_rows:
 		parts.append(
 			render_markdown_table(
-				["evidence_status", "count"],
-				append_total_count_row(status_rows, ["total"], sum(status_counts.values())),
+				["evidence_status", "count", "%"],
+				status_rows,
 			)
 		)
 	else:
@@ -2166,15 +2178,12 @@ def render_indicator_slot_group_segment_report(
 		"### Evidence Status Counts",
 		"",
 	]
-	status_rows = [
-		[escape_markdown_table_cell(status or "(blank evidence_status)"), str(count)]
-		for status, count in sorted(status_counts.items(), key=lambda item: (-item[1], item[0].lower()))
-	]
+	status_rows = build_status_count_rows(status_counts)
 	if status_rows:
 		parts.append(
 			render_markdown_table(
-				["evidence_status", "count"],
-				append_total_count_row(status_rows, ["total"], sum(status_counts.values())),
+				["evidence_status", "count", "%"],
+				status_rows,
 			)
 		)
 	else:
