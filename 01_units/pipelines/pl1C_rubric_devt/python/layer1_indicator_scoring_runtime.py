@@ -14,6 +14,7 @@ from typing import Mapping
 
 LABEL_LINE_RE = re.compile(r"^\s*\[[^\]]+\]\s*$")
 LEADING_ARTICLE_RE = re.compile(r"^(?:the|a|an)\s+", re.IGNORECASE)
+CONJUNCTION_SPLIT_RE = re.compile(r"\s+(?:and|or|&)\s+", re.IGNORECASE)
 
 
 def normalize_whitespace(value: str) -> str:
@@ -54,6 +55,19 @@ def extract_candidate_units(value: object, rule: str) -> list[str]:
 
 def strip_leading_article(value: str) -> str:
 	return LEADING_ARTICLE_RE.sub("", value, count=1).strip()
+
+
+def expand_candidates_with_conjuncts(candidates: list[str]) -> list[str]:
+	expanded_candidates: list[str] = []
+	seen_candidates: set[str] = set()
+	for candidate in candidates:
+		candidate_variants = [candidate]
+		candidate_variants.extend(part.strip() for part in CONJUNCTION_SPLIT_RE.split(candidate))
+		for variant in candidate_variants:
+			if variant and variant not in seen_candidates:
+				seen_candidates.add(variant)
+				expanded_candidates.append(variant)
+	return expanded_candidates
 
 
 def resolve_submission_id(row: Mapping[str, object]) -> str:
@@ -143,6 +157,18 @@ def exact_or_alias_article_insensitive_match(candidates: list[str], payload: Map
 	return False
 
 
+def exact_or_alias_article_insensitive_any_conjunct_match(
+	candidates: list[str],
+	payload: Mapping[str, object],
+	rule: str,
+) -> bool:
+	return exact_or_alias_article_insensitive_match(
+		expand_candidates_with_conjuncts(candidates),
+		payload,
+		rule,
+	)
+
+
 def role_or_term_match(candidates: list[str], payload: Mapping[str, object], rule: str) -> bool:
 	combined_payload = {
 		"allowed_terms": list(payload.get("allowed_terms", [])) + list(payload.get("allowed_roles", [])),
@@ -178,6 +204,8 @@ def evaluate_match_policy(text: str, payload: Mapping[str, object]) -> bool:
 		return exact_or_alias_match(candidates, payload, rule)
 	if match_policy == "exact_or_alias_article_insensitive":
 		return exact_or_alias_article_insensitive_match(candidates, payload, rule)
+	if match_policy == "exact_or_alias_article_insensitive_any_conjunct":
+		return exact_or_alias_article_insensitive_any_conjunct_match(candidates, payload, rule)
 	if match_policy == "exact_or_alias_or_role":
 		return role_or_term_match(candidates, payload, rule)
 	if match_policy == "co_occurrence":
