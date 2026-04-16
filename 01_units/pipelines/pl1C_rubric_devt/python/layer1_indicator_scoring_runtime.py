@@ -13,6 +13,7 @@ from typing import Mapping
 
 
 LABEL_LINE_RE = re.compile(r"^\s*\[[^\]]+\]\s*$")
+LEADING_ARTICLE_RE = re.compile(r"^(?:the|a|an)\s+", re.IGNORECASE)
 
 
 def normalize_whitespace(value: str) -> str:
@@ -49,6 +50,10 @@ def extract_candidate_units(value: object, rule: str) -> list[str]:
 	if whole_text and whole_text not in seen:
 		candidates.append(whole_text)
 	return candidates
+
+
+def strip_leading_article(value: str) -> str:
+	return LEADING_ARTICLE_RE.sub("", value, count=1).strip()
 
 
 def resolve_submission_id(row: Mapping[str, object]) -> str:
@@ -103,6 +108,41 @@ def exact_or_alias_match(candidates: list[str], payload: Mapping[str, object], r
 	return False
 
 
+def exact_or_alias_article_insensitive_match(candidates: list[str], payload: Mapping[str, object], rule: str) -> bool:
+	normalized_candidates = []
+	seen_candidates: set[str] = set()
+	for candidate in candidates:
+		for variant in (candidate, strip_leading_article(candidate)):
+			if variant and variant not in seen_candidates:
+				seen_candidates.add(variant)
+				normalized_candidates.append(variant)
+	allowed_terms = set()
+	for term in payload.get("allowed_terms", []):
+		normalized_term = normalize_text(term, rule)
+		if not normalized_term:
+			continue
+		allowed_terms.add(normalized_term)
+		stripped_term = strip_leading_article(normalized_term)
+		if stripped_term:
+			allowed_terms.add(stripped_term)
+	allowed_aliases = {}
+	for alias, canonical in dict(payload.get("allowed_aliases", {})).items():
+		normalized_alias = normalize_text(alias, rule)
+		normalized_canonical = normalize_text(canonical, rule)
+		if not normalized_alias or not normalized_canonical:
+			continue
+		for alias_variant in (normalized_alias, strip_leading_article(normalized_alias)):
+			if alias_variant:
+				allowed_aliases[alias_variant] = normalized_canonical
+	for candidate in normalized_candidates:
+		if candidate in allowed_terms:
+			return True
+		canonical = allowed_aliases.get(candidate)
+		if canonical and canonical in allowed_terms:
+			return True
+	return False
+
+
 def role_or_term_match(candidates: list[str], payload: Mapping[str, object], rule: str) -> bool:
 	combined_payload = {
 		"allowed_terms": list(payload.get("allowed_terms", [])) + list(payload.get("allowed_roles", [])),
@@ -136,6 +176,8 @@ def evaluate_match_policy(text: str, payload: Mapping[str, object]) -> bool:
 		return contains_any_substring(text, list(payload.get("allowed_terms", [])), rule)
 	if match_policy == "exact_or_alias":
 		return exact_or_alias_match(candidates, payload, rule)
+	if match_policy == "exact_or_alias_article_insensitive":
+		return exact_or_alias_article_insensitive_match(candidates, payload, rule)
 	if match_policy == "exact_or_alias_or_role":
 		return role_or_term_match(candidates, payload, rule)
 	if match_policy == "co_occurrence":

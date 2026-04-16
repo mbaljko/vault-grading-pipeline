@@ -386,6 +386,7 @@ def build_single_layer3_dimension_histogram_rows(
         ("2-demonstrated", "demonstrated"),
     ]
     counts = aggregate_counts[dimension_id]
+    total_count = sum(counts.values())
     max_count = max((counts.get(raw_label, 0) for _, raw_label in ordered_bins), default=0)
     resolution = compute_histogram_resolution(max_count)
     table_rows: list[list[str]] = []
@@ -394,9 +395,10 @@ def build_single_layer3_dimension_histogram_rows(
         table_rows.append([
             display_label,
             str(bin_count),
+            f"{(bin_count / total_count * 100) if total_count else 0:.1f}%",
             render_histogram_bar(bin_count, resolution),
         ])
-    table_rows.append(["Total", str(sum(counts.values())), ""])
+    table_rows.append(["Total", str(total_count), "100.0%", ""])
     return table_rows, build_histogram_resolution_note(resolution)
 
 
@@ -430,23 +432,32 @@ def build_layer2_indicator_histogram_rows(
     resolution = compute_histogram_resolution(max_count)
     table_rows: list[list[str]] = []
     indicator_lines = "<br>".join(f"`{indicator_id}`" for indicator_id in indicator_ids)
+    totals_by_indicator = {
+        indicator_id: sum(wildcard_counts[indicator_id].values())
+        for indicator_id in indicator_ids
+    }
     for indicator_value in ordered_bins:
         count_lines: list[str] = []
+        percent_lines: list[str] = []
         bar_lines: list[str] = []
         for indicator_id in indicator_ids:
             bin_count = wildcard_counts[indicator_id].get(indicator_value, 0)
+            total_count = totals_by_indicator[indicator_id]
             count_lines.append(str(bin_count))
+            percent_lines.append(f"{(bin_count / total_count * 100) if total_count else 0:.1f}%")
             bar_lines.append(render_histogram_bar(bin_count, resolution))
         table_rows.append([
             indicator_value,
             indicator_lines,
             "<br>".join(count_lines),
+            "<br>".join(percent_lines),
             "<br>".join(bar_lines),
         ])
     table_rows.append([
         "Total",
         indicator_lines,
-        "<br>".join(str(sum(wildcard_counts[indicator_id].values())) for indicator_id in indicator_ids),
+        "<br>".join(str(totals_by_indicator[indicator_id]) for indicator_id in indicator_ids),
+        "<br>".join("100.0%" for _ in indicator_ids),
         "",
     ])
     return indicator_ids, table_rows, build_histogram_resolution_note(resolution)
@@ -1034,7 +1045,7 @@ def generate_report(args: argparse.Namespace) -> Path:
                 sections.extend(
                     [
                         "#### Aggregate Dimension Histogram",
-                        render_markdown_table(["Bin", "Count", "Bar"], single_dimension_rows),
+                        render_markdown_table(["Bin", "Count", "%", "Bar"], single_dimension_rows),
                         single_dimension_note,
                         "",
                     ]
@@ -1056,7 +1067,7 @@ def generate_report(args: argparse.Namespace) -> Path:
                 sections.extend(
                     [
                         "",
-                        render_markdown_table(["Bin", "Indicator", "Count", "Bar"], layer2_histogram_rows),
+                        render_markdown_table(["Bin", "Indicator", "Count", "%", "Bar"], layer2_histogram_rows),
                         layer2_histogram_note,
                         "",
                     ]
