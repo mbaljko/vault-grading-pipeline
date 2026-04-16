@@ -181,6 +181,26 @@ def fill_template(template_text: str, values: dict[str, str]) -> tuple[str, list
     return rendered_text, sorted(unresolved)
 
 
+def extract_markdown_section(markdown_text: str, heading_prefix: str) -> str:
+    """Extract the body of a markdown section until the next heading of equal or higher level."""
+    lines = markdown_text.splitlines()
+    section_lines: list[str] = []
+    in_section = False
+
+    for line in lines:
+        if not in_section:
+            if line.strip().startswith(heading_prefix):
+                in_section = True
+            continue
+
+        stripped = line.lstrip()
+        if stripped.startswith("### ") or stripped.startswith("## ") or stripped.startswith("# "):
+            break
+        section_lines.append(line)
+
+    return "\n".join(section_lines).strip()
+
+
 def escape_latex_text(value: str) -> str:
     """Escape LaTeX-sensitive characters in dynamic text fragments."""
     replacements = {
@@ -198,6 +218,114 @@ def escape_latex_text(value: str) -> str:
     return "".join(replacements.get(char, char) for char in value)
 
 
+def render_inline_markdown_to_latex(text: str) -> str:
+    """Render a small supported subset of inline markdown into LaTeX."""
+    parts: list[str] = []
+    index = 0
+    pattern = re.compile(r"(\*\*[^*]+\*\*|`[^`]+`|==[^=]+==)")
+
+    for match in pattern.finditer(text):
+        start, end = match.span()
+        if start > index:
+            parts.append(escape_latex_text(text[index:start]))
+        token = match.group(0)
+        if token.startswith("**") and token.endswith("**"):
+            parts.append(f"\\textbf{{{escape_latex_text(token[2:-2])}}}")
+        elif token.startswith("`") and token.endswith("`"):
+            parts.append(f"\\texttt{{{escape_latex_text(token[1:-1])}}}")
+        elif token.startswith("==") and token.endswith("=="):
+            parts.append(f"\\textbf{{{escape_latex_text(token[2:-2])}}}")
+        index = end
+
+    if index < len(text):
+        parts.append(escape_latex_text(text[index:]))
+
+    return "".join(parts)
+
+
+def render_markdown_block_to_latex(markdown_block: str) -> str:
+    """Render a constrained markdown block into LaTeX for the repeated instructions section."""
+    if not markdown_block:
+        return ""
+
+    latex_lines: list[str] = []
+    paragraph_lines: list[str] = []
+    ordered_items: list[str] = []
+    list_items: list[str] = []
+
+    def flush_paragraph() -> None:
+        nonlocal paragraph_lines
+        if paragraph_lines:
+            paragraph_text = " ".join(line.strip() for line in paragraph_lines if line.strip())
+            latex_lines.append("\\noindent " + render_inline_markdown_to_latex(paragraph_text) + "\\par")
+            paragraph_lines = []
+
+    def flush_list() -> None:
+        nonlocal list_items
+        if list_items:
+            latex_lines.append("\\begin{itemize}")
+            latex_lines.append("\\tightlist")
+            for item in list_items:
+                latex_lines.append("\\item " + render_inline_markdown_to_latex(item))
+            latex_lines.append("\\end{itemize}")
+            list_items = []
+
+    def flush_ordered_list() -> None:
+        nonlocal ordered_items
+        if ordered_items:
+            latex_lines.append("\\begin{enumerate}")
+            latex_lines.append("\\def\\labelenumi{\\arabic{enumi}.}")
+            latex_lines.append("\\tightlist")
+            for item in ordered_items:
+                latex_lines.append("\\item " + render_inline_markdown_to_latex(item))
+            latex_lines.append("\\end{enumerate}")
+            ordered_items = []
+
+    for raw_line in markdown_block.splitlines():
+        stripped = raw_line.strip()
+        if not stripped:
+            flush_paragraph()
+            flush_ordered_list()
+            flush_list()
+            continue
+        ordered_match = re.match(r"\d+\.\s+(.*)", stripped)
+        if ordered_match:
+            flush_paragraph()
+            flush_list()
+            ordered_items.append(ordered_match.group(1).strip())
+            continue
+        if stripped.startswith("- "):
+            flush_paragraph()
+            flush_ordered_list()
+            list_items.append(stripped[2:].strip())
+            continue
+        flush_ordered_list()
+        flush_list()
+        paragraph_lines.append(stripped)
+
+    flush_paragraph()
+    flush_ordered_list()
+    flush_list()
+    return "\n".join(latex_lines)
+
+
+def build_instructions_block_latex(rendered_text: str) -> str:
+    """Extract and render the first-page Instructions block for reuse on the final page."""
+    instructions_markdown = extract_markdown_section(rendered_text, "### Instructions")
+    if not instructions_markdown:
+        return ""
+    rendered_block = render_markdown_block_to_latex(instructions_markdown)
+    if not rendered_block:
+        return ""
+    return (
+        "\\noindent{\\fontsize{16}{20}\\selectfont \\bfseries Instructions\\par}\n"
+        "\\vspace{0.75em}\n"
+        "\\begingroup\\fontsize{11}{14}\\selectfont\n"
+        f"{rendered_block}\n"
+        "\\endgroup\n"
+    )
+
+
 def build_final_page_block(student_data: dict[str, Any]) -> str:
     """Build the appended final page content from student name fields."""
     family_name = escape_latex_text(str(student_data.get("FAMILY_NAME") or "").strip().upper())
@@ -210,17 +338,28 @@ def build_final_page_block(student_data: dict[str, Any]) -> str:
         "\\thispagestyle{empty}\n"
         "\\begin{center}\n"
         "\\vspace*{\\fill}\n"
-        "{\\fontsize{18}{22}\\selectfont \\bfseries THIS IS AN INDIVIDUALIZED BOOKLET.\\par}\n"
-        "\\vspace{2em}\n"
-        "{\\fontsize{20}{24}\\selectfont \\bfseries THIS BOOKLET IS FOR:\\par}\n"
+        "{\\fontsize{18}{22}\\selectfont \\bfseries THIS IS AN INDIVIDUALIZED BOOKLET FOR:\\par}\n"
         "\\vspace{2em}\n"
         "{\\fontsize{36}{44}\\selectfont \\bfseries "
         f"{family_name}\\par}}\n"
         "\\vspace{1.5em}\n"
         "{\\fontsize{36}{44}\\selectfont \\bfseries "
         f"{given_name}\\par}}\n"
-        "\\vspace*{\\fill}\n"
         "\\end{center}\n"
+    )
+
+
+def build_final_page_with_instructions(student_data: dict[str, Any], rendered_text: str) -> str:
+    """Build the final personalized page with the repeated Instructions block."""
+    instructions_block = build_instructions_block_latex(rendered_text)
+    final_page = build_final_page_block(student_data)
+    if not instructions_block:
+        return final_page + "\\vspace*{\\fill}\n"
+    return (
+        final_page
+        + "\\vspace{2.5em}\n"
+        + instructions_block
+        + "\\vspace*{\\fill}\n"
     )
 
 
@@ -241,7 +380,7 @@ def apply_rendering_conversions(rendered_text: str, student_data: dict[str, Any]
         "\\noindent This page deliberately left blank\\par\n"
         "\\clearpage\n"
         "\\fi\n"
-        f"{build_final_page_block(student_data)}"
+        f"{build_final_page_with_instructions(student_data, rendered_text)}"
     )
     return f"{converted_text}{final_page}"
 
