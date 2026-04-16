@@ -1686,6 +1686,38 @@ def normalize_segment_bucket_label(value: str) -> str:
 	return "(blank segment text)"
 
 
+def parse_bound_segment_ids(bound_segment_id: str) -> list[str]:
+	return [segment_id.strip() for segment_id in bound_segment_id.split("+") if segment_id.strip()]
+
+
+def derive_segment_field_label(component_id: str, bound_segment_id: str) -> str:
+	segment_ids = parse_bound_segment_ids(bound_segment_id)
+	if not segment_ids:
+		return "evidence_text"
+	if len(segment_ids) == 1:
+		return f"segment_text_{component_id}__{segment_ids[0]}"
+	return " + ".join(f"segment_text_{component_id}__{segment_id}" for segment_id in segment_ids)
+
+
+def derive_segment_bucket_from_input_row(
+	input_row: dict[str, str],
+	component_id: str,
+	bound_segment_id: str,
+) -> str:
+	segment_ids = parse_bound_segment_ids(bound_segment_id)
+	if not segment_ids:
+		return normalize_segment_bucket_label((input_row.get("evidence_text") or "").strip())
+	if len(segment_ids) == 1:
+		segment_field = f"segment_text_{component_id}__{segment_ids[0]}"
+		return normalize_segment_bucket_label((input_row.get(segment_field) or "").strip())
+	segment_parts: list[str] = []
+	for segment_id in segment_ids:
+		segment_field = f"segment_text_{component_id}__{segment_id}"
+		segment_value = normalize_segment_bucket_label((input_row.get(segment_field) or "").strip())
+		segment_parts.append(f"{segment_id}: {segment_value}")
+	return " ; ".join(segment_parts)
+
+
 def segment_text_sort_key(value: str) -> tuple[int, str]:
 	normalized = normalize_segment_bucket_label(value)
 	if normalized == "(blank segment text)":
@@ -3288,7 +3320,7 @@ def main() -> int:
 		local_slot = (base_row_info.get("local_slot") or "").strip()
 		template_id = (base_row_info.get("template_id") or "").strip()
 		bound_segment_id = indicator_spec.get("bound_segment_id", "")
-		segment_field = f"segment_text_{component_id}__{bound_segment_id}" if bound_segment_id else ""
+		segment_field = derive_segment_field_label(component_id, bound_segment_id)
 		status_counts: Counter[str] = Counter()
 		matching_segment_counts: Counter[str] = Counter()
 		non_matching_segment_counts: Counter[str] = Counter()
@@ -3318,8 +3350,7 @@ def main() -> int:
 				segment_bucket = "(missing Layer 1 input row)"
 				missing_input_row_count += 1
 			else:
-				segment_value = (input_row.get(segment_field) or "").strip() if segment_field else (input_row.get("evidence_text") or "").strip()
-				segment_bucket = normalize_segment_bucket_label(segment_value)
+				segment_bucket = derive_segment_bucket_from_input_row(input_row, component_id, bound_segment_id)
 			if is_positive_scored_row(scored_row):
 				matching_segment_counts[segment_bucket] += 1
 				append_segment_detail_row(

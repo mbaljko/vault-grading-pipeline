@@ -947,6 +947,50 @@ def build_layer1_indicator_scoring_payload(record: dict[str, str]) -> str:
     return serialize_scoring_payload(payload)
 
 
+def find_layer1_base_row(
+    base_rows: list[dict[str, str]],
+    *,
+    local_slot: str,
+    bound_segment_id: str,
+) -> dict[str, str] | None:
+    for row in base_rows:
+        if row.get("local_slot", "").strip() != local_slot:
+            continue
+        if row.get("bound_segment_id", "").strip() != bound_segment_id:
+            continue
+        return row
+    return None
+
+
+def build_layer1_indicator_scoring_payload_with_context(
+    record: dict[str, str],
+    base_rows: list[dict[str, str]],
+) -> str:
+    payload = json.loads(build_layer1_indicator_scoring_payload(record))
+    match_policy = str(record.get("match_policy", "") or "").strip()
+    if match_policy != "canonical_inequality":
+        return serialize_scoring_payload(payload)
+
+    demand_a_row = find_layer1_base_row(base_rows, local_slot="01", bound_segment_id="DemandA")
+    demand_b_row = find_layer1_base_row(base_rows, local_slot="02", bound_segment_id="DemandB")
+    if demand_a_row is None or demand_b_row is None:
+        raise ValueError(
+            "canonical_inequality requires active Layer 1 DemandA slot 01 and DemandB slot 02 source rows."
+        )
+
+    payload.update(
+        {
+            "left_segment_id": "DemandA",
+            "right_segment_id": "DemandB",
+            "left_allowed_terms": parse_semicolon_separated_values(demand_a_row.get("allowed_terms", "")),
+            "left_allowed_aliases": parse_alias_mapping(demand_a_row.get("allowed_aliases", "")),
+            "right_allowed_terms": parse_semicolon_separated_values(demand_b_row.get("allowed_terms", "")),
+            "right_allowed_aliases": parse_alias_mapping(demand_b_row.get("allowed_aliases", "")),
+        }
+    )
+    return serialize_scoring_payload(payload)
+
+
 def build_registry_rows_from_machine_normalized_layer1_tables(
     base_rows: list[dict[str, str]],
     reuse_rows: list[dict[str, str]],
@@ -985,7 +1029,7 @@ def build_registry_rows_from_machine_normalized_layer1_tables(
                         "assessment_guidance": build_machine_normalized_indicator_guidance(base_row),
                         "evaluation_notes": "Follow the machine-normalised registry fields exactly; do not infer undeclared semantics.",
                         "decision_procedure": build_machine_normalized_decision_procedure(base_row),
-                        "indicator_scoring_payload_json": build_layer1_indicator_scoring_payload(base_row),
+                        "indicator_scoring_payload_json": build_layer1_indicator_scoring_payload_with_context(base_row, base_rows),
                         "status": effective_status,
                     }
                 )

@@ -97,6 +97,11 @@ def resolve_indicator_text(row: Mapping[str, object], component_id: str, payload
 	return ""
 
 
+def resolve_segment_text_by_id(row: Mapping[str, object], component_id: str, segment_id: str) -> str:
+	segment_field = f"segment_text_{component_id}__{segment_id}"
+	return str(row.get(segment_field, "") or "").strip()
+
+
 def contains_any_substring(text: str, terms: list[str], rule: str) -> bool:
 	normalized_text = normalize_text(text, rule)
 	return any(normalize_text(term, rule) in normalized_text for term in terms if normalize_text(term, rule))
@@ -169,6 +174,70 @@ def exact_or_alias_article_insensitive_any_conjunct_match(
 	)
 
 
+def canonicalize_segment_text(
+	text: str,
+	allowed_terms: list[str],
+	allowed_aliases: Mapping[str, str],
+	rule: str,
+) -> str:
+	if not text.strip():
+		return ""
+	canonical_terms: dict[str, str] = {}
+	for term in allowed_terms:
+		normalized_term = normalize_text(term, rule)
+		if not normalized_term:
+			continue
+		for variant in (normalized_term, strip_leading_article(normalized_term)):
+			if variant:
+				canonical_terms.setdefault(variant, normalized_term)
+	canonical_aliases: dict[str, str] = {}
+	for alias, canonical in dict(allowed_aliases).items():
+		normalized_alias = normalize_text(alias, rule)
+		normalized_canonical = normalize_text(canonical, rule)
+		if not normalized_alias or not normalized_canonical:
+			continue
+		for variant in (normalized_alias, strip_leading_article(normalized_alias)):
+			if variant:
+				canonical_aliases[variant] = normalized_canonical
+	for candidate in expand_candidates_with_conjuncts(extract_candidate_units(text, rule)):
+		for variant in (candidate, strip_leading_article(candidate)):
+			if not variant:
+				continue
+			if variant in canonical_terms:
+				return canonical_terms[variant]
+			canonical = canonical_aliases.get(variant)
+			if canonical:
+				return canonical
+	return ""
+
+
+def canonical_inequality_match(
+	row: Mapping[str, object],
+	component_id: str,
+	payload: Mapping[str, object],
+	rule: str,
+) -> bool:
+	left_segment_id = str(payload.get("left_segment_id", "DemandA") or "DemandA").strip()
+	right_segment_id = str(payload.get("right_segment_id", "DemandB") or "DemandB").strip()
+	left_text = resolve_segment_text_by_id(row, component_id, left_segment_id)
+	right_text = resolve_segment_text_by_id(row, component_id, right_segment_id)
+	left_canonical = canonicalize_segment_text(
+		left_text,
+		list(payload.get("left_allowed_terms", [])),
+		dict(payload.get("left_allowed_aliases", {})),
+		rule,
+	)
+	right_canonical = canonicalize_segment_text(
+		right_text,
+		list(payload.get("right_allowed_terms", [])),
+		dict(payload.get("right_allowed_aliases", {})),
+		rule,
+	)
+	if left_canonical and right_canonical:
+		return left_canonical != right_canonical
+	return bool(left_canonical or right_canonical)
+
+
 def role_or_term_match(candidates: list[str], payload: Mapping[str, object], rule: str) -> bool:
 	combined_payload = {
 		"allowed_terms": list(payload.get("allowed_terms", [])) + list(payload.get("allowed_roles", [])),
@@ -194,7 +263,13 @@ def co_occurrence_match(text: str, payload: Mapping[str, object], rule: str) -> 
 	return True
 
 
-def evaluate_match_policy(text: str, payload: Mapping[str, object]) -> bool:
+def evaluate_match_policy(
+	text: str,
+	payload: Mapping[str, object],
+	*,
+	row: Mapping[str, object] | None = None,
+	component_id: str = "",
+) -> bool:
 	rule = str(payload.get("normalisation_rule", "") or "").strip()
 	match_policy = str(payload.get("match_policy", "") or "").strip()
 	candidates = extract_candidate_units(text, rule)
@@ -212,16 +287,26 @@ def evaluate_match_policy(text: str, payload: Mapping[str, object]) -> bool:
 		return co_occurrence_match(text, payload, rule)
 	if match_policy == "absence_check":
 		return True
+	if match_policy == "canonical_inequality":
+		if row is None or not component_id:
+			return False
+		return canonical_inequality_match(row, component_id, payload, rule)
 	raise ValueError(f"Unsupported Layer 1 match_policy: {match_policy}")
 
 
-def apply_decision_rule(text: str, payload: Mapping[str, object]) -> tuple[str, str]:
+def apply_decision_rule(
+	text: str,
+	payload: Mapping[str, object],
+	*,
+	row: Mapping[str, object] | None = None,
+	component_id: str = "",
+) -> tuple[str, str]:
 	rule = str(payload.get("normalisation_rule", "") or "").strip()
 	decision_rule = str(payload.get("decision_rule", "") or "").strip()
 	excluded_terms = [normalize_text(term, rule) for term in payload.get("excluded_terms", []) if normalize_text(term, rule)]
 	normalized_text = normalize_text(text, rule)
 	has_excluded = any(term in normalized_text for term in excluded_terms)
-	policy_match = evaluate_match_policy(text, payload)
+	policy_match = evaluate_match_policy(text, payload, row=row, component_id=component_id)
 	if decision_rule == "present_if_any_allowed_term_found":
 		return ("present" if policy_match else "not_present", "none")
 	if decision_rule == "present_if_exact_match_or_alias_and_not_excluded":
@@ -234,6 +319,8 @@ def apply_decision_rule(text: str, payload: Mapping[str, object]) -> tuple[str, 
 		return ("present" if not has_excluded else "not_present", "none")
 	if decision_rule == "present_if_any_allowed_term_found_and_not_only_excluded":
 		return ("present" if policy_match else "not_present", "none")
+	if decision_rule == "present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b":
+		return ("present" if policy_match and not has_excluded else "not_present", "none")
 	return ("present" if policy_match else "not_present", "none")
 
 
@@ -246,6 +333,37 @@ def score_indicator_from_row(
 	default_evaluation_notes: str = "",
 ) -> dict[str, str]:
 	resolved_component_id = resolve_component_id(row, component_id)
+	match_policy = str(payload.get("match_policy", "") or "").strip()
+	if match_policy == "canonical_inequality":
+		left_segment_id = str(payload.get("left_segment_id", "DemandA") or "DemandA").strip()
+		right_segment_id = str(payload.get("right_segment_id", "DemandB") or "DemandB").strip()
+		left_text = resolve_segment_text_by_id(row, resolved_component_id, left_segment_id)
+		right_text = resolve_segment_text_by_id(row, resolved_component_id, right_segment_id)
+		if not left_text and not right_text:
+			return {
+				"submission_id": resolve_submission_id(row),
+				"component_id": resolved_component_id,
+				"indicator_id": indicator_id,
+				"evidence_status": "not_present",
+				"evaluation_notes": default_evaluation_notes,
+				"confidence": "high",
+				"flags": "missing_input_text",
+			}
+		evidence_status, flags = apply_decision_rule(
+			"",
+			payload,
+			row=row,
+			component_id=resolved_component_id,
+		)
+		return {
+			"submission_id": resolve_submission_id(row),
+			"component_id": resolved_component_id,
+			"indicator_id": indicator_id,
+			"evidence_status": evidence_status,
+			"evaluation_notes": default_evaluation_notes,
+			"confidence": "high",
+			"flags": flags,
+		}
 	text = resolve_indicator_text(row, resolved_component_id, payload)
 	if not text:
 		return {
@@ -257,7 +375,7 @@ def score_indicator_from_row(
 			"confidence": "high",
 			"flags": "missing_input_text",
 		}
-	evidence_status, flags = apply_decision_rule(text, payload)
+	evidence_status, flags = apply_decision_rule(text, payload, row=row, component_id=resolved_component_id)
 	return {
 		"submission_id": resolve_submission_id(row),
 		"component_id": resolved_component_id,
