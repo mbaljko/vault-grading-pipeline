@@ -90,6 +90,14 @@ The generator also supports this source Markdown page-break marker:
 
 Before Pandoc runs, the script converts that marker into a LaTeX page break so the generated PDF and `.tex` output preserve the intended pagination.
 
+The generator also supports answer-box markers in the Markdown template. Current supported form:
+
+```md
+[answer-box: width=full,height=2in]
+```
+
+That marker is converted before Pandoc runs into a full-width outlined LaTeX answer box with the requested height.
+
 The generator also appends a final page to every booklet headed by `THIS BOOKLET IS FOR:` and then shows `FAMILY_NAME` in all caps and `GIVEN_NAME` in very large type. That final name page is forced onto an even-numbered page. If the next available page would be odd-numbered, the script inserts a preceding blank page with `This page deliberately left blank` at the top.
 
 ## Output filenames

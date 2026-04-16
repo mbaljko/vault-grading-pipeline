@@ -44,6 +44,7 @@ PAGE_BREAK_PATTERN = re.compile(
     r'<div\b[^>]*class\s*=\s*(["\'])[^"\']*\bpage-break\b[^"\']*\1[^>]*>\s*</div>',
     re.IGNORECASE,
 )
+ANSWER_BOX_PATTERN = re.compile(r"^\[answer-box:\s*([^\]]+)\]\s*$", re.IGNORECASE | re.MULTILINE)
 UNICODE_LATEX_REPLACEMENTS = {
     "☐": r"$\square$ ",
     "☑": r"$\boxtimes$ ",
@@ -71,6 +72,14 @@ class StudentRecord:
     participant_id: str
     output_stem: str
     student_data: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class AnswerBoxSpec:
+    """Parsed answer-box marker settings."""
+
+    width: str
+    height: str
 
 
 def parse_args() -> argparse.Namespace:
@@ -213,6 +222,50 @@ def extract_markdown_heading(markdown_text: str, heading_prefix: str) -> str:
         if stripped.startswith(heading_prefix):
             return stripped
     return ""
+
+
+def parse_answer_box_spec(raw_spec: str) -> AnswerBoxSpec:
+    """Parse a markdown answer-box marker specification."""
+    options: dict[str, str] = {}
+    for part in raw_spec.split(","):
+        item = part.strip()
+        if not item:
+            continue
+        if "=" not in item:
+            raise ValueError(f"Invalid answer-box option '{item}'. Expected key=value.")
+        key, value = item.split("=", 1)
+        options[key.strip().lower()] = value.strip()
+
+    width = options.get("width", "full").lower()
+    height = options.get("height")
+
+    if width != "full":
+        raise ValueError(f"Unsupported answer-box width '{width}'. Currently only width=full is supported.")
+    if not height:
+        raise ValueError("Answer-box markers require a height value, for example height=2in.")
+    if not re.fullmatch(r"\d+(?:\.\d+)?(?:in|cm|mm|pt|em|ex)", height):
+        raise ValueError(
+            f"Invalid answer-box height '{height}'. Use a numeric LaTeX length such as 2in or 5cm."
+        )
+
+    return AnswerBoxSpec(width=width, height=height)
+
+
+def build_answer_box_latex(spec: AnswerBoxSpec) -> str:
+    """Build raw LaTeX for a supported answer-box marker."""
+    if spec.width == "full":
+        return f"\n\n\\answerboxfull{{{spec.height}}}\n\n"
+    raise ValueError(f"Unsupported answer-box width '{spec.width}'.")
+
+
+def replace_answer_box_markers(rendered_text: str) -> str:
+    """Replace markdown answer-box markers with raw LaTeX answer boxes."""
+
+    def replacer(match: re.Match[str]) -> str:
+        spec = parse_answer_box_spec(match.group(1))
+        return build_answer_box_latex(spec)
+
+    return ANSWER_BOX_PATTERN.sub(replacer, rendered_text)
 
 
 def escape_latex_text(value: str) -> str:
@@ -390,6 +443,7 @@ def apply_rendering_conversions(rendered_text: str, student_data: dict[str, Any]
     converted_text = rendered_text
     for source, replacement in UNICODE_LATEX_REPLACEMENTS.items():
         converted_text = converted_text.replace(source, replacement)
+    converted_text = replace_answer_box_markers(converted_text)
     converted_text = PAGE_BREAK_PATTERN.sub(lambda _: "\n\n\\newpage\n\n", converted_text)
     converted_text = converted_text.rstrip()
     final_page = (
