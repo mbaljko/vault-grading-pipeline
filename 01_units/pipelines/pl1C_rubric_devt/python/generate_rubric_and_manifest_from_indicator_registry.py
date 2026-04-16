@@ -889,14 +889,26 @@ def parse_alias_mapping(raw_value: str) -> dict[str, str]:
     alias_mapping: dict[str, str] = {}
     for part in raw_value.split(";"):
         normalized = normalize_semicolon_delimited_part(part)
-        if not normalized or "->" not in normalized:
+        if not normalized:
             continue
-        alias_raw, canonical_raw = normalized.split("->", 1)
-        alias = alias_raw.strip()
-        canonical = canonical_raw.strip()
-        if not alias or not canonical:
+        if "<-" in normalized:
+            canonical_raw, aliases_raw = normalized.split("<-", 1)
+            canonical = canonical_raw.strip()
+            if not canonical:
+                continue
+            for alias_raw in aliases_raw.split(","):
+                alias = alias_raw.strip()
+                if not alias:
+                    continue
+                alias_mapping[alias] = canonical
             continue
-        alias_mapping[alias] = canonical
+        if "->" in normalized:
+            alias_raw, canonical_raw = normalized.split("->", 1)
+            alias = alias_raw.strip()
+            canonical = canonical_raw.strip()
+            if not alias or not canonical:
+                continue
+            alias_mapping[alias] = canonical
     return alias_mapping
 
 
