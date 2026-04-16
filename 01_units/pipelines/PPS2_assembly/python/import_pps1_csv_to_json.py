@@ -76,6 +76,7 @@ class AuditRow:
     family_name: str
     output_json_path: str
     dimension_check_fields: dict[str, str]
+    dimension_word_count_fields: dict[str, str]
     position_state_matrix_fields: dict[str, str]
 
 
@@ -174,6 +175,13 @@ def normalize_value(value: str | None) -> str:
     if value is None:
         return ""
     return value.strip()
+
+
+def count_words(value: str | None) -> int:
+    text = normalize_value(value)
+    if not text:
+        return 0
+    return len(re.findall(r"\S+", text))
 
 
 def sanitize_filename(raw_value: str, fallback: str) -> str:
@@ -306,6 +314,19 @@ def build_position_state_matrix_audit_fields(row: dict[str, str]) -> dict[str, s
 
     saturation_rate = (specified_count / len(matrix_columns)) * 100
     audit_fields["Position-State Matrix Saturation Rate"] = f"{saturation_rate:.1f}%"
+    return audit_fields
+
+
+def build_dimension_word_count_audit_fields(
+    schema: ImportSchema,
+    record: dict[str, str],
+) -> dict[str, str]:
+    audit_fields: dict[str, str] = {}
+
+    for dimension in schema.dimensions:
+        audit_fields[f"{dimension}-PPP-word-count"] = str(count_words(record.get(f"{dimension}-PPP")))
+        audit_fields[f"{dimension}-PPS1-word-count"] = str(count_words(record.get(f"{dimension}-PPS1")))
+
     return audit_fields
 
 
@@ -493,6 +514,14 @@ def build_audit_fieldnames(schema: ImportSchema) -> list[str]:
             ]
         )
     fieldnames.append(".")
+    for dimension in schema.dimensions:
+        fieldnames.extend(
+            [
+                f"{dimension}-PPP-word-count",
+                f"{dimension}-PPS1-word-count",
+            ]
+        )
+    fieldnames.append(".")
     fieldnames.extend(
         [
             ".",
@@ -527,6 +556,7 @@ def write_audit_csv(path: Path, schema: ImportSchema, rows: list[AuditRow]) -> N
                 ".": "",
             }
             row_values.update(row.dimension_check_fields)
+            row_values.update(row.dimension_word_count_fields)
             row_values.update(row.position_state_matrix_fields)
             writer.writerow(row_values)
 
@@ -635,6 +665,22 @@ def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> st
     saturation_total = 0.0
     saturation_distribution = {4: 0, 3: 0, 2: 0, 1: 0, 0: 0}
     coverage_group_counts: dict[tuple[str, str], int] = {}
+    recoverable_missing_by_development_type = {
+        "shift": 0,
+        "continuity/reinforcement": 0,
+    }
+    submissions_with_present_by_development_type = {
+        "shift": 0,
+        "continuity/reinforcement": 0,
+    }
+    submissions_with_none_present_by_development_type = {
+        "shift": 0,
+        "continuity/reinforcement": 0,
+    }
+    recoverable_submissions_by_development_type = {
+        "shift": 0,
+        "continuity/reinforcement": 0,
+    }
     missing_pattern_counts = {
         3: {tuple([column_name]): 0 for column_name in matrix_columns},
         2: {},
@@ -652,17 +698,56 @@ def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> st
     for row in rows:
         specified_in_row = 0
         missing_columns_in_row: list[str] = []
+        missing_by_development_type = {
+            "shift": 0,
+            "continuity/reinforcement": 0,
+        }
+        specified_by_development_type = {
+            "shift": 0,
+            "continuity/reinforcement": 0,
+        }
         for column_name in matrix_columns:
             if row.position_state_matrix_fields[column_name]:
                 specified_counts[column_name] += 1
                 specified_in_row += 1
+                development_type = position_state_matrix_labels[column_name]["development_type"]
+                specified_by_development_type[development_type] += 1
             else:
                 missing_columns_in_row.append(column_name)
+                development_type = position_state_matrix_labels[column_name]["development_type"]
+                missing_by_development_type[development_type] += 1
         saturation_value = row.position_state_matrix_fields["Position-State Matrix Saturation Rate"]
         saturation_total += float(saturation_value.rstrip("%"))
         saturation_distribution[specified_in_row] += 1
         if specified_in_row in (3, 2, 1):
             missing_pattern_counts[specified_in_row][tuple(missing_columns_in_row)] += 1
+
+        for development_type in ("shift", "continuity/reinforcement"):
+            if specified_by_development_type[development_type] > 0:
+                submissions_with_present_by_development_type[development_type] += 1
+            else:
+                submissions_with_none_present_by_development_type[development_type] += 1
+
+        has_shift_backfill = any(
+            row.dimension_check_fields[f"{dimension}-check"] == "true"
+            and row.dimension_check_fields[f"{dimension}-shift"] == "true"
+            for dimension in schema.dimensions
+        )
+        has_cont_reinf_backfill = any(
+            row.dimension_check_fields[f"{dimension}-check"] == "true"
+            and row.dimension_check_fields[f"{dimension}-cont-reinf"] == "true"
+            for dimension in schema.dimensions
+        )
+        if has_shift_backfill:
+            recoverable_missing_by_development_type["shift"] += missing_by_development_type["shift"]
+            if specified_by_development_type["shift"] == 0:
+                recoverable_submissions_by_development_type["shift"] += 1
+        if has_cont_reinf_backfill:
+            recoverable_missing_by_development_type["continuity/reinforcement"] += missing_by_development_type[
+                "continuity/reinforcement"
+            ]
+            if specified_by_development_type["continuity/reinforcement"] == 0:
+                recoverable_submissions_by_development_type["continuity/reinforcement"] += 1
 
     for column_name in matrix_columns:
         position_state = position_state_matrix_labels[column_name]["position_state"]
@@ -771,15 +856,34 @@ def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> st
             "",
             "### Position-State Matrix Recovery",
             "",
-            "| position_state | development_type | Missing Entries | % Missing |",
-            "| --- | --- | ---: | ---: |",
+            "| position_state | development_type | Number of Submissions | Submissions with Present (1 or 2) | % Submissions with Present (1 or 2) | Submissions with none Present | % Submissions with none Present |",
+            "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
         ]
     )
     for position_state, development_type, group_count, denominator in recovery_rows:
-        missing_count = denominator - group_count
-        missing_percent = 0.0 if denominator == 0 else (missing_count / denominator) * 100
+        submissions_with_present = submissions_with_present_by_development_type[development_type]
+        submissions_with_none_present = submissions_with_none_present_by_development_type[development_type]
+        present_percent = 0.0 if not rows else (submissions_with_present / len(rows)) * 100
+        missing_percent = 0.0 if not rows else (submissions_with_none_present / len(rows)) * 100
         lines.append(
-            f"| {position_state} | {development_type} | {missing_count} | {missing_percent:.1f}% |"
+            f"| {position_state} | {development_type} | {len(rows)} | {submissions_with_present} | {present_percent:.1f}% | {submissions_with_none_present} | {missing_percent:.1f}% |"
+        )
+    lines.extend(
+        [
+            "",
+            "### Position-State Matrix Recovery from E1",
+            "",
+            "| position_state | development_type | Submissions with none Present | Backfillable from E1 | Not Backfillable | % of Submissions Still none Present Even with Backfill |",
+            "| --- | --- | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for position_state, development_type, group_count, denominator in recovery_rows:
+        missing_count = submissions_with_none_present_by_development_type[development_type]
+        backfillable_count = recoverable_submissions_by_development_type[development_type]
+        not_backfillable_count = missing_count - backfillable_count
+        not_backfillable_percent = 0.0 if not rows else (not_backfillable_count / len(rows)) * 100
+        lines.append(
+            f"| {position_state} | {development_type} | {missing_count} | {backfillable_count} | {not_backfillable_count} | {not_backfillable_percent:.1f}% |"
         )
     lines.extend(
         [
@@ -1004,6 +1108,7 @@ def main() -> int:
                     family_name=record.get(schema.identity_fields.family_name, ""),
                     output_json_path=str(output_path),
                     dimension_check_fields=build_dimension_development_audit_fields(schema, row),
+                    dimension_word_count_fields=build_dimension_word_count_audit_fields(schema, record),
                     position_state_matrix_fields=build_position_state_matrix_audit_fields(row),
                 )
             )
