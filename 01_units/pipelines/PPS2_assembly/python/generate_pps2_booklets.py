@@ -181,17 +181,67 @@ def fill_template(template_text: str, values: dict[str, str]) -> tuple[str, list
     return rendered_text, sorted(unresolved)
 
 
-def apply_rendering_conversions(rendered_text: str) -> str:
+def escape_latex_text(value: str) -> str:
+    """Escape LaTeX-sensitive characters in dynamic text fragments."""
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "{": r"\{",
+        "}": r"\}",
+        "#": r"\#",
+        "$": r"\$",
+        "%": r"\%",
+        "&": r"\&",
+        "_": r"\_",
+        "~": r"\textasciitilde{}",
+        "^": r"\textasciicircum{}",
+    }
+    return "".join(replacements.get(char, char) for char in value)
+
+
+def build_final_page_block(student_data: dict[str, Any]) -> str:
+    """Build the appended final page content from student name fields."""
+    family_name = escape_latex_text(str(student_data.get("FAMILY_NAME") or "").strip().upper())
+    given_name = escape_latex_text(str(student_data.get("GIVEN_NAME") or "").strip())
+
+    if not family_name or not given_name:
+        raise ValueError("Final page requires both FAMILY_NAME and GIVEN_NAME.")
+
+    return (
+        "\\thispagestyle{empty}\n"
+        "\\begin{center}\n"
+        "\\vspace*{\\fill}\n"
+        "{\\fontsize{20}{24}\\selectfont \\bfseries THIS BOOKLET IS FOR:\\par}\n"
+        "\\vspace{2em}\n"
+        "{\\fontsize{36}{44}\\selectfont \\bfseries "
+        f"{family_name}\\par}}\n"
+        "\\vspace{1.5em}\n"
+        "{\\fontsize{36}{44}\\selectfont \\bfseries "
+        f"{given_name}\\par}}\n"
+        "\\vspace*{\\fill}\n"
+        "\\end{center}\n"
+    )
+
+
+def apply_rendering_conversions(rendered_text: str, student_data: dict[str, Any]) -> str:
     """Convert supported source-only markup patterns into Pandoc-friendly output.
 
     This currently translates the HTML page-break marker used in the source markdown
     into a raw LaTeX page break so PDF and emitted .tex output preserve pagination.
-    It also appends a final stamp page to every booklet.
+    It also appends a final even-numbered page showing the student's name.
     """
     converted_text = PAGE_BREAK_PATTERN.sub(lambda _: "\n\n\\newpage\n\n", rendered_text)
     converted_text = converted_text.rstrip()
-    stamp_page = "\n\n\\newpage\n\\thispagestyle{empty}\n\\begin{center}\nSTAMP\n\\end{center}\n"
-    return f"{converted_text}{stamp_page}"
+    final_page = (
+        "\n\n"
+        "\\clearpage\n"
+        "\\ifodd\\value{page}\n"
+        "\\thispagestyle{empty}\n"
+        "\\noindent This page deliberately left blank\\par\n"
+        "\\clearpage\n"
+        "\\fi\n"
+        f"{build_final_page_block(student_data)}"
+    )
+    return f"{converted_text}{final_page}"
 
 
 def ensure_runtime_dependencies() -> tuple[Path | None, str | None]:
@@ -405,7 +455,7 @@ def render_student(
     student_file = student_record.student_file
     context = build_placeholder_context(student_record.student_data)
     rendered_text, unresolved = fill_template(template_text, context)
-    rendered_text = apply_rendering_conversions(rendered_text)
+    rendered_text = apply_rendering_conversions(rendered_text, student_record.student_data)
 
     missing_placeholders = sorted(set(unresolved) | {item for item in placeholders if item not in context})
     if missing_placeholders and not allow_missing:
