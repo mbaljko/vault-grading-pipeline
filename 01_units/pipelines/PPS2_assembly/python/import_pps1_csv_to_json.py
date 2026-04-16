@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Import PPS1 LMS CSV data into per-student JSON files.
 
-The script uses the key layout from a template JSON file, fills fields that can be
-derived from the LMS export, writes one JSON file per CSV row into an "all"
-directory, and copies a random sample into a second directory.
+The output schema, field ordering, and CSV-to-JSON mappings live in an external
+JSON config file so they can be updated without changing Python code.
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+from dataclasses import dataclass
 import json
 import random
 import re
@@ -18,107 +18,123 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_CSV_PATH = Path(
-    "/Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/"
-    "LMS_exported_data/PPS1 - Post-Practice Synthesis, Part 1-411-records-20260416_2145-comma_separated.csv"
-)
-DEFAULT_TEMPLATE_JSON_PATH = Path(
-    "/Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/student_data/S042.json"
-)
-DEFAULT_ALL_OUTPUT_DIR = Path(
-    "/Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/student_data_all"
-)
-DEFAULT_SAMPLE_OUTPUT_DIR = Path(
-    "/Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/student_data"
+DEFAULT_SCHEMA_PATH = Path(
+    "/Users/mb/Documents/vault-grading-pipeline/01_units/pipelines/PPS2_assembly/python/pps1_import_schema.json"
 )
 
-ALL_DIMENSIONS = [
-    "B-1",
-    "B-2",
-    "B-3",
-    "C-1",
-    "C-2",
-    "C-3",
-    "D-1",
-    "D-2",
-    "D-3",
-]
 
-SHORT_TO_DOTTED_DIMENSION = {
-    "B-1": "B.2.1",
-    "B-2": "B.2.2",
-    "B-3": "B.2.3",
-    "C-1": "C.2.1",
-    "C-2": "C.2.2",
-    "C-3": "C.2.3",
-    "D-1": "D.2.1",
-    "D-2": "D.2.2",
-    "D-3": "D.2.3",
-}
+@dataclass(frozen=True)
+class SectionSlot:
+    dim_field: str
+    ppp_field: str | None = None
+    pps1_field: str | None = None
 
-DOTTED_TO_SHORT_DIMENSION = {value: key for key, value in SHORT_TO_DOTTED_DIMENSION.items()}
 
-DIRECT_FIELD_MAP = {
-    "B11Response": "B-1-PPP",
-    "B12Response": "B-2-PPP",
-    "B13Response": "B-3-PPP",
-    "B21Response": "B-1-PPS1",
-    "B22Response": "B-2-PPS1",
-    "B23Response": "B-3-PPS1",
-    "B3 PPS Concept List": "B3 PPS Concept List",
-    "B3Interpretation": "B3Interpretation",
-    "B3Use": "B3Use",
-    "C11Response": "C-1-PPP",
-    "C12Response": "C-2-PPP",
-    "C13Response": "C-3-PPP",
-    "C21Response": "C-1-PPS1",
-    "C22Response": "C-2-PPS1",
-    "C23Response": "C-3-PPS1",
-    "C3 PPS Concept List": "C3 PPS Concept List",
-    "C3Interpretation": "C3Interpretation",
-    "C3Use": "C3Use",
-    "D11Response": "D-1-PPP",
-    "D12Response": "D-2-PPP",
-    "D13Response": "D-3-PPP",
-    "D21Response": "D-1-PPS1",
-    "D22Response": "D-2-PPS1",
-    "D23Response": "D-3-PPS1",
-    "D3 PPS Concept List": "D3 PPS Concept List",
-    "D3Interpretation": "D3Interpretation",
-    "D3Use": "D3Use",
-    "E21Response": "E-1-PPS1",
-    "E22Response": "E-2-PPS1",
-    "E23Response": "E-3-PPS1",
-    "E24Response": "E-4-PPS1",
-    "E25Response": "E-5-PPS1",
-    "GenAIAttestation": "GenAIAttestation",
-}
+@dataclass(frozen=True)
+class ClaimFields:
+    dimension_field: str
+    text_fields: list[str]
 
-GRID_STATUS_MAP = {
-    "E2_00_GridResponse": "stable",
-    "E2_10_GridResponse": "stable",
-    "E2_01_GridResponse": "in tension",
-    "E2_11_GridResponse": "in tension",
-}
+
+@dataclass(frozen=True)
+class IdentityFields:
+    participant_id: str
+    family_name: str
+    given_name: str
+
+
+@dataclass(frozen=True)
+class ParticipantIdentity:
+    given_name: str
+    family_name: str
+
+
+@dataclass(frozen=True)
+class ImportSchema:
+    import_defaults: "ImportDefaults"
+    record_defaults: dict[str, str]
+    dimensions: list[str]
+    short_to_dotted_dimension: dict[str, str]
+    direct_field_map: dict[str, str]
+    grid_status_map: dict[str, str]
+    section1_slots: list[SectionSlot]
+    section2_slots: list[SectionSlot]
+    section3_slots: list[SectionSlot]
+    claim_fields: ClaimFields
+    identity_fields: IdentityFields
+
+
+@dataclass(frozen=True)
+class ImportDefaults:
+    csv_path: Path
+    participants_csv_path: Path
+    all_output_dir: Path
+    sample_output_dir: Path
+    sample_size: int
+
+
+def parse_section_slots(raw_slots: list[dict[str, str]]) -> list[SectionSlot]:
+    return [
+        SectionSlot(
+            dim_field=slot["dim"],
+            ppp_field=slot.get("ppp"),
+            pps1_field=slot.get("pps1"),
+        )
+        for slot in raw_slots
+    ]
+
+
+def load_schema(schema_path: Path) -> ImportSchema:
+    raw_schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+    import_defaults = ImportDefaults(
+        csv_path=Path(raw_schema["importDefaults"]["csvPath"]),
+        participants_csv_path=Path(raw_schema["importDefaults"]["participantsCsvPath"]),
+        all_output_dir=Path(raw_schema["importDefaults"]["allOutputDir"]),
+        sample_output_dir=Path(raw_schema["importDefaults"]["sampleOutputDir"]),
+        sample_size=int(raw_schema["importDefaults"]["sampleSize"]),
+    )
+
+    identity_fields = IdentityFields(
+        participant_id=raw_schema["identityFields"]["participantId"],
+        family_name=raw_schema["identityFields"]["familyName"],
+        given_name=raw_schema["identityFields"]["givenName"],
+    )
+    claim_fields = ClaimFields(
+        dimension_field=raw_schema["claimFields"]["dimension"],
+        text_fields=list(raw_schema["claimFields"]["texts"]),
+    )
+
+    return ImportSchema(
+        import_defaults=import_defaults,
+        record_defaults=dict(raw_schema["recordDefaults"]),
+        dimensions=list(raw_schema["dimensions"]),
+        short_to_dotted_dimension=dict(raw_schema["shortToDottedDimension"]),
+        direct_field_map=dict(raw_schema["directFieldMap"]),
+        grid_status_map=dict(raw_schema["gridStatusMap"]),
+        section1_slots=parse_section_slots(raw_schema["section1Slots"]),
+        section2_slots=parse_section_slots(raw_schema["section2Slots"]),
+        section3_slots=parse_section_slots(raw_schema["section3Slots"]),
+        claim_fields=claim_fields,
+        identity_fields=identity_fields,
+    )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Convert PPS1 LMS CSV rows into per-student JSON files.")
-    parser.add_argument("--csv-path", type=Path, default=DEFAULT_CSV_PATH)
-    parser.add_argument("--template-json", type=Path, default=DEFAULT_TEMPLATE_JSON_PATH)
-    parser.add_argument("--all-output-dir", type=Path, default=DEFAULT_ALL_OUTPUT_DIR)
-    parser.add_argument("--sample-output-dir", type=Path, default=DEFAULT_SAMPLE_OUTPUT_DIR)
-    parser.add_argument("--sample-size", type=int, default=5)
+    parser.add_argument("--csv-path", type=Path)
+    parser.add_argument("--participants-csv-path", type=Path)
+    parser.add_argument("--schema-path", type=Path, default=DEFAULT_SCHEMA_PATH)
+    parser.add_argument("--all-output-dir", type=Path)
+    parser.add_argument("--sample-output-dir", type=Path)
+    parser.add_argument("--sample-size", type=int)
     parser.add_argument("--sample-seed", type=int)
     parser.add_argument("--verbose", action="store_true")
     return parser.parse_args()
 
 
-def load_template_keys(template_json_path: Path) -> list[str]:
-    data = json.loads(template_json_path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError(f"Template JSON must contain an object: {template_json_path}")
-    return list(data.keys())
+def resolve_runtime_value[T](override: T | None, default: T) -> T:
+    return default if override is None else override
 
 
 def normalize_value(value: str | None) -> str:
@@ -143,8 +159,58 @@ def split_user_name(user_value: str, username_value: str) -> tuple[str, str]:
     return " ".join(parts[:-1]), parts[-1]
 
 
-def build_empty_record(template_keys: list[str]) -> dict[str, str]:
-    return {key: "" for key in template_keys}
+def normalize_participant_name(value: str | None) -> str:
+    normalized = normalize_value(value)
+    if normalized == ".":
+        return ""
+    return normalized
+
+
+def load_participant_lookup(participants_csv_path: Path) -> dict[str, ParticipantIdentity]:
+    lookup: dict[str, ParticipantIdentity] = {}
+    with participants_csv_path.open(newline="", encoding="utf-8-sig") as csv_file:
+        reader = csv.DictReader(csv_file)
+        if not reader.fieldnames:
+            raise ValueError(f"Participants CSV has no header row: {participants_csv_path}")
+
+        for row in reader:
+            email = normalize_value(row.get("Email address")).casefold()
+            if not email:
+                continue
+
+            identity = ParticipantIdentity(
+                given_name=normalize_participant_name(row.get("First name")),
+                family_name=normalize_participant_name(row.get("Last name")),
+            )
+            lookup[email] = identity
+            local_part = email.split("@", 1)[0]
+            if local_part:
+                lookup.setdefault(local_part.casefold(), identity)
+
+    return lookup
+
+
+def resolve_names(
+    row: dict[str, str],
+    participant_lookup: dict[str, ParticipantIdentity],
+) -> tuple[str, str]:
+    user_value = normalize_value(row.get("User"))
+    username_value = normalize_value(row.get("Username"))
+    email_value = normalize_value(row.get("Email address")).casefold()
+
+    fallback_given_name, fallback_family_name = split_user_name(user_value, username_value)
+
+    participant = participant_lookup.get(email_value) or participant_lookup.get(username_value.casefold())
+    if participant is None:
+        return fallback_given_name, fallback_family_name
+
+    given_name = participant.given_name or fallback_given_name
+    family_name = participant.family_name or fallback_family_name
+    return given_name, family_name
+
+
+def build_empty_record(schema: ImportSchema) -> dict[str, str]:
+    return dict(schema.record_defaults)
 
 
 def checked(value: str) -> bool:
@@ -162,18 +228,22 @@ def derive_development_value(row: dict[str, str], prefix: str) -> str:
     return ""
 
 
-def populate_status_values(record: dict[str, str], row: dict[str, str]) -> None:
-    for grid_key, status_value in GRID_STATUS_MAP.items():
+def populate_status_values(schema: ImportSchema, record: dict[str, str], row: dict[str, str]) -> None:
+    dotted_to_short_dimension = {
+        value: key for key, value in schema.short_to_dotted_dimension.items()
+    }
+
+    for grid_key, status_value in schema.grid_status_map.items():
         dimension_value = normalize_value(row.get(grid_key))
-        short_dimension = DOTTED_TO_SHORT_DIMENSION.get(dimension_value)
+        short_dimension = dotted_to_short_dimension.get(dimension_value)
         if not short_dimension:
             continue
         record[f"{short_dimension}-status"] = status_value
 
 
-def populate_development_values(record: dict[str, str], row: dict[str, str]) -> None:
-    for dimension in ALL_DIMENSIONS:
-        prefix = SHORT_TO_DOTTED_DIMENSION[dimension].replace(".", "")
+def populate_development_values(schema: ImportSchema, record: dict[str, str], row: dict[str, str]) -> None:
+    for dimension in schema.dimensions:
+        prefix = schema.short_to_dotted_dimension[dimension].replace(".", "")
         record[f"{dimension}-devt"] = derive_development_value(row, prefix)
 
 
@@ -188,65 +258,74 @@ def ordered_unique(values: list[str]) -> list[str]:
     return result
 
 
-def select_section_dimensions(record: dict[str, str]) -> tuple[list[str], list[str], list[str]]:
+def select_section_dimensions(schema: ImportSchema, record: dict[str, str]) -> tuple[list[str], list[str], list[str]]:
     priority = ordered_unique(
-        [dimension for dimension in ALL_DIMENSIONS if record.get(f"{dimension}-status")]
-        + [dimension for dimension in ALL_DIMENSIONS if record.get(f"{dimension}-devt")]
-        + ALL_DIMENSIONS
+        [dimension for dimension in schema.dimensions if record.get(f"{dimension}-status")]
+        + [dimension for dimension in schema.dimensions if record.get(f"{dimension}-devt")]
+        + schema.dimensions
     )
     section1 = priority[:3]
     remaining = [dimension for dimension in priority if dimension not in section1]
     section2 = remaining[:3]
-    tension_dims = [dimension for dimension in ALL_DIMENSIONS if record.get(f"{dimension}-status") == "in tension"]
+    tension_dims = [
+        dimension for dimension in schema.dimensions if record.get(f"{dimension}-status") == "in tension"
+    ]
     tension_priority = ordered_unique(tension_dims + section2 + remaining)
     section3 = tension_priority[:2]
     return section1, section2, section3
 
 
-def populate_section_fields(record: dict[str, str]) -> None:
-    section1_dims, section2_dims, section3_dims = select_section_dimensions(record)
+def populate_section_fields(schema: ImportSchema, record: dict[str, str]) -> None:
+    section1_dims, section2_dims, section3_dims = select_section_dimensions(schema, record)
 
-    for index, dimension in enumerate(section1_dims, start=1):
-        record[f"Sec1_TS{index}_dim"] = SHORT_TO_DOTTED_DIMENSION[dimension]
-        record[f"Sec1_TS{index}_PPP"] = record.get(f"{dimension}-PPP", "")
-        record[f"Sec1_TS{index}_PPS1"] = record.get(f"{dimension}-PPS1", "")
+    for dimension, slot in zip(section1_dims, schema.section1_slots, strict=False):
+        record[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
+        if slot.ppp_field:
+            record[slot.ppp_field] = record.get(f"{dimension}-PPP", "")
+        if slot.pps1_field:
+            record[slot.pps1_field] = record.get(f"{dimension}-PPS1", "")
 
-    for index, dimension in enumerate(section2_dims, start=1):
-        record[f"Sec2_V{index}_dim"] = SHORT_TO_DOTTED_DIMENSION[dimension]
-        record[f"Sec2_V{index}_PPP"] = record.get(f"{dimension}-PPP", "")
-        record[f"Sec2_V{index}_PPS1"] = record.get(f"{dimension}-PPS1", "")
+    for dimension, slot in zip(section2_dims, schema.section2_slots, strict=False):
+        record[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
+        if slot.ppp_field:
+            record[slot.ppp_field] = record.get(f"{dimension}-PPP", "")
+        if slot.pps1_field:
+            record[slot.pps1_field] = record.get(f"{dimension}-PPS1", "")
 
-    for index, dimension in enumerate(section3_dims, start=1):
-        record[f"SecC_T{index}_dim"] = SHORT_TO_DOTTED_DIMENSION[dimension]
-        record[f"SecC_T{index}_PPS1"] = record.get(f"{dimension}-PPS1", "")
+    for dimension, slot in zip(section3_dims, schema.section3_slots, strict=False):
+        record[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
+        if slot.pps1_field:
+            record[slot.pps1_field] = record.get(f"{dimension}-PPS1", "")
 
     if section2_dims:
-        record["CLM_01_dimension"] = SHORT_TO_DOTTED_DIMENSION[section2_dims[0]]
-        record["CLM_01_text"] = record.get(f"{section2_dims[0]}-PPS1", "")
-    if len(section2_dims) > 1:
-        record["CLM_02_text"] = record.get(f"{section2_dims[1]}-PPS1", "")
-    if len(section2_dims) > 2:
-        record["CLM_03_text"] = record.get(f"{section2_dims[2]}-PPS1", "")
+        record[schema.claim_fields.dimension_field] = schema.short_to_dotted_dimension[section2_dims[0]]
+
+    for dimension, claim_field in zip(section2_dims, schema.claim_fields.text_fields, strict=False):
+        record[claim_field] = record.get(f"{dimension}-PPS1", "")
 
 
-def build_record(template_keys: list[str], row: dict[str, str]) -> dict[str, str]:
-    record = build_empty_record(template_keys)
+def build_record(
+    schema: ImportSchema,
+    row: dict[str, str],
+    participant_lookup: dict[str, ParticipantIdentity],
+) -> dict[str, str]:
+    record = build_empty_record(schema)
 
     user_value = normalize_value(row.get("User"))
     username_value = normalize_value(row.get("Username"))
-    given_name, family_name = split_user_name(user_value, username_value)
+    given_name, family_name = resolve_names(row, participant_lookup)
 
-    record["participant_id"] = username_value or sanitize_filename(user_value, "unknown")
-    record["GIVEN_NAME"] = given_name
-    record["FAMILY_NAME"] = family_name
+    record[schema.identity_fields.participant_id] = username_value or sanitize_filename(user_value, "unknown")
+    record[schema.identity_fields.given_name] = given_name
+    record[schema.identity_fields.family_name] = family_name
 
-    for csv_key, json_key in DIRECT_FIELD_MAP.items():
+    for csv_key, json_key in schema.direct_field_map.items():
         if json_key in record:
             record[json_key] = normalize_value(row.get(csv_key))
 
-    populate_development_values(record, row)
-    populate_status_values(record, row)
-    populate_section_fields(record)
+    populate_development_values(schema, record, row)
+    populate_status_values(schema, record, row)
+    populate_section_fields(schema, record)
 
     return record
 
@@ -291,21 +370,34 @@ def duplicate_sample(all_paths: list[Path], sample_output_dir: Path, sample_size
 
 def main() -> int:
     args = parse_args()
-    template_keys = load_template_keys(args.template_json)
-    args.all_output_dir.mkdir(parents=True, exist_ok=True)
+    schema = load_schema(args.schema_path)
+    csv_path = resolve_runtime_value(args.csv_path, schema.import_defaults.csv_path)
+    participants_csv_path = resolve_runtime_value(
+        args.participants_csv_path,
+        schema.import_defaults.participants_csv_path,
+    )
+    all_output_dir = resolve_runtime_value(args.all_output_dir, schema.import_defaults.all_output_dir)
+    sample_output_dir = resolve_runtime_value(
+        args.sample_output_dir,
+        schema.import_defaults.sample_output_dir,
+    )
+    sample_size = resolve_runtime_value(args.sample_size, schema.import_defaults.sample_size)
+
+    participant_lookup = load_participant_lookup(participants_csv_path)
+    all_output_dir.mkdir(parents=True, exist_ok=True)
 
     written_paths: list[Path] = []
     used_names: set[str] = set()
 
-    with args.csv_path.open(newline="", encoding="utf-8-sig") as csv_file:
+    with csv_path.open(newline="", encoding="utf-8-sig") as csv_file:
         reader = csv.DictReader(csv_file)
         if not reader.fieldnames:
-            raise ValueError(f"CSV file has no header row: {args.csv_path}")
+            raise ValueError(f"CSV file has no header row: {csv_path}")
 
         for row_index, row in enumerate(reader, start=1):
-            record = build_record(template_keys, row)
+            record = build_record(schema, row, participant_lookup)
             file_name = make_output_filename(row, used_names, row_index)
-            output_path = args.all_output_dir / file_name
+            output_path = all_output_dir / file_name
             write_json(output_path, record)
             written_paths.append(output_path)
             if args.verbose:
@@ -313,13 +405,13 @@ def main() -> int:
 
     copied_paths = duplicate_sample(
         all_paths=written_paths,
-        sample_output_dir=args.sample_output_dir,
-        sample_size=args.sample_size,
+        sample_output_dir=sample_output_dir,
+        sample_size=sample_size,
         sample_seed=args.sample_seed,
     )
 
-    print(f"Wrote {len(written_paths)} JSON files to {args.all_output_dir}")
-    print(f"Copied {len(copied_paths)} sampled JSON files to {args.sample_output_dir}")
+    print(f"Wrote {len(written_paths)} JSON files to {all_output_dir}")
+    print(f"Copied {len(copied_paths)} sampled JSON files to {sample_output_dir}")
     if args.verbose and copied_paths:
         for copied_path in copied_paths:
             print(f"Sampled {copied_path.name}")

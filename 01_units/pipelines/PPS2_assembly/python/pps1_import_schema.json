@@ -1,4 +1,11 @@
 {
+  "importDefaults": {
+    "csvPath": "/Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/LMS_exported_data/PPS1 - Post-Practice Synthesis, Part 1-411-records-20260416_2145-comma_separated.csv",
+    "participantsCsvPath": "/Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/LMS_exported_data/courseid_164725_participants.csv",
+    "allOutputDir": "/Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/student_data_all",
+    "sampleOutputDir": "/Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/student_data",
+    "sampleSize": 5
+  },
   "identityFields": {
     "participantId": "participant_id",
     "familyName": "FAMILY_NAME",
