@@ -74,6 +74,16 @@ LAYER1_BASE_TABLE_REQUIRED_COLUMNS = {
     "assessment_guidance",
     "evaluation_notes",
 }
+LAYER1_MACHINE_NORMALIZED_BASE_REQUIRED_COLUMNS = {
+    "template_id",
+    "local_slot",
+    "scoring_mode",
+    "dependency_type",
+    "required_layer0_records",
+    "bound_segment_id",
+    "match_policy",
+    "decision_rule",
+}
 LAYER2_REQUIRED_REGISTRY_COLUMNS = {
     "dimension_id",
     *COMMON_EXPLICIT_REQUIRED_COLUMNS,
@@ -722,6 +732,338 @@ def validate_required_columns(
             raise ValueError(f"{table_name} row {row_label!r} is missing required column(s): {missing_columns}")
 
 
+def rows_satisfy_required_columns(rows: list[dict[str, str]], required_columns: set[str]) -> bool:
+    if not rows:
+        return False
+    return all(required_columns.issubset(set(row)) for row in rows)
+
+
+def collect_component_patterns_from_reuse_rows(reuse_rows: list[dict[str, str]]) -> list[str]:
+    patterns: list[str] = []
+    seen: set[str] = set()
+    for reuse_row in reuse_rows:
+        raw_pattern = reuse_row.get("applies_to_component_pattern", "").strip()
+        if raw_pattern:
+            pattern = raw_pattern
+        else:
+            layer0_pattern = reuse_row.get("applies_to_layer0_record_pattern", "").strip()
+            match = re.search(r"source_component_id\s*=\s*([^\s].*?)$", layer0_pattern)
+            if match is None:
+                continue
+            pattern = match.group(1).strip()
+        if pattern and pattern not in seen:
+            seen.add(pattern)
+            patterns.append(pattern)
+    return patterns
+
+
+def derive_component_block(component_id: str) -> str:
+    match = re.search(r"Section([A-Za-z]+)(\d+)Response", component_id)
+    if match is not None:
+        return match.group(2)
+    compact = component_id.strip().replace("Section", "").replace("Response", "")
+    return compact or component_id.strip()
+
+
+def derive_legacy_layer1_indicator_id(component_id: str, local_slot: str) -> str:
+    component_block = derive_component_block(component_id)
+    compact_slot = local_slot.strip().lstrip("0")
+    if compact_slot == "":
+        compact_slot = "0"
+    return f"I{component_block}{compact_slot}"
+
+
+def derive_legacy_layer1_sbo_identifier(assessment_id: str, component_id: str, indicator_id: str) -> str:
+    match = re.search(r"Section([A-Za-z]+)(\d+)Response", component_id)
+    if match is not None:
+        section_prefix = match.group(1)
+        section_number = match.group(2)
+        component_token = f"Sec{section_prefix}{section_number}"
+    else:
+        component_token = component_id.strip()
+    if assessment_id:
+        return f"I_{assessment_id}_{component_token}_{indicator_id}"
+    return f"I_{component_token}_{indicator_id}"
+
+
+def build_machine_normalized_indicator_definition(record: dict[str, str]) -> str:
+    parts: list[str] = []
+    bound_segment_id = record.get("bound_segment_id", "").strip()
+    required_layer0_records = record.get("required_layer0_records", "").strip()
+    dependency_type = record.get("dependency_type", "").strip()
+    match_policy = record.get("match_policy", "").strip()
+    if bound_segment_id:
+        parts.append(f"Evaluate Layer 0 extracted evidence bound to segment {bound_segment_id}.")
+    if required_layer0_records:
+        parts.append(f"Required Layer 0 records: {required_layer0_records}.")
+    if dependency_type:
+        parts.append(f"Dependency type: {dependency_type}.")
+    if match_policy:
+        parts.append(f"Match policy: {match_policy}.")
+    for field_name in ["allowed_terms", "allowed_aliases", "allowed_roles", "required_term_groups", "minimum_match_count_per_group"]:
+        field_value = record.get(field_name, "").strip()
+        if field_value:
+            parts.append(f"{field_name}: {field_value}.")
+    return " ".join(parts).strip()
+
+
+def build_machine_normalized_short_description(record: dict[str, str], item_id: str = "") -> str:
+    existing_description = record.get("sbo_short_description", "").strip()
+    if existing_description:
+        return existing_description
+
+    bound_segment_id = record.get("bound_segment_id", "").strip()
+    match_policy = record.get("match_policy", "").strip().lower()
+    decision_rule = record.get("decision_rule", "").strip().lower()
+    allowed_terms = {value.lower() for value in parse_semicolon_separated_values(record.get("allowed_terms", ""))}
+    allowed_roles = {value.lower() for value in parse_semicolon_separated_values(record.get("allowed_roles", ""))}
+    required_term_groups = parse_semicolon_separated_values(record.get("required_term_groups", ""))
+
+    if {"interact with", "interacts with", "intersect with", "intersects with"} & allowed_terms:
+        return "Claim interaction phrasing"
+    if bound_segment_id in {"DemandA", "DemandB"}:
+        return f"Program criteria or constraints in {bound_segment_id}"
+    if bound_segment_id == "Mechanism":
+        return "Named administrative or review mechanisms"
+    if bound_segment_id == "Workflow":
+        return "Workflow stages or human roles"
+    if bound_segment_id == "Effect" or match_policy == "co_occurrence" or required_term_groups:
+        return "Structural effects on review visibility or discretion"
+    if match_policy == "absence_check" or decision_rule == "present_if_no_excluded_terms_found":
+        return "Non-normative descriptive framing"
+    if allowed_roles & {"administrative staff", "reviewer", "individual reviewer", "committee", "review committee"}:
+        return "Human decision actors named in claim"
+    if allowed_terms & {"administrative staff", "reviewer", "individual reviewer", "committee", "review committee"}:
+        return "Human decision actors named in claim"
+    if bound_segment_id:
+        return f"Indicator over {bound_segment_id}"
+    if item_id:
+        return f"Indicator {item_id}"
+    return "Layer 1 indicator"
+
+
+def build_machine_normalized_indicator_guidance(record: dict[str, str]) -> str:
+    parts: list[str] = []
+    scoring_mode = record.get("scoring_mode", "").strip()
+    normalisation_rule = record.get("normalisation_rule", "").strip()
+    excluded_terms = record.get("excluded_terms", "").strip()
+    if scoring_mode:
+        parts.append(f"Execute in scoring_mode={scoring_mode}.")
+    if normalisation_rule:
+        parts.append(f"Apply normalisation_rule={normalisation_rule} before matching.")
+    if excluded_terms:
+        parts.append(f"Excluded terms: {excluded_terms}.")
+    parts.append("Consume only Layer 0-derived evidence; do not reconstruct omitted source text.")
+    return " ".join(parts).strip()
+
+
+def build_machine_normalized_decision_procedure(record: dict[str, str]) -> str:
+    parts: list[str] = []
+    decision_rule = record.get("decision_rule", "").strip()
+    match_policy = record.get("match_policy", "").strip()
+    if decision_rule:
+        parts.append(f"Apply decision_rule={decision_rule}.")
+    if match_policy:
+        parts.append(f"Use match_policy={match_policy}.")
+    return " ".join(parts).strip()
+
+
+HTML_BREAK_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
+LEADING_LIST_MARKER_RE = re.compile(r"^\s*[-*]\s*")
+
+
+def normalize_semicolon_delimited_part(raw_part: str) -> str:
+    normalized = normalize_markdown_cell(raw_part).strip().strip("`")
+    if not normalized:
+        return ""
+    normalized = HTML_BREAK_RE.sub(" ", normalized)
+    normalized = LEADING_LIST_MARKER_RE.sub("", normalized)
+    return " ".join(normalized.split())
+
+
+def parse_semicolon_separated_values(raw_value: str) -> list[str]:
+    values: list[str] = []
+    seen: set[str] = set()
+    for part in raw_value.split(";"):
+        normalized = normalize_semicolon_delimited_part(part)
+        if not normalized:
+            continue
+        key = normalized.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        values.append(normalized)
+    return values
+
+
+def parse_alias_mapping(raw_value: str) -> dict[str, str]:
+    alias_mapping: dict[str, str] = {}
+    for part in raw_value.split(";"):
+        normalized = normalize_semicolon_delimited_part(part)
+        if not normalized:
+            continue
+        if "<-" in normalized:
+            canonical_raw, aliases_raw = normalized.split("<-", 1)
+            canonical = canonical_raw.strip()
+            if not canonical:
+                continue
+            for alias_raw in aliases_raw.split(","):
+                alias = alias_raw.strip()
+                if not alias:
+                    continue
+                alias_mapping[alias] = canonical
+            continue
+        if "->" in normalized:
+            alias_raw, canonical_raw = normalized.split("->", 1)
+            alias = alias_raw.strip()
+            canonical = canonical_raw.strip()
+            if not alias or not canonical:
+                continue
+            alias_mapping[alias] = canonical
+    return alias_mapping
+
+
+def parse_integer_value(raw_value: str, default: int = 0) -> int:
+    normalized = raw_value.strip()
+    if not normalized:
+        return default
+    try:
+        return int(normalized)
+    except ValueError:
+        return default
+
+
+def build_layer1_indicator_scoring_payload(record: dict[str, str]) -> str:
+    required_term_group_names = parse_semicolon_separated_values(record.get("required_term_groups", ""))
+    required_term_groups = {
+        group_name: parse_semicolon_separated_values(record.get(group_name, ""))
+        for group_name in required_term_group_names
+        if parse_semicolon_separated_values(record.get(group_name, ""))
+    }
+    payload = {
+        "scoring_mode": record.get("scoring_mode", "").strip(),
+        "dependency_type": record.get("dependency_type", "").strip(),
+        "required_layer0_records": parse_semicolon_separated_values(record.get("required_layer0_records", "")),
+        "bound_segment_id": record.get("bound_segment_id", "").strip(),
+        "normalisation_rule": record.get("normalisation_rule", "").strip(),
+        "match_policy": record.get("match_policy", "").strip(),
+        "allowed_terms": parse_semicolon_separated_values(record.get("allowed_terms", "")),
+        "allowed_aliases": parse_alias_mapping(record.get("allowed_aliases", "")),
+        "allowed_roles": parse_semicolon_separated_values(record.get("allowed_roles", "")),
+        "excluded_terms": parse_semicolon_separated_values(record.get("excluded_terms", "")),
+        "required_term_groups": required_term_groups,
+        "minimum_match_count_per_group": parse_integer_value(record.get("minimum_match_count_per_group", ""), default=0),
+        "decision_rule": record.get("decision_rule", "").strip(),
+    }
+    return serialize_scoring_payload(payload)
+
+
+def find_layer1_base_row(
+    base_rows: list[dict[str, str]],
+    *,
+    local_slot: str,
+    bound_segment_id: str,
+) -> dict[str, str] | None:
+    for row in base_rows:
+        if row.get("local_slot", "").strip() != local_slot:
+            continue
+        if row.get("bound_segment_id", "").strip() != bound_segment_id:
+            continue
+        return row
+    return None
+
+
+def build_layer1_indicator_scoring_payload_with_context(
+    record: dict[str, str],
+    base_rows: list[dict[str, str]],
+) -> str:
+    payload = json.loads(build_layer1_indicator_scoring_payload(record))
+    match_policy = str(record.get("match_policy", "") or "").strip()
+    if match_policy != "canonical_inequality":
+        return serialize_scoring_payload(payload)
+
+    demand_a_row = find_layer1_base_row(base_rows, local_slot="01", bound_segment_id="DemandA")
+    demand_b_row = find_layer1_base_row(base_rows, local_slot="02", bound_segment_id="DemandB")
+    if demand_a_row is None or demand_b_row is None:
+        raise ValueError(
+            "canonical_inequality requires active Layer 1 DemandA slot 01 and DemandB slot 02 source rows."
+        )
+
+    payload.update(
+        {
+            "left_segment_id": "DemandA",
+            "right_segment_id": "DemandB",
+            "left_allowed_terms": parse_semicolon_separated_values(demand_a_row.get("allowed_terms", "")),
+            "left_allowed_aliases": parse_alias_mapping(demand_a_row.get("allowed_aliases", "")),
+            "right_allowed_terms": parse_semicolon_separated_values(demand_b_row.get("allowed_terms", "")),
+            "right_allowed_aliases": parse_alias_mapping(demand_b_row.get("allowed_aliases", "")),
+        }
+    )
+    return serialize_scoring_payload(payload)
+
+
+def build_registry_rows_from_machine_normalized_layer1_tables(
+    base_rows: list[dict[str, str]],
+    reuse_rows: list[dict[str, str]],
+    registry_metadata: dict[str, str],
+    include_inactive: bool,
+    layer_config: RegistryLayerConfig,
+) -> list[RegistryRow]:
+    assessment_id = registry_metadata.get("assessment_id", "").strip()
+    component_patterns = collect_component_patterns_from_reuse_rows(reuse_rows)
+    if not component_patterns:
+        raise ValueError(
+            "Machine-normalised Layer 1 registry must declare component patterns in applies_to_component_pattern or applies_to_layer0_record_pattern."
+        )
+
+    rows: list[RegistryRow] = []
+    for component_pattern in component_patterns:
+        for component_id, _ in expand_component_pattern(component_pattern):
+            for base_row in base_rows:
+                effective_status = base_row.get("status", "").strip()
+                if not include_inactive and effective_status and effective_status.lower() != "active":
+                    continue
+
+                local_slot = base_row.get("local_slot", "").strip()
+                item_id = derive_legacy_layer1_indicator_id(component_id, local_slot)
+                sbo_identifier = derive_legacy_layer1_sbo_identifier(assessment_id, component_id, item_id)
+                merged_record = dict(base_row)
+                merged_record.update(
+                    {
+                        "assessment_id": assessment_id,
+                        "component_id": component_id,
+                        "indicator_id": item_id,
+                        "sbo_identifier": sbo_identifier,
+                        "sbo_identifier_shortid": item_id,
+                        "sbo_short_description": build_machine_normalized_short_description(base_row, item_id),
+                        "indicator_definition": build_machine_normalized_indicator_definition(base_row),
+                        "assessment_guidance": build_machine_normalized_indicator_guidance(base_row),
+                        "evaluation_notes": "Follow the machine-normalised registry fields exactly; do not infer undeclared semantics.",
+                        "decision_procedure": build_machine_normalized_decision_procedure(base_row),
+                        "indicator_scoring_payload_json": build_layer1_indicator_scoring_payload_with_context(base_row, base_rows),
+                        "status": effective_status,
+                    }
+                )
+                rows.append(
+                    RegistryRow(
+                        item_id=item_id,
+                        assessment_id=assessment_id,
+                        component_id=component_id,
+                        segment_id="",
+                        sbo_identifier=resolve_sbo_identifier(merged_record),
+                        sbo_identifier_shortid=resolve_sbo_identifier_shortid(merged_record),
+                        sbo_short_description=resolve_short_description(merged_record, layer_config),
+                        definition_text=resolve_definition_text(merged_record, layer_config),
+                        guidance_text=resolve_guidance_text(merged_record, layer_config),
+                        evaluation_notes=resolve_evaluation_notes(merged_record, layer_config),
+                        decision_procedure=resolve_decision_procedure(merged_record),
+                        status=effective_status,
+                        scoring_payload_json=resolve_scoring_payload_json(merged_record, layer_config),
+                    )
+                )
+    return rows
+
+
 def resolve_definition_text(record: dict[str, str], layer_config: RegistryLayerConfig) -> str:
     return resolve_first_present(record, layer_config.definition_field_candidates)
 
@@ -753,6 +1095,8 @@ def resolve_scale_text(record: dict[str, str], layer_config: RegistryLayerConfig
 
 
 def resolve_scoring_payload_json(record: dict[str, str], layer_config: RegistryLayerConfig) -> str:
+    if layer_config.name == "layer1":
+        return record.get("indicator_scoring_payload_json", "").strip()
     if layer_config.name == "layer2":
         return record.get("dimension_scoring_payload_json", "").strip()
     if layer_config.name == "layer3":
@@ -1651,6 +1995,20 @@ def load_registry_rows(
             tables,
             required_columns=layer_base_required_columns,
         )
+    if layer_config.name == "layer1":
+        machine_normalized_layer1_base_rows = collect_section_rows(
+            tables,
+            "base table",
+            required_columns=LAYER1_MACHINE_NORMALIZED_BASE_REQUIRED_COLUMNS,
+            allow_field_value_records=True,
+        )
+        if not machine_normalized_layer1_base_rows:
+            machine_normalized_layer1_base_rows = collect_field_value_records(
+                tables,
+                required_columns=LAYER1_MACHINE_NORMALIZED_BASE_REQUIRED_COLUMNS,
+            )
+        if base_rows and not rows_satisfy_required_columns(base_rows, layer_base_required_columns):
+            base_rows = []
     reuse_table = find_table_by_heading(tables, "reuse rule table")
     component_block_rule_table = find_table_by_heading(tables, "component block rule table")
 
@@ -1725,6 +2083,19 @@ def load_registry_rows(
                 layer_config=layer_config,
                 enrichment_lookup=enrichment_lookup,
             )
+    elif layer_config.name == "layer1" and machine_normalized_layer1_base_rows and reuse_table is not None:
+        validate_required_columns(
+            "Machine-normalised Layer 1 base table",
+            machine_normalized_layer1_base_rows,
+            LAYER1_MACHINE_NORMALIZED_BASE_REQUIRED_COLUMNS,
+        )
+        rows = build_registry_rows_from_machine_normalized_layer1_tables(
+            base_rows=machine_normalized_layer1_base_rows,
+            reuse_rows=list(reuse_table["rows"]),
+            registry_metadata=registry_metadata,
+            include_inactive=include_inactive,
+            layer_config=layer_config,
+        )
     else:
         raise ValueError(
             f"Could not locate a usable {layer_config.item_label.lower()} source in the registry. Expected either a flat {layer_config.item_label.lower()} table "
@@ -2466,6 +2837,10 @@ def render_manifest_document(
         ])
         if layer_config.name == "layer0":
             manifest_row.append(f"`{row.segment_id}`")
+        if layer_config.name == "layer1":
+            if "indicator_scoring_payload_json" not in manifest_headers:
+                manifest_headers.append("indicator_scoring_payload_json")
+            manifest_row.append(row.scoring_payload_json)
         if layer_config.name == "layer2":
             if "dimension_template_id" not in manifest_headers:
                 manifest_headers.extend([

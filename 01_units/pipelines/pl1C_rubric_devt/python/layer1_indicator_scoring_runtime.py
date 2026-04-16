@@ -400,23 +400,13 @@ def canonical_inequality_match(
 		dict(payload.get("right_allowed_aliases", {})),
 		rule,
 	)
+	source_response_text = str(row.get("source_response_text", "") or row.get("response_text", "") or "").strip()
 	if left_canonical and right_canonical:
 		return left_canonical != right_canonical
+	if not left_canonical and not right_canonical:
+		return bool(left_text or right_text or source_response_text)
 	if left_text and right_text:
 		return True
-	source_response_text = str(row.get("source_response_text", "") or row.get("response_text", "") or "").strip()
-	if source_response_text:
-		fallback_canonicals = extract_canonical_mentions_from_text(
-			source_response_text,
-			list(payload.get("left_allowed_terms", [])) + list(payload.get("right_allowed_terms", [])),
-			{
-				**dict(payload.get("left_allowed_aliases", {})),
-				**dict(payload.get("right_allowed_aliases", {})),
-			},
-			rule,
-		)
-		if len(fallback_canonicals) >= 2:
-			return True
 	return bool(left_canonical or right_canonical)
 
 
