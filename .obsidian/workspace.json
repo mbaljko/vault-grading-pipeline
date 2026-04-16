@@ -486,8 +486,12 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "fe3cb8bfbc96d736",
+  "active": "e5174a9fca7b05c1",
   "lastOpenFiles": [
+    "01_units/pipelines/PPS2_assembly/python/generate_pps2_booklets.py",
+    "01_units/pipelines/PPS2_assembly/python/generate_pps2_booklets_README.md",
+    "01_units/pipelines/PPS2_assembly/python",
+    "01_units/pipelines/PPS2_assembly",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate-layer1-indicator-scoring-module.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/test_layer1_indicator_scoring_runtime.py",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/test_layer1_indicator_scoring_runtime.cpython-313.pyc",
@@ -496,9 +500,6 @@
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate_rubric_and_manifest_from_indicator_registry_non_Layer0_consuming.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/layer1_indicator_scoring_runtime.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/execute-layer1-indicator-scoring-modules.py",
-    "01_units/pipelines/pl1C_rubric_devt/python/generate-layer1-indicator-scoring-module.py",
-    "01_units/pipelines/pl1C_rubric_devt/python/layer1_indicator_scoring_runtime.py",
-    "01_units/pipelines/pl1C_rubric_devt/python/build-layer1-input-from-layer0.py",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1C_scaffold_stage13_Layer0_Segmentation_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage00_Generate_Layer0_Segmentation_Prompt.md",
@@ -522,7 +523,6 @@
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - engagement - signal prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage02_Analytic Sub-space Identification.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage01_SubmissionAnalyticBrief_Sec1-3.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage01_AssignmentPayloadSpec.md"
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage01_SubmissionAnalyticBrief_Sec1-3.md"
   ]
 }
