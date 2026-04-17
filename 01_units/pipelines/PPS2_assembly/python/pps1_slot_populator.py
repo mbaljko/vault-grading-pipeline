@@ -1,4 +1,4 @@
-"""Populate PPS1 section-slot and claim fields from dimension-level source fields.
+"""Populate PPS1 section-slot fields from dimension-level source fields.
 
 This module isolates the slot-selection heuristic used by the PPS1 importer.
 It expects a schema-like object that exposes:
@@ -21,25 +21,20 @@ Slots populated by this module:
     - `Sec2_V1_dim`, `Sec2_V1_PPP`, `Sec2_V1_PPS1`
     - `Sec2_V2_dim`, `Sec2_V2_PPP`, `Sec2_V2_PPS1`
     - `Sec2_V3_dim`, `Sec2_V3_PPP`, `Sec2_V3_PPS1`
-- Section 3/4 tension slots:
-    - `Sec3Sec4_T1_dim`, `Sec3Sec4_T1_PPS1`
-    - `Sec3Sec4_T2_dim`, `Sec3Sec4_T2_PPS1`
-- Claim outputs populated during the same step:
-    - `CLM_01_dimension`, `CLM_01_text`, `CLM_02_text`, `CLM_03_text`
+- Section 4 slots:
+    - `Sec4_Slot1_dim`, `Sec4_Slot1_PPS1`
+    - `Sec4_Slot2_dim`, `Sec4_Slot2_PPS1`
+    - `Sec4_Slot3_dim`, `Sec4_Slot3_PPS1`
 
 Selection heuristic:
 
 1. Prefer dimensions with a non-empty `-status` value.
 2. Then prefer dimensions with a non-empty `-devt` value.
 3. Fall back to schema dimension order.
-4. Section 1 takes the first three dimensions from that priority list.
-5. Section 2 takes the next three remaining dimensions.
-6. Section 3/4 tensions prefer dimensions whose `-status` is `in tension`,
-   then reuse the Section 2/remaining order to fill any open slots.
-
-Claim fields are tied to Section 2. `CLM_01_dimension` is the first Section 2
-dimension, and `CLM_01_text` through `CLM_03_text` are populated from the
-matching Section 2 PPS1 values in slot order.
+4. Section 1 takes as many dimensions as there are configured Section 1 slots.
+5. Section 2 takes as many remaining dimensions as there are configured Section 2 slots.
+6. Section 4 prefers dimensions whose `-status` is `in tension`, then reuses
+    the Section 2/remaining order to fill any open slots.
 """
 
 from __future__ import annotations
@@ -48,17 +43,11 @@ from dataclasses import dataclass
 from typing import Protocol
 
 
-CLAIM_DIMENSION_FIELD = "CLM_01_dimension"
-CLAIM_TEXT_FIELDS = ("CLM_01_text", "CLM_02_text", "CLM_03_text")
-
-
 @dataclass(frozen=True)
 class SectionSlot:
     dim_field: str
     ppp_field: str | None = None
     pps1_field: str | None = None
-
-
 class SlotPopulationSchema(Protocol):
     dimensions: list[str]
     short_to_dotted_dimension: dict[str, str]
@@ -82,19 +71,22 @@ def select_section_dimensions(
     schema: SlotPopulationSchema,
     record: dict[str, str],
 ) -> tuple[list[str], list[str], list[str]]:
+    section1_slot_count = len(schema.section1_slots)
+    section2_slot_count = len(schema.section2_slots)
+    section3_slot_count = len(schema.section3_slots)
     priority = ordered_unique(
         [dimension for dimension in schema.dimensions if record.get(f"{dimension}-status")]
         + [dimension for dimension in schema.dimensions if record.get(f"{dimension}-devt")]
         + schema.dimensions
     )
-    section1 = priority[:3]
+    section1 = priority[:section1_slot_count]
     remaining = [dimension for dimension in priority if dimension not in section1]
-    section2 = remaining[:3]
+    section2 = remaining[:section2_slot_count]
     tension_dims = [
         dimension for dimension in schema.dimensions if record.get(f"{dimension}-status") == "in tension"
     ]
     tension_priority = ordered_unique(tension_dims + section2 + remaining)
-    section3 = tension_priority[:2]
+    section3 = tension_priority[:section3_slot_count]
     return section1, section2, section3
 
 
@@ -123,9 +115,3 @@ def populate_section_fields(
         target[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
         if slot.pps1_field:
             target[slot.pps1_field] = source_record.get(f"{dimension}-PPS1", "")
-
-    if section2_dims:
-        target[CLAIM_DIMENSION_FIELD] = schema.short_to_dotted_dimension[section2_dims[0]]
-
-    for dimension, claim_field in zip(section2_dims, CLAIM_TEXT_FIELDS, strict=False):
-        target[claim_field] = source_record.get(f"{dimension}-PPS1", "")

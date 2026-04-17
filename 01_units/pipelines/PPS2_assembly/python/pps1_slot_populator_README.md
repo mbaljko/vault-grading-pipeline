@@ -12,8 +12,8 @@ This module contains the PPS1 importer logic that chooses which dimension rows p
 The module is intentionally narrow. It does not import LMS CSV rows, build base records, or derive `*-devt` and `*-status` values. It only:
 
 - defines the `SectionSlot` dataclass used by the schema loader
-- selects Section 1, Section 2, and Section 3/4 dimensions from an assembled record
-- writes the `Sec1_*`, `Sec2_*`, `Sec3Sec4_*`, and `CLM_*` fields into a target mapping
+- selects Section 1, Section 2, and Section 4 dimensions from an assembled record
+- writes the `Sec1_*`, `Sec2_*`, and `Sec4_Slot*` fields into a target mapping
 
 ## Inputs
 
@@ -38,18 +38,11 @@ The slot order is heuristic, not hard-coded per section.
 1. Dimensions with a non-empty `-status` are prioritized first.
 2. Dimensions with a non-empty `-devt` are prioritized next.
 3. Remaining dimensions fall back to schema order.
-4. Section 1 takes the first three prioritized dimensions.
-5. Section 2 takes the next three remaining dimensions.
-6. Section 3/4 tension slots prefer dimensions whose status is exactly `in tension`, then fall back to the Section 2 / remaining ordering.
+4. Section 1 takes as many prioritized dimensions as there are configured Section 1 slots.
+5. Section 2 takes as many remaining dimensions as there are configured Section 2 slots.
+6. Section 4 slots prefer dimensions whose status is exactly `in tension`, then fall back to the Section 2 / remaining ordering.
 
 This is why a slot such as `Sec1_TS1_dim` can end up as `D.2.1`: if `D-1` is the first prioritized dimension, it is mapped through `short_to_dotted_dimension` and assigned into the first Section 1 slot.
-
-## Claim Fields
-
-Claim fields are populated from the Section 2 selection:
-
-- `CLM_01_dimension` is the first Section 2 dimension
-- `CLM_01_text`, `CLM_02_text`, and `CLM_03_text` are the corresponding Section 2 PPS1 texts in slot order
 
 ## Maintenance Notes
 

@@ -150,14 +150,12 @@
     "Sec2_V3_PPP": "",
     "Sec2_V3_PPS1": "",
     "Sec2_V3_dim": "",
-    "Sec3Sec4_T1_dim": "",
-    "Sec3Sec4_T1_PPS1": "",
-    "Sec3Sec4_T2_dim": "",
-    "Sec3Sec4_T2_PPS1": "",
-    "CLM_01_dimension": "",
-    "CLM_01_text": "",
-    "CLM_02_text": "",
-    "CLM_03_text": ""
+    "Sec4_Slot1_dim": "",
+    "Sec4_Slot1_PPS1": "",
+    "Sec4_Slot2_dim": "",
+    "Sec4_Slot2_PPS1": "",
+    "Sec4_Slot3_dim": "",
+    "Sec4_Slot3_PPS1": ""
   },
   "derivedFieldGroups": {
     "e1Derived": [
@@ -230,14 +228,12 @@
       "Sec2_V3_PPP",
       "Sec2_V3_PPS1",
       "Sec2_V3_dim",
-      "Sec3Sec4_T1_dim",
-      "Sec3Sec4_T1_PPS1",
-      "Sec3Sec4_T2_dim",
-      "Sec3Sec4_T2_PPS1",
-      "CLM_01_dimension",
-      "CLM_01_text",
-      "CLM_02_text",
-      "CLM_03_text"
+      "Sec4_Slot1_dim",
+      "Sec4_Slot1_PPS1",
+      "Sec4_Slot2_dim",
+      "Sec4_Slot2_PPS1",
+      "Sec4_Slot3_dim",
+      "Sec4_Slot3_PPS1"
     ]
   },
   "dimensions": [
@@ -339,12 +335,16 @@
   ],
   "section3Slots": [
     {
-      "dim": "Sec3Sec4_T1_dim",
-      "pps1": "Sec3Sec4_T1_PPS1"
+      "dim": "Sec4_Slot1_dim",
+      "pps1": "Sec4_Slot1_PPS1"
     },
     {
-      "dim": "Sec3Sec4_T2_dim",
-      "pps1": "Sec3Sec4_T2_PPS1"
+      "dim": "Sec4_Slot2_dim",
+      "pps1": "Sec4_Slot2_PPS1"
+    },
+    {
+      "dim": "Sec4_Slot3_dim",
+      "pps1": "Sec4_Slot3_PPS1"
     }
   ]
 }

@@ -49,25 +49,16 @@ Field source summary for generated JSON records:
         plus `shortToDottedDimension` from the schema to assign `stable` or
         `in tension` to the matching dimension.
 - Derived section-slot fields:
-    - `Sec1_TS1_PPP`, `Sec1_TS1_PPS1`, `Sec1_TS1_dim`, `Sec1_TS2_PPP`,
-        `Sec1_TS2_PPS1`, `Sec1_TS2_dim`, `Sec1_TS3_PPP`, `Sec1_TS3_PPS1`,
-        and `Sec1_TS3_dim` are derived from prioritized dimension selection over
-        the populated B/C/D dimension fields.
-    - `Sec2_V1_PPP`, `Sec2_V1_PPS1`, `Sec2_V1_dim`, `Sec2_V2_PPP`,
-        `Sec2_V2_PPS1`, `Sec2_V2_dim`, `Sec2_V3_PPP`, `Sec2_V3_PPS1`, and
-        `Sec2_V3_dim` are derived from the remaining prioritized dimensions after
-        Section 1 is filled.
-    - `Sec3Sec4_T1_dim`, `Sec3Sec4_T1_PPS1`, `Sec3Sec4_T2_dim`, and
-        `Sec3Sec4_T2_PPS1` are derived from dimensions prioritized for
-        `in tension` status.
-    - `CLM_01_dimension`, `CLM_01_text`, `CLM_02_text`, and `CLM_03_text` are
-        also populated during this slot-population step as part of the final
-        flat JSON record declared in `allRecordDefaults`.
-    - In `pps1_import_schema.json`, these slot fields are declared under
-        `derivedFieldGroups.sectionDerived`, and the tension-slot mappings live
-        under `section3Slots`.
-    - The slot-selection and slot-population heuristic lives in
-        `pps1_slot_populator.py`.
+    - `Sec1_TS1_PPP`, `Sec1_TS1_PPS1`, `Sec1_TS1_dim`
+    - `Sec1_TS2_PPP`, `Sec1_TS2_PPS1`, `Sec1_TS2_dim`
+    - `Sec1_TS3_PPP`, `Sec1_TS3_PPS1`, `Sec1_TS3_dim`
+    - `Sec2_V1_PPP`, `Sec2_V1_PPS1`, `Sec2_V1_dim`
+    - `Sec2_V2_PPP`, `Sec2_V2_PPS1`, `Sec2_V2_dim`
+    - `Sec2_V3_PPP`, `Sec2_V3_PPS1`, `Sec2_V3_dim`
+    - `Sec4_Slot1_dim`, `Sec4_Slot1_PPS1`
+    - `Sec4_Slot2_dim`, `Sec4_Slot2_PPS1`
+    - `Sec4_Slot3_dim`, `Sec4_Slot3_PPS1`
+    - See `pps1_slot_populator.py` for slot-population semantics and selection logic.
 - Post-import enrichment fields:
     - `STUDENT_POOL` and `IS_SAMPLE` are not assigned in this importer.
     - They are added later by `promote_pps1_buffered_jsons.py` during post-import
@@ -253,6 +244,34 @@ def parse_section_slots(raw_slots: list[dict[str, str]]) -> list[SectionSlot]:
         )
         for slot in raw_slots
     ]
+def validate_slot_population_fields(
+    all_record_defaults: dict[str, str],
+    derived_field_groups: dict[str, list[str]],
+    section1_slots: list[SectionSlot],
+    section2_slots: list[SectionSlot],
+    section3_slots: list[SectionSlot],
+) -> None:
+    section_derived_fields = set(derived_field_groups.get("sectionDerived", []))
+    slot_fields = [
+        field_name
+        for slot in (*section1_slots, *section2_slots, *section3_slots)
+        for field_name in (slot.dim_field, slot.ppp_field, slot.pps1_field)
+        if field_name
+    ]
+
+    missing_from_all_record_defaults = [field_name for field_name in slot_fields if field_name not in all_record_defaults]
+    if missing_from_all_record_defaults:
+        raise ValueError(
+            "Schema allRecordDefaults is missing slot population fields: "
+            + ", ".join(missing_from_all_record_defaults)
+        )
+
+    missing_from_section_derived = [field_name for field_name in slot_fields if field_name not in section_derived_fields]
+    if missing_from_section_derived:
+        raise ValueError(
+            "Schema derivedFieldGroups.sectionDerived is missing slot population fields: "
+            + ", ".join(missing_from_section_derived)
+        )
 
 
 def load_schema(schema_path: Path) -> ImportSchema:
@@ -280,6 +299,9 @@ def load_schema(schema_path: Path) -> ImportSchema:
         for group_name, field_names in raw_schema.get("derivedFieldGroups", {}).items()
         if isinstance(field_names, list)
     }
+    section1_slots = parse_section_slots(raw_schema["section1Slots"])
+    section2_slots = parse_section_slots(raw_schema["section2Slots"])
+    section3_slots = parse_section_slots(raw_schema["section3Slots"])
 
     expected_all_record_fields = list(record_defaults)
     for group_name, field_names in derived_field_groups.items():
@@ -291,6 +313,14 @@ def load_schema(schema_path: Path) -> ImportSchema:
             "Schema allRecordDefaults is missing fields: " + ", ".join(missing_all_record_fields)
         )
 
+    validate_slot_population_fields(
+        all_record_defaults=all_record_defaults,
+        derived_field_groups=derived_field_groups,
+        section1_slots=section1_slots,
+        section2_slots=section2_slots,
+        section3_slots=section3_slots,
+    )
+
     return ImportSchema(
         import_defaults=import_defaults,
         record_defaults=record_defaults,
@@ -300,9 +330,9 @@ def load_schema(schema_path: Path) -> ImportSchema:
         short_to_dotted_dimension=dict(raw_schema["shortToDottedDimension"]),
         direct_field_map=dict(raw_schema["directFieldMap"]),
         grid_status_map=dict(raw_schema["gridStatusMap"]),
-        section1_slots=parse_section_slots(raw_schema["section1Slots"]),
-        section2_slots=parse_section_slots(raw_schema["section2Slots"]),
-        section3_slots=parse_section_slots(raw_schema["section3Slots"]),
+        section1_slots=section1_slots,
+        section2_slots=section2_slots,
+        section3_slots=section3_slots,
         identity_fields=identity_fields,
     )
 

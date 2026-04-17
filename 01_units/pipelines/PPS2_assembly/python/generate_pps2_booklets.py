@@ -12,16 +12,12 @@ Usage:
 Expected placeholder format:
     {participant_id}
     {PPP_A1_text}
-    {claims.CLM_01_text}
     Table{Sec1_TS1_PPP}{Sec1_TS1_PPS1}
 
 Example student JSON shape:
     {
       "participant_id": "S042",
-      "PPP_A1_text": "Example text",
-      "claims": {
-        "CLM_01_text": "Claim text"
-      }
+            "PPP_A1_text": "Example text"
     }
 """
 
