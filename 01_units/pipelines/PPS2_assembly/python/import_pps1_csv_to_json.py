@@ -31,6 +31,34 @@ DEFAULT_SCHEMA_PATH = Path(
     "/Users/mb/Documents/vault-grading-pipeline/01_units/pipelines/PPS2_assembly/python/pps1_import_schema.json"
 )
 NO_ENTRY_RECEIVED = "[NO ENTRY RECEIVED]"
+CANONICAL_DEVELOPMENT_TYPES = ("cont-reinf", "intro", "shift", "tension")
+DEVELOPMENT_LABEL_PATTERNS: tuple[tuple[str, str], ...] = (
+    (
+        r"(?i)(?:cont(?:inuity)?(?:\W|_)*(?:and(?:\W|_)+)?reinf\w*|contunity(?:\W|_)*reinf\w*|continuity(?:\W|_)*reinforcement|reinforced(?:\W|_)+continuity|continuity)(?=\b|interpretation|explanation)",
+        "cont-reinf",
+    ),
+    (r"(?i)intro(?:duced|duction)?(?=\b|interpretation|explanation)", "intro"),
+    (r"(?i)shift(?:ed|s)?(?=\b|interpretation|explanation)", "shift"),
+    (r"(?i)tension(?=\b|interpretation|explanation)", "tension"),
+)
+PROSE_DEVELOPMENT_PATTERNS: tuple[tuple[str, str], ...] = (
+    (
+        "intro",
+        r"(?i)\b(?:did\s+not\s+(?:directly\s+)?address|did\s+not\s+engage\s+with|had\s+not\s+considered|had\s+not\s+really\s+considered|there\s+was\s+no\s+explicit|there\s+was\s+no\s+institutional\s+perspective|not\s+clearly\s+identified\s+in\s+my\s+ppp|not\s+in\s+my\s+baseline|poorly\s+captured|pretty\s+unsure|came\s+to\s+understand|started\s+to\s+realize|started\s+to\s+realise|began\s+to\s+see|became\s+aware|was\s+introduced|were\s+introduced|this\s+aspect\s+was\s+not\s+clearly\s+identified)\b",
+    ),
+    (
+        "tension",
+        r"(?i)\b(?:in\s+tension|creates?\s+tension|remains?\s+in\s+tension|unresolved\s+tension|conflict\s+between|inconsistency\s+between|competing\s+commitments|both\s+seem\s+true)\b",
+    ),
+    (
+        "cont-reinf",
+        r"(?i)\b(?:did\s+not\s+change|stayed\s+(?:pretty\s+much\s+)?the\s+same|stayed\s+the\s+exact\s+same|stayed\s+more\s+or\s+less\s+the\s+same|remained\s+constant|remained\s+consistent|remained\s+continuous|still\s+held\s+up|held\s+up\s+pretty\s+well|was\s+reinforced|were\s+reinforced|consistently\s+reinforced|continuity\s+reinforcement|continuity\-reinforcement|reinforced\s+rather\s+than\s+replaced|reinforced\s+my|strengthened|fortified|maintained|persisted|in\s+agreement\s+with|was\s+also\s+the\s+case|support(?:ed|s)?\s+this\s+idea|extends\s+the\s+earlier\s+position|not\s+contradicts\s+it|this\s+position\s+was\s+reinforced|my\s+interpretation\s+has\s+been\s+reinforced)\b",
+    ),
+    (
+        "shift",
+        r"(?i)\b(?:change\s+in\s+my\s+viewpoint|shift(?:ed|s)?|changed|move\s+away\s+from|moved\s+away\s+from|move\s+from|moved\s+from|develop(?:ed|s)?\s+into|evolved|reconsider(?:ed)?|represents\s+a\s+shift|reflects\s+a\s+move|move\s+toward|moved\s+toward|transition(?:ed|s)?\s+to|gave\s+way\s+to|this\s+has\s+changed|this\s+develops\s+into|this\s+expanded|further\s+refined\s+into|led\s+me\s+to\s+appreciate|led\s+me\s+to\s+realise|led\s+me\s+to\s+realize)\b",
+    ),
+)
 
 
 @dataclass(frozen=True)
@@ -297,15 +325,39 @@ def canonicalize_development_type(value: str) -> str:
     normalized = normalized.replace("_", " ").replace("/", " ").replace("-", " ")
     normalized = re.sub(r"\s+", " ", normalized).strip()
 
-    if re.search(r"\bshift(?:ed|s)?\b", normalized):
+    for pattern, canonical_value in DEVELOPMENT_LABEL_PATTERNS:
+        if re.search(pattern, normalized):
+            return canonical_value
+    if re.search(r"(?i)signals\s+change", normalized):
         return "shift"
-    if re.search(r"\b(?:cont(?:inuity)?\s*(?:and\s*)?reinf\w*|reinforced\s+continuity|continuity)\b", normalized):
-        return "cont-reinf"
-    if re.search(r"\bintro(?:duced|duction)?\b", normalized):
-        return "intro"
-    if re.search(r"\btension\b", normalized):
-        return "tension"
     return normalized.replace(" ", "-") if normalized else ""
+
+
+def extract_explicit_development_type(text: str) -> str:
+    explicit_matches: list[tuple[int, str]] = []
+    for marker_match in re.finditer(
+        r"(?i)\b(?:type\s+of\s+development|development\s+type|development)\b",
+        text,
+    ):
+        search_text = text[marker_match.end(): marker_match.end() + 240]
+        for pattern, canonical_value in DEVELOPMENT_LABEL_PATTERNS:
+            match = re.search(pattern, search_text)
+            if match:
+                explicit_matches.append((marker_match.start() + match.start(), canonical_value))
+        signals_change_match = re.search(r"(?i)signals\s+change", search_text)
+        if signals_change_match:
+            explicit_matches.append((marker_match.start() + signals_change_match.start(), "shift"))
+
+    if explicit_matches:
+        return min(explicit_matches, key=lambda item: item[0])[1]
+    return ""
+
+
+def infer_development_type_from_prose(text: str) -> str:
+    for canonical_value, pattern in PROSE_DEVELOPMENT_PATTERNS:
+        if re.search(pattern, text):
+            return canonical_value
+    return ""
 
 
 def extract_development_type_from_cleaned_pps1(value: str | None) -> str:
@@ -313,24 +365,13 @@ def extract_development_type_from_cleaned_pps1(value: str | None) -> str:
     if not text or text == NO_ENTRY_RECEIVED:
         return ""
 
-    marker_match = re.search(r"(?i)\b(?:type\s+of\s+development|development\s+type)\b", text)
-    search_text = text[marker_match.end(): marker_match.end() + 160] if marker_match else text[:160]
+    searchable_text = re.sub(r"\s+", " ", text).strip()
 
-    matches: list[tuple[int, str]] = []
-    pattern_to_value = [
-        (r"(?i)\b(?:cont(?:inuity)?\s*(?:and\s*)?reinf\w*|reinforced\s+continuity|continuity)\b", "cont-reinf"),
-        (r"(?i)\bintro(?:duced|duction)?\b", "intro"),
-        (r"(?i)\bshift(?:ed|s)?\b", "shift"),
-        (r"(?i)\btension\b", "tension"),
-    ]
-    for pattern, canonical_value in pattern_to_value:
-        match = re.search(pattern, search_text)
-        if match:
-            matches.append((match.start(), canonical_value))
+    explicit_value = extract_explicit_development_type(searchable_text)
+    if explicit_value:
+        return explicit_value
 
-    if matches:
-        return min(matches, key=lambda item: item[0])[1]
-    return ""
+    return infer_development_type_from_prose(searchable_text)
 
 
 def build_pps1_text_development_fields(schema: ImportSchema, record: dict[str, str]) -> dict[str, str]:
@@ -1178,6 +1219,122 @@ def write_pps1_text_development_csv(
             writer.writerow(row_values)
 
 
+def build_pps1_text_development_summary_report(
+    schema: ImportSchema,
+    rows: list[Pps1TextDevelopmentRow],
+) -> str:
+    total_rows = len(rows)
+    per_dimension_counts: dict[str, dict[str, int]] = {
+        dimension: {development_type: 0 for development_type in CANONICAL_DEVELOPMENT_TYPES}
+        for dimension in schema.dimensions
+    }
+    blank_counts = {dimension: 0 for dimension in schema.dimensions}
+    coverage_counts: dict[int, int] = {count: 0 for count in range(len(schema.dimensions) + 1)}
+    total_extracted = 0
+    rows_with_any = 0
+    rows_with_all = 0
+
+    for row in rows:
+        extracted_for_row = 0
+        for dimension in schema.dimensions:
+            value = row.extracted_development_types.get(dimension, "")
+            if value in CANONICAL_DEVELOPMENT_TYPES:
+                per_dimension_counts[dimension][value] += 1
+                extracted_for_row += 1
+                total_extracted += 1
+            else:
+                blank_counts[dimension] += 1
+        coverage_counts[extracted_for_row] += 1
+        if extracted_for_row > 0:
+            rows_with_any += 1
+        if extracted_for_row == len(schema.dimensions):
+            rows_with_all += 1
+
+    total_slots = total_rows * len(schema.dimensions)
+    missing_slots = total_slots - total_extracted
+    overall_counts = {development_type: 0 for development_type in CANONICAL_DEVELOPMENT_TYPES}
+    for dimension in schema.dimensions:
+        for development_type in CANONICAL_DEVELOPMENT_TYPES:
+            overall_counts[development_type] += per_dimension_counts[dimension][development_type]
+
+    lines = [
+        "# PPS1 Text Development Summary",
+        "",
+        f"- Total student rows: {total_rows}",
+        f"- Rows with at least one extracted development type: {rows_with_any}",
+        f"- Rows with all {len(schema.dimensions)} dimensions extracted: {rows_with_all}",
+        f"- Extracted dimension values: {total_extracted} / {total_slots} ({(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}%)",
+        f"- Missing dimension values: {missing_slots}",
+        "",
+        "## Overall Distribution",
+        "",
+        "| Development Type | Count | Percent of Extracted |",
+        "| --- | ---: | ---: |",
+    ]
+    for development_type in CANONICAL_DEVELOPMENT_TYPES:
+        count = overall_counts[development_type]
+        percent = (100.0 * count / total_extracted) if total_extracted else 0.0
+        lines.append(f"| {development_type} | {count} | {percent:.1f}% |")
+    lines.append(f"| Total | {total_extracted} | 100.0% |")
+
+    lines.extend(
+        [
+            "",
+            "## By Dimension",
+            "",
+            "| Dimension | cont-reinf | intro | shift | tension | blank | extracted % |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for dimension in schema.dimensions:
+        extracted_count = sum(per_dimension_counts[dimension].values())
+        extracted_percent = (100.0 * extracted_count / total_rows) if total_rows else 0.0
+        lines.append(
+            "| "
+            f"{dimension} | "
+            f"{per_dimension_counts[dimension]['cont-reinf']} | "
+            f"{per_dimension_counts[dimension]['intro']} | "
+            f"{per_dimension_counts[dimension]['shift']} | "
+            f"{per_dimension_counts[dimension]['tension']} | "
+            f"{blank_counts[dimension]} | "
+            f"{extracted_percent:.1f}% |"
+        )
+    lines.append(
+        "| "
+        f"Total | "
+        f"{overall_counts['cont-reinf']} | "
+        f"{overall_counts['intro']} | "
+        f"{overall_counts['shift']} | "
+        f"{overall_counts['tension']} | "
+        f"{missing_slots} | "
+        f"{(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}% |"
+    )
+
+    lines.extend(
+        [
+            "",
+            "## Student Coverage",
+            "",
+            "| Extracted Dimensions | Student Rows |",
+            "| ---: | ---: |",
+        ]
+    )
+    for extracted_dimensions in range(len(schema.dimensions), -1, -1):
+        lines.append(f"| {extracted_dimensions} | {coverage_counts[extracted_dimensions]} |")
+    lines.append(f"| Total | {total_rows} |")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_pps1_text_development_summary_report(
+    path: Path,
+    schema: ImportSchema,
+    rows: list[Pps1TextDevelopmentRow],
+) -> None:
+    path.write_text(build_pps1_text_development_summary_report(schema, rows), encoding="utf-8")
+
+
 def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> str:
     def summarize_numeric_values(values: list[int]) -> dict[str, float | int]:
         if not values:
@@ -1946,11 +2103,17 @@ def main() -> int:
     cleaning_audit_path = audit_path.with_name(audit_path.stem + "_cleaning.csv")
     cleaning_audit_summary_path = cleaning_audit_path.with_suffix(".md")
     pps1_text_development_path = audit_path.with_name(audit_path.stem + "_pps1_text_development_types.csv")
+    pps1_text_development_summary_path = pps1_text_development_path.with_suffix(".md")
     write_audit_csv(audit_path, schema, audit_rows)
     write_audit_summary_report(audit_summary_path, schema, audit_rows)
     write_cleaning_audit_csv(cleaning_audit_path, cleaning_audit_rows)
     write_cleaning_audit_summary_report(cleaning_audit_summary_path, cleaning_audit_rows)
     write_pps1_text_development_csv(pps1_text_development_path, schema, pps1_text_development_rows)
+    write_pps1_text_development_summary_report(
+        pps1_text_development_summary_path,
+        schema,
+        pps1_text_development_rows,
+    )
 
     copied_paths = duplicate_sample(
         generated_records=generated_records,
@@ -1965,6 +2128,7 @@ def main() -> int:
     print(f"Wrote cleaning audit CSV to {cleaning_audit_path}")
     print(f"Wrote cleaning audit summary report to {cleaning_audit_summary_path}")
     print(f"Wrote PPS1 text development CSV to {pps1_text_development_path}")
+    print(f"Wrote PPS1 text development summary report to {pps1_text_development_summary_path}")
     print(f"Copied {len(copied_paths)} sampled JSON files to {sample_output_dir}")
     if args.verbose and copied_paths:
         for copied_path in copied_paths:
