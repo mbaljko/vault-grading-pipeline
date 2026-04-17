@@ -48,7 +48,8 @@ PAGE_BREAK_PATTERN = re.compile(
     r'<div\b[^>]*class\s*=\s*(["\'])[^"\']*\bpage-break\b[^"\']*\1[^>]*>\s*</div>',
     re.IGNORECASE,
 )
-ANSWER_BOX_PATTERN = re.compile(r"^\[answer-box:\s*([^\]]+)\]\s*$", re.IGNORECASE | re.MULTILINE)
+ANSWER_BOX_PATTERN = re.compile(r"\[answer-box:\s*([^\]]+)\]", re.IGNORECASE)
+FIRST_APPENDIX_HEADING_PATTERN = re.compile(r"^# APPENDIX:", re.MULTILINE)
 UNICODE_LATEX_REPLACEMENTS = {
     "☐": r"$\square$ ",
     "☑": r"$\boxtimes$ ",
@@ -341,8 +342,10 @@ def parse_answer_box_spec(raw_spec: str) -> AnswerBoxSpec:
     width = options.get("width", "full").lower()
     height = options.get("height")
 
-    if width != "full":
-        raise ValueError(f"Unsupported answer-box width '{width}'. Currently only width=full is supported.")
+    if width not in {"full", "half", "quarter"}:
+        raise ValueError(
+            f"Unsupported answer-box width '{width}'. Supported widths are full, half, and quarter."
+        )
     if not height:
         raise ValueError("Answer-box markers require a height value, for example height=2in.")
     if not re.fullmatch(r"\d+(?:\.\d+)?(?:in|cm|mm|pt|em|ex)", height):
@@ -356,7 +359,11 @@ def parse_answer_box_spec(raw_spec: str) -> AnswerBoxSpec:
 def build_answer_box_latex(spec: AnswerBoxSpec) -> str:
     """Build raw LaTeX for a supported answer-box marker."""
     if spec.width == "full":
-        return f"\n\n\\answerboxfull{{{spec.height}}}\n\n"
+        return f"\\answerboxfull{{{spec.height}}}"
+    if spec.width == "half":
+        return f"\\answerboxhalf{{{spec.height}}}"
+    if spec.width == "quarter":
+        return f"\\answerboxquarter{{{spec.height}}}"
     raise ValueError(f"Unsupported answer-box width '{spec.width}'.")
 
 
@@ -365,9 +372,36 @@ def replace_answer_box_markers(rendered_text: str) -> str:
 
     def replacer(match: re.Match[str]) -> str:
         spec = parse_answer_box_spec(match.group(1))
-        return build_answer_box_latex(spec)
+        line_start = rendered_text.rfind("\n", 0, match.start()) + 1
+        line_end = rendered_text.find("\n", match.end())
+        if line_end == -1:
+            line_end = len(rendered_text)
+        prefix = rendered_text[line_start:match.start()]
+        suffix = rendered_text[match.end():line_end]
+        answer_box = build_answer_box_latex(spec)
+
+        if prefix.strip() or suffix.strip():
+            return f"\\hfill {answer_box}"
+        return f"\n\n{answer_box}\n\n"
 
     return ANSWER_BOX_PATTERN.sub(replacer, rendered_text)
+
+
+def ensure_first_appendix_starts_on_odd_page(rendered_text: str) -> str:
+    """Insert a page gate so the first appendix starts on an odd-numbered page."""
+
+    def replacer(match: re.Match[str]) -> str:
+        return (
+            "\\clearpage\n"
+            "\\ifodd\\value{page}\n"
+            "\\thispagestyle{empty}\n"
+            "\\null\n"
+            "\\clearpage\n"
+            "\\fi\n\n"
+            f"{match.group(0)}"
+        )
+
+    return FIRST_APPENDIX_HEADING_PATTERN.sub(replacer, rendered_text, count=1)
 
 
 def number_question_placeholders(rendered_text: str) -> str:
@@ -569,6 +603,7 @@ def apply_rendering_conversions(rendered_text: str, student_data: dict[str, Any]
         converted_text = converted_text.replace(source, replacement)
     converted_text = replace_answer_box_markers(converted_text)
     converted_text = PAGE_BREAK_PATTERN.sub(lambda _: "\n\n\\newpage\n\n", converted_text)
+    converted_text = ensure_first_appendix_starts_on_odd_page(converted_text)
     converted_text = converted_text.rstrip()
     final_page = (
         "\n\n"
