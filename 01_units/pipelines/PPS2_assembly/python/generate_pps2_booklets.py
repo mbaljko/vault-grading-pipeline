@@ -227,12 +227,12 @@ def build_two_column_latex_block(
 {escape_latex_text(left_header)}
 \\end{{minipage}} & \\begin{{minipage}}[b]{{\\linewidth}}\\raggedright
 {escape_latex_text(right_header)}
-\\end{{minipage}} \\
+\\end{{minipage}} \\\\
 \\midrule\\noalign{{}}
 \\endhead
 \\bottomrule\\noalign{{}}
 \\endlastfoot
-{format_latex_table_cell(left_value)} & {format_latex_table_cell(right_value)} \\
+{format_latex_table_cell(left_value)} & {format_latex_table_cell(right_value)} \\\\
 \\end{{longtable}}
 
 """
