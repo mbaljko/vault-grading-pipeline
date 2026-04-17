@@ -6,6 +6,8 @@ This workflow converts the exported PPS1 LMS CSV into one JSON file per student 
 
 - Script: `/Users/mb/Documents/vault-grading-pipeline/01_units/pipelines/PPS2_assembly/python/import_pps1_csv_to_json.py`
 - Schema/config: `/Users/mb/Documents/vault-grading-pipeline/01_units/pipelines/PPS2_assembly/python/pps1_import_schema.json`
+- Slot module: `/Users/mb/Documents/vault-grading-pipeline/01_units/pipelines/PPS2_assembly/python/pps1_slot_populator.py`
+- Slot module docs: `/Users/mb/Documents/vault-grading-pipeline/01_units/pipelines/PPS2_assembly/python/pps1_slot_populator_README.md`
 
 ## What it does
 
@@ -13,7 +15,7 @@ This workflow converts the exported PPS1 LMS CSV into one JSON file per student 
 - Maps LMS columns into the JSON fields used by the PPS2 workflow.
 - Derives `*-devt` fields from the `*_shift`, `*_cont`, and `*_intro` columns.
 - Derives `*-status` fields from the `E2_*_GridResponse` columns.
-- Populates the `Sec1_*`, `Sec2_*`, `Sec3Sec4_*`, and `CLM_*` fields heuristically from the available dimension data.
+- Populates the `Sec1_*`, `Sec2_*`, `Sec3Sec4_*`, and `CLM_*` fields heuristically from the available dimension data via the dedicated slot-populator module.
 - Writes one JSON per row into `student_data_all`.
 - Writes an audit CSV with one row per imported LMS row.
 - Writes a Markdown sidecar summary report next to the audit CSV.
@@ -77,5 +79,5 @@ This also writes the audit CSV configured at `auditPath` and a Markdown sidecar 
 - For each dimension `B-1` through `D-3`, the audit includes `*-shift`, `*-cont-reinf`, `*-intro`, `*-check`, and `*-err` columns. `*-check` is `true` only when exactly one development-type box is selected; otherwise `*-err` is `none selected` or `multiple selected`.
 - The audit also records the four Position-State Matrix columns `E2_00_GridResponse`, `E2_10_GridResponse`, `E2_01_GridResponse`, and `E2_11_GridResponse`, plus a per-row `Position-State Matrix Saturation Rate` showing what percentage of those four fields are specified.
 - The Markdown sidecar summary report counts, for each dimension, how many rows passed the check, had no development type selected, or had multiple development types selected, and it also summarizes Position-State Matrix coverage and saturation distribution with both counts and percentages.
-- Section-selection logic is heuristic. If the PPS2 booklet structure changes, update the schema first and only change Python when selection logic itself must change.
+- Section-selection logic is heuristic and now lives in `pps1_slot_populator.py`. If the PPS2 booklet structure changes, update the schema first and only change Python when selection logic itself must change.
 - The sampled set can therefore be larger than `sampleSize`, because the three coverage cases are added on top of the random sample when they are not already included.

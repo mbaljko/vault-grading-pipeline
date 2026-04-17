@@ -13,31 +13,61 @@ Field source summary for generated JSON records:
         `directFieldMap` in the external schema file.
     - Text cleaning is applied only to columns selected by
         `should_clean_lms_text_column`.
-- PPS1-specific derived fields, from Secion B, C, and D responses, Subsection *.2.*:        
-    - `{B,C,D}-{1,2,3}-devt_tagset` is derived from extraction over the cleaned
-        Section B, C, and D subsection 2 response text.
-    - `{B,C,D}-{1,2,3}_indicator_health_srcBCD2` is derived from the same B/C/D.2
+- Derived fields from cleaned B/C/D.2 response text:
+    - `B-1-devt_tagset`, `B-2-devt_tagset`, `B-3-devt_tagset`,
+        `C-1-devt_tagset`, `C-2-devt_tagset`, `C-3-devt_tagset`,
+        `D-1-devt_tagset`, `D-2-devt_tagset`, and `D-3-devt_tagset` are
+        derived from extraction over the cleaned Section B, C, and D
+        subsection 2 response text.
+    - `B-1_indicator_health_srcBCD2`, `B-2_indicator_health_srcBCD2`,
+        `B-3_indicator_health_srcBCD2`, `C-1_indicator_health_srcBCD2`,
+        `C-2_indicator_health_srcBCD2`, `C-3_indicator_health_srcBCD2`,
+        `D-1_indicator_health_srcBCD2`, `D-2_indicator_health_srcBCD2`, and
+        `D-3_indicator_health_srcBCD2` are derived from the same B/C/D.2
         extraction as `*-devt_tagset`: health `2` means a tagset value was
         extracted and health `0` means no value was extracted.
 - E1-derived development fields:
-    - `{B,C,D}-{1,2,3}-devt` fields are derived from the E1 development-type
-        checkbox columns in the LMS export.
+    - `B-1-devt`, `B-2-devt`, `B-3-devt`, `C-1-devt`, `C-2-devt`, `C-3-devt`,
+        `D-1-devt`, `D-2-devt`, and `D-3-devt` are derived from the E1
+        development-type checkbox columns in the LMS export.
     - For a dotted dimension prefix such as `B21`, the code reads
         `{prefix}_shift`, `{prefix}_cont`, and `{prefix}_intro` and maps the checked
         value to `Shift`, `Cont/Reinf`, or `Intro`.
-    - `{B,C,D}-{1,2,3}_indicator_health_srcE1` fields are derived from the same E1
-        checkbox source as `*-devt`: health `2` means exactly one checkbox selected,
+    - `B-1_indicator_health_srcE1`, `B-2_indicator_health_srcE1`,
+        `B-3_indicator_health_srcE1`, `C-1_indicator_health_srcE1`,
+        `C-2_indicator_health_srcE1`, `C-3_indicator_health_srcE1`,
+        `D-1_indicator_health_srcE1`, `D-2_indicator_health_srcE1`, and
+        `D-3_indicator_health_srcE1` are derived from the same E1 checkbox
+        source as `*-devt`: health `2` means exactly one checkbox selected,
         health `1` means multiple selected, and health `0` means none selected.
 - E2-derived status fields:
-    - `{B,C,D}-{1,2,3}-status` fields are derived from the E2 position-state matrix.
+    - `B-1-status`, `B-2-status`, `B-3-status`, `C-1-status`, `C-2-status`,
+        `C-3-status`, `D-1-status`, `D-2-status`, and `D-3-status` are
+        derived from the E2 position-state matrix.
     - The importer reads `E2_00_GridResponse`, `E2_10_GridResponse`,
         `E2_01_GridResponse`, and `E2_11_GridResponse`, then uses `gridStatusMap`
         plus `shortToDottedDimension` from the schema to assign `stable` or
         `in tension` to the matching dimension.
-- Derived section and claim fields:
-    - Fields such as `Sec1_TS1_*`, `Sec2_V*`, `Sec3Sec4_*`, `CLM_01_dimension`,
-        and `CLM_0*_text` are derived from the populated B/C/D dimension fields after
-        `*-devt` and `*-status` have been assigned.
+- Derived section-slot fields:
+    - `Sec1_TS1_PPP`, `Sec1_TS1_PPS1`, `Sec1_TS1_dim`, `Sec1_TS2_PPP`,
+        `Sec1_TS2_PPS1`, `Sec1_TS2_dim`, `Sec1_TS3_PPP`, `Sec1_TS3_PPS1`,
+        and `Sec1_TS3_dim` are derived from prioritized dimension selection over
+        the populated B/C/D dimension fields.
+    - `Sec2_V1_PPP`, `Sec2_V1_PPS1`, `Sec2_V1_dim`, `Sec2_V2_PPP`,
+        `Sec2_V2_PPS1`, `Sec2_V2_dim`, `Sec2_V3_PPP`, `Sec2_V3_PPS1`, and
+        `Sec2_V3_dim` are derived from the remaining prioritized dimensions after
+        Section 1 is filled.
+    - `Sec3Sec4_T1_dim`, `Sec3Sec4_T1_PPS1`, `Sec3Sec4_T2_dim`, and
+        `Sec3Sec4_T2_PPS1` are derived from dimensions prioritized for
+        `in tension` status.
+    - `CLM_01_dimension`, `CLM_01_text`, `CLM_02_text`, and `CLM_03_text` are
+        also populated during this slot-population step as part of the final
+        flat JSON record declared in `allRecordDefaults`.
+    - In `pps1_import_schema.json`, these slot fields are declared under
+        `derivedFieldGroups.sectionDerived`, and the tension-slot mappings live
+        under `section3Slots`.
+    - The slot-selection and slot-population heuristic lives in
+        `pps1_slot_populator.py`.
 - Post-import enrichment fields:
     - `STUDENT_POOL` and `IS_SAMPLE` are not assigned in this importer.
     - They are added later by `promote_pps1_buffered_jsons.py` during post-import
@@ -48,6 +78,8 @@ Field source summary for generated JSON records:
 
 The output schema, field ordering, and CSV-to-JSON mappings live in an external
 JSON config file so they can be updated without changing Python code.
+`recordDefaults` holds the base LMS-mapped fields, while `allRecordDefaults`
+declares the complete final flat JSON record including all derived outputs.
 """
 
 from __future__ import annotations
@@ -190,6 +222,7 @@ class Pps1TextDevelopmentRow:
 class ImportSchema:
     import_defaults: "ImportDefaults"
     record_defaults: dict[str, str]
+    all_record_defaults: dict[str, str]
     derived_field_groups: dict[str, list[str]]
     dimensions: list[str]
     short_to_dotted_dimension: dict[str, str]
@@ -239,14 +272,30 @@ def load_schema(schema_path: Path) -> ImportSchema:
         family_name=raw_schema["identityFields"]["familyName"],
         given_name=raw_schema["identityFields"]["givenName"],
     )
+
+    record_defaults = dict(raw_schema["recordDefaults"])
+    all_record_defaults = dict(raw_schema.get("allRecordDefaults", raw_schema["recordDefaults"]))
+    derived_field_groups = {
+        str(group_name): [str(field_name) for field_name in field_names]
+        for group_name, field_names in raw_schema.get("derivedFieldGroups", {}).items()
+        if isinstance(field_names, list)
+    }
+
+    expected_all_record_fields = list(record_defaults)
+    for group_name, field_names in derived_field_groups.items():
+        expected_all_record_fields.extend(field_names)
+
+    missing_all_record_fields = [field_name for field_name in expected_all_record_fields if field_name not in all_record_defaults]
+    if missing_all_record_fields:
+        raise ValueError(
+            "Schema allRecordDefaults is missing fields: " + ", ".join(missing_all_record_fields)
+        )
+
     return ImportSchema(
         import_defaults=import_defaults,
-        record_defaults=dict(raw_schema["recordDefaults"]),
-        derived_field_groups={
-            str(group_name): [str(field_name) for field_name in field_names]
-            for group_name, field_names in raw_schema.get("derivedFieldGroups", {}).items()
-            if isinstance(field_names, list)
-        },
+        record_defaults=record_defaults,
+        all_record_defaults=all_record_defaults,
+        derived_field_groups=derived_field_groups,
         dimensions=list(raw_schema["dimensions"]),
         short_to_dotted_dimension=dict(raw_schema["shortToDottedDimension"]),
         direct_field_map=dict(raw_schema["directFieldMap"]),
@@ -666,7 +715,8 @@ def assemble_record(
     base_record: dict[str, str],
     derived_blocks: dict[str, dict[str, str]],
 ) -> dict[str, str]:
-    assembled = dict(base_record)
+    assembled = dict(schema.all_record_defaults)
+    assembled.update(base_record)
     for group_name in schema.derived_field_groups:
         assembled.update(derived_blocks.get(group_name, {}))
     return assembled
@@ -827,17 +877,6 @@ def populate_development_tagset_values(schema: ImportSchema, target: dict[str, s
         extracted_value = extract_development_type_from_cleaned_pps1(source_record.get(f"{dimension}-PPS1"))
         target[f"{dimension}-devt_tagset"] = extracted_value
         target[f"{dimension}_indicator_health_srcBCD2"] = derive_indicator_health_src_bcd2(extracted_value)
-
-
-def ordered_unique(values: list[str]) -> list[str]:
-    seen: set[str] = set()
-    result: list[str] = []
-    for value in values:
-        if value in seen:
-            continue
-        seen.add(value)
-        result.append(value)
-    return result
 
 
 def build_record(

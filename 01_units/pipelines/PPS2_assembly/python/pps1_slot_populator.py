@@ -11,6 +11,22 @@ The source record is the already-assembled flat record containing direct LMS
 fields plus the derived `*-devt` and `*-status` fields. The target mapping is
 typically the importer's `sectionDerived` block.
 
+Slots populated by this module:
+
+- Section 1 slots:
+    - `Sec1_TS1_dim`, `Sec1_TS1_PPP`, `Sec1_TS1_PPS1`
+    - `Sec1_TS2_dim`, `Sec1_TS2_PPP`, `Sec1_TS2_PPS1`
+    - `Sec1_TS3_dim`, `Sec1_TS3_PPP`, `Sec1_TS3_PPS1`
+- Section 2 slots:
+    - `Sec2_V1_dim`, `Sec2_V1_PPP`, `Sec2_V1_PPS1`
+    - `Sec2_V2_dim`, `Sec2_V2_PPP`, `Sec2_V2_PPS1`
+    - `Sec2_V3_dim`, `Sec2_V3_PPP`, `Sec2_V3_PPS1`
+- Section 3/4 tension slots:
+    - `Sec3Sec4_T1_dim`, `Sec3Sec4_T1_PPS1`
+    - `Sec3Sec4_T2_dim`, `Sec3Sec4_T2_PPS1`
+- Claim outputs populated during the same step:
+    - `CLM_01_dimension`, `CLM_01_text`, `CLM_02_text`, `CLM_03_text`
+
 Selection heuristic:
 
 1. Prefer dimensions with a non-empty `-status` value.
