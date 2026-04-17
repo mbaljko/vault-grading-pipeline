@@ -70,6 +70,7 @@ if str(APPS_DIR) not in sys.path:
     sys.path.insert(0, str(APPS_DIR))
 
 from lms_text_cleaning import clean_lms_text, should_clean_lms_text_column
+from pps1_slot_populator import SectionSlot, populate_section_fields
 
 
 DEFAULT_SCHEMA_PATH = Path(
@@ -104,19 +105,6 @@ PROSE_DEVELOPMENT_PATTERNS: tuple[tuple[str, str], ...] = (
         r"(?i)\b(?:change\s+in\s+my\s+viewpoint|shift(?:ed|s)?|changed|move\s+away\s+from|moved\s+away\s+from|move\s+from|moved\s+from|develop(?:ed|s)?\s+into|evolved|reconsider(?:ed)?|represents\s+a\s+shift|reflects\s+a\s+move|move\s+toward|moved\s+toward|transition(?:ed|s)?\s+to|gave\s+way\s+to|this\s+has\s+changed|this\s+develops\s+into|this\s+expanded|further\s+refined\s+into|led\s+me\s+to\s+appreciate|led\s+me\s+to\s+realise|led\s+me\s+to\s+realize)\b",
     ),
 )
-
-
-@dataclass(frozen=True)
-class SectionSlot:
-    dim_field: str
-    ppp_field: str | None = None
-    pps1_field: str | None = None
-
-
-@dataclass(frozen=True)
-class ClaimFields:
-    dimension_field: str
-    text_fields: list[str]
 
 
 @dataclass(frozen=True)
@@ -210,7 +198,6 @@ class ImportSchema:
     section1_slots: list[SectionSlot]
     section2_slots: list[SectionSlot]
     section3_slots: list[SectionSlot]
-    claim_fields: ClaimFields
     identity_fields: IdentityFields
 
 
@@ -252,11 +239,6 @@ def load_schema(schema_path: Path) -> ImportSchema:
         family_name=raw_schema["identityFields"]["familyName"],
         given_name=raw_schema["identityFields"]["givenName"],
     )
-    claim_fields = ClaimFields(
-        dimension_field=raw_schema["claimFields"]["dimension"],
-        text_fields=list(raw_schema["claimFields"]["texts"]),
-    )
-
     return ImportSchema(
         import_defaults=import_defaults,
         record_defaults=dict(raw_schema["recordDefaults"]),
@@ -272,7 +254,6 @@ def load_schema(schema_path: Path) -> ImportSchema:
         section1_slots=parse_section_slots(raw_schema["section1Slots"]),
         section2_slots=parse_section_slots(raw_schema["section2Slots"]),
         section3_slots=parse_section_slots(raw_schema["section3Slots"]),
-        claim_fields=claim_fields,
         identity_fields=identity_fields,
     )
 
@@ -857,52 +838,6 @@ def ordered_unique(values: list[str]) -> list[str]:
         seen.add(value)
         result.append(value)
     return result
-
-
-def select_section_dimensions(schema: ImportSchema, record: dict[str, str]) -> tuple[list[str], list[str], list[str]]:
-    priority = ordered_unique(
-        [dimension for dimension in schema.dimensions if record.get(f"{dimension}-status")]
-        + [dimension for dimension in schema.dimensions if record.get(f"{dimension}-devt")]
-        + schema.dimensions
-    )
-    section1 = priority[:3]
-    remaining = [dimension for dimension in priority if dimension not in section1]
-    section2 = remaining[:3]
-    tension_dims = [
-        dimension for dimension in schema.dimensions if record.get(f"{dimension}-status") == "in tension"
-    ]
-    tension_priority = ordered_unique(tension_dims + section2 + remaining)
-    section3 = tension_priority[:2]
-    return section1, section2, section3
-
-
-def populate_section_fields(schema: ImportSchema, target: dict[str, str], source_record: dict[str, str]) -> None:
-    section1_dims, section2_dims, section3_dims = select_section_dimensions(schema, source_record)
-
-    for dimension, slot in zip(section1_dims, schema.section1_slots, strict=False):
-        target[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
-        if slot.ppp_field:
-            target[slot.ppp_field] = source_record.get(f"{dimension}-PPP", "")
-        if slot.pps1_field:
-            target[slot.pps1_field] = source_record.get(f"{dimension}-PPS1", "")
-
-    for dimension, slot in zip(section2_dims, schema.section2_slots, strict=False):
-        target[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
-        if slot.ppp_field:
-            target[slot.ppp_field] = source_record.get(f"{dimension}-PPP", "")
-        if slot.pps1_field:
-            target[slot.pps1_field] = source_record.get(f"{dimension}-PPS1", "")
-
-    for dimension, slot in zip(section3_dims, schema.section3_slots, strict=False):
-        target[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
-        if slot.pps1_field:
-            target[slot.pps1_field] = source_record.get(f"{dimension}-PPS1", "")
-
-    if section2_dims:
-        target[schema.claim_fields.dimension_field] = schema.short_to_dotted_dimension[section2_dims[0]]
-
-    for dimension, claim_field in zip(section2_dims, schema.claim_fields.text_fields, strict=False):
-        target[claim_field] = source_record.get(f"{dimension}-PPS1", "")
 
 
 def build_record(

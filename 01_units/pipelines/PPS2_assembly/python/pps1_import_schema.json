@@ -237,13 +237,5 @@
       "dim": "Sec3Sec4_T2_dim",
       "pps1": "Sec3Sec4_T2_PPS1"
     }
-  ],
-  "claimFields": {
-    "dimension": "CLM_01_dimension",
-    "texts": [
-      "CLM_01_text",
-      "CLM_02_text",
-      "CLM_03_text"
-    ]
-  }
+  ]
 }
