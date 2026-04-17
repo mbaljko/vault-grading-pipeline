@@ -4,7 +4,11 @@ from __future__ import annotations
 import argparse
 import json
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
+import re
+
+from pps1_slot_populator import select_section_dimensions
 
 
 DEFAULT_INPUT_ROOT = Path(
@@ -54,6 +58,39 @@ CONVERGED_HEALTH_ORDER = (
     "asserted-alongside-intro",
     "reinforced",
     "conflict",
+)
+SECTION1_SLOT_FIELDS = ("Sec1_TS1_dim", "Sec1_TS2_dim", "Sec1_TS3_dim")
+SECTION2_SLOT_FIELDS = ("Sec2_V1_dim", "Sec2_V2_dim", "Sec2_V3_dim")
+SECTION3_SLOT_FIELDS = ("Sec4_Slot1_dim", "Sec4_Slot2_dim", "Sec4_Slot3_dim")
+ALL_SLOT_FIELDS = SECTION1_SLOT_FIELDS + SECTION2_SLOT_FIELDS + SECTION3_SLOT_FIELDS
+HUMAN_FRIENDLY_TO_SHORT_DIMENSION = {
+    "Institutional structures and organisational arrangements": "B-1",
+    "Responsibility and accountability distribution": "B-2",
+    "Institutional influence, constraint, and authority": "B-3",
+    "Justice, accessibility, and harm": "C-1",
+    "Assumptions about neutrality, efficiency, fairness, or objectivity": "C-2",
+    "Criteria for identifying harm, exclusion, or accessibility barriers": "C-3",
+    "Human responsibility vs AI-mediated delegation of responsibility": "D-1",
+    "AI-mediated oversight, uncertainty, and verification practices": "D-2",
+    "Role of tools or AI systems in shaping professional judgement": "D-3",
+}
+
+
+@dataclass(frozen=True)
+class SlotAnalysisSchema:
+    dimensions: list[str]
+    short_to_dotted_dimension: dict[str, str]
+    section1_slots: list[str]
+    section2_slots: list[str]
+    section3_slots: list[str]
+
+
+SLOT_ANALYSIS_SCHEMA = SlotAnalysisSchema(
+    dimensions=list(DIMENSIONS),
+    short_to_dotted_dimension={},
+    section1_slots=list(SECTION1_SLOT_FIELDS),
+    section2_slots=list(SECTION2_SLOT_FIELDS),
+    section3_slots=list(SECTION3_SLOT_FIELDS),
 )
 
 
@@ -873,6 +910,192 @@ def build_shift_count_distribution_analysis(records: list[dict[str, object]]) ->
     return lines
 
 
+def normalize_slot_dimension(value: object) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return ""
+    if normalized in HUMAN_FRIENDLY_TO_SHORT_DIMENSION:
+        return HUMAN_FRIENDLY_TO_SHORT_DIMENSION[normalized]
+    short_match = re.match(r"^([BCD]-\d)\b", normalized)
+    if short_match:
+        return short_match.group(1)
+    dotted_match = re.match(r"^([BCD])\.2\.(\d)\b", normalized)
+    if dotted_match:
+        return f"{dotted_match.group(1)}-{dotted_match.group(2)}"
+    return normalized
+
+
+def normalize_payload_for_slot_analysis(payload: dict[str, object]) -> dict[str, str]:
+    return {str(key): "" if value is None else str(value) for key, value in payload.items()}
+
+
+def get_actual_slot_dimensions(payload: dict[str, object]) -> dict[str, str]:
+    return {field: normalize_slot_dimension(payload.get(field)) for field in ALL_SLOT_FIELDS}
+
+
+def get_expected_slot_dimensions(payload: dict[str, object]) -> dict[str, str]:
+    normalized_payload = normalize_payload_for_slot_analysis(payload)
+    section1, section2, section3 = select_section_dimensions(SLOT_ANALYSIS_SCHEMA, normalized_payload)
+    return {
+        **dict(zip(SECTION1_SLOT_FIELDS, section1, strict=False)),
+        **dict(zip(SECTION2_SLOT_FIELDS, section2, strict=False)),
+        **dict(zip(SECTION3_SLOT_FIELDS, section3, strict=False)),
+    }
+
+
+def format_slot_value(value: str) -> str:
+    return value or ""
+
+
+def duplicate_slot_dimensions(actual_dimensions: dict[str, str]) -> list[str]:
+    counts: dict[str, int] = defaultdict(int)
+    for field in SECTION1_SLOT_FIELDS + SECTION2_SLOT_FIELDS:
+        dimension = actual_dimensions.get(field, "")
+        if dimension:
+            counts[dimension] += 1
+    return [dimension for dimension, count in sorted(counts.items()) if count > 1]
+
+
+def same_family_non_tension_exists(payload: dict[str, object], dimension: str) -> bool:
+    family = dimension.split("-", 1)[0]
+    for candidate in DIMENSIONS:
+        if not candidate.startswith(f"{family}-") or candidate == dimension:
+            continue
+        if str(payload.get(f"{candidate}-status") or "") != "in tension":
+            return True
+    return False
+
+
+def describe_slot_selection_issues(payload: dict[str, object]) -> list[str]:
+    actual = get_actual_slot_dimensions(payload)
+    expected = get_expected_slot_dimensions(payload)
+    issues: list[str] = []
+
+    duplicates = duplicate_slot_dimensions(actual)
+    if duplicates:
+        issues.append("duplicate dimensions: " + ", ".join(duplicates))
+
+    actual_section1 = [actual.get(field, "") for field in SECTION1_SLOT_FIELDS]
+    expected_section1 = [expected.get(field, "") for field in SECTION1_SLOT_FIELDS]
+    if actual_section1 != expected_section1:
+        issues.append("TS expected " + ", ".join(expected_section1) + " but got " + ", ".join(actual_section1))
+
+    actual_section2 = [actual.get(field, "") for field in SECTION2_SLOT_FIELDS]
+    expected_section2 = [expected.get(field, "") for field in SECTION2_SLOT_FIELDS]
+    if actual_section2 != expected_section2:
+        issues.append("V expected " + ", ".join(expected_section2) + " but got " + ", ".join(actual_section2))
+
+    actual_section3 = [actual.get(field, "") for field in SECTION3_SLOT_FIELDS]
+    expected_section3 = [expected.get(field, "") for field in SECTION3_SLOT_FIELDS]
+    if actual_section3 != expected_section3:
+        issues.append("Sec4 expected " + ", ".join(expected_section3) + " but got " + ", ".join(actual_section3))
+
+    for field in SECTION1_SLOT_FIELDS:
+        dimension = actual.get(field, "")
+        if not dimension:
+            continue
+        if str(payload.get(f"{dimension}-status") or "") == "in tension" and same_family_non_tension_exists(payload, dimension):
+            issues.append(f"{field} chose in-tension {dimension} despite a same-family non-tension option")
+
+    if any(dimension.startswith("D-") for dimension in actual_section2 if dimension):
+        issues.append("V includes D dimension")
+
+    return issues
+
+
+def slot_analysis_row(record: dict[str, object], *, include_issues: bool) -> str:
+    payload = record.get("payload")
+    if not isinstance(payload, dict):
+        payload = {}
+    actual = get_actual_slot_dimensions(payload)
+    participant_id = str(payload.get("participant_id") or Path(str(record.get("path") or "")).stem)
+    student_pool = str(record.get("student_pool") or "")
+    cells = [
+        participant_id,
+        student_pool,
+        format_slot_value(actual.get("Sec1_TS1_dim", "")),
+        format_slot_value(actual.get("Sec1_TS2_dim", "")),
+        format_slot_value(actual.get("Sec1_TS3_dim", "")),
+        format_slot_value(actual.get("Sec2_V1_dim", "")),
+        format_slot_value(actual.get("Sec2_V2_dim", "")),
+        format_slot_value(actual.get("Sec2_V3_dim", "")),
+        format_slot_value(actual.get("Sec4_Slot1_dim", "")),
+        format_slot_value(actual.get("Sec4_Slot2_dim", "")),
+        format_slot_value(actual.get("Sec4_Slot3_dim", "")),
+    ]
+    if include_issues:
+        issues = "; ".join(describe_slot_selection_issues(payload))
+        cells.append(issues)
+    return "| " + " | ".join(cell.replace("|", "/") for cell in cells) + " |"
+
+
+def build_slot_selection_table(records: list[dict[str, object]], *, problematic: bool) -> list[str]:
+    filtered_records: list[dict[str, object]] = []
+    for record in records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        issues = describe_slot_selection_issues(payload)
+        if problematic and issues:
+            filtered_records.append(record)
+        if not problematic and not issues:
+            filtered_records.append(record)
+
+    filtered_records.sort(
+        key=lambda record: (
+            str(record.get("student_pool") or ""),
+            str((record.get("payload") or {}).get("participant_id") or ""),
+            str(record.get("path") or ""),
+        )
+    )
+
+    header = "| Participant | Pool | TS1 | TS2 | TS3 | V1 | V2 | V3 | Slot1 | Slot2 | Slot3 |"
+    divider = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+    if problematic:
+        header = "| Participant | Pool | TS1 | TS2 | TS3 | V1 | V2 | V3 | Slot1 | Slot2 | Slot3 | Issues |"
+        divider = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+
+    lines = [header, divider]
+    if not filtered_records:
+        empty_cells = ["(none)"] + [""] * 10
+        if problematic:
+            empty_cells.append("")
+        lines.append("| " + " | ".join(empty_cells) + " |")
+        return lines
+
+    for record in filtered_records:
+        lines.append(slot_analysis_row(record, include_issues=problematic))
+    return lines
+
+
+def build_slot_selection_analysis(records: list[dict[str, object]]) -> list[str]:
+    straightforward_count = 0
+    problematic_count = 0
+    for record in records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        if describe_slot_selection_issues(payload):
+            problematic_count += 1
+        else:
+            straightforward_count += 1
+
+    return [
+        "## Slot Selection Analysis",
+        "",
+        f"- Straightforward cases: {straightforward_count}",
+        f"- Problematic cases: {problematic_count}",
+        "",
+        "### Straightforward cases",
+        "",
+        *build_slot_selection_table(records, problematic=False),
+        "",
+        "### Problematic cases",
+        "",
+        *build_slot_selection_table(records, problematic=True),
+    ]
+
+
 def build_report(records: list[dict[str, object]]) -> str:
     lines = [
         "# JSON Analysis Report",
@@ -890,6 +1113,7 @@ def build_report(records: list[dict[str, object]]) -> str:
     lines.extend(["", *build_shift_count_distribution_analysis(records)])
     lines.extend(["", *build_group_shift_count_analysis(records)])
     lines.extend(["", *build_converged_analysis(records)])
+    lines.extend(["", *build_slot_selection_analysis(records)])
     lines.append("")
     return "\n".join(lines)
 

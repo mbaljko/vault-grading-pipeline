@@ -36,10 +36,17 @@ Selection heuristic:
     non-empty `-devt`, then schema dimension order.
 2. Populate the Section 1 TS slots first from family-specific subsets of that
     prioritized order:
-    - `TS1` takes the first `B-*` dimension.
-    - `TS2` takes the first `C-*` dimension.
-    - `TS3` takes the first `D-*` dimension.
-3. Section 2 takes its slots from the remaining prioritized dimensions.
+    - `TS1` takes the first non-tension `B-*` dimension when available,
+        otherwise it falls back to the first remaining `B-*` dimension.
+    - `TS2` takes the first non-tension `C-*` dimension when available,
+        otherwise it falls back to the first remaining `C-*` dimension.
+    - `TS3` takes the first non-tension `D-*` dimension when available,
+        otherwise it falls back to the first remaining `D-*` dimension.
+3. Section 2 takes its slots from the remaining pool while trying to avoid
+    duplication with the TS selections. It prefers `B-*` and `C-*` dimensions,
+    tries to include one from each of `B` and `C`, ranks development types as
+    `intro`, then `cont-reinf`, then `shift`, and only falls back to `D-*`
+    when needed to fill the configured slots.
 4. Section 4 prefers dimensions from the remaining pool whose `-status` is
     `in tension`, then falls back to the remaining Section 2 order.
 """
@@ -60,6 +67,12 @@ HUMAN_FRIENDLY_DIMENSIONS = {
     "D-1": "D-1 Human responsibility vs AI-mediated delegation of responsibility",
     "D-2": "D-2 AI-mediated oversight, uncertainty, and verification practices",
     "D-3": "D-3 Role of tools or AI systems in shaping professional judgement",
+}
+
+SECTION2_DEVELOPMENT_PRIORITY = {
+    "intro": 0,
+    "cont-reinf": 1,
+    "shift": 2,
 }
 
 
@@ -121,6 +134,86 @@ def first_dimension_for_family(priority: list[str], family_prefix: str) -> str |
     return None
 
 
+def first_non_tension_dimension_for_family(
+    priority: list[str],
+    record: dict[str, str],
+    family_prefix: str,
+) -> str | None:
+    for dimension in priority:
+        if not dimension.startswith(f"{family_prefix}-"):
+            continue
+        if record.get(f"{dimension}-status") != "in tension":
+            return dimension
+    return None
+
+
+def normalized_section2_development_type(record: dict[str, str], dimension: str) -> str:
+    for field_name in (
+        f"{dimension}-devt_converged",
+        f"{dimension}-devt",
+        f"{dimension}-devt_tagset",
+    ):
+        normalized = record.get(field_name, "").strip().lower().replace("_", "-")
+        if normalized:
+            return normalized
+    return ""
+
+
+def rank_section2_dimensions(priority: list[str], record: dict[str, str], dimensions: list[str]) -> list[str]:
+    priority_index = {dimension: index for index, dimension in enumerate(priority)}
+
+    def ranking_key(dimension: str) -> tuple[int, int]:
+        development_type = normalized_section2_development_type(record, dimension)
+        development_rank = SECTION2_DEVELOPMENT_PRIORITY.get(
+            development_type,
+            len(SECTION2_DEVELOPMENT_PRIORITY),
+        )
+        return development_rank, priority_index[dimension]
+
+    return sorted(dimensions, key=ranking_key)
+
+
+def select_section2_dimensions(
+    section2_slot_count: int,
+    priority: list[str],
+    record: dict[str, str],
+    remaining: list[str],
+) -> list[str]:
+    if section2_slot_count <= 0:
+        return []
+
+    ranked_remaining = rank_section2_dimensions(priority, record, remaining)
+    remaining_by_family = {
+        family: [dimension for dimension in ranked_remaining if dimension.startswith(f"{family}-")]
+        for family in ("B", "C", "D")
+    }
+
+    section2: list[str] = []
+    for family in ("B", "C"):
+        family_candidates = remaining_by_family[family]
+        if family_candidates and len(section2) < section2_slot_count:
+            section2.append(family_candidates[0])
+
+    ranked_fill_order = [
+        dimension for dimension in ranked_remaining if dimension.startswith(("B-", "C-")) and dimension not in section2
+    ]
+    ranked_fill_order.extend(
+        dimension for dimension in ranked_remaining if dimension.startswith("D-") and dimension not in section2
+    )
+    ranked_fill_order.extend(
+        dimension
+        for dimension in ranked_remaining
+        if not dimension.startswith(("B-", "C-", "D-")) and dimension not in section2
+    )
+
+    for dimension in ranked_fill_order:
+        if len(section2) >= section2_slot_count:
+            break
+        section2.append(dimension)
+
+    return section2
+
+
 def select_section_dimensions(
     schema: SlotPopulationSchema,
     record: dict[str, str],
@@ -136,7 +229,9 @@ def select_section_dimensions(
 
     section1: list[str] = []
     for family_prefix in ["B", "C", "D"][:section1_slot_count]:
-        selected_dimension = first_dimension_for_family(priority, family_prefix)
+        selected_dimension = first_non_tension_dimension_for_family(priority, record, family_prefix)
+        if not selected_dimension:
+            selected_dimension = first_dimension_for_family(priority, family_prefix)
         if selected_dimension:
             section1.append(selected_dimension)
 
@@ -146,7 +241,7 @@ def select_section_dimensions(
         section1.extend(remaining[: section1_slot_count - len(section1)])
         remaining = [dimension for dimension in priority if dimension not in section1]
 
-    section2 = remaining[:section2_slot_count]
+    section2 = select_section2_dimensions(section2_slot_count, priority, record, remaining)
     remaining_after_section2 = [dimension for dimension in remaining if dimension not in section2]
     tension_dims = [
         dimension
