@@ -287,8 +287,8 @@ def build_section1_overview_table(values: dict[str, str]) -> str:
 \\begingroup
 \\renewcommand{{\\arraystretch}}{{0.95}}
 \\begin{{longtable}}[]{{@{{}}
-  >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 6\\tabcolsep) * \\real{{0.08}}}}
-  >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 6\\tabcolsep) * \\real{{0.60}}}}
+    >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 6\\tabcolsep) * \\real{{0.064}}}}
+    >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 6\\tabcolsep) * \\real{{0.616}}}}
   >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 6\\tabcolsep) * \\real{{0.12}}}}
   >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 6\\tabcolsep) * \\real{{0.20}}}}@{{}}}}
 \\toprule\\noalign{{}}
