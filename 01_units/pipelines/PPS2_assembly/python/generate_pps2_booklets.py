@@ -219,7 +219,7 @@ def build_two_column_latex_block(
     right_header: str,
     left_value: str,
     right_value: str,
-        column_fraction: str = "0.48",
+    column_fraction: str = "0.50",
 ) -> str:
     return f"""
 
@@ -267,13 +267,11 @@ def expand_table_macros(template_text: str, values: dict[str, str]) -> tuple[str
             return match.group(0)
         placeholder_token = f"@@TABLE_MACRO_{macro_index}@@"
         macro_index += 1
-        column_fraction = "0.50" if (left_key, right_key) == ("D-1-PPP", "D-1-PPS1") else "0.48"
         rendered_blocks[placeholder_token] = build_two_column_latex_block(
             left_header="PPP (Initial) position",
             right_header="PPS1 Position",
             left_value=values[left_key],
             right_value=values[right_key],
-            column_fraction=column_fraction,
         )
         return placeholder_token
 
