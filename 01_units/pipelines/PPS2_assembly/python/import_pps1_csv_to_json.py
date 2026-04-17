@@ -1437,6 +1437,15 @@ def build_audit_summary_report(
     divider_cells = ["---", *("---:" for _ in schema.dimensions)]
 
     def build_e1_section_lines(section_rows: list[AuditRow], section_heading: str) -> list[str]:
+        def display_student_name(row: AuditRow) -> str:
+            given_name = normalize_value(row.given_name)
+            family_name = normalize_value(row.family_name)
+            if family_name == ".":
+                return given_name or row.username or row.participant_id
+            if given_name and family_name:
+                return f"{given_name} {family_name}"
+            return given_name or family_name or row.username or row.participant_id
+
         counts_by_dimension: dict[str, dict[str, int]] = {}
         for dimension in schema.dimensions:
             passed = 0
@@ -1491,6 +1500,36 @@ def build_audit_summary_report(
             error_rate = 0.0 if total_count == 0 else (error_count / total_count) * 100
             error_rate_row_cells.append(f"{error_rate:.1f}%")
         section_lines.append(f"| {' | '.join(error_rate_row_cells)} |")
+
+        at_least_seven_health_2 = 0
+        fewer_than_seven_health_2 = 0
+        fewer_than_seven_names: list[str] = []
+        for row in section_rows:
+            passed_count = sum(
+                1 for dimension in schema.dimensions if row.dimension_check_fields[f"{dimension}-check"] == "true"
+            )
+            if passed_count >= 7:
+                at_least_seven_health_2 += 1
+            else:
+                fewer_than_seven_health_2 += 1
+                fewer_than_seven_names.append(display_student_name(row))
+
+        section_lines.extend(
+            [
+                "",
+                "| Submission bucket | Count |",
+                "| --- | ---: |",
+                f"| health=2 for 7 or more dimensions | {at_least_seven_health_2} |",
+                f"| health=2 for fewer than 7 dimensions | {fewer_than_seven_health_2} |",
+            ]
+        )
+        if fewer_than_seven_names:
+            section_lines.extend(
+                [
+                    "",
+                    f"Students (<7 dimensions at health=2): {', '.join(fewer_than_seven_names)}",
+                ]
+            )
         return section_lines
 
     lines = [
