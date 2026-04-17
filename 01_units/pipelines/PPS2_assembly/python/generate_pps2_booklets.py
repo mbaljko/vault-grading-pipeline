@@ -13,6 +13,7 @@ Expected placeholder format:
     {participant_id}
     {PPP_A1_text}
     {claims.CLM_01_text}
+    Table{Sec1_TS1_PPP}{Sec1_TS1_PPS1}
 
 Example student JSON shape:
     {
@@ -40,6 +41,7 @@ from typing import Any
 
 
 PLACEHOLDER_PATTERN = re.compile(r"\{([A-Za-z0-9_.-]+)\}")
+TABLE_MACRO_PATTERN = re.compile(r"Table\{([A-Za-z0-9_.-]+)\}\{([A-Za-z0-9_.-]+)\}")
 QUESTION_PLACEHOLDER_PATTERN = re.compile(r"Qx\.")
 FULL_WIDTH_RULE_PATTERN = re.compile(r"^[ \t]*---[ \t]*$", re.MULTILINE)
 PAGE_BREAK_PATTERN = re.compile(
@@ -183,7 +185,6 @@ def build_placeholder_context(data: dict[str, Any]) -> dict[str, str]:
         if isinstance(value, (dict, list)):
             continue
         context[str(key)] = "" if value is None else str(value)
-    context.update(build_derived_placeholder_context(data))
     return context
 
 
@@ -238,21 +239,41 @@ def build_two_column_latex_block(
 """
 
 
-def build_derived_placeholder_context(data: dict[str, Any]) -> dict[str, str]:
-    derived_context: dict[str, str] = {}
-    for index in (1, 2, 3):
-        derived_context[f"Sec1_TS{index}_TABLE"] = build_two_column_latex_block(
-            left_header="PPP (Initial) position",
-            right_header="PPS1 Position",
-            left_value="" if data.get(f"Sec1_TS{index}_PPP") is None else str(data.get(f"Sec1_TS{index}_PPP")),
-            right_value="" if data.get(f"Sec1_TS{index}_PPS1") is None else str(data.get(f"Sec1_TS{index}_PPS1")),
-        )
-    return derived_context
-
-
 def extract_placeholders(template_text: str) -> set[str]:
     """Extract unique placeholder names from the Markdown template."""
     return set(PLACEHOLDER_PATTERN.findall(template_text))
+
+
+def expand_table_macros(template_text: str, values: dict[str, str]) -> tuple[str, list[str], dict[str, str]]:
+    """Expand Table{left_key}{right_key} macros using JSON-aligned field names."""
+    unresolved: set[str] = set()
+    rendered_blocks: dict[str, str] = {}
+    macro_index = 0
+
+    def replacer(match: re.Match[str]) -> str:
+        nonlocal macro_index
+        left_key = match.group(1)
+        right_key = match.group(2)
+        left_missing = left_key not in values
+        right_missing = right_key not in values
+        if left_missing:
+            unresolved.add(left_key)
+        if right_missing:
+            unresolved.add(right_key)
+        if left_missing or right_missing:
+            return match.group(0)
+        placeholder_token = f"@@TABLE_MACRO_{macro_index}@@"
+        macro_index += 1
+        rendered_blocks[placeholder_token] = build_two_column_latex_block(
+            left_header="PPP (Initial) position",
+            right_header="PPS1 Position",
+            left_value=values[left_key],
+            right_value=values[right_key],
+        )
+        return placeholder_token
+
+    rendered_text = TABLE_MACRO_PATTERN.sub(replacer, template_text)
+    return rendered_text, sorted(unresolved), rendered_blocks
 
 
 def fill_template(template_text: str, values: dict[str, str]) -> tuple[str, list[str]]:
@@ -260,7 +281,8 @@ def fill_template(template_text: str, values: dict[str, str]) -> tuple[str, list
 
     Returns the rendered text and a sorted list of unresolved placeholders.
     """
-    unresolved: set[str] = set()
+    rendered_text, unresolved_table_macros, rendered_blocks = expand_table_macros(template_text, values)
+    unresolved: set[str] = set(unresolved_table_macros)
 
     def replacer(match: re.Match[str]) -> str:
         placeholder = match.group(1)
@@ -269,7 +291,9 @@ def fill_template(template_text: str, values: dict[str, str]) -> tuple[str, list
         unresolved.add(placeholder)
         return match.group(0)
 
-    rendered_text = PLACEHOLDER_PATTERN.sub(replacer, template_text)
+    rendered_text = PLACEHOLDER_PATTERN.sub(replacer, rendered_text)
+    for token, replacement in rendered_blocks.items():
+        rendered_text = rendered_text.replace(token, replacement)
     return rendered_text, sorted(unresolved)
 
 
