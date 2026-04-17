@@ -7,7 +7,14 @@ import json
 import shutil
 from pathlib import Path
 
-from import_pps1_csv_to_json import DEFAULT_SCHEMA_PATH, load_audit_rows_from_csv, load_schema, build_audit_summary_report
+from import_pps1_csv_to_json import (
+    DEFAULT_SCHEMA_PATH,
+    build_audit_summary_report,
+    build_pps1_text_development_summary_report,
+    load_audit_rows_from_csv,
+    load_pps1_text_development_rows_from_csv,
+    load_schema,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -119,7 +126,7 @@ def main() -> int:
         staged_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
         primary_target_path = primary_output_dir / filename
-        shutil.move(str(staged_path), primary_target_path)
+        shutil.copy2(staged_path, primary_target_path)
 
         if is_sample:
             shutil.copy2(primary_target_path, args.sample_output_dir / filename)
@@ -150,6 +157,18 @@ def main() -> int:
         build_audit_summary_report(schema, audit_rows, student_pool_by_filename=student_pool_by_filename),
         encoding="utf-8",
     )
+
+    tagset_csv = args.audit_csv.with_name(args.audit_csv.stem + "_pps1_tagset_extraction.csv")
+    if tagset_csv.exists():
+        tagset_rows = load_pps1_text_development_rows_from_csv(tagset_csv, schema)
+        tagset_csv.with_suffix(".md").write_text(
+            build_pps1_text_development_summary_report(
+                schema,
+                tagset_rows,
+                student_pool_by_filename=student_pool_by_filename,
+            ),
+            encoding="utf-8",
+        )
     return 0
 
 

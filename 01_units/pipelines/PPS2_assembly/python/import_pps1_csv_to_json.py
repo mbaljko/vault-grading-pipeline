@@ -1293,42 +1293,154 @@ def write_pps1_text_development_csv(
 def build_pps1_text_development_summary_report(
     schema: ImportSchema,
     rows: list[Pps1TextDevelopmentRow],
+    student_pool_by_filename: dict[str, str] | None = None,
 ) -> str:
-    total_rows = len(rows)
-    dimension_count = len(schema.dimensions)
-    per_dimension_counts: dict[str, dict[str, int]] = {
-        dimension: {development_type: 0 for development_type in CANONICAL_DEVELOPMENT_TYPES}
-        for dimension in schema.dimensions
-    }
-    blank_counts = {dimension: 0 for dimension in schema.dimensions}
-    coverage_counts: dict[int, int] = {count: 0 for count in range(len(schema.dimensions) + 1)}
-    total_extracted = 0
-    rows_with_any = 0
-    rows_with_all = 0
+    def build_tagset_health_section_lines(section_rows: list[Pps1TextDevelopmentRow], heading: str) -> list[str]:
+        total_rows = len(section_rows)
+        total_slots = total_rows * dimension_count
+        per_dimension_counts: dict[str, dict[str, int]] = {
+            dimension: {development_type: 0 for development_type in CANONICAL_DEVELOPMENT_TYPES}
+            for dimension in schema.dimensions
+        }
+        blank_counts = {dimension: 0 for dimension in schema.dimensions}
+        coverage_counts: dict[int, int] = {count: 0 for count in range(dimension_count + 1)}
+        total_extracted = 0
+        rows_with_any = 0
+        rows_with_all = 0
 
-    for row in rows:
-        extracted_for_row = 0
+        for row in section_rows:
+            extracted_for_row = 0
+            for dimension in schema.dimensions:
+                value = row.extracted_development_types.get(dimension, "")
+                if value in CANONICAL_DEVELOPMENT_TYPES:
+                    per_dimension_counts[dimension][value] += 1
+                    extracted_for_row += 1
+                    total_extracted += 1
+                else:
+                    blank_counts[dimension] += 1
+            coverage_counts[extracted_for_row] += 1
+            if extracted_for_row > 0:
+                rows_with_any += 1
+            if extracted_for_row == dimension_count:
+                rows_with_all += 1
+
+        missing_slots = total_slots - total_extracted
+        overall_counts = {development_type: 0 for development_type in CANONICAL_DEVELOPMENT_TYPES}
         for dimension in schema.dimensions:
-            value = row.extracted_development_types.get(dimension, "")
-            if value in CANONICAL_DEVELOPMENT_TYPES:
-                per_dimension_counts[dimension][value] += 1
-                extracted_for_row += 1
-                total_extracted += 1
-            else:
-                blank_counts[dimension] += 1
-        coverage_counts[extracted_for_row] += 1
-        if extracted_for_row > 0:
-            rows_with_any += 1
-        if extracted_for_row == len(schema.dimensions):
-            rows_with_all += 1
+            for development_type in CANONICAL_DEVELOPMENT_TYPES:
+                overall_counts[development_type] += per_dimension_counts[dimension][development_type]
 
-    total_slots = total_rows * len(schema.dimensions)
-    missing_slots = total_slots - total_extracted
-    overall_counts = {development_type: 0 for development_type in CANONICAL_DEVELOPMENT_TYPES}
-    for dimension in schema.dimensions:
+        section_lines = [
+            heading,
+            "",
+            f"- Total student rows: {total_rows}",
+            f"- Rows with at least one extracted development type: {rows_with_any}",
+            f"- Rows with all {dimension_count} dimensions extracted: {rows_with_all}",
+            f"- Extracted dimension values: {total_extracted} / {total_slots} ({(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}%)",
+            f"- Missing dimension values: {missing_slots}",
+            "",
+            "#### Health Summary",
+            "",
+            "Interpretation: health `2` means tagset value extracted, health `0` means tagset value not extracted.",
+            "",
+            f"- Health `2`: {total_extracted} / {total_slots} ({(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}%)",
+            f"- Health `0`: {missing_slots} / {total_slots} ({(100.0 * missing_slots / total_slots) if total_slots else 0.0:.1f}%)",
+            f"- Average extracted dimensions per student: {(total_extracted / total_rows) if total_rows else 0.0:.2f} / {dimension_count}",
+            f"- Average health score per student: {(2 * total_extracted / total_rows) if total_rows else 0.0:.2f} / {2 * dimension_count}",
+            "",
+            "| Health value | Count | % of all dimension slots |",
+            "| --- | ---: | ---: |",
+            f"| 2 | {total_extracted} | {(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}% |",
+            f"| 0 | {missing_slots} | {(100.0 * missing_slots / total_slots) if total_slots else 0.0:.1f}% |",
+            f"| Total | {total_slots} | 100.0% |",
+            "",
+            "#### Health by Dimension",
+            "",
+            "| Dimension | health 2 | health 0 | health 2 % | health 0 % |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ]
+        for dimension in schema.dimensions:
+            extracted_count = sum(per_dimension_counts[dimension].values())
+            missing_count = blank_counts[dimension]
+            section_lines.append(
+                f"| {dimension} | {extracted_count} | {missing_count} | "
+                f"{((100.0 * extracted_count / total_rows) if total_rows else 0.0):.1f}% | "
+                f"{((100.0 * missing_count / total_rows) if total_rows else 0.0):.1f}% |"
+            )
+        section_lines.extend(
+            [
+                f"| Total | {total_extracted} | {missing_slots} | {(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}% | {(100.0 * missing_slots / total_slots) if total_slots else 0.0:.1f}% |",
+                "",
+                "#### Overall Distribution",
+                "",
+                "| Development Type | Count | Percent of Extracted |",
+                "| --- | ---: | ---: |",
+            ]
+        )
         for development_type in CANONICAL_DEVELOPMENT_TYPES:
-            overall_counts[development_type] += per_dimension_counts[dimension][development_type]
+            count = overall_counts[development_type]
+            percent = (100.0 * count / total_extracted) if total_extracted else 0.0
+            section_lines.append(f"| {development_type} | {count} | {percent:.1f}% |")
+        section_lines.append(f"| Total | {total_extracted} | 100.0% |")
 
+        section_lines.extend(
+            [
+                "",
+                "#### By Dimension",
+                "",
+                "| Dimension | cont-reinf | intro | shift | tension | blank | extracted % |",
+                "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+            ]
+        )
+        for dimension in schema.dimensions:
+            extracted_count = sum(per_dimension_counts[dimension].values())
+            extracted_percent = (100.0 * extracted_count / total_rows) if total_rows else 0.0
+            section_lines.append(
+                "| "
+                f"{dimension} | "
+                f"{per_dimension_counts[dimension]['cont-reinf']} | "
+                f"{per_dimension_counts[dimension]['intro']} | "
+                f"{per_dimension_counts[dimension]['shift']} | "
+                f"{per_dimension_counts[dimension]['tension']} | "
+                f"{blank_counts[dimension]} | "
+                f"{extracted_percent:.1f}% |"
+            )
+        section_lines.append(
+            "| "
+            f"Total | "
+            f"{overall_counts['cont-reinf']} | "
+            f"{overall_counts['intro']} | "
+            f"{overall_counts['shift']} | "
+            f"{overall_counts['tension']} | "
+            f"{missing_slots} | "
+            f"{(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}% |"
+        )
+        section_lines.append(
+            "| "
+            f"% of {total_slots} | "
+            f"{(100.0 * overall_counts['cont-reinf'] / total_slots) if total_slots else 0.0:.1f}% | "
+            f"{(100.0 * overall_counts['intro'] / total_slots) if total_slots else 0.0:.1f}% | "
+            f"{(100.0 * overall_counts['shift'] / total_slots) if total_slots else 0.0:.1f}% | "
+            f"{(100.0 * overall_counts['tension'] / total_slots) if total_slots else 0.0:.1f}% | "
+            f"{(100.0 * missing_slots / total_slots) if total_slots else 0.0:.1f}% | "
+            f"{(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}% |"
+        )
+
+        section_lines.extend(
+            [
+                "",
+                "#### Submission Count and Dimensions with Type",
+                "",
+                "| Dimensions with Type | Submission Count |",
+                "| ---: | ---: |",
+            ]
+        )
+        for extracted_dimensions in range(dimension_count, -1, -1):
+            section_lines.append(f"| {extracted_dimensions} | {coverage_counts[extracted_dimensions]} |")
+        section_lines.append(f"| Total | {total_rows} |")
+        return section_lines
+
+    dimension_count = len(schema.dimensions)
     lines = [
         "# PPS1 Tagset Extraction Summary",
         "",
@@ -1341,111 +1453,20 @@ def build_pps1_text_development_summary_report(
         "Here are the results of this extraction",
         "",
         "- tagset ∈ {shift, introduced, continuity-reinforcement, tension}",
-        f"- Total student rows: {total_rows}",
-        f"- Rows with at least one extracted development type: {rows_with_any}",
-        f"- Rows with all {dimension_count} dimensions extracted: {rows_with_all}",
-        f"- Extracted dimension values: {total_extracted} / {total_slots} ({(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}%)",
-        f"- Missing dimension values: {missing_slots}",
-        "",
-        "## Health Summary",
-        "",
-        "Interpretation: health `2` means tagset value extracted, health `0` means tagset value not extracted.",
-        "",
-        f"- Health `2`: {total_extracted} / {total_slots} ({(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}%)",
-        f"- Health `0`: {missing_slots} / {total_slots} ({(100.0 * missing_slots / total_slots) if total_slots else 0.0:.1f}%)",
-        f"- Average extracted dimensions per student: {(total_extracted / total_rows) if total_rows else 0.0:.2f} / {dimension_count}",
-        f"- Average health score per student: {(2 * total_extracted / total_rows) if total_rows else 0.0:.2f} / {2 * dimension_count}",
-        "",
-        "| Health value | Count | % of all dimension slots |",
-        "| --- | ---: | ---: |",
-        f"| 2 | {total_extracted} | {(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}% |",
-        f"| 0 | {missing_slots} | {(100.0 * missing_slots / total_slots) if total_slots else 0.0:.1f}% |",
-        f"| Total | {total_slots} | 100.0% |",
-        "",
-        "### Health by Dimension",
-        "",
-        "| Dimension | health 2 | health 0 | health 2 % | health 0 % |",
-        "| --- | ---: | ---: | ---: | ---: |",
     ]
-    for dimension in schema.dimensions:
-        extracted_count = sum(per_dimension_counts[dimension].values())
-        missing_count = blank_counts[dimension]
-        lines.append(
-            f"| {dimension} | {extracted_count} | {missing_count} | "
-            f"{((100.0 * extracted_count / total_rows) if total_rows else 0.0):.1f}% | "
-            f"{((100.0 * missing_count / total_rows) if total_rows else 0.0):.1f}% |"
-        )
-    lines.extend(
-        [
-            f"| Total | {total_extracted} | {missing_slots} | {(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}% | {(100.0 * missing_slots / total_slots) if total_slots else 0.0:.1f}% |",
-            "",
-        "## Overall Distribution",
-        "",
-        "| Development Type | Count | Percent of Extracted |",
-        "| --- | ---: | ---: |",
-        ]
-    )
-    for development_type in CANONICAL_DEVELOPMENT_TYPES:
-        count = overall_counts[development_type]
-        percent = (100.0 * count / total_extracted) if total_extracted else 0.0
-        lines.append(f"| {development_type} | {count} | {percent:.1f}% |")
-    lines.append(f"| Total | {total_extracted} | 100.0% |")
+    lines.extend(build_tagset_health_section_lines(rows, "## All records"))
 
-    lines.extend(
-        [
-            "",
-            "## By Dimension",
-            "",
-            "| Dimension | cont-reinf | intro | shift | tension | blank | extracted % |",
-            "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
-        ]
-    )
-    for dimension in schema.dimensions:
-        extracted_count = sum(per_dimension_counts[dimension].values())
-        extracted_percent = (100.0 * extracted_count / total_rows) if total_rows else 0.0
-        lines.append(
-            "| "
-            f"{dimension} | "
-            f"{per_dimension_counts[dimension]['cont-reinf']} | "
-            f"{per_dimension_counts[dimension]['intro']} | "
-            f"{per_dimension_counts[dimension]['shift']} | "
-            f"{per_dimension_counts[dimension]['tension']} | "
-            f"{blank_counts[dimension]} | "
-            f"{extracted_percent:.1f}% |"
-        )
-    lines.append(
-        "| "
-        f"Total | "
-        f"{overall_counts['cont-reinf']} | "
-        f"{overall_counts['intro']} | "
-        f"{overall_counts['shift']} | "
-        f"{overall_counts['tension']} | "
-        f"{missing_slots} | "
-        f"{(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}% |"
-    )
-    lines.append(
-        "| "
-        f"% of {total_slots} | "
-        f"{(100.0 * overall_counts['cont-reinf'] / total_slots) if total_slots else 0.0:.1f}% | "
-        f"{(100.0 * overall_counts['intro'] / total_slots) if total_slots else 0.0:.1f}% | "
-        f"{(100.0 * overall_counts['shift'] / total_slots) if total_slots else 0.0:.1f}% | "
-        f"{(100.0 * overall_counts['tension'] / total_slots) if total_slots else 0.0:.1f}% | "
-        f"{(100.0 * missing_slots / total_slots) if total_slots else 0.0:.1f}% | "
-        f"{(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}% |"
-    )
+    if student_pool_by_filename:
+        pool_to_rows: dict[str, list[Pps1TextDevelopmentRow]] = {}
+        for row in rows:
+            filename = Path(row.output_json_path).name
+            student_pool = student_pool_by_filename.get(filename)
+            if not student_pool:
+                continue
+            pool_to_rows.setdefault(student_pool, []).append(row)
 
-    lines.extend(
-        [
-            "",
-            "## Submission Count and Dimensions with Type",
-            "",
-            "| Dimensions with Type | Submission Count |",
-            "| ---: | ---: |",
-        ]
-    )
-    for extracted_dimensions in range(len(schema.dimensions), -1, -1):
-        lines.append(f"| {extracted_dimensions} | {coverage_counts[extracted_dimensions]} |")
-    lines.append(f"| Total | {total_rows} |")
+        for student_pool in sorted(pool_to_rows):
+            lines.extend(["", *build_tagset_health_section_lines(pool_to_rows[student_pool], f"## {student_pool}")])
 
     lines.append("")
     return "\n".join(lines)
@@ -1457,6 +1478,25 @@ def write_pps1_text_development_summary_report(
     rows: list[Pps1TextDevelopmentRow],
 ) -> None:
     path.write_text(build_pps1_text_development_summary_report(schema, rows), encoding="utf-8")
+
+
+def load_pps1_text_development_rows_from_csv(path: Path, schema: ImportSchema) -> list[Pps1TextDevelopmentRow]:
+    rows: list[Pps1TextDevelopmentRow] = []
+    with path.open(newline="", encoding="utf-8-sig") as csv_file:
+        reader = csv.DictReader(csv_file)
+        for raw_row in reader:
+            rows.append(
+                Pps1TextDevelopmentRow(
+                    source_csv_path=(raw_row.get("source_csv_path") or ""),
+                    row_index=int(raw_row.get("row_index") or 0),
+                    participant_id=(raw_row.get("participant_id") or ""),
+                    given_name=(raw_row.get("given_name") or ""),
+                    family_name=(raw_row.get("family_name") or ""),
+                    output_json_path=(raw_row.get("output_json_path") or ""),
+                    extracted_development_types={dimension: (raw_row.get(dimension) or "") for dimension in schema.dimensions},
+                )
+            )
+    return rows
 
 
 def build_audit_summary_report(
