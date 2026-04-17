@@ -88,6 +88,7 @@ class StudentRecord:
     student_file: Path
     participant_id: str
     output_stem: str
+    header_name: str
     student_data: dict[str, Any]
 
 
@@ -218,12 +219,13 @@ def build_two_column_latex_block(
     right_header: str,
     left_value: str,
     right_value: str,
+        column_fraction: str = "0.48",
 ) -> str:
     return f"""
 
 \\begin{{longtable}}[]{{@{{}}
-  >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 2\\tabcolsep) * \\real{{0.48}}}}
-  >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 2\\tabcolsep) * \\real{{0.48}}}}@{{}}}}
+    >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 2\\tabcolsep) * \\real{{{column_fraction}}}}}
+    >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 2\\tabcolsep) * \\real{{{column_fraction}}}}}@{{}}}}
 \\toprule\\noalign{{}}
 \\begin{{minipage}}[b]{{\\linewidth}}\\raggedright
 {escape_latex_text(left_header)}
@@ -265,11 +267,13 @@ def expand_table_macros(template_text: str, values: dict[str, str]) -> tuple[str
             return match.group(0)
         placeholder_token = f"@@TABLE_MACRO_{macro_index}@@"
         macro_index += 1
+        column_fraction = "0.50" if (left_key, right_key) == ("D-1-PPP", "D-1-PPS1") else "0.48"
         rendered_blocks[placeholder_token] = build_two_column_latex_block(
             left_header="PPP (Initial) position",
             right_header="PPS1 Position",
             left_value=values[left_key],
             right_value=values[right_key],
+            column_fraction=column_fraction,
         )
         return placeholder_token
 
@@ -394,8 +398,15 @@ def ensure_first_appendix_starts_on_odd_page(rendered_text: str) -> str:
         return (
             "\\clearpage\n"
             "\\ifodd\\value{page}\n"
+            "\\else\n"
             "\\thispagestyle{empty}\n"
-            "\\null\n"
+            "\\begin{center}\n"
+            "\\vspace*{\\fill}\n"
+            "{\\Large\\bfseries APPENDIX BLANK PAGE\\par}\n"
+            "\\vspace{1em}\n"
+            "This page deliberately left blank to ensure the appendix starts on a right-hand page.\\par\n"
+            "\\vspace*{\\fill}\n"
+            "\\end{center}\n"
             "\\clearpage\n"
             "\\fi\n\n"
             f"{match.group(0)}"
@@ -676,6 +687,17 @@ def build_output_stem(student_data: dict[str, Any]) -> str:
     return f"eecs3000w26_{family_name}_{given_name}"
 
 
+def build_header_name(student_data: dict[str, Any]) -> str:
+    """Build the student name shown in the running header."""
+    family_name = str(student_data.get("FAMILY_NAME") or "").strip().upper()
+    given_name = str(student_data.get("GIVEN_NAME") or "").strip()
+
+    if not family_name or not given_name:
+        raise ValueError("Header name requires both FAMILY_NAME and GIVEN_NAME.")
+
+    return f"{family_name}, {given_name}"
+
+
 def format_command_for_log(command: list[str]) -> str:
     """Format a subprocess command for concise logging and error messages."""
     return " ".join(command)
@@ -706,6 +728,7 @@ def render_pdf(
     pandoc_path: Path,
     latex_engine: str | None,
     latex_template: Path | None,
+    template_variables: dict[str, str],
     verbose: bool,
 ) -> tuple[bool, str]:
     """Convert a filled Markdown file to PDF using pandoc."""
@@ -713,6 +736,8 @@ def render_pdf(
     base_command = [str(pandoc_path), str(filled_markdown_path), "-o", str(pdf_output_path)]
     if latex_template is not None:
         base_command.extend(["--template", str(latex_template)])
+    for key, value in template_variables.items():
+        base_command.extend(["-V", f"{key}={value}"])
     if latex_engine is not None:
         commands.append([*base_command, "--pdf-engine", latex_engine])
     commands.append(base_command)
@@ -751,12 +776,15 @@ def render_tex(
     tex_output_path: Path,
     pandoc_path: Path,
     latex_template: Path | None,
+    template_variables: dict[str, str],
     verbose: bool,
 ) -> tuple[bool, str]:
     """Convert a filled Markdown file to LaTeX using pandoc."""
     command = [str(pandoc_path), str(filled_markdown_path), "-t", "latex", "-o", str(tex_output_path)]
     if latex_template is not None:
         command.extend(["--template", str(latex_template)])
+    for key, value in template_variables.items():
+        command.extend(["-V", f"{key}={value}"])
 
     if verbose:
         print(f"Running: {' '.join(command)}")
@@ -787,10 +815,12 @@ def load_student_record(student_file: Path) -> StudentRecord:
         raise ValueError("Student JSON root must be an object.")
     participant_id = str(parsed.get("participant_id") or student_file.stem)
     output_stem = build_output_stem(parsed)
+    header_name = build_header_name(parsed)
     return StudentRecord(
         student_file=student_file,
         participant_id=participant_id,
         output_stem=output_stem,
+        header_name=header_name,
         student_data=parsed,
     )
 
@@ -848,6 +878,7 @@ def render_student(
     pdf_output_path = output_dir / f"{student_record.output_stem}.pdf"
     md_output_path = output_dir / f"{student_record.output_stem}.md"
     tex_output_path = output_dir / f"{student_record.output_stem}.tex"
+    template_variables = {"student_header_name": student_record.header_name}
 
     if dry_run:
         if missing_placeholders:
@@ -874,6 +905,7 @@ def render_student(
             pandoc_path=pandoc_path,
             latex_engine=latex_engine,
             latex_template=latex_template,
+            template_variables=template_variables,
             verbose=verbose,
         )
         if not success:
@@ -888,6 +920,7 @@ def render_student(
                 tex_output_path=tex_output_path,
                 pandoc_path=pandoc_path,
                 latex_template=latex_template,
+                template_variables=template_variables,
                 verbose=verbose,
             )
             if not tex_success:
