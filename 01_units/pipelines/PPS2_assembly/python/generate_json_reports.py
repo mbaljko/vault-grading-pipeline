@@ -18,6 +18,17 @@ PRIMARY_DATASET_DIR_NAMES = (
     "student_data_SAS_SecM",
     "student_data_SAS_SecO",
 )
+DIMENSIONS = (
+    "B-1",
+    "B-2",
+    "B-3",
+    "C-1",
+    "C-2",
+    "C-3",
+    "D-1",
+    "D-2",
+    "D-3",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -53,6 +64,7 @@ def load_promoted_json_records(input_root: Path) -> list[dict[str, object]]:
                 {
                     "path": json_path,
                     "student_pool": payload.get("STUDENT_POOL", ""),
+                    "payload": payload,
                 }
             )
     return records
@@ -86,6 +98,193 @@ def build_file_count_analysis(records: list[dict[str, object]]) -> list[str]:
     return lines
 
 
+def split_records_by_student_pool(records: list[dict[str, object]]) -> dict[str, list[dict[str, object]]]:
+    grouped_records: dict[str, list[dict[str, object]]] = defaultdict(list)
+    for record in records:
+        student_pool = str(record.get("student_pool") or "")
+        if student_pool:
+            grouped_records[student_pool].append(record)
+    return dict(grouped_records)
+
+
+def build_e1_dimension_overview_table(records: list[dict[str, object]]) -> list[str]:
+    counts_by_dimension: dict[str, dict[str, int]] = {}
+    for dimension in DIMENSIONS:
+        counts_by_dimension[dimension] = {"2": 0, "1": 0, "0": 0}
+        for record in records:
+            payload = record.get("payload")
+            if not isinstance(payload, dict):
+                continue
+            health_value = str(payload.get(f"{dimension}_indicator_health_srcE1") or "")
+            if health_value in counts_by_dimension[dimension]:
+                counts_by_dimension[dimension][health_value] += 1
+
+    header_row = "| Check Status | " + " | ".join(DIMENSIONS) + " |"
+    divider_row = "| --- | " + " | ".join("---:" for _ in DIMENSIONS) + " |"
+
+    passed_row = "| Passed (health=2) | " + " | ".join(
+        str(counts_by_dimension[dimension]["2"]) for dimension in DIMENSIONS
+    ) + " |"
+    multiple_row = "| Multiple Selected (health=1) | " + " | ".join(
+        str(counts_by_dimension[dimension]["1"]) for dimension in DIMENSIONS
+    ) + " |"
+    none_row = "| None Selected (health=0) | " + " | ".join(
+        str(counts_by_dimension[dimension]["0"]) for dimension in DIMENSIONS
+    ) + " |"
+    total_row = "| Total | " + " | ".join(str(len(records)) for _ in DIMENSIONS) + " |"
+    error_rate_row = "| % Error Rate | " + " | ".join(
+        f"{(((counts_by_dimension[dimension]['1'] + counts_by_dimension[dimension]['0']) / len(records)) * 100) if records else 0.0:.1f}%"
+        for dimension in DIMENSIONS
+    ) + " |"
+
+    return [header_row, divider_row, passed_row, multiple_row, none_row, total_row, error_rate_row]
+
+
+def build_e1_dimension_overview_analysis(records: list[dict[str, object]]) -> list[str]:
+    lines = [
+        "## E1 Categorization of Dimension Devt : Type Uniqueness",
+        "",
+        "### All data",
+        "",
+        *build_e1_dimension_overview_table(records),
+    ]
+
+    for student_pool, pool_records in sorted(split_records_by_student_pool(records).items()):
+        lines.extend(["", f"### {student_pool}", "", *build_e1_dimension_overview_table(pool_records)])
+
+    return lines
+
+
+def build_tagset_health_by_dimension_table(records: list[dict[str, object]]) -> list[str]:
+    counts_by_dimension: dict[str, dict[str, int]] = {}
+    for dimension in DIMENSIONS:
+        counts_by_dimension[dimension] = {"2": 0, "0": 0}
+        for record in records:
+            payload = record.get("payload")
+            if not isinstance(payload, dict):
+                continue
+            health_value = str(payload.get(f"{dimension}_indicator_health_srcBCD2") or "")
+            if health_value in counts_by_dimension[dimension]:
+                counts_by_dimension[dimension][health_value] += 1
+
+    header_row = "| Health Status | " + " | ".join(DIMENSIONS) + " |"
+    divider_row = "| --- | " + " | ".join("---:" for _ in DIMENSIONS) + " |"
+    health_2_row = "| Extracted (health=2) | " + " | ".join(
+        str(counts_by_dimension[dimension]["2"]) for dimension in DIMENSIONS
+    ) + " |"
+    health_0_row = "| Not Extracted (health=0) | " + " | ".join(
+        str(counts_by_dimension[dimension]["0"]) for dimension in DIMENSIONS
+    ) + " |"
+    total_row = "| Total | " + " | ".join(str(len(records)) for _ in DIMENSIONS) + " |"
+    extracted_rate_row = "| % Extracted | " + " | ".join(
+        f"{((counts_by_dimension[dimension]['2'] / len(records)) * 100) if records else 0.0:.1f}%"
+        for dimension in DIMENSIONS
+    ) + " |"
+    not_extracted_rate_row = "| % Not Extracted | " + " | ".join(
+        f"{((counts_by_dimension[dimension]['0'] / len(records)) * 100) if records else 0.0:.1f}%"
+        for dimension in DIMENSIONS
+    ) + " |"
+
+    return [
+        header_row,
+        divider_row,
+        health_2_row,
+        health_0_row,
+        total_row,
+        extracted_rate_row,
+        not_extracted_rate_row,
+    ]
+
+
+def build_tagset_health_by_dimension_analysis(records: list[dict[str, object]]) -> list[str]:
+    lines = [
+        "## indicator_health_srcBCD2",
+        "",
+        "### All data",
+        "",
+        *build_tagset_health_by_dimension_table(records),
+    ]
+
+    for student_pool, pool_records in sorted(split_records_by_student_pool(records).items()):
+        lines.extend(["", f"### {student_pool}", "", *build_tagset_health_by_dimension_table(pool_records)])
+
+    return lines
+
+
+def build_e2_status_table(records: list[dict[str, object]]) -> list[str]:
+    counts_by_tension_dimensions = {count: 0 for count in range(len(DIMENSIONS) + 1)}
+
+    for record in records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        tension_count = sum(1 for dimension in DIMENSIONS if str(payload.get(f"{dimension}-status") or "") == "in tension")
+        counts_by_tension_dimensions[tension_count] += 1
+
+    lines = [
+        "| Tension dimensions identified | Submission Count | % of Submissions |",
+        "| ---: | ---: | ---: |",
+    ]
+    for tension_count in range(2, -1, -1):
+        submission_count = counts_by_tension_dimensions[tension_count]
+        percent = (submission_count / len(records)) * 100 if records else 0.0
+        lines.append(f"| {tension_count} | {submission_count} | {percent:.1f}% |")
+    lines.append(f"| Total | {len(records)} | 100.0% |")
+    return lines
+
+
+def build_e2_status_analysis(records: list[dict[str, object]]) -> list[str]:
+    lines = [
+        "## E2-based status",
+        "",
+        "### All data",
+        "",
+        *build_e2_status_table(records),
+    ]
+
+    for student_pool, pool_records in sorted(split_records_by_student_pool(records).items()):
+        lines.extend(["", f"### {student_pool}", "", *build_e2_status_table(pool_records)])
+
+    return lines
+
+
+def build_devt_tagset_tension_table(records: list[dict[str, object]]) -> list[str]:
+    counts_by_tension_dimensions = {count: 0 for count in range(len(DIMENSIONS) + 1)}
+
+    for record in records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        tension_count = sum(1 for dimension in DIMENSIONS if str(payload.get(f"{dimension}-devt_tagset") or "") == "tension")
+        counts_by_tension_dimensions[tension_count] += 1
+
+    lines = [
+        "| Tension dimensions identified | Submission Count | % of Submissions |",
+        "| ---: | ---: | ---: |",
+    ]
+    for tension_count in range(len(DIMENSIONS), -1, -1):
+        submission_count = counts_by_tension_dimensions[tension_count]
+        percent = (submission_count / len(records)) * 100 if records else 0.0
+        lines.append(f"| {tension_count} | {submission_count} | {percent:.1f}% |")
+    lines.append(f"| Total | {len(records)} | 100.0% |")
+    return lines
+
+
+def build_devt_tagset_tension_analysis(records: list[dict[str, object]]) -> list[str]:
+    lines = [
+        "## devt_tagset Tension",
+        "",
+        "### All data",
+        "",
+        *build_devt_tagset_tension_table(records),
+    ]
+
+    for student_pool, pool_records in sorted(split_records_by_student_pool(records).items()):
+        lines.extend(["", f"### {student_pool}", "", *build_devt_tagset_tension_table(pool_records)])
+
+    return lines
+
+
 def build_report(records: list[dict[str, object]]) -> str:
     lines = [
         "# JSON Analysis Report",
@@ -94,6 +293,10 @@ def build_report(records: list[dict[str, object]]) -> str:
         "",
     ]
     lines.extend(build_file_count_analysis(records))
+    lines.extend(["", *build_e1_dimension_overview_analysis(records)])
+    lines.extend(["", *build_tagset_health_by_dimension_analysis(records)])
+    lines.extend(["", *build_e2_status_analysis(records)])
+    lines.extend(["", *build_devt_tagset_tension_analysis(records)])
     lines.append("")
     return "\n".join(lines)
 
