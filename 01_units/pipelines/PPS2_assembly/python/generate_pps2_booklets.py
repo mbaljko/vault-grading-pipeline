@@ -53,6 +53,18 @@ UNICODE_LATEX_REPLACEMENTS = {
     "☒": r"$\boxtimes$ ",
 }
 DEFAULT_LATEX_ENGINES = ("xelatex", "lualatex", "pdflatex")
+LATEX_ESCAPE_REPLACEMENTS = {
+    "\\": r"\textbackslash{}",
+    "{": r"\{",
+    "}": r"\}",
+    "#": r"\#",
+    "$": r"\$",
+    "%": r"\%",
+    "&": r"\&",
+    "_": r"\_",
+    "~": r"\textasciitilde{}",
+    "^": r"\textasciicircum{}",
+}
 
 
 @dataclass(frozen=True)
@@ -171,7 +183,71 @@ def build_placeholder_context(data: dict[str, Any]) -> dict[str, str]:
         if isinstance(value, (dict, list)):
             continue
         context[str(key)] = "" if value is None else str(value)
+    context.update(build_derived_placeholder_context(data))
     return context
+
+
+def escape_latex_text(value: str) -> str:
+    escaped_parts: list[str] = []
+    for char in value:
+        escaped_parts.append(LATEX_ESCAPE_REPLACEMENTS.get(char, char))
+    return "".join(escaped_parts)
+
+
+def format_latex_table_cell(value: str) -> str:
+    lines = [line.strip() for line in value.replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    if not lines:
+        return ""
+
+    formatted_lines: list[str] = []
+    for line in lines:
+        bullet_prefix = ""
+        content = line
+        if content.startswith("- "):
+            bullet_prefix = r"\textbullet\ "
+            content = content[2:].strip()
+        formatted_lines.append(f"{bullet_prefix}{escape_latex_text(content)}")
+
+    return r"\par ".join(formatted_lines)
+
+
+def build_two_column_latex_block(
+    left_header: str,
+    right_header: str,
+    left_value: str,
+    right_value: str,
+) -> str:
+    return f"""
+
+\\begin{{longtable}}[]{{@{{}}
+  >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 2\\tabcolsep) * \\real{{0.48}}}}
+  >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 2\\tabcolsep) * \\real{{0.48}}}}@{{}}}}
+\\toprule\\noalign{{}}
+\\begin{{minipage}}[b]{{\\linewidth}}\\raggedright
+{escape_latex_text(left_header)}
+\\end{{minipage}} & \\begin{{minipage}}[b]{{\\linewidth}}\\raggedright
+{escape_latex_text(right_header)}
+\\end{{minipage}} \\
+\\midrule\\noalign{{}}
+\\endhead
+\\bottomrule\\noalign{{}}
+\\endlastfoot
+{format_latex_table_cell(left_value)} & {format_latex_table_cell(right_value)} \\
+\\end{{longtable}}
+
+"""
+
+
+def build_derived_placeholder_context(data: dict[str, Any]) -> dict[str, str]:
+    derived_context: dict[str, str] = {}
+    for index in (1, 2, 3):
+        derived_context[f"Sec1_TS{index}_TABLE"] = build_two_column_latex_block(
+            left_header="PPP (Initial) position",
+            right_header="PPS1 Position",
+            left_value="" if data.get(f"Sec1_TS{index}_PPP") is None else str(data.get(f"Sec1_TS{index}_PPP")),
+            right_value="" if data.get(f"Sec1_TS{index}_PPS1") is None else str(data.get(f"Sec1_TS{index}_PPS1")),
+        )
+    return derived_context
 
 
 def extract_placeholders(template_text: str) -> set[str]:
