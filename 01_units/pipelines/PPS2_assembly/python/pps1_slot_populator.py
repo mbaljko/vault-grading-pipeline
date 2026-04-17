@@ -28,13 +28,16 @@ Slots populated by this module:
 
 Selection heuristic:
 
-1. Prefer dimensions with a non-empty `-status` value.
-2. Then prefer dimensions with a non-empty `-devt` value.
-3. Fall back to schema dimension order.
-4. Section 1 takes as many dimensions as there are configured Section 1 slots.
-5. Section 2 takes as many remaining dimensions as there are configured Section 2 slots.
-6. Section 4 prefers dimensions whose `-status` is `in tension`, then reuses
-    the Section 2/remaining order to fill any open slots.
+1. Build a prioritized dimension order by preferring non-empty `-status`, then
+    non-empty `-devt`, then schema dimension order.
+2. Populate the Section 1 TS slots first from family-specific subsets of that
+    prioritized order:
+    - `TS1` takes the first `B-*` dimension.
+    - `TS2` takes the first `C-*` dimension.
+    - `TS3` takes the first `D-*` dimension.
+3. Section 2 takes its slots from the remaining prioritized dimensions.
+4. Section 4 prefers dimensions from the remaining pool whose `-status` is
+    `in tension`, then falls back to the remaining Section 2 order.
 """
 
 from __future__ import annotations
@@ -67,6 +70,13 @@ def ordered_unique(values: list[str]) -> list[str]:
     return result
 
 
+def first_dimension_for_family(priority: list[str], family_prefix: str) -> str | None:
+    for dimension in priority:
+        if dimension.startswith(f"{family_prefix}-"):
+            return dimension
+    return None
+
+
 def select_section_dimensions(
     schema: SlotPopulationSchema,
     record: dict[str, str],
@@ -79,13 +89,27 @@ def select_section_dimensions(
         + [dimension for dimension in schema.dimensions if record.get(f"{dimension}-devt")]
         + schema.dimensions
     )
-    section1 = priority[:section1_slot_count]
+
+    section1: list[str] = []
+    for family_prefix in ["B", "C", "D"][:section1_slot_count]:
+        selected_dimension = first_dimension_for_family(priority, family_prefix)
+        if selected_dimension:
+            section1.append(selected_dimension)
+
     remaining = [dimension for dimension in priority if dimension not in section1]
+
+    if len(section1) < section1_slot_count:
+        section1.extend(remaining[: section1_slot_count - len(section1)])
+        remaining = [dimension for dimension in priority if dimension not in section1]
+
     section2 = remaining[:section2_slot_count]
+    remaining_after_section2 = [dimension for dimension in remaining if dimension not in section2]
     tension_dims = [
-        dimension for dimension in schema.dimensions if record.get(f"{dimension}-status") == "in tension"
+        dimension
+        for dimension in section2 + remaining_after_section2
+        if record.get(f"{dimension}-status") == "in tension"
     ]
-    tension_priority = ordered_unique(tension_dims + section2 + remaining)
+    tension_priority = ordered_unique(tension_dims + section2 + remaining_after_section2)
     section3 = tension_priority[:section3_slot_count]
     return section1, section2, section3
 

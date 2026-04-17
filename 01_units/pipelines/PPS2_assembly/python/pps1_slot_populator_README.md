@@ -35,14 +35,15 @@ The module is intentionally narrow. It does not import LMS CSV rows, build base 
 
 The slot order is heuristic, not hard-coded per section.
 
-1. Dimensions with a non-empty `-status` are prioritized first.
-2. Dimensions with a non-empty `-devt` are prioritized next.
-3. Remaining dimensions fall back to schema order.
-4. Section 1 takes as many prioritized dimensions as there are configured Section 1 slots.
-5. Section 2 takes as many remaining dimensions as there are configured Section 2 slots.
-6. Section 4 slots prefer dimensions whose status is exactly `in tension`, then fall back to the Section 2 / remaining ordering.
+1. Build a prioritized dimension order by preferring non-empty `-status`, then non-empty `-devt`, then schema order.
+2. Populate the Section 1 TS slots first from family-specific subsets of that prioritized order:
+  - `TS1` takes the first `B-*` dimension.
+  - `TS2` takes the first `C-*` dimension.
+  - `TS3` takes the first `D-*` dimension.
+3. Section 2 takes as many dimensions as there are configured Section 2 slots from the remaining prioritized pool.
+4. Section 4 prefers `in tension` dimensions from the remaining pool, then falls back to the remaining Section 2 order.
 
-This is why a slot such as `Sec1_TS1_dim` can end up as `D.2.1`: if `D-1` is the first prioritized dimension, it is mapped through `short_to_dotted_dimension` and assigned into the first Section 1 slot.
+This is why a slot such as `Sec1_TS1_dim` will always be a `B.*` dimension: the module selects the highest-priority remaining `B-*` dimension for `TS1`, then does the same for `C-*` and `D-*` for `TS2` and `TS3`.
 
 ## Maintenance Notes
 

@@ -48,6 +48,24 @@ Field source summary for generated JSON records:
         `E2_01_GridResponse`, and `E2_11_GridResponse`, then uses `gridStatusMap`
         plus `shortToDottedDimension` from the schema to assign `stable` or
         `in tension` to the matching dimension.
+- Converged development fields:
+    - `B-1-devt_converged`, `B-2-devt_converged`, `B-3-devt_converged`,
+        `C-1-devt_converged`, `C-2-devt_converged`, `C-3-devt_converged`,
+        `D-1-devt_converged`, `D-2-devt_converged`, and
+        `D-3-devt_converged` are declared in the schema as converged
+        development outputs derived from `*-devt` and `*-devt_tagset`.
+    - `B-1-devt_converged_health`, `B-2-devt_converged_health`,
+        `B-3-devt_converged_health`, `C-1-devt_converged_health`,
+        `C-2-devt_converged_health`, `C-3-devt_converged_health`,
+        `D-1-devt_converged_health`, `D-2-devt_converged_health`, and
+        `D-3-devt_converged_health` are the paired health/status fields for
+        those converged outputs.
+    - If exactly one source is populated, the converged value takes that source
+        value and the health is `asserted`.
+    - If both sources are populated and agree, the converged value keeps that
+        shared value and the health is `reinforced`.
+    - If both sources are populated and differ, the converged value becomes a
+        joined token such as `intro+shift` and the health is `conflict`.
 - Derived section-slot fields:
     - `Sec1_TS1_PPP`, `Sec1_TS1_PPS1`, `Sec1_TS1_dim`
     - `Sec1_TS2_PPP`, `Sec1_TS2_PPS1`, `Sec1_TS2_dim`
@@ -58,7 +76,10 @@ Field source summary for generated JSON records:
     - `Sec4_Slot1_dim`, `Sec4_Slot1_PPS1`
     - `Sec4_Slot2_dim`, `Sec4_Slot2_PPS1`
     - `Sec4_Slot3_dim`, `Sec4_Slot3_PPS1`
-    - See `pps1_slot_populator.py` for slot-population semantics and selection logic.
+    - Section 1 TS slots are populated first with `TS1 -> B-*`, `TS2 -> C-*`,
+        and `TS3 -> D-*` selections.
+    - See `pps1_slot_populator.py` for the remaining slot-population semantics
+        and selection logic.
 - Post-import enrichment fields:
     - `STUDENT_POOL` and `IS_SAMPLE` are not assigned in this importer.
     - They are added later by `promote_pps1_buffered_jsons.py` during post-import
@@ -355,6 +376,17 @@ def resolve_runtime_value[T](override: T | None, default: T) -> T:
     return default if override is None else override
 
 
+def ordered_unique(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
 def normalize_value(value: str | None) -> str:
     if value is None:
         return ""
@@ -494,6 +526,25 @@ def build_pps1_text_development_fields(schema: ImportSchema, record: dict[str, s
 
 def derive_indicator_health_src_bcd2(extracted_value: str) -> str:
     return "2" if normalize_value(extracted_value) else "0"
+
+
+def derive_converged_development_value(
+    checkbox_value: str,
+    tagset_value: str,
+) -> tuple[str, str]:
+    normalized_checkbox_value = canonicalize_development_type(checkbox_value)
+    normalized_tagset_value = canonicalize_development_type(tagset_value)
+
+    present_values = [value for value in (normalized_checkbox_value, normalized_tagset_value) if value]
+    if not present_values:
+        return "", ""
+
+    unique_values = ordered_unique(present_values)
+    if len(unique_values) == 1:
+        health = "reinforced" if len(present_values) == 2 else "asserted"
+        return unique_values[0], health
+
+    return "+".join(unique_values), "conflict"
 
 
 def classify_cleaning_change(
@@ -909,6 +960,21 @@ def populate_development_tagset_values(schema: ImportSchema, target: dict[str, s
         target[f"{dimension}_indicator_health_srcBCD2"] = derive_indicator_health_src_bcd2(extracted_value)
 
 
+def populate_converged_development_values(
+    schema: ImportSchema,
+    target: dict[str, str],
+    e1_fields: dict[str, str],
+    bcd2_fields: dict[str, str],
+) -> None:
+    for dimension in schema.dimensions:
+        converged_value, converged_health = derive_converged_development_value(
+            checkbox_value=e1_fields.get(f"{dimension}-devt", ""),
+            tagset_value=bcd2_fields.get(f"{dimension}-devt_tagset", ""),
+        )
+        target[f"{dimension}-devt_converged"] = converged_value
+        target[f"{dimension}-devt_converged_health"] = converged_health
+
+
 def build_record(
     schema: ImportSchema,
     row: dict[str, str],
@@ -956,6 +1022,12 @@ def build_record(
 
     populate_development_values(schema, derived_blocks["e1Derived"], row)
     populate_development_tagset_values(schema, derived_blocks["bcd2Derived"], base_record)
+    populate_converged_development_values(
+        schema,
+        derived_blocks["convergedDerived"],
+        derived_blocks["e1Derived"],
+        derived_blocks["bcd2Derived"],
+    )
     populate_status_values(schema, derived_blocks["e2Derived"], row)
 
     assembled_for_sections = assemble_record(schema, base_record, derived_blocks)
