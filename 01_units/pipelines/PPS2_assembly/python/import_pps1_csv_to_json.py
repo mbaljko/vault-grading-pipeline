@@ -1260,6 +1260,7 @@ def build_pps1_text_development_summary_report(
     lines = [
         "# PPS1 Text Development Summary",
         "",
+        "- dev_type ∈ {cont-reinf, intro, shift, tension}",
         f"- Total student rows: {total_rows}",
         f"- Rows with at least one extracted development type: {rows_with_any}",
         f"- Rows with all {len(schema.dimensions)} dimensions extracted: {rows_with_all}",
@@ -1309,13 +1310,23 @@ def build_pps1_text_development_summary_report(
         f"{missing_slots} | "
         f"{(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}% |"
     )
+    lines.append(
+        "| "
+        f"% of {total_slots} | "
+        f"{(100.0 * overall_counts['cont-reinf'] / total_slots) if total_slots else 0.0:.1f}% | "
+        f"{(100.0 * overall_counts['intro'] / total_slots) if total_slots else 0.0:.1f}% | "
+        f"{(100.0 * overall_counts['shift'] / total_slots) if total_slots else 0.0:.1f}% | "
+        f"{(100.0 * overall_counts['tension'] / total_slots) if total_slots else 0.0:.1f}% | "
+        f"{(100.0 * missing_slots / total_slots) if total_slots else 0.0:.1f}% | "
+        f"{(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}% |"
+    )
 
     lines.extend(
         [
             "",
-            "## Student Coverage",
+            "## Submission Count and Dimensions with Type",
             "",
-            "| Extracted Dimensions | Student Rows |",
+            "| Dimensions with Type | Submission Count |",
             "| ---: | ---: |",
         ]
     )
