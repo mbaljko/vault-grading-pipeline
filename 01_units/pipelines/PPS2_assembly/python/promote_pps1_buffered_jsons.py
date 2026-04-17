@@ -71,10 +71,10 @@ def main() -> int:
     clear_json_files(args.section_m_output_dir)
     clear_json_files(args.section_o_output_dir)
 
-    promoted = 0
+    promoted_all_minus_sas = 0
     sampled = 0
-    sec_m = 0
-    sec_o = 0
+    promoted_sec_m = 0
+    promoted_sec_o = 0
 
     for staged_path in sorted(args.staged_dir.glob("*.json")):
         filename = staged_path.name
@@ -87,10 +87,13 @@ def main() -> int:
 
         if in_section_m:
             student_pool = "student_data_SAS_SecM"
+            primary_output_dir = args.section_m_output_dir
         elif in_section_o:
             student_pool = "student_data_SAS_SecO"
+            primary_output_dir = args.section_o_output_dir
         else:
             student_pool = "student_data_all_MINUS_SAS"
+            primary_output_dir = args.all_minus_sas_output_dir
 
         is_sample = filename in sample_filenames
 
@@ -102,24 +105,23 @@ def main() -> int:
         payload["IS_SAMPLE"] = is_sample
         staged_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
-        all_target_path = args.all_minus_sas_output_dir / filename
-        shutil.move(str(staged_path), all_target_path)
-        promoted += 1
+        primary_target_path = primary_output_dir / filename
+        shutil.move(str(staged_path), primary_target_path)
 
         if is_sample:
-            shutil.copy2(all_target_path, args.sample_output_dir / filename)
+            shutil.copy2(primary_target_path, args.sample_output_dir / filename)
             sampled += 1
         if student_pool == "student_data_SAS_SecM":
-            shutil.copy2(all_target_path, args.section_m_output_dir / filename)
-            sec_m += 1
-        if student_pool == "student_data_SAS_SecO":
-            shutil.copy2(all_target_path, args.section_o_output_dir / filename)
-            sec_o += 1
+            promoted_sec_m += 1
+        elif student_pool == "student_data_SAS_SecO":
+            promoted_sec_o += 1
+        else:
+            promoted_all_minus_sas += 1
 
-    print(f"Promoted {promoted} JSON files to {args.all_minus_sas_output_dir}")
+    print(f"Promoted {promoted_all_minus_sas} JSON files to {args.all_minus_sas_output_dir}")
     print(f"Copied {sampled} sampled JSON files to {args.sample_output_dir}")
-    print(f"Copied {sec_m} Section M JSON files to {args.section_m_output_dir}")
-    print(f"Copied {sec_o} Section O JSON files to {args.section_o_output_dir}")
+    print(f"Promoted {promoted_sec_m} Section M JSON files to {args.section_m_output_dir}")
+    print(f"Promoted {promoted_sec_o} Section O JSON files to {args.section_o_output_dir}")
     return 0
 
 

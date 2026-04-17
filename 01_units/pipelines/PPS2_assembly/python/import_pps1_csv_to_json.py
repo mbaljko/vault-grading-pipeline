@@ -1411,6 +1411,11 @@ def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> st
     }
 
     counts_by_dimension: dict[str, dict[str, int]] = {}
+    status_label_display = {
+        "Passed": "Passed (health=2)",
+        "Multiple Selected": "Multiple Selected (health=1)",
+        "None Selected": "None Selected (health=0)",
+    }
     for dimension in schema.dimensions:
         passed = 0
         none_selected = 0
@@ -1440,14 +1445,14 @@ def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> st
         "",
         f"- Total imported rows: {len(rows)}",
         "",
-        "## Dimensions : Devt Type Uniqueness",
+        "## E1 Categorization of Dimension Devt : Type Uniqueness",
         "",
         f"| {' | '.join(header_cells)} |",
         f"| {' | '.join(divider_cells)} |",
     ]
 
-    for status_label in ("Passed", "None Selected", "Multiple Selected"):
-        row_cells = [status_label]
+    for status_label in ("Passed", "Multiple Selected", "None Selected"):
+        row_cells = [status_label_display[status_label]]
         row_cells.extend(str(counts_by_dimension[dimension][status_label]) for dimension in schema.dimensions)
         lines.append(f"| {' | '.join(row_cells)} |")
 
