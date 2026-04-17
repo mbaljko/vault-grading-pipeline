@@ -29,6 +29,11 @@ DIMENSIONS = (
     "D-2",
     "D-3",
 )
+DIMENSION_GROUPS = {
+    "B": ("B-1", "B-2", "B-3"),
+    "C": ("C-1", "C-2", "C-3"),
+    "D": ("D-1", "D-2", "D-3"),
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -344,6 +349,161 @@ def build_tension_correlation_analysis(records: list[dict[str, object]]) -> list
     return lines
 
 
+def count_group_indicator_population(payload: dict[str, object], group_dimensions: tuple[str, ...], suffix: str) -> int:
+    return sum(1 for dimension in group_dimensions if str(payload.get(f"{dimension}{suffix}") or "").strip())
+
+
+def build_group_indicator_population_table(records: list[dict[str, object]], suffix: str) -> list[str]:
+    counts_by_group = {
+        group_name: {count: 0 for count in range(4)}
+        for group_name in DIMENSION_GROUPS
+    }
+
+    for record in records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        for group_name, group_dimensions in DIMENSION_GROUPS.items():
+            populated_count = count_group_indicator_population(payload, group_dimensions, suffix)
+            counts_by_group[group_name][populated_count] += 1
+
+    lines = [
+        "| Populated indicators (n of 3) | B | C | D | B+C+D |",
+        "| ---: | ---: | ---: | ---: | ---: |",
+    ]
+    aggregate_total = len(records) * len(DIMENSION_GROUPS)
+    for populated_count in range(4):
+        row_cells: list[str] = []
+        for group_name in ("B", "C", "D"):
+            count = counts_by_group[group_name][populated_count]
+            percent = (count / len(records)) * 100 if records else 0.0
+            row_cells.append(f"{count} ({percent:.1f}%)")
+        aggregate_count = sum(counts_by_group[group_name][populated_count] for group_name in ("B", "C", "D"))
+        aggregate_percent = (aggregate_count / aggregate_total) * 100 if aggregate_total else 0.0
+        row_cells.append(f"{aggregate_count} ({aggregate_percent:.1f}%)")
+        lines.append(f"| {populated_count} | " + " | ".join(row_cells) + " |")
+    lines.append(
+        "| Total | "
+        + " | ".join([str(len(records)) for _ in range(3)] + [str(aggregate_total)])
+        + " |"
+    )
+    return lines
+
+
+def build_group_indicator_population_analysis(records: list[dict[str, object]]) -> list[str]:
+    lines = [
+        "## B/C/D indicator population",
+        "",
+        "### All data",
+        "",
+        "#### devt",
+        "",
+        *build_group_indicator_population_table(records, "-devt"),
+        "",
+        "#### devt_tagset",
+        "",
+        *build_group_indicator_population_table(records, "-devt_tagset"),
+    ]
+
+    for student_pool, pool_records in sorted(split_records_by_student_pool(records).items()):
+        lines.extend(
+            [
+                "",
+                f"### {student_pool}",
+                "",
+                "#### devt",
+                "",
+                *build_group_indicator_population_table(pool_records, "-devt"),
+                "",
+                "#### devt_tagset",
+                "",
+                *build_group_indicator_population_table(pool_records, "-devt_tagset"),
+            ]
+        )
+
+    return lines
+
+
+def normalize_devt_value(value: object) -> str:
+    raw_value = str(value or "").strip().lower()
+    if raw_value == "shift":
+        return "shift"
+    if raw_value in {"cont/reinf", "cont-reinf", "continuity-reinforcement", "continuity/reinforcement"}:
+        return "cont-reinf"
+    return "other"
+
+
+def build_shift_ratio_bin_labels() -> tuple[str, ...]:
+    labels = []
+    for bin_index in range(4):
+        lower = bin_index / 4
+        upper = (bin_index + 1) / 4
+        labels.append(f"Q{bin_index + 1} ({lower:.2f}-{upper:.2f})")
+    labels.append("No shift/cont-reinf")
+    return tuple(labels)
+
+
+def assign_shift_ratio_bin(shift_count: int, cont_reinf_count: int) -> str:
+    total = shift_count + cont_reinf_count
+    if total == 0:
+        return "No shift/cont-reinf"
+
+    shift_ratio = shift_count / total
+    if shift_ratio >= 1.0:
+        return "Q4 (0.75-1.00)"
+    bin_index = int(shift_ratio * 4)
+    lower = bin_index / 4
+    upper = (bin_index + 1) / 4
+    return f"Q{bin_index + 1} ({lower:.2f}-{upper:.2f})"
+
+
+def build_shift_vs_cont_reinf_distribution_table(records: list[dict[str, object]]) -> list[str]:
+    categories = build_shift_ratio_bin_labels()
+    counts_by_category = {category: 0 for category in categories}
+
+    for record in records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        shift_count = 0
+        cont_reinf_count = 0
+        for group_dimensions in DIMENSION_GROUPS.values():
+            for dimension in group_dimensions:
+                normalized_value = normalize_devt_value(payload.get(f"{dimension}-devt"))
+                if normalized_value == "shift":
+                    shift_count += 1
+                elif normalized_value == "cont-reinf":
+                    cont_reinf_count += 1
+        category = assign_shift_ratio_bin(shift_count, cont_reinf_count)
+        counts_by_category[category] += 1
+
+    lines = [
+        "| Shift ratio quartile | B+C+D |",
+        "| --- | ---: |",
+    ]
+    for category in categories:
+        count = counts_by_category[category]
+        percent = (count / len(records)) * 100 if records else 0.0
+        lines.append(f"| {category} | {count} ({percent:.1f}%) |")
+    lines.append(f"| Total | {len(records)} |")
+    return lines
+
+
+def build_shift_vs_cont_reinf_distribution_analysis(records: list[dict[str, object]]) -> list[str]:
+    lines = [
+        "## B/C/D shift vs cont-reinf distribution - Quartiles",
+        "",
+        "### All data",
+        "",
+        *build_shift_vs_cont_reinf_distribution_table(records),
+    ]
+
+    for student_pool, pool_records in sorted(split_records_by_student_pool(records).items()):
+        lines.extend(["", f"### {student_pool}", "", *build_shift_vs_cont_reinf_distribution_table(pool_records)])
+
+    return lines
+
+
 def build_report(records: list[dict[str, object]]) -> str:
     lines = [
         "# JSON Analysis Report",
@@ -357,6 +517,8 @@ def build_report(records: list[dict[str, object]]) -> str:
     lines.extend(["", *build_e2_status_analysis(records)])
     lines.extend(["", *build_devt_tagset_tension_analysis(records)])
     lines.extend(["", *build_tension_correlation_analysis(records)])
+    lines.extend(["", *build_group_indicator_population_analysis(records)])
+    lines.extend(["", *build_shift_vs_cont_reinf_distribution_analysis(records)])
     lines.append("")
     return "\n".join(lines)
 
