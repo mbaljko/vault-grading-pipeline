@@ -20,7 +20,6 @@ Slots populated by this module:
 - Section 2 slots:
     - `Sec2_V1_dim`, `Sec2_V1_PPP`, `Sec2_V1_PPS1`, `Sec2_V1_devt_type`, `Sec2_V1_devt_explain_if_conflicting`
     - `Sec2_V2_dim`, `Sec2_V2_PPP`, `Sec2_V2_PPS1`, `Sec2_V2_devt_type`, `Sec2_V2_devt_explain_if_conflicting`
-    - `Sec2_V3_dim`, `Sec2_V3_PPP`, `Sec2_V3_PPS1`, `Sec2_V3_devt_type`, `Sec2_V3_devt_explain_if_conflicting`
 - Section 4 slots:
     - `Sec4_Slot1_dim`, `Sec4_Slot1_PPS1`, `Sec4_Slot1_devt_type`, `Sec4_Slot1_devt_explain_if_conflicting`
     - `Sec4_Slot2_dim`, `Sec4_Slot2_PPS1`, `Sec4_Slot2_devt_type`, `Sec4_Slot2_devt_explain_if_conflicting`
@@ -32,8 +31,8 @@ schema's dotted dimension codes.
 
 Selection heuristic:
 
-1. Build a prioritized dimension order by preferring non-empty `-status`, then
-    non-empty `-devt`, then schema dimension order.
+1. Build a prioritized dimension order by preferring non-empty `-devt`, then
+    schema dimension order.
 2. Populate the Section 1 TS slots first from family-specific subsets of that
     prioritized order:
     - `TS1` takes the first non-tension `B-*` dimension when available,
@@ -46,7 +45,8 @@ Selection heuristic:
     duplication with the TS selections. It prefers `B-*` and `C-*` dimensions,
     tries to include one from each of `B` and `C`, ranks development types as
     `intro`, then `cont-reinf`, then `shift`, and only falls back to `D-*`
-    when needed to fill the configured slots.
+    when needed to fill the populated V slots.
+    - `V1` and `V2` participate in this selection.
 4. Section 4 prefers dimensions from the remaining pool whose `-status` is
     `in tension`, then falls back to the remaining Section 2 order.
 """
@@ -222,8 +222,7 @@ def select_section_dimensions(
     section2_slot_count = len(schema.section2_slots)
     section3_slot_count = len(schema.section3_slots)
     priority = ordered_unique(
-        [dimension for dimension in schema.dimensions if record.get(f"{dimension}-status")]
-        + [dimension for dimension in schema.dimensions if record.get(f"{dimension}-devt")]
+        [dimension for dimension in schema.dimensions if record.get(f"{dimension}-devt")]
         + schema.dimensions
     )
 

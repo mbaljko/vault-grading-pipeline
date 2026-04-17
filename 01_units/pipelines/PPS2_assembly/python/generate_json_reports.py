@@ -60,7 +60,7 @@ CONVERGED_HEALTH_ORDER = (
     "conflict",
 )
 SECTION1_SLOT_FIELDS = ("Sec1_TS1_dim", "Sec1_TS2_dim", "Sec1_TS3_dim")
-SECTION2_SLOT_FIELDS = ("Sec2_V1_dim", "Sec2_V2_dim", "Sec2_V3_dim")
+SECTION2_SLOT_FIELDS = ("Sec2_V1_dim", "Sec2_V2_dim")
 SECTION3_SLOT_FIELDS = ("Sec4_Slot1_dim", "Sec4_Slot2_dim", "Sec4_Slot3_dim")
 ALL_SLOT_FIELDS = SECTION1_SLOT_FIELDS + SECTION2_SLOT_FIELDS + SECTION3_SLOT_FIELDS
 HUMAN_FRIENDLY_TO_SHORT_DIMENSION = {
@@ -966,6 +966,14 @@ def same_family_non_tension_exists(payload: dict[str, object], dimension: str) -
     return False
 
 
+def expected_ts_family(slot_field: str) -> str:
+    if slot_field == "Sec1_TS1_dim":
+        return "B"
+    if slot_field == "Sec1_TS2_dim":
+        return "C"
+    return "D"
+
+
 def describe_slot_selection_issues(payload: dict[str, object]) -> list[str]:
     actual = get_actual_slot_dimensions(payload)
     expected = get_expected_slot_dimensions(payload)
@@ -975,10 +983,10 @@ def describe_slot_selection_issues(payload: dict[str, object]) -> list[str]:
     if duplicates:
         issues.append("duplicate dimensions: " + ", ".join(duplicates))
 
-    actual_section1 = [actual.get(field, "") for field in SECTION1_SLOT_FIELDS]
-    expected_section1 = [expected.get(field, "") for field in SECTION1_SLOT_FIELDS]
-    if actual_section1 != expected_section1:
-        issues.append("TS expected " + ", ".join(expected_section1) + " but got " + ", ".join(actual_section1))
+    for field in SECTION1_SLOT_FIELDS:
+        dimension = actual.get(field, "")
+        if dimension and not dimension.startswith(f"{expected_ts_family(field)}-"):
+            issues.append(f"{field} chose {dimension} outside its expected family")
 
     actual_section2 = [actual.get(field, "") for field in SECTION2_SLOT_FIELDS]
     expected_section2 = [expected.get(field, "") for field in SECTION2_SLOT_FIELDS]
@@ -1003,6 +1011,49 @@ def describe_slot_selection_issues(payload: dict[str, object]) -> list[str]:
     return issues
 
 
+def describe_slot_selection_issues_by_group(payload: dict[str, object]) -> dict[str, list[str]]:
+    actual = get_actual_slot_dimensions(payload)
+    expected = get_expected_slot_dimensions(payload)
+    grouped_issues = {"ts": [], "v": [], "slot": []}
+
+    duplicates = duplicate_slot_dimensions(actual)
+    if duplicates:
+        grouped_issues["v"].append("duplicate dimensions across TS/V: " + ", ".join(duplicates))
+
+    for field in SECTION1_SLOT_FIELDS:
+        dimension = actual.get(field, "")
+        if dimension and not dimension.startswith(f"{expected_ts_family(field)}-"):
+            grouped_issues["ts"].append(f"{field} chose {dimension} outside its expected family")
+
+    actual_section2 = [actual.get(field, "") for field in SECTION2_SLOT_FIELDS]
+    expected_section2 = [expected.get(field, "") for field in SECTION2_SLOT_FIELDS]
+    if actual_section2 != expected_section2:
+        grouped_issues["v"].append(
+            "expected " + ", ".join(expected_section2) + " but got " + ", ".join(actual_section2)
+        )
+
+    actual_section3 = [actual.get(field, "") for field in SECTION3_SLOT_FIELDS]
+    expected_section3 = [expected.get(field, "") for field in SECTION3_SLOT_FIELDS]
+    if actual_section3 != expected_section3:
+        grouped_issues["slot"].append(
+            "expected " + ", ".join(expected_section3) + " but got " + ", ".join(actual_section3)
+        )
+
+    for field in SECTION1_SLOT_FIELDS:
+        dimension = actual.get(field, "")
+        if not dimension:
+            continue
+        if str(payload.get(f"{dimension}-status") or "") == "in tension" and same_family_non_tension_exists(payload, dimension):
+            grouped_issues["ts"].append(
+                f"{field} chose in-tension {dimension} despite a same-family non-tension option"
+            )
+
+    if any(dimension.startswith("D-") for dimension in actual_section2 if dimension):
+        grouped_issues["v"].append("includes D dimension")
+
+    return grouped_issues
+
+
 def slot_analysis_row(record: dict[str, object], *, include_issues: bool) -> str:
     payload = record.get("payload")
     if not isinstance(payload, dict):
@@ -1018,7 +1069,6 @@ def slot_analysis_row(record: dict[str, object], *, include_issues: bool) -> str
         format_slot_value(actual.get("Sec1_TS3_dim", "")),
         format_slot_value(actual.get("Sec2_V1_dim", "")),
         format_slot_value(actual.get("Sec2_V2_dim", "")),
-        format_slot_value(actual.get("Sec2_V3_dim", "")),
         format_slot_value(actual.get("Sec4_Slot1_dim", "")),
         format_slot_value(actual.get("Sec4_Slot2_dim", "")),
         format_slot_value(actual.get("Sec4_Slot3_dim", "")),
@@ -1049,15 +1099,15 @@ def build_slot_selection_table(records: list[dict[str, object]], *, problematic:
         )
     )
 
-    header = "| Participant | Pool | TS1 | TS2 | TS3 | V1 | V2 | V3 | Slot1 | Slot2 | Slot3 |"
-    divider = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+    header = "| Participant | Pool | TS1 | TS2 | TS3 | V1 | V2 | Slot1 | Slot2 | Slot3 |"
+    divider = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
     if problematic:
-        header = "| Participant | Pool | TS1 | TS2 | TS3 | V1 | V2 | V3 | Slot1 | Slot2 | Slot3 | Issues |"
-        divider = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+        header = "| Participant | Pool | TS1 | TS2 | TS3 | V1 | V2 | Slot1 | Slot2 | Slot3 | Issues |"
+        divider = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
 
     lines = [header, divider]
     if not filtered_records:
-        empty_cells = ["(none)"] + [""] * 10
+        empty_cells = ["(none)"] + [""] * 9
         if problematic:
             empty_cells.append("")
         lines.append("| " + " | ".join(empty_cells) + " |")
@@ -1068,7 +1118,57 @@ def build_slot_selection_table(records: list[dict[str, object]], *, problematic:
     return lines
 
 
-def build_slot_selection_analysis(records: list[dict[str, object]]) -> list[str]:
+def build_problematic_slot_selection_table(records: list[dict[str, object]], group: str) -> list[str]:
+    field_map = {
+        "ts": SECTION1_SLOT_FIELDS,
+        "v": SECTION2_SLOT_FIELDS,
+        "slot": SECTION3_SLOT_FIELDS,
+    }
+    label_map = {
+        "ts": ("TS1", "TS2", "TS3"),
+        "v": ("V1", "V2"),
+        "slot": ("Slot1", "Slot2", "Slot3"),
+    }
+    fields = field_map[group]
+    labels = label_map[group]
+
+    filtered_records: list[dict[str, object]] = []
+    for record in records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        if describe_slot_selection_issues_by_group(payload)[group]:
+            filtered_records.append(record)
+
+    filtered_records.sort(
+        key=lambda record: (
+            str(record.get("student_pool") or ""),
+            str((record.get("payload") or {}).get("participant_id") or ""),
+            str(record.get("path") or ""),
+        )
+    )
+
+    header = "| Participant | Pool | " + " | ".join(labels) + " | Issues |"
+    divider = "| --- | --- | " + " | ".join("---" for _ in labels) + " | --- |"
+    lines = [header, divider]
+    if not filtered_records:
+        lines.append("| (none) |  | " + " | ".join("" for _ in labels) + " |  |")
+        return lines
+
+    for record in filtered_records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            payload = {}
+        actual = get_actual_slot_dimensions(payload)
+        participant_id = str(payload.get("participant_id") or Path(str(record.get("path") or "")).stem)
+        student_pool = str(record.get("student_pool") or "")
+        issues = "; ".join(describe_slot_selection_issues_by_group(payload)[group])
+        cells = [participant_id, student_pool] + [format_slot_value(actual.get(field, "")) for field in fields] + [issues]
+        lines.append("| " + " | ".join(cell.replace("|", "/") for cell in cells) + " |")
+    return lines
+
+
+def build_slot_selection_analysis_block(records: list[dict[str, object]]) -> list[str]:
     straightforward_count = 0
     problematic_count = 0
     for record in records:
@@ -1081,8 +1181,6 @@ def build_slot_selection_analysis(records: list[dict[str, object]]) -> list[str]
             straightforward_count += 1
 
     return [
-        "## Slot Selection Analysis",
-        "",
         f"- Straightforward cases: {straightforward_count}",
         f"- Problematic cases: {problematic_count}",
         "",
@@ -1092,8 +1190,38 @@ def build_slot_selection_analysis(records: list[dict[str, object]]) -> list[str]
         "",
         "### Problematic cases",
         "",
-        *build_slot_selection_table(records, problematic=True),
+        "#### TS slots",
+        "",
+        *build_problematic_slot_selection_table(records, "ts"),
+        "",
+        "#### V slots",
+        "",
+        *build_problematic_slot_selection_table(records, "v"),
+        "",
+        "#### Section 4 slots",
+        "",
+        *build_problematic_slot_selection_table(records, "slot"),
     ]
+
+
+def build_slot_selection_analysis(records: list[dict[str, object]]) -> list[str]:
+    lines = [
+        "## Slot Selection Analysis",
+        "",
+        "### All data",
+        "",
+        *build_slot_selection_analysis_block(records),
+    ]
+
+    for student_pool, pool_records in sorted(split_records_by_student_pool(records).items()):
+        lines.extend([
+            "",
+            f"### {student_pool}",
+            "",
+            *build_slot_selection_analysis_block(pool_records),
+        ])
+
+    return lines
 
 
 def build_report(records: list[dict[str, object]]) -> str:

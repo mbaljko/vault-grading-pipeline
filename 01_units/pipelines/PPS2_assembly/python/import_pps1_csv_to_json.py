@@ -82,12 +82,12 @@ Field source summary for generated JSON records:
     - `Sec1_TS3_PPP`, `Sec1_TS3_PPS1`, `Sec1_TS3_dim`
     - `Sec2_V1_PPP`, `Sec2_V1_PPS1`, `Sec2_V1_dim`
     - `Sec2_V2_PPP`, `Sec2_V2_PPS1`, `Sec2_V2_dim`
-    - `Sec2_V3_PPP`, `Sec2_V3_PPS1`, `Sec2_V3_dim`
     - `Sec4_Slot1_dim`, `Sec4_Slot1_PPS1`
     - `Sec4_Slot2_dim`, `Sec4_Slot2_PPS1`
     - `Sec4_Slot3_dim`, `Sec4_Slot3_PPS1`
     - Section 1 TS slots are populated first with `TS1 -> B-*`, `TS2 -> C-*`,
         and `TS3 -> D-*` selections.
+    - Section 2 populates `V1` and `V2`.
     - See `pps1_slot_populator.py` for the remaining slot-population semantics
         and selection logic.
 - Post-import enrichment fields:

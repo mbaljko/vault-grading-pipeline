@@ -175,11 +175,6 @@
     "Sec2_V2_dim": "",
     "Sec2_V2_devt_type": "",
     "Sec2_V2_devt_explain_if_conflicting": "",
-    "Sec2_V3_PPP": "",
-    "Sec2_V3_PPS1": "",
-    "Sec2_V3_dim": "",
-    "Sec2_V3_devt_type": "",
-    "Sec2_V3_devt_explain_if_conflicting": "",
     "Sec4_Slot1_dim": "",
     "Sec4_Slot1_PPS1": "",
     "Sec4_Slot1_devt_type": "",
@@ -291,11 +286,6 @@
       "Sec2_V2_dim",
       "Sec2_V2_devt_type",
       "Sec2_V2_devt_explain_if_conflicting",
-      "Sec2_V3_PPP",
-      "Sec2_V3_PPS1",
-      "Sec2_V3_dim",
-      "Sec2_V3_devt_type",
-      "Sec2_V3_devt_explain_if_conflicting",
       "Sec4_Slot1_dim",
       "Sec4_Slot1_PPS1",
       "Sec4_Slot1_devt_type",
@@ -410,13 +400,6 @@
       "pps1": "Sec2_V2_PPS1",
       "devt_type": "Sec2_V2_devt_type",
       "devt_explain_if_conflicting": "Sec2_V2_devt_explain_if_conflicting"
-    },
-    {
-      "dim": "Sec2_V3_dim",
-      "ppp": "Sec2_V3_PPP",
-      "pps1": "Sec2_V3_PPS1",
-      "devt_type": "Sec2_V3_devt_type",
-      "devt_explain_if_conflicting": "Sec2_V3_devt_explain_if_conflicting"
     }
   ],
   "section3Slots": [
