@@ -54,6 +54,11 @@ Field source summary for generated JSON records:
         `D-1-devt_converged`, `D-2-devt_converged`, and
         `D-3-devt_converged` store the converged development label for each
         dimension, derived from `*-devt` and `*-devt_tagset`.
+    - `D-1-devt_convergenced_tension_addendum`,
+        `D-2-devt_convergenced_tension_addendum`, and
+        `D-3-devt_convergenced_tension_addendum` are additional D-only
+        converged fields. They store a note derived from the matching `D-*`
+        status field: `stable`, `under tension`, or `not known (not noted)`.
     - `B-1-devt_converged_health`, `B-2-devt_converged_health`,
         `B-3-devt_converged_health`, `C-1-devt_converged_health`,
         `C-2-devt_converged_health`, `C-3-devt_converged_health`,
@@ -567,6 +572,15 @@ def derive_converged_development_value(
     return "conflicting", f"conflict: {normalized_tagset_value}(BCD)+{normalized_checkbox_value}(E1)"
 
 
+def derive_d_tension_addendum(status_value: str) -> str:
+    normalized_status = status_value.strip().lower()
+    if normalized_status == "stable":
+        return "stable"
+    if normalized_status == "in tension":
+        return "under tension"
+    return "not known (not noted)"
+
+
 def classify_cleaning_change(
     raw_text: str,
     cleaned_text: str,
@@ -985,6 +999,7 @@ def populate_converged_development_values(
     target: dict[str, str],
     e1_fields: dict[str, str],
     bcd2_fields: dict[str, str],
+    e2_fields: dict[str, str],
 ) -> None:
     for dimension in schema.dimensions:
         converged_value, converged_health = derive_converged_development_value(
@@ -992,6 +1007,10 @@ def populate_converged_development_values(
             tagset_value=bcd2_fields.get(f"{dimension}-devt_tagset", ""),
         )
         target[f"{dimension}-devt_converged"] = converged_value
+        if dimension.startswith("D-"):
+            target[f"{dimension}-devt_convergenced_tension_addendum"] = derive_d_tension_addendum(
+                e2_fields.get(f"{dimension}-status", "")
+            )
         target[f"{dimension}-devt_converged_health"] = converged_health
 
 
@@ -1042,13 +1061,14 @@ def build_record(
 
     populate_development_values(schema, derived_blocks["e1Derived"], row)
     populate_development_tagset_values(schema, derived_blocks["bcd2Derived"], base_record)
+    populate_status_values(schema, derived_blocks["e2Derived"], row)
     populate_converged_development_values(
         schema,
         derived_blocks["convergedDerived"],
         derived_blocks["e1Derived"],
         derived_blocks["bcd2Derived"],
+        derived_blocks["e2Derived"],
     )
-    populate_status_values(schema, derived_blocks["e2Derived"], row)
 
     assembled_for_sections = assemble_record(schema, base_record, derived_blocks)
     populate_section_fields(schema, derived_blocks["sectionDerived"], assembled_for_sections)
