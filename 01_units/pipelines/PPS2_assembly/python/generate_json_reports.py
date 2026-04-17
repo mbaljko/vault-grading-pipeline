@@ -285,6 +285,65 @@ def build_devt_tagset_tension_analysis(records: list[dict[str, object]]) -> list
     return lines
 
 
+def build_tension_correlation_table(records: list[dict[str, object]]) -> list[str]:
+    categories = (
+        "No tension indicated",
+        "Tension indicated from one source (E2 only)",
+        "Tension reinforced (both sources)",
+        "Tension conflict (tagset says tension but not E2)",
+    )
+    counts_by_dimension = {
+        dimension: {category: 0 for category in categories}
+        for dimension in DIMENSIONS
+    }
+
+    for record in records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        for dimension in DIMENSIONS:
+            e2_tension = str(payload.get(f"{dimension}-status") or "") == "in tension"
+            tagset_tension = str(payload.get(f"{dimension}-devt_tagset") or "") == "tension"
+
+            if e2_tension and tagset_tension:
+                category = "Tension reinforced (both sources)"
+            elif e2_tension:
+                category = "Tension indicated from one source (E2 only)"
+            elif tagset_tension:
+                category = "Tension conflict (tagset says tension but not E2)"
+            else:
+                category = "No tension indicated"
+            counts_by_dimension[dimension][category] += 1
+
+    lines = [
+        "| Category | " + " | ".join(DIMENSIONS) + " |",
+        "| --- | " + " | ".join("---:" for _ in DIMENSIONS) + " |",
+    ]
+    for category in categories:
+        lines.append(
+            "| " + category + " | " + " | ".join(
+                str(counts_by_dimension[dimension][category]) for dimension in DIMENSIONS
+            ) + " |"
+        )
+    lines.append("| Total | " + " | ".join(str(len(records)) for _ in DIMENSIONS) + " |")
+    return lines
+
+
+def build_tension_correlation_analysis(records: list[dict[str, object]]) -> list[str]:
+    lines = [
+        "## Tension correlation - E2 vs tagset",
+        "",
+        "### All data",
+        "",
+        *build_tension_correlation_table(records),
+    ]
+
+    for student_pool, pool_records in sorted(split_records_by_student_pool(records).items()):
+        lines.extend(["", f"### {student_pool}", "", *build_tension_correlation_table(pool_records)])
+
+    return lines
+
+
 def build_report(records: list[dict[str, object]]) -> str:
     lines = [
         "# JSON Analysis Report",
@@ -297,6 +356,7 @@ def build_report(records: list[dict[str, object]]) -> str:
     lines.extend(["", *build_tagset_health_by_dimension_analysis(records)])
     lines.extend(["", *build_e2_status_analysis(records)])
     lines.extend(["", *build_devt_tagset_tension_analysis(records)])
+    lines.extend(["", *build_tension_correlation_analysis(records)])
     lines.append("")
     return "\n".join(lines)
 
