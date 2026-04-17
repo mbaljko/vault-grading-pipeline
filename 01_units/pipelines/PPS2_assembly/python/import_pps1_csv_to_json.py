@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import csv
 from dataclasses import dataclass
+import difflib
 import json
 import random
 import re
@@ -81,6 +82,35 @@ class AuditRow:
     concept_word_count_fields: dict[str, str]
     no_entry_received_fields: dict[str, str]
     position_state_matrix_fields: dict[str, str]
+
+
+@dataclass(frozen=True)
+class CleaningAuditRow:
+    source_csv_path: str
+    row_index: int
+    participant_id: str
+    given_name: str
+    family_name: str
+    output_json_path: str
+    source_column: str
+    json_key: str
+    cleaning_applied: str
+    raw_is_blank: str
+    cleaned_is_blank: str
+    sentinel_inserted: str
+    changed: str
+    suspicious: str
+    change_class: str
+    word_drop_type: str
+    raw_char_count: int
+    cleaned_char_count: int
+    raw_word_count: int
+    cleaned_word_count: int
+    char_delta: int
+    word_delta: int
+    raw_preview: str
+    cleaned_preview: str
+    text_diff: str
 
 
 @dataclass(frozen=True)
@@ -189,6 +219,43 @@ def count_words(value: str | None) -> int:
     return len(re.findall(r"\S+", text))
 
 
+def preview_text(value: str, limit: int = 180) -> str:
+    normalized = re.sub(r"\s+", " ", value).strip()
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 3] + "..."
+
+
+def build_diff_preview(raw_text: str, cleaned_text: str, limit: int = 240) -> str:
+    raw_tokens = raw_text.split()
+    cleaned_tokens = cleaned_text.split()
+    if raw_tokens == cleaned_tokens:
+        return ""
+
+    pieces: list[str] = []
+    matcher = difflib.SequenceMatcher(a=raw_tokens, b=cleaned_tokens)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            equal_tokens = raw_tokens[i1:i2]
+            if not equal_tokens:
+                continue
+            if len(equal_tokens) <= 4:
+                pieces.append(" ".join(equal_tokens))
+            else:
+                pieces.append(f"{equal_tokens[0]} {equal_tokens[1]} ... {equal_tokens[-2]} {equal_tokens[-1]}")
+        elif tag == "delete":
+            pieces.append(f"[-{' '.join(raw_tokens[i1:i2])}-]")
+        elif tag == "insert":
+            pieces.append(f"[+{' '.join(cleaned_tokens[j1:j2])}+]")
+        elif tag == "replace":
+            pieces.append(f"[-{' '.join(raw_tokens[i1:i2])}-][+{' '.join(cleaned_tokens[j1:j2])}+]")
+
+    diff_text = " ".join(piece for piece in pieces if piece).strip()
+    if len(diff_text) <= limit:
+        return diff_text
+    return diff_text[: limit - 3] + "..."
+
+
 def should_fill_no_entry_received(json_key: str) -> bool:
     if json_key in {"B3Interpretation", "B3Use", "C3Interpretation", "C3Use", "D3Interpretation", "D3Use"}:
         return True
@@ -198,6 +265,146 @@ def should_fill_no_entry_received(json_key: str) -> bool:
 
     dimension_prefix = json_key.rsplit("-", 1)[0]
     return dimension_prefix in {"B-1", "B-2", "B-3", "C-1", "C-2", "C-3", "D-1", "D-2", "D-3"}
+
+
+def should_capture_cleaning_audit(csv_key: str, json_key: str) -> bool:
+    return should_clean_lms_text_column(csv_key) or should_fill_no_entry_received(json_key)
+
+
+def classify_cleaning_change(
+    raw_text: str,
+    cleaned_text: str,
+    cleaning_applied: bool,
+    sentinel_inserted: bool,
+    raw_word_count: int,
+    cleaned_word_count: int,
+) -> str:
+    if not raw_text and sentinel_inserted:
+        return "blank_to_sentinel"
+    if raw_text == cleaned_text and not sentinel_inserted:
+        return "unchanged"
+    if raw_text and not cleaned_text:
+        return "emptied_by_cleaning" if cleaning_applied else "emptied"
+    if re.sub(r"\s+", " ", raw_text) == re.sub(r"\s+", " ", cleaned_text):
+        return "whitespace_only"
+    if "<" in raw_text or "&" in raw_text:
+        return "html_or_entity_normalized"
+    if any(marker in raw_text for marker in ("Ã", "â", "\ufffd")):
+        return "mojibake_fix"
+    if raw_word_count >= 20 and cleaned_word_count < raw_word_count * 0.7:
+        return "substantial_reduction"
+    return "normalized_text"
+
+
+def classify_word_drop_type(
+    raw_text: str,
+    cleaned_text: str,
+    sentinel_inserted: bool,
+    raw_word_count: int,
+    cleaned_word_count: int,
+) -> str:
+    if cleaned_word_count >= raw_word_count:
+        return "no_word_drop"
+    if not raw_text and sentinel_inserted:
+        return "blank_source"
+    if sentinel_inserted:
+        return "blank_to_sentinel"
+    if raw_text and cleaned_word_count == 0:
+        return "all_text_removed"
+
+    has_html = "<" in raw_text or "/>" in raw_text
+    has_url = "http://" in raw_text or "https://" in raw_text
+    has_entity = "&" in raw_text
+    has_mojibake = any(marker in raw_text for marker in ("Ã", "â", "\ufffd"))
+
+    if has_html and has_url:
+        return "html_and_link_scaffold_removed"
+    if has_html:
+        return "html_scaffold_removed"
+    if has_entity or has_mojibake:
+        return "entity_or_encoding_normalized"
+    return "plain_text_token_loss"
+
+
+def is_suspicious_cleaning_change(
+    raw_text: str,
+    cleaned_text: str,
+    sentinel_inserted: bool,
+    raw_char_count: int,
+    cleaned_char_count: int,
+    raw_word_count: int,
+    cleaned_word_count: int,
+) -> bool:
+    if raw_text and not cleaned_text:
+        return True
+    if raw_text and sentinel_inserted:
+        return True
+    if raw_word_count >= 20 and cleaned_word_count == 0:
+        return True
+    if raw_word_count >= 40 and cleaned_word_count < raw_word_count * 0.5 and "<" not in raw_text and "&" not in raw_text:
+        return True
+    return False
+
+
+def build_cleaning_audit_row_payload(
+    csv_key: str,
+    json_key: str,
+    raw_value: str | None,
+    cleaned_value: str,
+    sentinel_inserted: bool,
+) -> dict[str, str | int]:
+    raw_text = normalize_value(raw_value)
+    raw_char_count = len(raw_text)
+    cleaned_char_count = len(cleaned_value)
+    raw_word_count = count_words(raw_text)
+    cleaned_word_count = count_words(cleaned_value)
+    cleaning_applied = should_clean_lms_text_column(csv_key)
+    changed = raw_text != cleaned_value or sentinel_inserted
+    change_class = classify_cleaning_change(
+        raw_text=raw_text,
+        cleaned_text=cleaned_value,
+        cleaning_applied=cleaning_applied,
+        sentinel_inserted=sentinel_inserted,
+        raw_word_count=raw_word_count,
+        cleaned_word_count=cleaned_word_count,
+    )
+    word_drop_type = classify_word_drop_type(
+        raw_text=raw_text,
+        cleaned_text=cleaned_value,
+        sentinel_inserted=sentinel_inserted,
+        raw_word_count=raw_word_count,
+        cleaned_word_count=cleaned_word_count,
+    )
+    suspicious = is_suspicious_cleaning_change(
+        raw_text=raw_text,
+        cleaned_text=cleaned_value,
+        sentinel_inserted=sentinel_inserted,
+        raw_char_count=raw_char_count,
+        cleaned_char_count=cleaned_char_count,
+        raw_word_count=raw_word_count,
+        cleaned_word_count=cleaned_word_count,
+    )
+    return {
+        "source_column": csv_key,
+        "json_key": json_key,
+        "cleaning_applied": str(cleaning_applied).lower(),
+        "raw_is_blank": str(not raw_text).lower(),
+        "cleaned_is_blank": str(not cleaned_value).lower(),
+        "sentinel_inserted": str(sentinel_inserted).lower(),
+        "changed": str(changed).lower(),
+        "suspicious": str(suspicious).lower(),
+        "change_class": change_class,
+        "word_drop_type": word_drop_type,
+        "raw_char_count": raw_char_count,
+        "cleaned_char_count": cleaned_char_count,
+        "raw_word_count": raw_word_count,
+        "cleaned_word_count": cleaned_word_count,
+        "char_delta": cleaned_char_count - raw_char_count,
+        "word_delta": cleaned_word_count - raw_word_count,
+        "raw_preview": preview_text(raw_text),
+        "cleaned_preview": preview_text(cleaned_value if cleaned_value else NO_ENTRY_RECEIVED if sentinel_inserted else ""),
+        "text_diff": build_diff_preview(raw_text, cleaned_value if cleaned_value else NO_ENTRY_RECEIVED if sentinel_inserted else ""),
+    }
 
 
 def sanitize_filename(raw_value: str, fallback: str) -> str:
@@ -464,8 +671,9 @@ def build_record(
     schema: ImportSchema,
     row: dict[str, str],
     participant_lookup: dict[str, ParticipantIdentity],
-) -> dict[str, str]:
+) -> tuple[dict[str, str], list[dict[str, str | int]]]:
     record = build_empty_record(schema)
+    cleaning_audit_payloads: list[dict[str, str | int]] = []
 
     user_value = normalize_value(row.get("User"))
     username_value = normalize_value(row.get("Username"))
@@ -484,15 +692,30 @@ def build_record(
                 cleaned_value = normalize_value(raw_value)
 
             if should_fill_no_entry_received(json_key) and not cleaned_value:
-                record[json_key] = NO_ENTRY_RECEIVED
+                final_value = NO_ENTRY_RECEIVED
+                sentinel_inserted = True
             else:
-                record[json_key] = cleaned_value
+                final_value = cleaned_value
+                sentinel_inserted = False
+
+            record[json_key] = final_value
+
+            if should_capture_cleaning_audit(csv_key, json_key):
+                cleaning_audit_payloads.append(
+                    build_cleaning_audit_row_payload(
+                        csv_key=csv_key,
+                        json_key=json_key,
+                        raw_value=raw_value,
+                        cleaned_value=cleaned_value,
+                        sentinel_inserted=sentinel_inserted,
+                    )
+                )
 
     populate_development_values(schema, record, row)
     populate_status_values(schema, record, row)
     populate_section_fields(schema, record)
 
-    return record
+    return record, cleaning_audit_payloads
 
 
 def build_filename_base(given_name: str, family_name: str, fallback: str) -> str:
@@ -592,6 +815,24 @@ def build_audit_fieldnames(schema: ImportSchema) -> list[str]:
             ".",
         ]
     )
+    for dimension in schema.dimensions:
+        fieldnames.extend(
+            [
+                f"{dimension}-PPP-no-entry",
+                f"{dimension}-PPS1-no-entry",
+            ]
+        )
+    fieldnames.extend(
+        [
+            "B3Interpretation-no-entry",
+            "B3Use-no-entry",
+            "C3Interpretation-no-entry",
+            "C3Use-no-entry",
+            "D3Interpretation-no-entry",
+            "D3Use-no-entry",
+            ".",
+        ]
+    )
     fieldnames.extend(
         [
             ".",
@@ -628,8 +869,137 @@ def write_audit_csv(path: Path, schema: ImportSchema, rows: list[AuditRow]) -> N
             row_values.update(row.dimension_check_fields)
             row_values.update(row.dimension_word_count_fields)
             row_values.update(row.concept_word_count_fields)
+            row_values.update(row.no_entry_received_fields)
             row_values.update(row.position_state_matrix_fields)
             writer.writerow(row_values)
+
+
+def build_cleaning_audit_fieldnames() -> list[str]:
+    return [
+        "source_csv_path",
+        "row_index",
+        "participant_id",
+        "given_name",
+        "family_name",
+        "output_json_path",
+        "source_column",
+        "json_key",
+        "cleaning_applied",
+        "raw_is_blank",
+        "cleaned_is_blank",
+        "sentinel_inserted",
+        "changed",
+        "suspicious",
+        "change_class",
+        "word_drop_type",
+        "raw_char_count",
+        "cleaned_char_count",
+        "raw_word_count",
+        "cleaned_word_count",
+        "char_delta",
+        "word_delta",
+        "raw_preview",
+        "cleaned_preview",
+        "text_diff",
+    ]
+
+
+def write_cleaning_audit_csv(path: Path, rows: list[CleaningAuditRow]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = build_cleaning_audit_fieldnames()
+    with path.open("w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({field_name: getattr(row, field_name) for field_name in fieldnames})
+
+
+def build_cleaning_audit_summary_report(rows: list[CleaningAuditRow]) -> str:
+    total_rows = len(rows)
+    changed_rows = [row for row in rows if row.changed == "true"]
+    suspicious_rows = [row for row in rows if row.suspicious == "true"]
+    change_class_counts: dict[str, int] = {}
+    for row in rows:
+        change_class_counts[row.change_class] = change_class_counts.get(row.change_class, 0) + 1
+    word_drop_type_counts: dict[str, int] = {}
+    for row in rows:
+        if row.word_delta < 0:
+            word_drop_type_counts[row.word_drop_type] = word_drop_type_counts.get(row.word_drop_type, 0) + 1
+
+    lines = [
+        "# PPS1 Cleaning Audit Summary",
+        "",
+        f"- Total audited fields: {total_rows}",
+        f"- Changed fields: {len(changed_rows)}",
+        f"- Suspicious fields: {len(suspicious_rows)}",
+        "",
+        "## Change Classes",
+        "",
+        "| Change Class | Count |",
+        "| --- | ---: |",
+    ]
+    for change_class, count in sorted(change_class_counts.items(), key=lambda item: (-item[1], item[0])):
+        lines.append(f"| {change_class} | {count} |")
+
+    lines.extend(
+        [
+            "",
+            "## Word-Count Drop Types",
+            "",
+            "| Drop Type | Count |",
+            "| --- | ---: |",
+        ]
+    )
+    for drop_type, count in sorted(word_drop_type_counts.items(), key=lambda item: (-item[1], item[0])):
+        lines.append(f"| {drop_type} | {count} |")
+
+    if not word_drop_type_counts:
+        lines.append("| none | 0 |")
+
+    lines.extend(
+        [
+            "",
+            "## Suspicious Fields",
+            "",
+            "| participant_id | json_key | change_class | word_drop_type | raw_word_count | cleaned_word_count | text_diff | raw_preview | cleaned_preview |",
+            "| --- | --- | --- | --- | ---: | ---: | --- | --- | --- |",
+        ]
+    )
+    for row in sorted(
+        suspicious_rows,
+        key=lambda item: (item.word_delta, item.char_delta, item.participant_id),
+    )[:25]:
+        lines.append(
+            f"| {row.participant_id} | {row.json_key} | {row.change_class} | {row.word_drop_type} | {row.raw_word_count} | {row.cleaned_word_count} | `{row.text_diff}` | {row.raw_preview} | {row.cleaned_preview} |"
+        )
+
+    if not suspicious_rows:
+        lines.append("| none |  |  |  |  |  |  |  |  |")
+
+    lines.extend(
+        [
+            "",
+            "## Sample Changed Fields",
+            "",
+            "| participant_id | json_key | text_diff | raw_preview | cleaned_preview |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+    )
+    sample_changed_rows = [row for row in rows if row.changed == "true" and row.text_diff][:10]
+    for row in sample_changed_rows:
+        lines.append(
+            f"| {row.participant_id} | {row.json_key} | `{row.text_diff}` | {row.raw_preview} | {row.cleaned_preview} |"
+        )
+
+    if not sample_changed_rows:
+        lines.append("| none |  |  |  |  |")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_cleaning_audit_summary_report(path: Path, rows: list[CleaningAuditRow]) -> None:
+    path.write_text(build_cleaning_audit_summary_report(rows), encoding="utf-8")
 
 
 def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> str:
@@ -1191,38 +1561,34 @@ def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> st
             "",
             "### No Entry Received",
             "",
-            f"| Metric | {' | '.join(schema.dimensions)} |",
-            f"| --- | {' | '.join('---:' for _ in schema.dimensions)} |",
+            "| Metric | "
+            + " | ".join([f"{dimension} PPP" for dimension in schema.dimensions])
+            + " | "
+            + " | ".join([f"{dimension} PPS1" for dimension in schema.dimensions])
+            + " | "
+            + " | ".join(concept_fields)
+            + " |",
+            "| --- | "
+            + " | ".join("---:" for _ in range(len(schema.dimensions) * 2 + len(concept_fields)))
+            + " |",
         ]
     )
+    count_row = ["No Entry Count"]
+    percent_row = ["% of Submissions"]
     for suffix in ("PPP", "PPS1"):
-        count_row = [f"{suffix} Count"]
-        percent_row = [f"{suffix} % of Submissions"]
         for dimension in schema.dimensions:
             field_name = f"{dimension}-{suffix}"
             count = no_entry_count(field_name)
             percent = 0.0 if not rows else (count / len(rows)) * 100
             count_row.append(str(count))
             percent_row.append(f"{percent:.1f}%")
-        lines.append(f"| {' | '.join(count_row)} |")
-        lines.append(f"| {' | '.join(percent_row)} |")
-
-    lines.extend(
-        [
-            "",
-            f"| Metric | {' | '.join(concept_fields)} |",
-            f"| --- | {' | '.join('---:' for _ in concept_fields)} |",
-        ]
-    )
-    concept_count_row = ["Count"]
-    concept_percent_row = ["% of Submissions"]
     for field_name in concept_fields:
         count = no_entry_count(field_name)
         percent = 0.0 if not rows else (count / len(rows)) * 100
-        concept_count_row.append(str(count))
-        concept_percent_row.append(f"{percent:.1f}%")
-    lines.append(f"| {' | '.join(concept_count_row)} |")
-    lines.append(f"| {' | '.join(concept_percent_row)} |")
+        count_row.append(str(count))
+        percent_row.append(f"{percent:.1f}%")
+    lines.append(f"| {' | '.join(count_row)} |")
+    lines.append(f"| {' | '.join(percent_row)} |")
 
     lines.append("")
     return "\n".join(lines)
@@ -1317,6 +1683,7 @@ def main() -> int:
 
     generated_records: list[GeneratedRecord] = []
     audit_rows: list[AuditRow] = []
+    cleaning_audit_rows: list[CleaningAuditRow] = []
     used_names: set[str] = set()
 
     with csv_path.open(newline="", encoding="utf-8-sig") as csv_file:
@@ -1325,7 +1692,7 @@ def main() -> int:
             raise ValueError(f"CSV file has no header row: {csv_path}")
 
         for row_index, row in enumerate(reader, start=1):
-            record = build_record(schema, row, participant_lookup)
+            record, cleaning_audit_payloads = build_record(schema, row, participant_lookup)
             file_name = make_output_filename(schema, record, row, used_names, row_index)
             output_path = all_output_dir / file_name
             write_json(output_path, record)
@@ -1354,11 +1721,45 @@ def main() -> int:
                     position_state_matrix_fields=build_position_state_matrix_audit_fields(row),
                 )
             )
+            for payload in cleaning_audit_payloads:
+                cleaning_audit_rows.append(
+                    CleaningAuditRow(
+                        source_csv_path=str(csv_path),
+                        row_index=row_index,
+                        participant_id=record.get(schema.identity_fields.participant_id, ""),
+                        given_name=record.get(schema.identity_fields.given_name, ""),
+                        family_name=record.get(schema.identity_fields.family_name, ""),
+                        output_json_path=str(output_path),
+                        source_column=str(payload["source_column"]),
+                        json_key=str(payload["json_key"]),
+                        cleaning_applied=str(payload["cleaning_applied"]),
+                        raw_is_blank=str(payload["raw_is_blank"]),
+                        cleaned_is_blank=str(payload["cleaned_is_blank"]),
+                        sentinel_inserted=str(payload["sentinel_inserted"]),
+                        changed=str(payload["changed"]),
+                        suspicious=str(payload["suspicious"]),
+                        change_class=str(payload["change_class"]),
+                        word_drop_type=str(payload["word_drop_type"]),
+                        raw_char_count=int(payload["raw_char_count"]),
+                        cleaned_char_count=int(payload["cleaned_char_count"]),
+                        raw_word_count=int(payload["raw_word_count"]),
+                        cleaned_word_count=int(payload["cleaned_word_count"]),
+                        char_delta=int(payload["char_delta"]),
+                        word_delta=int(payload["word_delta"]),
+                        raw_preview=str(payload["raw_preview"]),
+                        cleaned_preview=str(payload["cleaned_preview"]),
+                        text_diff=str(payload["text_diff"]),
+                    )
+                )
             if args.verbose:
                 print(f"Wrote {output_path}")
 
+    cleaning_audit_path = audit_path.with_name(audit_path.stem + "_cleaning.csv")
+    cleaning_audit_summary_path = cleaning_audit_path.with_suffix(".md")
     write_audit_csv(audit_path, schema, audit_rows)
     write_audit_summary_report(audit_summary_path, schema, audit_rows)
+    write_cleaning_audit_csv(cleaning_audit_path, cleaning_audit_rows)
+    write_cleaning_audit_summary_report(cleaning_audit_summary_path, cleaning_audit_rows)
 
     copied_paths = duplicate_sample(
         generated_records=generated_records,
@@ -1370,6 +1771,8 @@ def main() -> int:
     print(f"Wrote {len(generated_records)} JSON files to {all_output_dir}")
     print(f"Wrote import audit CSV to {audit_path}")
     print(f"Wrote import audit summary report to {audit_summary_path}")
+    print(f"Wrote cleaning audit CSV to {cleaning_audit_path}")
+    print(f"Wrote cleaning audit summary report to {cleaning_audit_summary_path}")
     print(f"Copied {len(copied_paths)} sampled JSON files to {sample_output_dir}")
     if args.verbose and copied_paths:
         for copied_path in copied_paths:
