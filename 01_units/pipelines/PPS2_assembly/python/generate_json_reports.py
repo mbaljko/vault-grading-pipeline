@@ -428,78 +428,241 @@ def normalize_devt_value(value: object) -> str:
     raw_value = str(value or "").strip().lower()
     if raw_value == "shift":
         return "shift"
-    if raw_value in {"cont/reinf", "cont-reinf", "continuity-reinforcement", "continuity/reinforcement"}:
+    if raw_value in {
+        "cont/reinf",
+        "cont-reinf",
+        "continuity-reinforcement",
+        "continuity/reinforcement",
+        "intro",
+        "introduction",
+    }:
         return "cont-reinf"
     return "other"
 
 
-def build_shift_ratio_bin_labels() -> tuple[str, ...]:
+def build_shift_ratio_bin_labels(bin_count: int) -> tuple[str, ...]:
     labels = []
-    for bin_index in range(4):
-        lower = bin_index / 4
-        upper = (bin_index + 1) / 4
-        labels.append(f"Q{bin_index + 1} ({lower:.2f}-{upper:.2f})")
-    labels.append("No shift/cont-reinf")
+    for bin_index in range(bin_count):
+        lower = bin_index / bin_count
+        upper = (bin_index + 1) / bin_count
+        if bin_count == 4:
+            labels.append(f"Q{bin_index + 1} ({lower:.2f}-{upper:.2f})")
+        else:
+            labels.append(f"{lower:.1f}-{upper:.1f}")
     return tuple(labels)
 
 
-def assign_shift_ratio_bin(shift_count: int, cont_reinf_count: int) -> str:
-    total = shift_count + cont_reinf_count
-    if total == 0:
-        return "No shift/cont-reinf"
+def build_shift_count_labels(total_dimensions: int) -> tuple[str, ...]:
+    return tuple(f"{shift_count} of {total_dimensions} shifted" for shift_count in range(total_dimensions + 1))
 
+
+def assign_shift_ratio_bin(shift_count: int, cont_reinf_count: int, bin_count: int) -> str:
+    total = shift_count + cont_reinf_count
     shift_ratio = shift_count / total
     if shift_ratio >= 1.0:
-        return "Q4 (0.75-1.00)"
-    bin_index = int(shift_ratio * 4)
-    lower = bin_index / 4
-    upper = (bin_index + 1) / 4
-    return f"Q{bin_index + 1} ({lower:.2f}-{upper:.2f})"
+        if bin_count == 4:
+            return "Q4 (0.75-1.00)"
+        return "0.9-1.0"
+    bin_index = int(shift_ratio * bin_count)
+    lower = bin_index / bin_count
+    upper = (bin_index + 1) / bin_count
+    if bin_count == 4:
+        return f"Q{bin_index + 1} ({lower:.2f}-{upper:.2f})"
+    return f"{lower:.1f}-{upper:.1f}"
 
 
-def build_shift_vs_cont_reinf_distribution_table(records: list[dict[str, object]]) -> list[str]:
-    categories = build_shift_ratio_bin_labels()
+def get_shift_vs_cont_reinf_counts(payload: dict[str, object]) -> tuple[int, int] | None:
+    shift_count = 0
+    cont_reinf_count = 0
+
+    for dimension in DIMENSIONS:
+        normalized_value = normalize_devt_value(payload.get(f"{dimension}-devt"))
+        if normalized_value == "shift":
+            shift_count += 1
+        elif normalized_value == "cont-reinf":
+            cont_reinf_count += 1
+        else:
+            return None
+
+    return shift_count, cont_reinf_count
+
+
+def build_shift_count_distribution_table(records: list[dict[str, object]]) -> list[str]:
+    total_dimensions = len(DIMENSIONS)
+    categories = build_shift_count_labels(total_dimensions)
     counts_by_category = {category: 0 for category in categories}
+    eligible_records = 0
 
     for record in records:
         payload = record.get("payload")
         if not isinstance(payload, dict):
             continue
-        shift_count = 0
-        cont_reinf_count = 0
-        for group_dimensions in DIMENSION_GROUPS.values():
-            for dimension in group_dimensions:
-                normalized_value = normalize_devt_value(payload.get(f"{dimension}-devt"))
-                if normalized_value == "shift":
-                    shift_count += 1
-                elif normalized_value == "cont-reinf":
-                    cont_reinf_count += 1
-        category = assign_shift_ratio_bin(shift_count, cont_reinf_count)
-        counts_by_category[category] += 1
+        shift_counts = get_shift_vs_cont_reinf_counts(payload)
+        if shift_counts is None:
+            continue
+        shift_count, _ = shift_counts
+        eligible_records += 1
+        counts_by_category[f"{shift_count} of {total_dimensions} shifted"] += 1
+
+    excluded_records = len(records) - eligible_records
 
     lines = [
-        "| Shift ratio quartile | B+C+D |",
-        "| --- | ---: |",
+        "| Shift count bin | Submission Count | % of Included |",
+        "| --- | ---: | ---: |",
     ]
     for category in categories:
         count = counts_by_category[category]
-        percent = (count / len(records)) * 100 if records else 0.0
-        lines.append(f"| {category} | {count} ({percent:.1f}%) |")
-    lines.append(f"| Total | {len(records)} |")
+        percent = (count / eligible_records) * 100 if eligible_records else 0.0
+        lines.append(f"| {category} | {count} | {percent:.1f}% |")
+    lines.append(f"| Included submissions | {eligible_records} | {100.0 if eligible_records else 0.0:.1f}% |")
+    lines.append(
+        f"| Excluded submissions | {excluded_records} | {((excluded_records / len(records)) * 100) if records else 0.0:.1f}% |"
+    )
+    lines.append(f"| Total submissions | {len(records)} | {100.0 if records else 0.0:.1f}% |")
     return lines
 
 
-def build_shift_vs_cont_reinf_distribution_analysis(records: list[dict[str, object]]) -> list[str]:
+def build_shift_vs_cont_reinf_distribution_table(records: list[dict[str, object]], bin_count: int) -> list[str]:
+    categories = build_shift_ratio_bin_labels(bin_count)
+    counts_by_category = {category: 0 for category in categories}
+    eligible_records = 0
+
+    for record in records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        shift_counts = get_shift_vs_cont_reinf_counts(payload)
+        if shift_counts is None:
+            continue
+        shift_count, cont_reinf_count = shift_counts
+        eligible_records += 1
+        category = assign_shift_ratio_bin(shift_count, cont_reinf_count, bin_count)
+        counts_by_category[category] += 1
+
+    excluded_records = len(records) - eligible_records
+
+    lines = [
+        f"| Shift ratio {'quartile' if bin_count == 4 else 'decile'} | Submission Count | % of Included |",
+        "| --- | ---: | ---: |",
+    ]
+    for category in categories:
+        count = counts_by_category[category]
+        percent = (count / eligible_records) * 100 if eligible_records else 0.0
+        lines.append(f"| {category} | {count} | {percent:.1f}% |")
+    lines.append(f"| Included submissions | {eligible_records} | {100.0 if eligible_records else 0.0:.1f}% |")
+    lines.append(
+        f"| Excluded submissions | {excluded_records} | {((excluded_records / len(records)) * 100) if records else 0.0:.1f}% |"
+    )
+    lines.append(f"| Total submissions | {len(records)} | {100.0 if records else 0.0:.1f}% |")
+    return lines
+
+
+def build_shift_vs_cont_reinf_distribution_analysis(records: list[dict[str, object]], *, bin_count: int, heading: str) -> list[str]:
+    lines = [
+        heading,
+        "",
+        "### All data",
+        "",
+        *build_shift_vs_cont_reinf_distribution_table(records, bin_count),
+    ]
+
+    for student_pool, pool_records in sorted(split_records_by_student_pool(records).items()):
+        lines.extend(["", f"### {student_pool}", "", *build_shift_vs_cont_reinf_distribution_table(pool_records, bin_count)])
+
+    return lines
+
+
+def get_group_shift_vs_cont_reinf_counts(payload: dict[str, object], group_dimensions: tuple[str, ...]) -> tuple[int, int] | None:
+    shift_count = 0
+    cont_reinf_count = 0
+
+    for dimension in group_dimensions:
+        normalized_value = normalize_devt_value(payload.get(f"{dimension}-devt"))
+        if normalized_value == "shift":
+            shift_count += 1
+        elif normalized_value == "cont-reinf":
+            cont_reinf_count += 1
+        else:
+            return None
+
+    return shift_count, cont_reinf_count
+
+
+def build_group_shift_count_table(records: list[dict[str, object]]) -> list[str]:
+    categories = tuple(f"{shift_count} of 3 shifted" for shift_count in range(4))
+    counts_by_group = {
+        group_name: {category: 0 for category in categories}
+        for group_name in DIMENSION_GROUPS
+    }
+    included_by_group = {group_name: 0 for group_name in DIMENSION_GROUPS}
+
+    for record in records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        for group_name, group_dimensions in DIMENSION_GROUPS.items():
+            shift_counts = get_group_shift_vs_cont_reinf_counts(payload, group_dimensions)
+            if shift_counts is None:
+                continue
+            shift_count, _ = shift_counts
+            included_by_group[group_name] += 1
+            counts_by_group[group_name][f"{shift_count} of 3 shifted"] += 1
+
+    lines = [
+        "| Shift count bin | B Count | B % Included | C Count | C % Included | D Count | D % Included |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for category in categories:
+        row_cells: list[str] = []
+        for group_name in ("B", "C", "D"):
+            count = counts_by_group[group_name][category]
+            included = included_by_group[group_name]
+            percent = (count / included) * 100 if included else 0.0
+            row_cells.extend([str(count), f"{percent:.1f}%"])
+        lines.append(f"| {category} | " + " | ".join(row_cells) + " |")
+
+    included_cells: list[str] = []
+    excluded_cells: list[str] = []
+    total_cells: list[str] = []
+    for group_name in ("B", "C", "D"):
+        included = included_by_group[group_name]
+        excluded = len(records) - included
+        included_cells.extend([str(included), f"{100.0 if included else 0.0:.1f}%"])
+        excluded_cells.extend([str(excluded), f"{((excluded / len(records)) * 100) if records else 0.0:.1f}%"])
+        total_cells.extend([str(len(records)), f"{100.0 if records else 0.0:.1f}%"])
+
+    lines.append("| Included submissions | " + " | ".join(included_cells) + " |")
+    lines.append("| Excluded submissions | " + " | ".join(excluded_cells) + " |")
+    lines.append("| Total submissions | " + " | ".join(total_cells) + " |")
+    return lines
+
+
+def build_group_shift_count_analysis(records: list[dict[str, object]]) -> list[str]:
     lines = [
         "## B/C/D shift vs cont-reinf distribution - Quartiles",
         "",
         "### All data",
         "",
-        *build_shift_vs_cont_reinf_distribution_table(records),
+        *build_group_shift_count_table(records),
     ]
 
     for student_pool, pool_records in sorted(split_records_by_student_pool(records).items()):
-        lines.extend(["", f"### {student_pool}", "", *build_shift_vs_cont_reinf_distribution_table(pool_records)])
+        lines.extend(["", f"### {student_pool}", "", *build_group_shift_count_table(pool_records)])
+
+    return lines
+
+
+def build_shift_count_distribution_analysis(records: list[dict[str, object]]) -> list[str]:
+    lines = [
+        "## B/C/D shift vs cont-reinf distribution - Deciles",
+        "",
+        "### All data",
+        "",
+        *build_shift_count_distribution_table(records),
+    ]
+
+    for student_pool, pool_records in sorted(split_records_by_student_pool(records).items()):
+        lines.extend(["", f"### {student_pool}", "", *build_shift_count_distribution_table(pool_records)])
 
     return lines
 
@@ -518,7 +681,8 @@ def build_report(records: list[dict[str, object]]) -> str:
     lines.extend(["", *build_devt_tagset_tension_analysis(records)])
     lines.extend(["", *build_tension_correlation_analysis(records)])
     lines.extend(["", *build_group_indicator_population_analysis(records)])
-    lines.extend(["", *build_shift_vs_cont_reinf_distribution_analysis(records)])
+    lines.extend(["", *build_shift_count_distribution_analysis(records)])
+    lines.extend(["", *build_group_shift_count_analysis(records)])
     lines.append("")
     return "\n".join(lines)
 
