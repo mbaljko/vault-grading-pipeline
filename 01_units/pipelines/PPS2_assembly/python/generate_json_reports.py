@@ -452,8 +452,7 @@ def ordered_labels(values: list[str], preferred_order: tuple[str, ...]) -> list[
 
 
 def normalize_report_label(value: object) -> str:
-    normalized = str(value or "").strip()
-    return normalized if normalized else "[blank]"
+    return str(value or "").strip()
 
 
 def normalize_converged_value_for_report(value: object) -> str:
@@ -499,8 +498,6 @@ def build_converged_value_table(records: list[dict[str, object]]) -> list[str]:
             observed_labels.add(label)
 
     ordered = ordered_labels(list(observed_labels), CONVERGED_VALUE_ORDER)
-    if "[blank]" in ordered:
-        ordered = ["[blank]"] + [label for label in ordered if label != "[blank]"]
 
     lines = [
         "| Converged value | " + " | ".join(DIMENSIONS) + " |",
@@ -576,8 +573,6 @@ def build_converged_health_table(records: list[dict[str, object]]) -> list[str]:
             observed_labels.add(label)
 
     ordered = ordered_labels(list(observed_labels), CONVERGED_HEALTH_ORDER)
-    if "[blank]" in ordered:
-        ordered = ["[blank]"] + [label for label in ordered if label != "[blank]"]
 
     lines = [
         "| Converged health | " + " | ".join(DIMENSIONS) + " |",

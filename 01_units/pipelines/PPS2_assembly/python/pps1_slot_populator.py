@@ -26,6 +26,10 @@ Slots populated by this module:
     - `Sec4_Slot2_dim`, `Sec4_Slot2_PPS1`, `Sec4_Slot2_devt_type`, `Sec4_Slot2_devt_explain_if_conflicting`
     - `Sec4_Slot3_dim`, `Sec4_Slot3_PPS1`, `Sec4_Slot3_devt_type`, `Sec4_Slot3_devt_explain_if_conflicting`
 
+Section 1 `TS*_dim` fields are populated with the longer human-friendly
+dimension labels. Section 2 and Section 4 `*_dim` fields continue to use the
+schema's dotted dimension codes.
+
 Selection heuristic:
 
 1. Build a prioritized dimension order by preferring non-empty `-status`, then
@@ -46,6 +50,19 @@ from dataclasses import dataclass
 from typing import Protocol
 
 
+HUMAN_FRIENDLY_DIMENSIONS = {
+    "B-1": "B-1 Institutional structures and organisational arrangements",
+    "B-2": "B-2 Responsibility and accountability distribution",
+    "B-3": "B-3 Institutional influence, constraint, and authority",
+    "C-1": "C-1 Justice, accessibility, and harm",
+    "C-2": "C-2 Assumptions about neutrality, efficiency, fairness, or objectivity",
+    "C-3": "C-3 Criteria for identifying harm, exclusion, or accessibility barriers",
+    "D-1": "D-1 Human responsibility vs AI-mediated delegation of responsibility",
+    "D-2": "D-2 AI-mediated oversight, uncertainty, and verification practices",
+    "D-3": "D-3 Role of tools or AI systems in shaping professional judgement",
+}
+
+
 @dataclass(frozen=True)
 class SectionSlot:
     dim_field: str
@@ -55,11 +72,29 @@ class SectionSlot:
     devt_explain_if_conflicting_field: str | None = None
 
 
-def conflict_explanation(value: str) -> str:
-    normalized = value.strip()
-    if normalized.startswith("conflict:"):
-        return normalized.removeprefix("conflict:").strip()
+def conflict_explanation(devt_type: str, health_value: str) -> str:
+    if devt_type.strip() != "conflicting":
+        return ""
+    normalized = health_value.strip()
+    if normalized:
+        return normalized
     return ""
+
+
+def display_dimension(
+    schema: SlotPopulationSchema,
+    dimension: str,
+    *,
+    human_friendly: bool,
+) -> str:
+    if human_friendly:
+        return HUMAN_FRIENDLY_DIMENSIONS.get(
+            dimension,
+            schema.short_to_dotted_dimension[dimension],
+        )
+    return schema.short_to_dotted_dimension[dimension]
+
+
 class SlotPopulationSchema(Protocol):
     dimensions: list[str]
     short_to_dotted_dimension: dict[str, str]
@@ -131,38 +166,44 @@ def populate_section_fields(
     section1_dims, section2_dims, section3_dims = select_section_dimensions(schema, source_record)
 
     for dimension, slot in zip(section1_dims, schema.section1_slots, strict=False):
-        target[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
+        target[slot.dim_field] = display_dimension(schema, dimension, human_friendly=True)
         if slot.ppp_field:
             target[slot.ppp_field] = source_record.get(f"{dimension}-PPP", "")
         if slot.pps1_field:
             target[slot.pps1_field] = source_record.get(f"{dimension}-PPS1", "")
+        devt_type = source_record.get(f"{dimension}-devt_converged", "")
         if slot.devt_type_field:
-            target[slot.devt_type_field] = source_record.get(f"{dimension}-devt_converged", "")
+            target[slot.devt_type_field] = devt_type
         if slot.devt_explain_if_conflicting_field:
             target[slot.devt_explain_if_conflicting_field] = conflict_explanation(
-                source_record.get(f"{dimension}-devt_converged_health", "")
+                devt_type,
+                source_record.get(f"{dimension}-devt_converged_health", ""),
             )
 
     for dimension, slot in zip(section2_dims, schema.section2_slots, strict=False):
-        target[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
+        target[slot.dim_field] = display_dimension(schema, dimension, human_friendly=False)
         if slot.ppp_field:
             target[slot.ppp_field] = source_record.get(f"{dimension}-PPP", "")
         if slot.pps1_field:
             target[slot.pps1_field] = source_record.get(f"{dimension}-PPS1", "")
+        devt_type = source_record.get(f"{dimension}-devt_converged", "")
         if slot.devt_type_field:
-            target[slot.devt_type_field] = source_record.get(f"{dimension}-devt_converged", "")
+            target[slot.devt_type_field] = devt_type
         if slot.devt_explain_if_conflicting_field:
             target[slot.devt_explain_if_conflicting_field] = conflict_explanation(
-                source_record.get(f"{dimension}-devt_converged_health", "")
+                devt_type,
+                source_record.get(f"{dimension}-devt_converged_health", ""),
             )
 
     for dimension, slot in zip(section3_dims, schema.section3_slots, strict=False):
-        target[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
+        target[slot.dim_field] = display_dimension(schema, dimension, human_friendly=False)
         if slot.pps1_field:
             target[slot.pps1_field] = source_record.get(f"{dimension}-PPS1", "")
+        devt_type = source_record.get(f"{dimension}-devt_converged", "")
         if slot.devt_type_field:
-            target[slot.devt_type_field] = source_record.get(f"{dimension}-devt_converged", "")
+            target[slot.devt_type_field] = devt_type
         if slot.devt_explain_if_conflicting_field:
             target[slot.devt_explain_if_conflicting_field] = conflict_explanation(
-                source_record.get(f"{dimension}-devt_converged_health", "")
+                devt_type,
+                source_record.get(f"{dimension}-devt_converged_health", ""),
             )

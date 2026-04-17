@@ -205,8 +205,8 @@ def build_placeholder_context(data: dict[str, Any]) -> dict[str, str]:
 
 
 def render_placeholder_value(value: str) -> str:
-    """Render a placeholder value, substituting a fallback for empty content."""
-    return value if value.strip() else "not noted"
+    """Render a placeholder value without substituting fallback text."""
+    return value
 
 
 def escape_latex_text(value: str) -> str:
