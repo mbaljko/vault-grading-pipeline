@@ -202,6 +202,7 @@ class Pps1TextDevelopmentRow:
 class ImportSchema:
     import_defaults: "ImportDefaults"
     record_defaults: dict[str, str]
+    derived_field_groups: dict[str, list[str]]
     dimensions: list[str]
     short_to_dotted_dimension: dict[str, str]
     direct_field_map: dict[str, str]
@@ -259,6 +260,11 @@ def load_schema(schema_path: Path) -> ImportSchema:
     return ImportSchema(
         import_defaults=import_defaults,
         record_defaults=dict(raw_schema["recordDefaults"]),
+        derived_field_groups={
+            str(group_name): [str(field_name) for field_name in field_names]
+            for group_name, field_names in raw_schema.get("derivedFieldGroups", {}).items()
+            if isinstance(field_names, list)
+        },
         dimensions=list(raw_schema["dimensions"]),
         short_to_dotted_dimension=dict(raw_schema["shortToDottedDimension"]),
         direct_field_map=dict(raw_schema["directFieldMap"]),
@@ -667,6 +673,24 @@ def build_empty_record(schema: ImportSchema) -> dict[str, str]:
     return dict(schema.record_defaults)
 
 
+def build_empty_derived_blocks(schema: ImportSchema) -> dict[str, dict[str, str]]:
+    return {
+        group_name: {field_name: "" for field_name in field_names}
+        for group_name, field_names in schema.derived_field_groups.items()
+    }
+
+
+def assemble_record(
+    schema: ImportSchema,
+    base_record: dict[str, str],
+    derived_blocks: dict[str, dict[str, str]],
+) -> dict[str, str]:
+    assembled = dict(base_record)
+    for group_name in schema.derived_field_groups:
+        assembled.update(derived_blocks.get(group_name, {}))
+    return assembled
+
+
 def checked(value: str) -> bool:
     normalized = value.strip().casefold()
     return normalized in {"✓", "true", "yes", "1"}
@@ -797,7 +821,7 @@ def build_no_entry_received_audit_fields(
     return audit_fields
 
 
-def populate_status_values(schema: ImportSchema, record: dict[str, str], row: dict[str, str]) -> None:
+def populate_status_values(schema: ImportSchema, target: dict[str, str], row: dict[str, str]) -> None:
     dotted_to_short_dimension = {
         value: key for key, value in schema.short_to_dotted_dimension.items()
     }
@@ -807,21 +831,21 @@ def populate_status_values(schema: ImportSchema, record: dict[str, str], row: di
         short_dimension = dotted_to_short_dimension.get(dimension_value)
         if not short_dimension:
             continue
-        record[f"{short_dimension}-status"] = status_value
+        target[f"{short_dimension}-status"] = status_value
 
 
-def populate_development_values(schema: ImportSchema, record: dict[str, str], row: dict[str, str]) -> None:
+def populate_development_values(schema: ImportSchema, target: dict[str, str], row: dict[str, str]) -> None:
     for dimension in schema.dimensions:
         prefix = schema.short_to_dotted_dimension[dimension].replace(".", "")
-        record[f"{dimension}-devt"] = derive_development_value(row, prefix)
-        record[f"{dimension}_indicator_health_srcE1"] = derive_indicator_health_src_e1(row, prefix)
+        target[f"{dimension}-devt"] = derive_development_value(row, prefix)
+        target[f"{dimension}_indicator_health_srcE1"] = derive_indicator_health_src_e1(row, prefix)
 
 
-def populate_development_tagset_values(schema: ImportSchema, record: dict[str, str]) -> None:
+def populate_development_tagset_values(schema: ImportSchema, target: dict[str, str], source_record: dict[str, str]) -> None:
     for dimension in schema.dimensions:
-        extracted_value = extract_development_type_from_cleaned_pps1(record.get(f"{dimension}-PPS1"))
-        record[f"{dimension}-devt_tagset"] = extracted_value
-        record[f"{dimension}_indicator_health_srcBCD2"] = derive_indicator_health_src_bcd2(extracted_value)
+        extracted_value = extract_development_type_from_cleaned_pps1(source_record.get(f"{dimension}-PPS1"))
+        target[f"{dimension}-devt_tagset"] = extracted_value
+        target[f"{dimension}_indicator_health_srcBCD2"] = derive_indicator_health_src_bcd2(extracted_value)
 
 
 def ordered_unique(values: list[str]) -> list[str]:
@@ -852,33 +876,33 @@ def select_section_dimensions(schema: ImportSchema, record: dict[str, str]) -> t
     return section1, section2, section3
 
 
-def populate_section_fields(schema: ImportSchema, record: dict[str, str]) -> None:
-    section1_dims, section2_dims, section3_dims = select_section_dimensions(schema, record)
+def populate_section_fields(schema: ImportSchema, target: dict[str, str], source_record: dict[str, str]) -> None:
+    section1_dims, section2_dims, section3_dims = select_section_dimensions(schema, source_record)
 
     for dimension, slot in zip(section1_dims, schema.section1_slots, strict=False):
-        record[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
+        target[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
         if slot.ppp_field:
-            record[slot.ppp_field] = record.get(f"{dimension}-PPP", "")
+            target[slot.ppp_field] = source_record.get(f"{dimension}-PPP", "")
         if slot.pps1_field:
-            record[slot.pps1_field] = record.get(f"{dimension}-PPS1", "")
+            target[slot.pps1_field] = source_record.get(f"{dimension}-PPS1", "")
 
     for dimension, slot in zip(section2_dims, schema.section2_slots, strict=False):
-        record[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
+        target[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
         if slot.ppp_field:
-            record[slot.ppp_field] = record.get(f"{dimension}-PPP", "")
+            target[slot.ppp_field] = source_record.get(f"{dimension}-PPP", "")
         if slot.pps1_field:
-            record[slot.pps1_field] = record.get(f"{dimension}-PPS1", "")
+            target[slot.pps1_field] = source_record.get(f"{dimension}-PPS1", "")
 
     for dimension, slot in zip(section3_dims, schema.section3_slots, strict=False):
-        record[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
+        target[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
         if slot.pps1_field:
-            record[slot.pps1_field] = record.get(f"{dimension}-PPS1", "")
+            target[slot.pps1_field] = source_record.get(f"{dimension}-PPS1", "")
 
     if section2_dims:
-        record[schema.claim_fields.dimension_field] = schema.short_to_dotted_dimension[section2_dims[0]]
+        target[schema.claim_fields.dimension_field] = schema.short_to_dotted_dimension[section2_dims[0]]
 
     for dimension, claim_field in zip(section2_dims, schema.claim_fields.text_fields, strict=False):
-        record[claim_field] = record.get(f"{dimension}-PPS1", "")
+        target[claim_field] = source_record.get(f"{dimension}-PPS1", "")
 
 
 def build_record(
@@ -886,19 +910,20 @@ def build_record(
     row: dict[str, str],
     participant_lookup: dict[str, ParticipantIdentity],
 ) -> tuple[dict[str, str], list[dict[str, str | int]]]:
-    record = build_empty_record(schema)
+    base_record = build_empty_record(schema)
+    derived_blocks = build_empty_derived_blocks(schema)
     cleaning_audit_payloads: list[dict[str, str | int]] = []
 
     user_value = normalize_value(row.get("User"))
     username_value = normalize_value(row.get("Username"))
     given_name, family_name = resolve_names(row, participant_lookup)
 
-    record[schema.identity_fields.participant_id] = username_value or sanitize_filename(user_value, "unknown")
-    record[schema.identity_fields.given_name] = given_name
-    record[schema.identity_fields.family_name] = family_name
+    base_record[schema.identity_fields.participant_id] = username_value or sanitize_filename(user_value, "unknown")
+    base_record[schema.identity_fields.given_name] = given_name
+    base_record[schema.identity_fields.family_name] = family_name
 
     for csv_key, json_key in schema.direct_field_map.items():
-        if json_key in record:
+        if json_key in base_record:
             raw_value = row.get(csv_key)
             if should_clean_lms_text_column(csv_key):
                 cleaned_value = clean_lms_text(raw_value)
@@ -912,7 +937,7 @@ def build_record(
                 final_value = cleaned_value
                 sentinel_inserted = False
 
-            record[json_key] = final_value
+            base_record[json_key] = final_value
 
             if should_capture_cleaning_audit(csv_key, json_key):
                 cleaning_audit_payloads.append(
@@ -925,10 +950,14 @@ def build_record(
                     )
                 )
 
-    populate_development_values(schema, record, row)
-    populate_development_tagset_values(schema, record)
-    populate_status_values(schema, record, row)
-    populate_section_fields(schema, record)
+    populate_development_values(schema, derived_blocks["e1Derived"], row)
+    populate_development_tagset_values(schema, derived_blocks["bcd2Derived"], base_record)
+    populate_status_values(schema, derived_blocks["e2Derived"], row)
+
+    assembled_for_sections = assemble_record(schema, base_record, derived_blocks)
+    populate_section_fields(schema, derived_blocks["sectionDerived"], assembled_for_sections)
+
+    record = assemble_record(schema, base_record, derived_blocks)
 
     return record, cleaning_audit_payloads
 
