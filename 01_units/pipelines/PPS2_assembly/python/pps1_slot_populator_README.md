@@ -28,14 +28,14 @@ The module is intentionally narrow. It does not import LMS CSV rows, build base 
 - a target dictionary, usually the importer's `sectionDerived` block
 - a flat source record that already contains:
   - direct `*-PPP` and `*-PPS1` fields
-  - derived `*-devt` fields
+  - derived `*-devt_converged` fields
   - derived `*-status` fields
 
 ## Selection Heuristic
 
 The slot order is heuristic, not hard-coded per section.
 
-1. Build a prioritized dimension order by preferring non-empty `-devt`, then schema order.
+1. Build a prioritized dimension order by preferring non-empty `-devt_converged`, then schema order.
 2. Populate the Section 1 TS slots first from family-specific subsets of that prioritized order:
   - `TS1` takes the first non-tension `B-*` dimension when available, otherwise the first remaining `B-*` dimension.
   - `TS2` takes the first non-tension `C-*` dimension when available, otherwise the first remaining `C-*` dimension.

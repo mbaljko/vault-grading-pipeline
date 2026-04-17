@@ -8,8 +8,8 @@ It expects a schema-like object that exposes:
 - `section1_slots`, `section2_slots`, `section3_slots`: ordered slot definitions
 
 The source record is the already-assembled flat record containing direct LMS
-fields plus the derived `*-devt` and `*-status` fields. The target mapping is
-typically the importer's `sectionDerived` block.
+fields plus the derived `*-devt_converged` and `*-status` fields. The target
+mapping is typically the importer's `sectionDerived` block.
 
 Slots populated by this module:
 
@@ -31,8 +31,8 @@ schema's dotted dimension codes.
 
 Selection heuristic:
 
-1. Build a prioritized dimension order by preferring non-empty `-devt`, then
-    schema dimension order.
+1. Build a prioritized dimension order by preferring non-empty
+    `-devt_converged`, then schema dimension order.
 2. Populate the Section 1 TS slots first from family-specific subsets of that
     prioritized order:
     - `TS1` takes the first non-tension `B-*` dimension when available,
@@ -148,15 +148,7 @@ def first_non_tension_dimension_for_family(
 
 
 def normalized_section2_development_type(record: dict[str, str], dimension: str) -> str:
-    for field_name in (
-        f"{dimension}-devt_converged",
-        f"{dimension}-devt",
-        f"{dimension}-devt_tagset",
-    ):
-        normalized = record.get(field_name, "").strip().lower().replace("_", "-")
-        if normalized:
-            return normalized
-    return ""
+    return record.get(f"{dimension}-devt_converged", "").strip().lower().replace("_", "-")
 
 
 def rank_section2_dimensions(priority: list[str], record: dict[str, str], dimensions: list[str]) -> list[str]:
@@ -222,7 +214,7 @@ def select_section_dimensions(
     section2_slot_count = len(schema.section2_slots)
     section3_slot_count = len(schema.section3_slots)
     priority = ordered_unique(
-        [dimension for dimension in schema.dimensions if record.get(f"{dimension}-devt")]
+        [dimension for dimension in schema.dimensions if record.get(f"{dimension}-devt_converged")]
         + schema.dimensions
     )
 
