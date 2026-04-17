@@ -153,27 +153,45 @@
     "Sec1_TS1_PPP": "",
     "Sec1_TS1_PPS1": "",
     "Sec1_TS1_dim": "",
+    "Sec1_TS1_devt_type": "",
+    "Sec1_TS1_devt_explain_if_conflicting": "",
     "Sec1_TS2_PPP": "",
     "Sec1_TS2_PPS1": "",
     "Sec1_TS2_dim": "",
+    "Sec1_TS2_devt_type": "",
+    "Sec1_TS2_devt_explain_if_conflicting": "",
     "Sec1_TS3_PPP": "",
     "Sec1_TS3_PPS1": "",
     "Sec1_TS3_dim": "",
+    "Sec1_TS3_devt_type": "",
+    "Sec1_TS3_devt_explain_if_conflicting": "",
     "Sec2_V1_PPP": "",
     "Sec2_V1_PPS1": "",
     "Sec2_V1_dim": "",
+    "Sec2_V1_devt_type": "",
+    "Sec2_V1_devt_explain_if_conflicting": "",
     "Sec2_V2_PPP": "",
     "Sec2_V2_PPS1": "",
     "Sec2_V2_dim": "",
+    "Sec2_V2_devt_type": "",
+    "Sec2_V2_devt_explain_if_conflicting": "",
     "Sec2_V3_PPP": "",
     "Sec2_V3_PPS1": "",
     "Sec2_V3_dim": "",
+    "Sec2_V3_devt_type": "",
+    "Sec2_V3_devt_explain_if_conflicting": "",
     "Sec4_Slot1_dim": "",
     "Sec4_Slot1_PPS1": "",
+    "Sec4_Slot1_devt_type": "",
+    "Sec4_Slot1_devt_explain_if_conflicting": "",
     "Sec4_Slot2_dim": "",
     "Sec4_Slot2_PPS1": "",
+    "Sec4_Slot2_devt_type": "",
+    "Sec4_Slot2_devt_explain_if_conflicting": "",
     "Sec4_Slot3_dim": "",
-    "Sec4_Slot3_PPS1": ""
+    "Sec4_Slot3_PPS1": "",
+    "Sec4_Slot3_devt_type": "",
+    "Sec4_Slot3_devt_explain_if_conflicting": ""
   },
   "derivedFieldGroups": {
     "e1Derived": [
@@ -251,27 +269,45 @@
       "Sec1_TS1_PPP",
       "Sec1_TS1_PPS1",
       "Sec1_TS1_dim",
+      "Sec1_TS1_devt_type",
+      "Sec1_TS1_devt_explain_if_conflicting",
       "Sec1_TS2_PPP",
       "Sec1_TS2_PPS1",
       "Sec1_TS2_dim",
+      "Sec1_TS2_devt_type",
+      "Sec1_TS2_devt_explain_if_conflicting",
       "Sec1_TS3_PPP",
       "Sec1_TS3_PPS1",
       "Sec1_TS3_dim",
+      "Sec1_TS3_devt_type",
+      "Sec1_TS3_devt_explain_if_conflicting",
       "Sec2_V1_PPP",
       "Sec2_V1_PPS1",
       "Sec2_V1_dim",
+      "Sec2_V1_devt_type",
+      "Sec2_V1_devt_explain_if_conflicting",
       "Sec2_V2_PPP",
       "Sec2_V2_PPS1",
       "Sec2_V2_dim",
+      "Sec2_V2_devt_type",
+      "Sec2_V2_devt_explain_if_conflicting",
       "Sec2_V3_PPP",
       "Sec2_V3_PPS1",
       "Sec2_V3_dim",
+      "Sec2_V3_devt_type",
+      "Sec2_V3_devt_explain_if_conflicting",
       "Sec4_Slot1_dim",
       "Sec4_Slot1_PPS1",
+      "Sec4_Slot1_devt_type",
+      "Sec4_Slot1_devt_explain_if_conflicting",
       "Sec4_Slot2_dim",
       "Sec4_Slot2_PPS1",
+      "Sec4_Slot2_devt_type",
+      "Sec4_Slot2_devt_explain_if_conflicting",
       "Sec4_Slot3_dim",
-      "Sec4_Slot3_PPS1"
+      "Sec4_Slot3_PPS1",
+      "Sec4_Slot3_devt_type",
+      "Sec4_Slot3_devt_explain_if_conflicting"
     ]
   },
   "dimensions": [
@@ -341,48 +377,66 @@
     {
       "dim": "Sec1_TS1_dim",
       "ppp": "Sec1_TS1_PPP",
-      "pps1": "Sec1_TS1_PPS1"
+      "pps1": "Sec1_TS1_PPS1",
+      "devt_type": "Sec1_TS1_devt_type",
+      "devt_explain_if_conflicting": "Sec1_TS1_devt_explain_if_conflicting"
     },
     {
       "dim": "Sec1_TS2_dim",
       "ppp": "Sec1_TS2_PPP",
-      "pps1": "Sec1_TS2_PPS1"
+      "pps1": "Sec1_TS2_PPS1",
+      "devt_type": "Sec1_TS2_devt_type",
+      "devt_explain_if_conflicting": "Sec1_TS2_devt_explain_if_conflicting"
     },
     {
       "dim": "Sec1_TS3_dim",
       "ppp": "Sec1_TS3_PPP",
-      "pps1": "Sec1_TS3_PPS1"
+      "pps1": "Sec1_TS3_PPS1",
+      "devt_type": "Sec1_TS3_devt_type",
+      "devt_explain_if_conflicting": "Sec1_TS3_devt_explain_if_conflicting"
     }
   ],
   "section2Slots": [
     {
       "dim": "Sec2_V1_dim",
       "ppp": "Sec2_V1_PPP",
-      "pps1": "Sec2_V1_PPS1"
+      "pps1": "Sec2_V1_PPS1",
+      "devt_type": "Sec2_V1_devt_type",
+      "devt_explain_if_conflicting": "Sec2_V1_devt_explain_if_conflicting"
     },
     {
       "dim": "Sec2_V2_dim",
       "ppp": "Sec2_V2_PPP",
-      "pps1": "Sec2_V2_PPS1"
+      "pps1": "Sec2_V2_PPS1",
+      "devt_type": "Sec2_V2_devt_type",
+      "devt_explain_if_conflicting": "Sec2_V2_devt_explain_if_conflicting"
     },
     {
       "dim": "Sec2_V3_dim",
       "ppp": "Sec2_V3_PPP",
-      "pps1": "Sec2_V3_PPS1"
+      "pps1": "Sec2_V3_PPS1",
+      "devt_type": "Sec2_V3_devt_type",
+      "devt_explain_if_conflicting": "Sec2_V3_devt_explain_if_conflicting"
     }
   ],
   "section3Slots": [
     {
       "dim": "Sec4_Slot1_dim",
-      "pps1": "Sec4_Slot1_PPS1"
+      "pps1": "Sec4_Slot1_PPS1",
+      "devt_type": "Sec4_Slot1_devt_type",
+      "devt_explain_if_conflicting": "Sec4_Slot1_devt_explain_if_conflicting"
     },
     {
       "dim": "Sec4_Slot2_dim",
-      "pps1": "Sec4_Slot2_PPS1"
+      "pps1": "Sec4_Slot2_PPS1",
+      "devt_type": "Sec4_Slot2_devt_type",
+      "devt_explain_if_conflicting": "Sec4_Slot2_devt_explain_if_conflicting"
     },
     {
       "dim": "Sec4_Slot3_dim",
-      "pps1": "Sec4_Slot3_PPS1"
+      "pps1": "Sec4_Slot3_PPS1",
+      "devt_type": "Sec4_Slot3_devt_type",
+      "devt_explain_if_conflicting": "Sec4_Slot3_devt_explain_if_conflicting"
     }
   ]
 }

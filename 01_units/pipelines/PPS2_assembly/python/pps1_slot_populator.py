@@ -14,17 +14,17 @@ typically the importer's `sectionDerived` block.
 Slots populated by this module:
 
 - Section 1 slots:
-    - `Sec1_TS1_dim`, `Sec1_TS1_PPP`, `Sec1_TS1_PPS1`
-    - `Sec1_TS2_dim`, `Sec1_TS2_PPP`, `Sec1_TS2_PPS1`
-    - `Sec1_TS3_dim`, `Sec1_TS3_PPP`, `Sec1_TS3_PPS1`
+    - `Sec1_TS1_dim`, `Sec1_TS1_PPP`, `Sec1_TS1_PPS1`, `Sec1_TS1_devt_type`, `Sec1_TS1_devt_explain_if_conflicting`
+    - `Sec1_TS2_dim`, `Sec1_TS2_PPP`, `Sec1_TS2_PPS1`, `Sec1_TS2_devt_type`, `Sec1_TS2_devt_explain_if_conflicting`
+    - `Sec1_TS3_dim`, `Sec1_TS3_PPP`, `Sec1_TS3_PPS1`, `Sec1_TS3_devt_type`, `Sec1_TS3_devt_explain_if_conflicting`
 - Section 2 slots:
-    - `Sec2_V1_dim`, `Sec2_V1_PPP`, `Sec2_V1_PPS1`
-    - `Sec2_V2_dim`, `Sec2_V2_PPP`, `Sec2_V2_PPS1`
-    - `Sec2_V3_dim`, `Sec2_V3_PPP`, `Sec2_V3_PPS1`
+    - `Sec2_V1_dim`, `Sec2_V1_PPP`, `Sec2_V1_PPS1`, `Sec2_V1_devt_type`, `Sec2_V1_devt_explain_if_conflicting`
+    - `Sec2_V2_dim`, `Sec2_V2_PPP`, `Sec2_V2_PPS1`, `Sec2_V2_devt_type`, `Sec2_V2_devt_explain_if_conflicting`
+    - `Sec2_V3_dim`, `Sec2_V3_PPP`, `Sec2_V3_PPS1`, `Sec2_V3_devt_type`, `Sec2_V3_devt_explain_if_conflicting`
 - Section 4 slots:
-    - `Sec4_Slot1_dim`, `Sec4_Slot1_PPS1`
-    - `Sec4_Slot2_dim`, `Sec4_Slot2_PPS1`
-    - `Sec4_Slot3_dim`, `Sec4_Slot3_PPS1`
+    - `Sec4_Slot1_dim`, `Sec4_Slot1_PPS1`, `Sec4_Slot1_devt_type`, `Sec4_Slot1_devt_explain_if_conflicting`
+    - `Sec4_Slot2_dim`, `Sec4_Slot2_PPS1`, `Sec4_Slot2_devt_type`, `Sec4_Slot2_devt_explain_if_conflicting`
+    - `Sec4_Slot3_dim`, `Sec4_Slot3_PPS1`, `Sec4_Slot3_devt_type`, `Sec4_Slot3_devt_explain_if_conflicting`
 
 Selection heuristic:
 
@@ -51,6 +51,15 @@ class SectionSlot:
     dim_field: str
     ppp_field: str | None = None
     pps1_field: str | None = None
+    devt_type_field: str | None = None
+    devt_explain_if_conflicting_field: str | None = None
+
+
+def conflict_explanation(value: str) -> str:
+    normalized = value.strip()
+    if normalized.startswith("conflict:"):
+        return normalized.removeprefix("conflict:").strip()
+    return ""
 class SlotPopulationSchema(Protocol):
     dimensions: list[str]
     short_to_dotted_dimension: dict[str, str]
@@ -127,6 +136,12 @@ def populate_section_fields(
             target[slot.ppp_field] = source_record.get(f"{dimension}-PPP", "")
         if slot.pps1_field:
             target[slot.pps1_field] = source_record.get(f"{dimension}-PPS1", "")
+        if slot.devt_type_field:
+            target[slot.devt_type_field] = source_record.get(f"{dimension}-devt_converged", "")
+        if slot.devt_explain_if_conflicting_field:
+            target[slot.devt_explain_if_conflicting_field] = conflict_explanation(
+                source_record.get(f"{dimension}-devt_converged_health", "")
+            )
 
     for dimension, slot in zip(section2_dims, schema.section2_slots, strict=False):
         target[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
@@ -134,8 +149,20 @@ def populate_section_fields(
             target[slot.ppp_field] = source_record.get(f"{dimension}-PPP", "")
         if slot.pps1_field:
             target[slot.pps1_field] = source_record.get(f"{dimension}-PPS1", "")
+        if slot.devt_type_field:
+            target[slot.devt_type_field] = source_record.get(f"{dimension}-devt_converged", "")
+        if slot.devt_explain_if_conflicting_field:
+            target[slot.devt_explain_if_conflicting_field] = conflict_explanation(
+                source_record.get(f"{dimension}-devt_converged_health", "")
+            )
 
     for dimension, slot in zip(section3_dims, schema.section3_slots, strict=False):
         target[slot.dim_field] = schema.short_to_dotted_dimension[dimension]
         if slot.pps1_field:
             target[slot.pps1_field] = source_record.get(f"{dimension}-PPS1", "")
+        if slot.devt_type_field:
+            target[slot.devt_type_field] = source_record.get(f"{dimension}-devt_converged", "")
+        if slot.devt_explain_if_conflicting_field:
+            target[slot.devt_explain_if_conflicting_field] = conflict_explanation(
+                source_record.get(f"{dimension}-devt_converged_health", "")
+            )

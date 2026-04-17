@@ -67,10 +67,15 @@ Field source summary for generated JSON records:
         outcome.
     - If exactly one source is populated, the converged value takes that source
         value and the health is `asserted`.
+    - If either source supplies `intro` and the other source supplies a
+        different non-empty value, the converged value keeps the non-`intro`
+        value and the health is `asserted-alongside-intro`.
     - If both sources are populated and agree, the converged value keeps that
         shared value and the health is `reinforced`.
-    - If both sources are populated and differ, the converged value becomes a
-        joined token such as `intro+shift` and the health is `conflict`.
+    - If both sources are populated and differ, the converged value is
+        `conflicting` and the health records the evidence in source order,
+        with tagset evidence first and E1 evidence second, for example
+        `conflict: intro(BCD)+shift(E1)`.
 - Derived section-slot fields:
     - `Sec1_TS1_PPP`, `Sec1_TS1_PPS1`, `Sec1_TS1_dim`
     - `Sec1_TS2_PPP`, `Sec1_TS2_PPS1`, `Sec1_TS2_dim`
@@ -267,6 +272,8 @@ def parse_section_slots(raw_slots: list[dict[str, str]]) -> list[SectionSlot]:
             dim_field=slot["dim"],
             ppp_field=slot.get("ppp"),
             pps1_field=slot.get("pps1"),
+            devt_type_field=slot.get("devt_type"),
+            devt_explain_if_conflicting_field=slot.get("devt_explain_if_conflicting"),
         )
         for slot in raw_slots
     ]
@@ -546,12 +553,18 @@ def derive_converged_development_value(
     if not present_values:
         return "", ""
 
+    if normalized_checkbox_value == "intro" and normalized_tagset_value and normalized_tagset_value != "intro":
+        return normalized_tagset_value, "asserted-alongside-intro"
+
+    if normalized_tagset_value == "intro" and normalized_checkbox_value and normalized_checkbox_value != "intro":
+        return normalized_checkbox_value, "asserted-alongside-intro"
+
     unique_values = ordered_unique(present_values)
     if len(unique_values) == 1:
         health = "reinforced" if len(present_values) == 2 else "asserted"
         return unique_values[0], health
 
-    return "+".join(unique_values), "conflict"
+    return "conflicting", f"conflict: {normalized_tagset_value}(BCD)+{normalized_checkbox_value}(E1)"
 
 
 def classify_cleaning_change(

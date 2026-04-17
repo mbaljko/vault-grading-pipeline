@@ -39,7 +39,7 @@ CONVERGED_VALUE_ORDER = (
     "cont-reinf",
     "intro",
     "tension",
-    "conflicted",
+    "conflicting",
 )
 CONFLICTED_VALUE_LABELS = (
     "cont-reinf+intro",
@@ -51,6 +51,7 @@ CONFLICTED_VALUE_LABELS = (
 )
 CONVERGED_HEALTH_ORDER = (
     "asserted",
+    "asserted-alongside-intro",
     "reinforced",
     "conflict",
 )
@@ -457,17 +458,29 @@ def normalize_report_label(value: object) -> str:
 
 def normalize_converged_value_for_report(value: object) -> str:
     normalized = normalize_report_label(value)
-    conflicted_labels = {
-        "cont-reinf+intro",
-        "cont-reinf+shift",
-        "intro+cont-reinf",
-        "intro+shift",
-        "shift+cont-reinf",
-        "shift+intro",
-    }
+    conflicted_labels = set(CONFLICTED_VALUE_LABELS) | {"conflicted", "conflicting"}
     if normalized in conflicted_labels:
-        return "conflicted"
+        return "conflicting"
     return normalized
+
+
+def normalize_converged_health_for_report(value: object) -> str:
+    normalized = normalize_report_label(value)
+    if normalized.startswith("conflict:"):
+        return "conflict"
+    return normalized
+
+
+def extract_conflict_detail_from_payload(payload: dict[str, object], dimension: str) -> str:
+    value_label = normalize_report_label(payload.get(f"{dimension}-devt_converged"))
+    if value_label in CONFLICTED_VALUE_LABELS:
+        return value_label
+
+    health_label = normalize_report_label(payload.get(f"{dimension}-devt_converged_health"))
+    if health_label.startswith("conflict:"):
+        return health_label.removeprefix("conflict:").strip()
+
+    return ""
 
 
 def build_converged_value_table(records: list[dict[str, object]]) -> list[str]:
@@ -507,21 +520,30 @@ def build_converged_conflict_breakdown_table(records: list[dict[str, object]]) -
     counts_by_dimension: dict[str, dict[str, int]] = {
         dimension: defaultdict(int) for dimension in DIMENSIONS
     }
+    observed_labels: set[str] = set()
 
     for record in records:
         payload = record.get("payload")
         if not isinstance(payload, dict):
             continue
         for dimension in DIMENSIONS:
-            label = normalize_report_label(payload.get(f"{dimension}-devt_converged"))
-            if label in CONFLICTED_VALUE_LABELS:
+            label = extract_conflict_detail_from_payload(payload, dimension)
+            if label:
                 counts_by_dimension[dimension][label] += 1
+                observed_labels.add(label)
 
     lines = [
         "| Conflicted value | " + " | ".join(DIMENSIONS) + " |",
         "| --- | " + " | ".join("---:" for _ in DIMENSIONS) + " |",
     ]
-    for label in CONFLICTED_VALUE_LABELS:
+    ordered_labels_to_render = [
+        label for label in CONFLICTED_VALUE_LABELS if label in observed_labels
+    ]
+    ordered_labels_to_render.extend(
+        sorted(label for label in observed_labels if label not in CONFLICTED_VALUE_LABELS)
+    )
+
+    for label in ordered_labels_to_render:
         lines.append(
             f"| {label} | "
             + " | ".join(str(counts_by_dimension[dimension][label]) for dimension in DIMENSIONS)
@@ -530,7 +552,7 @@ def build_converged_conflict_breakdown_table(records: list[dict[str, object]]) -
     lines.append(
         "| Total conflicted | "
         + " | ".join(
-            str(sum(counts_by_dimension[dimension][label] for label in CONFLICTED_VALUE_LABELS))
+            str(sum(counts_by_dimension[dimension].values()))
             for dimension in DIMENSIONS
         )
         + " |"
@@ -549,7 +571,7 @@ def build_converged_health_table(records: list[dict[str, object]]) -> list[str]:
         if not isinstance(payload, dict):
             continue
         for dimension in DIMENSIONS:
-            label = normalize_report_label(payload.get(f"{dimension}-devt_converged_health"))
+            label = normalize_converged_health_for_report(payload.get(f"{dimension}-devt_converged_health"))
             counts_by_dimension[dimension][label] += 1
             observed_labels.add(label)
 
