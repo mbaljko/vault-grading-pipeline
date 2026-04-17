@@ -633,6 +633,19 @@ def derive_development_value(row: dict[str, str], prefix: str) -> str:
     return ""
 
 
+def derive_indicator_health_src_e1(row: dict[str, str], prefix: str) -> str:
+    shift_selected = checked(normalize_value(row.get(f"{prefix}_shift")))
+    cont_reinf_selected = checked(normalize_value(row.get(f"{prefix}_cont")))
+    intro_selected = checked(normalize_value(row.get(f"{prefix}_intro")))
+    selected_count = sum((shift_selected, cont_reinf_selected, intro_selected))
+
+    if selected_count == 1:
+        return "2"
+    if selected_count == 0:
+        return "0"
+    return "1"
+
+
 def build_dimension_development_audit_fields(
     schema: ImportSchema,
     row: dict[str, str],
@@ -752,6 +765,7 @@ def populate_development_values(schema: ImportSchema, record: dict[str, str], ro
     for dimension in schema.dimensions:
         prefix = schema.short_to_dotted_dimension[dimension].replace(".", "")
         record[f"{dimension}-devt"] = derive_development_value(row, prefix)
+        record[f"{dimension}_indicator_health_srcE1"] = derive_indicator_health_src_e1(row, prefix)
 
 
 def ordered_unique(values: list[str]) -> list[str]:
@@ -1346,7 +1360,11 @@ def write_pps1_text_development_summary_report(
     path.write_text(build_pps1_text_development_summary_report(schema, rows), encoding="utf-8")
 
 
-def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> str:
+def build_audit_summary_report(
+    schema: ImportSchema,
+    rows: list[AuditRow],
+    student_pool_by_filename: dict[str, str] | None = None,
+) -> str:
     def summarize_numeric_values(values: list[int]) -> dict[str, float | int]:
         if not values:
             return {"avg": 0.0, "median": 0.0, "min": 0, "max": 0}
@@ -1410,35 +1428,70 @@ def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> st
         for column_name, metadata in position_state_matrix_labels.items()
     }
 
-    counts_by_dimension: dict[str, dict[str, int]] = {}
     status_label_display = {
         "Passed": "Passed (health=2)",
         "Multiple Selected": "Multiple Selected (health=1)",
         "None Selected": "None Selected (health=0)",
     }
-    for dimension in schema.dimensions:
-        passed = 0
-        none_selected = 0
-        multiple_selected = 0
-
-        for row in rows:
-            check_value = row.dimension_check_fields[f"{dimension}-check"]
-            error_value = row.dimension_check_fields[f"{dimension}-err"]
-            if check_value == "true":
-                passed += 1
-            elif error_value == "none selected":
-                none_selected += 1
-            elif error_value == "multiple selected":
-                multiple_selected += 1
-
-        counts_by_dimension[dimension] = {
-            "Passed": passed,
-            "None Selected": none_selected,
-            "Multiple Selected": multiple_selected,
-        }
-
     header_cells = ["Check Status", *schema.dimensions]
     divider_cells = ["---", *("---:" for _ in schema.dimensions)]
+
+    def build_e1_section_lines(section_rows: list[AuditRow], section_heading: str) -> list[str]:
+        counts_by_dimension: dict[str, dict[str, int]] = {}
+        for dimension in schema.dimensions:
+            passed = 0
+            none_selected = 0
+            multiple_selected = 0
+
+            for row in section_rows:
+                check_value = row.dimension_check_fields[f"{dimension}-check"]
+                error_value = row.dimension_check_fields[f"{dimension}-err"]
+                if check_value == "true":
+                    passed += 1
+                elif error_value == "none selected":
+                    none_selected += 1
+                elif error_value == "multiple selected":
+                    multiple_selected += 1
+
+            counts_by_dimension[dimension] = {
+                "Passed": passed,
+                "None Selected": none_selected,
+                "Multiple Selected": multiple_selected,
+            }
+
+        section_lines = [section_heading, "", f"| {' | '.join(header_cells)} |", f"| {' | '.join(divider_cells)} |"]
+
+        for status_label in ("Passed", "Multiple Selected", "None Selected"):
+            row_cells = [status_label_display[status_label]]
+            row_cells.extend(str(counts_by_dimension[dimension][status_label]) for dimension in schema.dimensions)
+            section_lines.append(f"| {' | '.join(row_cells)} |")
+
+        total_row_cells = ["Total"]
+        total_row_cells.extend(
+            str(
+                counts_by_dimension[dimension]["Passed"]
+                + counts_by_dimension[dimension]["None Selected"]
+                + counts_by_dimension[dimension]["Multiple Selected"]
+            )
+            for dimension in schema.dimensions
+        )
+        section_lines.append(f"| {' | '.join(total_row_cells)} |")
+
+        error_rate_row_cells = ["% Error Rate"]
+        for dimension in schema.dimensions:
+            total_count = (
+                counts_by_dimension[dimension]["Passed"]
+                + counts_by_dimension[dimension]["None Selected"]
+                + counts_by_dimension[dimension]["Multiple Selected"]
+            )
+            error_count = (
+                counts_by_dimension[dimension]["None Selected"]
+                + counts_by_dimension[dimension]["Multiple Selected"]
+            )
+            error_rate = 0.0 if total_count == 0 else (error_count / total_count) * 100
+            error_rate_row_cells.append(f"{error_rate:.1f}%")
+        section_lines.append(f"| {' | '.join(error_rate_row_cells)} |")
+        return section_lines
 
     lines = [
         "# PPS1 Import Audit Summary",
@@ -1447,40 +1500,22 @@ def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> st
         "",
         "## E1 Categorization of Dimension Devt : Type Uniqueness",
         "",
-        f"| {' | '.join(header_cells)} |",
-        f"| {' | '.join(divider_cells)} |",
     ]
+    lines.extend(build_e1_section_lines(rows, "### All records"))
 
-    for status_label in ("Passed", "Multiple Selected", "None Selected"):
-        row_cells = [status_label_display[status_label]]
-        row_cells.extend(str(counts_by_dimension[dimension][status_label]) for dimension in schema.dimensions)
-        lines.append(f"| {' | '.join(row_cells)} |")
+    if student_pool_by_filename:
+        pool_to_rows: dict[str, list[AuditRow]] = {}
+        for row in rows:
+            filename = Path(row.output_json_path).name
+            student_pool = student_pool_by_filename.get(filename)
+            if not student_pool:
+                continue
+            pool_to_rows.setdefault(student_pool, []).append(row)
 
-    total_row_cells = ["Total"]
-    total_row_cells.extend(
-        str(
-            counts_by_dimension[dimension]["Passed"]
-            + counts_by_dimension[dimension]["None Selected"]
-            + counts_by_dimension[dimension]["Multiple Selected"]
-        )
-        for dimension in schema.dimensions
-    )
-    lines.append(f"| {' | '.join(total_row_cells)} |")
+        for student_pool in sorted(pool_to_rows):
+            lines.extend(["", *build_e1_section_lines(pool_to_rows[student_pool], f"### {student_pool}")])
 
-    error_rate_row_cells = ["% Error Rate"]
-    for dimension in schema.dimensions:
-        total_count = (
-            counts_by_dimension[dimension]["Passed"]
-            + counts_by_dimension[dimension]["None Selected"]
-            + counts_by_dimension[dimension]["Multiple Selected"]
-        )
-        error_count = (
-            counts_by_dimension[dimension]["None Selected"]
-            + counts_by_dimension[dimension]["Multiple Selected"]
-        )
-        error_rate = 0.0 if total_count == 0 else (error_count / total_count) * 100
-        error_rate_row_cells.append(f"{error_rate:.1f}%")
-    lines.append(f"| {' | '.join(error_rate_row_cells)} |")
+    lines.append("")
 
     matrix_columns = [
         "E2_00_GridResponse",
@@ -1945,6 +1980,87 @@ def build_audit_summary_report(schema: ImportSchema, rows: list[AuditRow]) -> st
 
 def write_audit_summary_report(path: Path, schema: ImportSchema, rows: list[AuditRow]) -> None:
     path.write_text(build_audit_summary_report(schema, rows), encoding="utf-8")
+
+
+def load_audit_rows_from_csv(path: Path, schema: ImportSchema) -> list[AuditRow]:
+    rows: list[AuditRow] = []
+    with path.open(newline="", encoding="utf-8-sig") as csv_file:
+        reader = csv.DictReader(csv_file)
+        for raw_row in reader:
+            dimension_check_fields = {
+                key: (raw_row.get(key) or "")
+                for dimension in schema.dimensions
+                for key in (
+                    f"{dimension}-shift",
+                    f"{dimension}-cont-reinf",
+                    f"{dimension}-intro",
+                    f"{dimension}-check",
+                    f"{dimension}-err",
+                )
+            }
+            dimension_word_count_fields = {
+                key: (raw_row.get(key) or "0")
+                for dimension in schema.dimensions
+                for key in (f"{dimension}-PPP-word-count", f"{dimension}-PPS1-word-count")
+            }
+            concept_word_count_fields = {
+                key: (raw_row.get(key) or "0")
+                for key in (
+                    "B3Interpretation-word-count",
+                    "B3Use-word-count",
+                    "C3Interpretation-word-count",
+                    "C3Use-word-count",
+                    "D3Interpretation-word-count",
+                    "D3Use-word-count",
+                )
+            }
+            no_entry_received_fields = {
+                key: (raw_row.get(key) or "false")
+                for dimension in schema.dimensions
+                for key in (f"{dimension}-PPP-no-entry", f"{dimension}-PPS1-no-entry")
+            }
+            no_entry_received_fields.update(
+                {
+                    key: (raw_row.get(key) or "false")
+                    for key in (
+                        "B3Interpretation-no-entry",
+                        "B3Use-no-entry",
+                        "C3Interpretation-no-entry",
+                        "C3Use-no-entry",
+                        "D3Interpretation-no-entry",
+                        "D3Use-no-entry",
+                    )
+                }
+            )
+            position_state_matrix_fields = {
+                key: (raw_row.get(key) or "")
+                for key in (
+                    "E2_00_GridResponse",
+                    "E2_10_GridResponse",
+                    "E2_01_GridResponse",
+                    "E2_11_GridResponse",
+                    "Position-State Matrix Saturation Rate",
+                )
+            }
+            rows.append(
+                AuditRow(
+                    source_csv_path=raw_row.get("source_csv_path") or "",
+                    row_index=int(raw_row.get("row_index") or 0),
+                    user=raw_row.get("user") or "",
+                    username=raw_row.get("username") or "",
+                    email_address=raw_row.get("email_address") or "",
+                    participant_id=raw_row.get("participant_id") or "",
+                    given_name=raw_row.get("given_name") or "",
+                    family_name=raw_row.get("family_name") or "",
+                    output_json_path=raw_row.get("output_json_path") or "",
+                    dimension_check_fields=dimension_check_fields,
+                    dimension_word_count_fields=dimension_word_count_fields,
+                    concept_word_count_fields=concept_word_count_fields,
+                    no_entry_received_fields=no_entry_received_fields,
+                    position_state_matrix_fields=position_state_matrix_fields,
+                )
+            )
+    return rows
 
 
 def clear_existing_json_files(directory: Path) -> None:

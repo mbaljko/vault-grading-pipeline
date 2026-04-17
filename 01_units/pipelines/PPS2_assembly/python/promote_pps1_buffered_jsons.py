@@ -7,6 +7,8 @@ import json
 import shutil
 from pathlib import Path
 
+from import_pps1_csv_to_json import DEFAULT_SCHEMA_PATH, load_audit_rows_from_csv, load_schema, build_audit_summary_report
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -37,6 +39,17 @@ def clear_json_files(directory: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     for existing_path in directory.glob("*.json"):
         existing_path.unlink()
+
+
+def load_student_pool_by_filename(directories: list[Path]) -> dict[str, str]:
+    student_pool_by_filename: dict[str, str] = {}
+    for directory in directories:
+        for json_path in directory.glob("*.json"):
+            payload = json.loads(json_path.read_text(encoding="utf-8"))
+            student_pool = payload.get("STUDENT_POOL")
+            if isinstance(student_pool, str) and student_pool:
+                student_pool_by_filename[json_path.name] = student_pool
+    return student_pool_by_filename
 
 
 def main() -> int:
@@ -122,6 +135,21 @@ def main() -> int:
     print(f"Copied {sampled} sampled JSON files to {args.sample_output_dir}")
     print(f"Promoted {promoted_sec_m} Section M JSON files to {args.section_m_output_dir}")
     print(f"Promoted {promoted_sec_o} Section O JSON files to {args.section_o_output_dir}")
+
+    schema = load_schema(DEFAULT_SCHEMA_PATH)
+    audit_rows = load_audit_rows_from_csv(args.audit_csv, schema)
+    student_pool_by_filename = load_student_pool_by_filename(
+        [
+            args.all_minus_sas_output_dir,
+            args.section_m_output_dir,
+            args.section_o_output_dir,
+            args.sample_output_dir,
+        ]
+    )
+    args.audit_csv.with_suffix(".md").write_text(
+        build_audit_summary_report(schema, audit_rows, student_pool_by_filename=student_pool_by_filename),
+        encoding="utf-8",
+    )
     return 0
 
 
