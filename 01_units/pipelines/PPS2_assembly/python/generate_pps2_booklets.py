@@ -190,6 +190,11 @@ def build_placeholder_context(data: dict[str, Any]) -> dict[str, str]:
     return context
 
 
+def render_placeholder_value(value: str) -> str:
+    """Render a placeholder value, substituting a fallback for empty content."""
+    return value if value.strip() else "not noted"
+
+
 def escape_latex_text(value: str) -> str:
     escaped_parts: list[str] = []
     for char in value:
@@ -223,13 +228,16 @@ def build_two_column_latex_block(
 ) -> str:
     return f"""
 
+\\begingroup
+\\compacttablefont
+\\renewcommand{{\\arraystretch}}{{0.92}}
 \\begin{{longtable}}[]{{@{{}}
     >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 2\\tabcolsep) * \\real{{{column_fraction}}}}}
     >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 2\\tabcolsep) * \\real{{{column_fraction}}}}}@{{}}}}
 \\toprule\\noalign{{}}
-\\begin{{minipage}}[b]{{\\linewidth}}\\raggedright
+\\begin{{minipage}}[b]{{\\linewidth}}\\raggedright\\normalfont\\normalsize\\bfseries
 {escape_latex_text(left_header)}
-\\end{{minipage}} & \\begin{{minipage}}[b]{{\\linewidth}}\\raggedright
+\\end{{minipage}} & \\begin{{minipage}}[b]{{\\linewidth}}\\raggedright\\normalfont\\normalsize\\bfseries
 {escape_latex_text(right_header)}
 \\end{{minipage}} \\\\
 \\midrule\\noalign{{}}
@@ -238,6 +246,7 @@ def build_two_column_latex_block(
 \\endlastfoot
 {format_latex_table_cell(left_value)} & {format_latex_table_cell(right_value)} \\\\
 \\end{{longtable}}
+\\endgroup
 
 """
 
@@ -270,8 +279,8 @@ def expand_table_macros(template_text: str, values: dict[str, str]) -> tuple[str
         rendered_blocks[placeholder_token] = build_two_column_latex_block(
             left_header="PPP (Initial) position",
             right_header="PPS1 Position",
-            left_value=values[left_key],
-            right_value=values[right_key],
+            left_value=render_placeholder_value(values[left_key]),
+            right_value=render_placeholder_value(values[right_key]),
         )
         return placeholder_token
 
@@ -290,7 +299,7 @@ def fill_template(template_text: str, values: dict[str, str]) -> tuple[str, list
     def replacer(match: re.Match[str]) -> str:
         placeholder = match.group(1)
         if placeholder in values:
-            return values[placeholder]
+            return render_placeholder_value(values[placeholder])
         unresolved.add(placeholder)
         return match.group(0)
 
