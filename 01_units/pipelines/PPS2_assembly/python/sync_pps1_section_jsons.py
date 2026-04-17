@@ -16,6 +16,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--section-output-dir", type=Path, required=True, help="Directory to populate with section JSON files.")
     parser.add_argument("--activity-group-csv", type=Path, required=True, help="Roster CSV containing section membership columns.")
     parser.add_argument("--audit-csv", type=Path, required=True, help="Importer audit CSV containing email to output_json_path mappings.")
+    parser.add_argument(
+        "--source-dir",
+        type=Path,
+        help="Optional directory containing the promoted JSON files. When provided, audit CSV filenames are resolved relative to this directory.",
+    )
     return parser.parse_args()
 
 
@@ -45,7 +50,14 @@ def main() -> int:
 
             email = (row.get("Email address") or "").strip().casefold()
             source_path = audit_lookup.get(email)
-            if source_path is None or not source_path.exists():
+            if source_path is None:
+                missing += 1
+                continue
+
+            if args.source_dir is not None:
+                source_path = args.source_dir / source_path.name
+
+            if not source_path.exists():
                 missing += 1
                 continue
 
