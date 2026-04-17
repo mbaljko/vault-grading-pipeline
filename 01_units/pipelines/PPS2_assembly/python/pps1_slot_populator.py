@@ -25,9 +25,7 @@ Slots populated by this module:
     - `Sec4_Slot2_dim`, `Sec4_Slot2_PPS1`, `Sec4_Slot2_devt_type`, `Sec4_Slot2_devt_explain_if_conflicting`
     - `Sec4_Slot3_dim`, `Sec4_Slot3_PPS1`, `Sec4_Slot3_devt_type`, `Sec4_Slot3_devt_explain_if_conflicting`
 
-Section 1 `TS*_dim` fields are populated with the longer human-friendly
-dimension labels. Section 2 and Section 4 `*_dim` fields continue to use the
-schema's dotted dimension codes.
+All populated `*_dim` fields use the longer human-friendly dimension labels.
 
 Selection heuristic:
 
@@ -267,7 +265,7 @@ def populate_section_fields(
             )
 
     for dimension, slot in zip(section2_dims, schema.section2_slots, strict=False):
-        target[slot.dim_field] = display_dimension(schema, dimension, human_friendly=False)
+        target[slot.dim_field] = display_dimension(schema, dimension, human_friendly=True)
         if slot.ppp_field:
             target[slot.ppp_field] = source_record.get(f"{dimension}-PPP", "")
         if slot.pps1_field:
@@ -282,7 +280,7 @@ def populate_section_fields(
             )
 
     for dimension, slot in zip(section3_dims, schema.section3_slots, strict=False):
-        target[slot.dim_field] = display_dimension(schema, dimension, human_friendly=False)
+        target[slot.dim_field] = display_dimension(schema, dimension, human_friendly=True)
         if slot.pps1_field:
             target[slot.pps1_field] = source_record.get(f"{dimension}-PPS1", "")
         devt_type = source_record.get(f"{dimension}-devt_converged", "")

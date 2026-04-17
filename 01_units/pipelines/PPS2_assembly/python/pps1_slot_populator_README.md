@@ -14,6 +14,7 @@ The module is intentionally narrow. It does not import LMS CSV rows, build base 
 - defines the `SectionSlot` dataclass used by the schema loader
 - selects Section 1, Section 2, and Section 4 dimensions from an assembled record
 - writes the `Sec1_*`, `Sec2_*`, and `Sec4_Slot*` fields into a target mapping
+- writes all populated `*_dim` fields using the human-friendly dimension labels
 
 ## Inputs
 
