@@ -13,6 +13,12 @@ Field source summary for generated JSON records:
         `directFieldMap` in the external schema file.
     - Text cleaning is applied only to columns selected by
         `should_clean_lms_text_column`.
+- PPS1-specific derived fields, from Secion B, C, and D responses, Subsection *.2.*:        
+    - `{B,C,D}-{1,2,3}-devt_tagset` is derived from extraction over the cleaned
+        Section B, C, and D subsection 2 response text.
+    - `{B,C,D}-{1,2,3}_indicator_health_srcBCD2` is derived from the same B/C/D.2
+        extraction as `*-devt_tagset`: health `2` means a tagset value was
+        extracted and health `0` means no value was extracted.
 - E1-derived development fields:
     - `{B,C,D}-{1,2,3}-devt` fields are derived from the E1 development-type
         checkbox columns in the LMS export.
@@ -416,8 +422,12 @@ def extract_development_type_from_cleaned_pps1(value: str | None) -> str:
 def build_pps1_text_development_fields(schema: ImportSchema, record: dict[str, str]) -> dict[str, str]:
     audit_fields: dict[str, str] = {}
     for dimension in schema.dimensions:
-        audit_fields[dimension] = extract_development_type_from_cleaned_pps1(record.get(f"{dimension}-PPS1"))
+        audit_fields[dimension] = normalize_value(record.get(f"{dimension}-devt_tagset"))
     return audit_fields
+
+
+def derive_indicator_health_src_bcd2(extracted_value: str) -> str:
+    return "2" if normalize_value(extracted_value) else "0"
 
 
 def classify_cleaning_change(
@@ -807,6 +817,13 @@ def populate_development_values(schema: ImportSchema, record: dict[str, str], ro
         record[f"{dimension}_indicator_health_srcE1"] = derive_indicator_health_src_e1(row, prefix)
 
 
+def populate_development_tagset_values(schema: ImportSchema, record: dict[str, str]) -> None:
+    for dimension in schema.dimensions:
+        extracted_value = extract_development_type_from_cleaned_pps1(record.get(f"{dimension}-PPS1"))
+        record[f"{dimension}-devt_tagset"] = extracted_value
+        record[f"{dimension}_indicator_health_srcBCD2"] = derive_indicator_health_src_bcd2(extracted_value)
+
+
 def ordered_unique(values: list[str]) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
@@ -909,6 +926,7 @@ def build_record(
                 )
 
     populate_development_values(schema, record, row)
+    populate_development_tagset_values(schema, record)
     populate_status_values(schema, record, row)
     populate_section_fields(schema, record)
 
@@ -1277,6 +1295,7 @@ def build_pps1_text_development_summary_report(
     rows: list[Pps1TextDevelopmentRow],
 ) -> str:
     total_rows = len(rows)
+    dimension_count = len(schema.dimensions)
     per_dimension_counts: dict[str, dict[str, int]] = {
         dimension: {development_type: 0 for development_type in CANONICAL_DEVELOPMENT_TYPES}
         for dimension in schema.dimensions
@@ -1311,20 +1330,61 @@ def build_pps1_text_development_summary_report(
             overall_counts[development_type] += per_dimension_counts[dimension][development_type]
 
     lines = [
-        "# PPS1 Text Development Summary",
+        "# PPS1 Tagset Extraction Summary",
         "",
-        "- dev_type ∈ {cont-reinf, intro, shift, tension}",
+        "For each of 9 dimension, Students were asked to provide supply a response that indentified their",
+        "development type from these 4 values {shift / introduced / continuity-reinforcement / tension}",
+        "We are calling",
+        "these 4 values {shift / introduced / continuity-reinforcement / tension} the tagset",
+        "",
+        "We attempt to extract these values.",
+        "Here are the results of this extraction",
+        "",
+        "- tagset ∈ {shift, introduced, continuity-reinforcement, tension}",
         f"- Total student rows: {total_rows}",
         f"- Rows with at least one extracted development type: {rows_with_any}",
-        f"- Rows with all {len(schema.dimensions)} dimensions extracted: {rows_with_all}",
+        f"- Rows with all {dimension_count} dimensions extracted: {rows_with_all}",
         f"- Extracted dimension values: {total_extracted} / {total_slots} ({(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}%)",
         f"- Missing dimension values: {missing_slots}",
         "",
+        "## Health Summary",
+        "",
+        "Interpretation: health `2` means tagset value extracted, health `0` means tagset value not extracted.",
+        "",
+        f"- Health `2`: {total_extracted} / {total_slots} ({(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}%)",
+        f"- Health `0`: {missing_slots} / {total_slots} ({(100.0 * missing_slots / total_slots) if total_slots else 0.0:.1f}%)",
+        f"- Average extracted dimensions per student: {(total_extracted / total_rows) if total_rows else 0.0:.2f} / {dimension_count}",
+        f"- Average health score per student: {(2 * total_extracted / total_rows) if total_rows else 0.0:.2f} / {2 * dimension_count}",
+        "",
+        "| Health value | Count | % of all dimension slots |",
+        "| --- | ---: | ---: |",
+        f"| 2 | {total_extracted} | {(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}% |",
+        f"| 0 | {missing_slots} | {(100.0 * missing_slots / total_slots) if total_slots else 0.0:.1f}% |",
+        f"| Total | {total_slots} | 100.0% |",
+        "",
+        "### Health by Dimension",
+        "",
+        "| Dimension | health 2 | health 0 | health 2 % | health 0 % |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for dimension in schema.dimensions:
+        extracted_count = sum(per_dimension_counts[dimension].values())
+        missing_count = blank_counts[dimension]
+        lines.append(
+            f"| {dimension} | {extracted_count} | {missing_count} | "
+            f"{((100.0 * extracted_count / total_rows) if total_rows else 0.0):.1f}% | "
+            f"{((100.0 * missing_count / total_rows) if total_rows else 0.0):.1f}% |"
+        )
+    lines.extend(
+        [
+            f"| Total | {total_extracted} | {missing_slots} | {(100.0 * total_extracted / total_slots) if total_slots else 0.0:.1f}% | {(100.0 * missing_slots / total_slots) if total_slots else 0.0:.1f}% |",
+            "",
         "## Overall Distribution",
         "",
         "| Development Type | Count | Percent of Extracted |",
         "| --- | ---: | ---: |",
-    ]
+        ]
+    )
     for development_type in CANONICAL_DEVELOPMENT_TYPES:
         count = overall_counts[development_type]
         percent = (100.0 * count / total_extracted) if total_extracted else 0.0
@@ -2312,7 +2372,7 @@ def main() -> int:
 
     cleaning_audit_path = audit_path.with_name(audit_path.stem + "_cleaning.csv")
     cleaning_audit_summary_path = cleaning_audit_path.with_suffix(".md")
-    pps1_text_development_path = audit_path.with_name(audit_path.stem + "_pps1_text_development_types.csv")
+    pps1_text_development_path = audit_path.with_name(audit_path.stem + "_pps1_tagset_extraction.csv")
     pps1_text_development_summary_path = pps1_text_development_path.with_suffix(".md")
     write_audit_csv(audit_path, schema, audit_rows)
     write_audit_summary_report(audit_summary_path, schema, audit_rows)
@@ -2337,8 +2397,8 @@ def main() -> int:
     print(f"Wrote import audit summary report to {audit_summary_path}")
     print(f"Wrote cleaning audit CSV to {cleaning_audit_path}")
     print(f"Wrote cleaning audit summary report to {cleaning_audit_summary_path}")
-    print(f"Wrote PPS1 text development CSV to {pps1_text_development_path}")
-    print(f"Wrote PPS1 text development summary report to {pps1_text_development_summary_path}")
+    print(f"Wrote PPS1 tagset extraction CSV to {pps1_text_development_path}")
+    print(f"Wrote PPS1 tagset extraction summary report to {pps1_text_development_summary_path}")
     print(f"Copied {len(copied_paths)} sampled JSON files to {sample_output_dir}")
     if args.verbose and copied_paths:
         for copied_path in copied_paths:
