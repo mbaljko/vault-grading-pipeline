@@ -50,6 +50,12 @@ PAGE_BREAK_PATTERN = re.compile(
 )
 ANSWER_BOX_PATTERN = re.compile(r"\[answer-box:\s*([^\]]+)\]", re.IGNORECASE)
 FIRST_APPENDIX_HEADING_PATTERN = re.compile(r"^# APPENDIX:", re.MULTILINE)
+SECTION1_OVERVIEW_TABLE_PATTERN = re.compile(
+    r"^\|\s*\| Dimension\s+\| PPS1 Devt\s+\| PPS1 Position state \|\n"
+    r"^\| --- \| ---[^\n]*\n"
+    r"(?:^\| [BCD]-[123] \| [^\n]*\n){9}",
+    re.MULTILINE,
+)
 UNICODE_LATEX_REPLACEMENTS = {
     "☐": r"$\square$ ",
     "☑": r"$\boxtimes$ ",
@@ -68,6 +74,18 @@ LATEX_ESCAPE_REPLACEMENTS = {
     "~": r"\textasciitilde{}",
     "^": r"\textasciicircum{}",
 }
+
+SECTION1_OVERVIEW_ROWS = (
+    ("B-1", "Institutional structures and organisational arrangements"),
+    ("B-2", "Responsibility and accountability distribution"),
+    ("B-3", "Institutional influence, constraint, and authority"),
+    ("C-1", "Justice, accessibility, and harm"),
+    ("C-2", "Assumptions about neutrality, efficiency, fairness, or objectivity"),
+    ("C-3", "Criteria for identifying harm, exclusion, or accessibility barriers"),
+    ("D-1", "Human responsibility vs AI-mediated delegation of responsibility"),
+    ("D-2", "AI-mediated oversight, uncertainty, and verification practices"),
+    ("D-3", "Role of tools or AI systems in shaping professional judgement"),
+)
 
 
 @dataclass(frozen=True)
@@ -249,6 +267,55 @@ def build_two_column_latex_block(
 \\endgroup
 
 """
+
+
+def build_section1_overview_table(values: dict[str, str]) -> str:
+    """Build the Section 1 four-column overview table with fixed widths."""
+    row_lines: list[str] = []
+    for dimension_code, dimension_label in SECTION1_OVERVIEW_ROWS:
+        development = escape_latex_text(render_placeholder_value(values.get(f"{dimension_code}-devt", "")))
+        status = escape_latex_text(render_placeholder_value(values.get(f"{dimension_code}-status", "")))
+        row_lines.append(
+            f"{escape_latex_text(dimension_code)} & "
+            f"{escape_latex_text(dimension_label)} & "
+            f"{development} & {status} \\\\"
+        )
+
+    rows = "\n".join(row_lines)
+    return f"""
+
+\\begingroup
+\\renewcommand{{\\arraystretch}}{{0.95}}
+\\begin{{longtable}}[]{{@{{}}
+  >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 6\\tabcolsep) * \\real{{0.08}}}}
+  >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 6\\tabcolsep) * \\real{{0.60}}}}
+  >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 6\\tabcolsep) * \\real{{0.12}}}}
+  >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 6\\tabcolsep) * \\real{{0.20}}}}@{{}}}}
+\\toprule\\noalign{{}}
+\\begin{{minipage}}[b]{{\\linewidth}}\\raggedright\\normalfont\\normalsize\\bfseries
+\\end{{minipage}} & \\begin{{minipage}}[b]{{\\linewidth}}\\raggedright\\normalfont\\normalsize\\bfseries
+Dimension
+\\end{{minipage}} & \\begin{{minipage}}[b]{{\\linewidth}}\\raggedright\\normalfont\\normalsize\\bfseries
+PPS1 Devt
+\\end{{minipage}} & \\begin{{minipage}}[b]{{\\linewidth}}\\raggedright\\normalfont\\normalsize\\bfseries
+PPS1 Position state
+\\end{{minipage}} \\\\
+\\midrule\\noalign{{}}
+\\endhead
+\\bottomrule\\noalign{{}}
+\\endlastfoot
+{rows}
+\\end{{longtable}}
+\\endgroup
+
+"""
+
+
+def replace_section1_overview_table(rendered_text: str, student_data: dict[str, Any]) -> str:
+    """Replace the markdown Section 1 overview table with manual LaTeX."""
+    values = build_placeholder_context(student_data)
+    manual_table = build_section1_overview_table(values)
+    return SECTION1_OVERVIEW_TABLE_PATTERN.sub(lambda _: manual_table, rendered_text, count=1)
 
 
 def extract_placeholders(template_text: str) -> set[str]:
@@ -615,6 +682,7 @@ def apply_rendering_conversions(rendered_text: str, student_data: dict[str, Any]
     It also appends a final even-numbered page showing the student's name.
     """
     converted_text = rendered_text
+    converted_text = replace_section1_overview_table(converted_text, student_data)
     converted_text = number_question_placeholders(converted_text)
     converted_text = replace_full_width_rules(converted_text)
     for source, replacement in UNICODE_LATEX_REPLACEMENTS.items():
