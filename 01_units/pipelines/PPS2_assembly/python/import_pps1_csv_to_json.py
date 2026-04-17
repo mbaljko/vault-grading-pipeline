@@ -1,6 +1,45 @@
 #!/usr/bin/env python3
 """Import PPS1 LMS CSV data into per-student JSON files.
 
+Field source summary for generated JSON records:
+
+- Identity and roster-derived fields:
+    - `participant_id`, `GIVEN_NAME`, and `FAMILY_NAME` come from LMS identity
+        columns (`Username`, `User`, `Email address`) plus the participants roster CSV
+        used to resolve names more reliably.
+- Direct LMS-mapped response fields:
+    - Fields such as `B-1-PPP`, `B-1-PPS1`, `B3Interpretation`, `C3Use`,
+        `E-1-PPS1`, and `GenAIAttestation` come from LMS export columns via
+        `directFieldMap` in the external schema file.
+    - Text cleaning is applied only to columns selected by
+        `should_clean_lms_text_column`.
+- E1-derived development fields:
+    - `{B,C,D}-{1,2,3}-devt` fields are derived from the E1 development-type
+        checkbox columns in the LMS export.
+    - For a dotted dimension prefix such as `B21`, the code reads
+        `{prefix}_shift`, `{prefix}_cont`, and `{prefix}_intro` and maps the checked
+        value to `Shift`, `Cont/Reinf`, or `Intro`.
+    - `{B,C,D}-{1,2,3}_indicator_health_srcE1` fields are derived from the same E1
+        checkbox source as `*-devt`: health `2` means exactly one checkbox selected,
+        health `1` means multiple selected, and health `0` means none selected.
+- E2-derived status fields:
+    - `{B,C,D}-{1,2,3}-status` fields are derived from the E2 position-state matrix.
+    - The importer reads `E2_00_GridResponse`, `E2_10_GridResponse`,
+        `E2_01_GridResponse`, and `E2_11_GridResponse`, then uses `gridStatusMap`
+        plus `shortToDottedDimension` from the schema to assign `stable` or
+        `in tension` to the matching dimension.
+- Derived section and claim fields:
+    - Fields such as `Sec1_TS1_*`, `Sec2_V*`, `Sec3Sec4_*`, `CLM_01_dimension`,
+        and `CLM_0*_text` are derived from the populated B/C/D dimension fields after
+        `*-devt` and `*-status` have been assigned.
+- Post-import enrichment fields:
+    - `STUDENT_POOL` and `IS_SAMPLE` are not assigned in this importer.
+    - They are added later by `promote_pps1_buffered_jsons.py` during post-import
+        promotion into final destination directories.
+- Schema-only placeholders:
+    - Fields that exist in `pps1_import_schema.json` but are not populated in this
+        file remain at their default values until another step assigns them.
+
 The output schema, field ordering, and CSV-to-JSON mappings live in an external
 JSON config file so they can be updated without changing Python code.
 """
