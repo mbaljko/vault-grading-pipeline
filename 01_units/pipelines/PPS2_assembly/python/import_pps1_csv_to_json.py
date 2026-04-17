@@ -52,14 +52,19 @@ Field source summary for generated JSON records:
     - `B-1-devt_converged`, `B-2-devt_converged`, `B-3-devt_converged`,
         `C-1-devt_converged`, `C-2-devt_converged`, `C-3-devt_converged`,
         `D-1-devt_converged`, `D-2-devt_converged`, and
-        `D-3-devt_converged` are declared in the schema as converged
-        development outputs derived from `*-devt` and `*-devt_tagset`.
+        `D-3-devt_converged` store the converged development label for each
+        dimension, derived from `*-devt` and `*-devt_tagset`.
     - `B-1-devt_converged_health`, `B-2-devt_converged_health`,
         `B-3-devt_converged_health`, `C-1-devt_converged_health`,
         `C-2-devt_converged_health`, `C-3-devt_converged_health`,
         `D-1-devt_converged_health`, `D-2-devt_converged_health`, and
         `D-3-devt_converged_health` are the paired health/status fields for
         those converged outputs.
+    - The field list for these values is defined in `pps1_import_schema.json`
+        under `allRecordDefaults` and `derivedFieldGroups.convergedDerived`.
+    - A tagset value of `tension` is set aside for this convergence step and
+        does not participate in the main `shift` / `cont-reinf` / `intro`
+        outcome.
     - If exactly one source is populated, the converged value takes that source
         value and the health is `asserted`.
     - If both sources are populated and agree, the converged value keeps that
@@ -534,6 +539,8 @@ def derive_converged_development_value(
 ) -> tuple[str, str]:
     normalized_checkbox_value = canonicalize_development_type(checkbox_value)
     normalized_tagset_value = canonicalize_development_type(tagset_value)
+    if normalized_tagset_value == "tension":
+        normalized_tagset_value = ""
 
     present_values = [value for value in (normalized_checkbox_value, normalized_tagset_value) if value]
     if not present_values:

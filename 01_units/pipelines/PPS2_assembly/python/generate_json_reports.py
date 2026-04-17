@@ -34,6 +34,26 @@ DIMENSION_GROUPS = {
     "C": ("C-1", "C-2", "C-3"),
     "D": ("D-1", "D-2", "D-3"),
 }
+CONVERGED_VALUE_ORDER = (
+    "shift",
+    "cont-reinf",
+    "intro",
+    "tension",
+    "conflicted",
+)
+CONFLICTED_VALUE_LABELS = (
+    "cont-reinf+intro",
+    "cont-reinf+shift",
+    "intro+cont-reinf",
+    "intro+shift",
+    "shift+cont-reinf",
+    "shift+intro",
+)
+CONVERGED_HEALTH_ORDER = (
+    "asserted",
+    "reinforced",
+    "conflict",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -424,6 +444,175 @@ def build_group_indicator_population_analysis(records: list[dict[str, object]]) 
     return lines
 
 
+def ordered_labels(values: list[str], preferred_order: tuple[str, ...]) -> list[str]:
+    preferred = [label for label in preferred_order if label in values]
+    remaining = sorted(label for label in values if label not in preferred_order)
+    return preferred + remaining
+
+
+def normalize_report_label(value: object) -> str:
+    normalized = str(value or "").strip()
+    return normalized if normalized else "[blank]"
+
+
+def normalize_converged_value_for_report(value: object) -> str:
+    normalized = normalize_report_label(value)
+    conflicted_labels = {
+        "cont-reinf+intro",
+        "cont-reinf+shift",
+        "intro+cont-reinf",
+        "intro+shift",
+        "shift+cont-reinf",
+        "shift+intro",
+    }
+    if normalized in conflicted_labels:
+        return "conflicted"
+    return normalized
+
+
+def build_converged_value_table(records: list[dict[str, object]]) -> list[str]:
+    counts_by_dimension: dict[str, dict[str, int]] = {
+        dimension: defaultdict(int) for dimension in DIMENSIONS
+    }
+    observed_labels: set[str] = set()
+
+    for record in records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        for dimension in DIMENSIONS:
+            label = normalize_converged_value_for_report(payload.get(f"{dimension}-devt_converged"))
+            counts_by_dimension[dimension][label] += 1
+            observed_labels.add(label)
+
+    ordered = ordered_labels(list(observed_labels), CONVERGED_VALUE_ORDER)
+    if "[blank]" in ordered:
+        ordered = ["[blank]"] + [label for label in ordered if label != "[blank]"]
+
+    lines = [
+        "| Converged value | " + " | ".join(DIMENSIONS) + " |",
+        "| --- | " + " | ".join("---:" for _ in DIMENSIONS) + " |",
+    ]
+    for label in ordered:
+        lines.append(
+            f"| {label} | "
+            + " | ".join(str(counts_by_dimension[dimension][label]) for dimension in DIMENSIONS)
+            + " |"
+        )
+    lines.append("| Total | " + " | ".join(str(len(records)) for _ in DIMENSIONS) + " |")
+    return lines
+
+
+def build_converged_conflict_breakdown_table(records: list[dict[str, object]]) -> list[str]:
+    counts_by_dimension: dict[str, dict[str, int]] = {
+        dimension: defaultdict(int) for dimension in DIMENSIONS
+    }
+
+    for record in records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        for dimension in DIMENSIONS:
+            label = normalize_report_label(payload.get(f"{dimension}-devt_converged"))
+            if label in CONFLICTED_VALUE_LABELS:
+                counts_by_dimension[dimension][label] += 1
+
+    lines = [
+        "| Conflicted value | " + " | ".join(DIMENSIONS) + " |",
+        "| --- | " + " | ".join("---:" for _ in DIMENSIONS) + " |",
+    ]
+    for label in CONFLICTED_VALUE_LABELS:
+        lines.append(
+            f"| {label} | "
+            + " | ".join(str(counts_by_dimension[dimension][label]) for dimension in DIMENSIONS)
+            + " |"
+        )
+    lines.append(
+        "| Total conflicted | "
+        + " | ".join(
+            str(sum(counts_by_dimension[dimension][label] for label in CONFLICTED_VALUE_LABELS))
+            for dimension in DIMENSIONS
+        )
+        + " |"
+    )
+    return lines
+
+
+def build_converged_health_table(records: list[dict[str, object]]) -> list[str]:
+    counts_by_dimension: dict[str, dict[str, int]] = {
+        dimension: defaultdict(int) for dimension in DIMENSIONS
+    }
+    observed_labels: set[str] = set()
+
+    for record in records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        for dimension in DIMENSIONS:
+            label = normalize_report_label(payload.get(f"{dimension}-devt_converged_health"))
+            counts_by_dimension[dimension][label] += 1
+            observed_labels.add(label)
+
+    ordered = ordered_labels(list(observed_labels), CONVERGED_HEALTH_ORDER)
+    if "[blank]" in ordered:
+        ordered = ["[blank]"] + [label for label in ordered if label != "[blank]"]
+
+    lines = [
+        "| Converged health | " + " | ".join(DIMENSIONS) + " |",
+        "| --- | " + " | ".join("---:" for _ in DIMENSIONS) + " |",
+    ]
+    for label in ordered:
+        lines.append(
+            f"| {label} | "
+            + " | ".join(str(counts_by_dimension[dimension][label]) for dimension in DIMENSIONS)
+            + " |"
+        )
+    lines.append("| Total | " + " | ".join(str(len(records)) for _ in DIMENSIONS) + " |")
+    return lines
+
+
+def build_converged_analysis(records: list[dict[str, object]]) -> list[str]:
+    lines = [
+        "## Converged development fields",
+        "",
+        "### All data",
+        "",
+        "#### Converged values",
+        "",
+        *build_converged_value_table(records),
+        "",
+        "##### Conflicted value breakdown",
+        "",
+        *build_converged_conflict_breakdown_table(records),
+        "",
+        "#### Converged health",
+        "",
+        *build_converged_health_table(records),
+    ]
+
+    for student_pool, pool_records in sorted(split_records_by_student_pool(records).items()):
+        lines.extend(
+            [
+                "",
+                f"### {student_pool}",
+                "",
+                "#### Converged values",
+                "",
+                *build_converged_value_table(pool_records),
+                "",
+                "##### Conflicted value breakdown",
+                "",
+                *build_converged_conflict_breakdown_table(pool_records),
+                "",
+                "#### Converged health",
+                "",
+                *build_converged_health_table(pool_records),
+            ]
+        )
+
+    return lines
+
+
 def normalize_devt_value(value: object) -> str:
     raw_value = str(value or "").strip().lower()
     if raw_value == "shift":
@@ -683,6 +872,7 @@ def build_report(records: list[dict[str, object]]) -> str:
     lines.extend(["", *build_group_indicator_population_analysis(records)])
     lines.extend(["", *build_shift_count_distribution_analysis(records)])
     lines.extend(["", *build_group_shift_count_analysis(records)])
+    lines.extend(["", *build_converged_analysis(records)])
     lines.append("")
     return "\n".join(lines)
 
