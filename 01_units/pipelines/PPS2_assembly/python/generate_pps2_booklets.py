@@ -704,12 +704,19 @@ def apply_rendering_conversions(rendered_text: str, student_data: dict[str, Any]
 
 
 def replace_combining_enclosing_circle(text: str) -> str:
-    """Convert character-plus-U+20DD into LaTeX \textcircled{...}."""
+    """Convert U+20DD into visible LaTeX output.
+
+    When the combining mark follows a non-space character, render that as
+    `\textcircled{...}`. When it appears standalone or after whitespace,
+    render a visible open circle instead.
+    """
 
     def replacement(match: re.Match[str]) -> str:
         enclosed = match.group(1)
         if not enclosed:
-            return ""
+            return r"$\bigcirc$"
+        if enclosed.isspace():
+            return enclosed + r"$\bigcirc$"
         return rf"\textcircled{{{escape_latex_text(enclosed)}}}"
 
     return COMBINING_ENCLOSING_CIRCLE_PATTERN.sub(replacement, text)
