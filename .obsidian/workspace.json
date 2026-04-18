@@ -300,7 +300,7 @@
             }
           }
         ],
-        "currentTab": 19
+        "currentTab": 2
       }
     ],
     "direction": "vertical"
@@ -446,13 +446,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/PPS2_assembly/python/import_pps1_csv_to_json_README.md",
+                "file": "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification v2.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of import_pps1_csv_to_json_README"
+              "title": "Outline of __NOTE - Layer 1 SBO Human Verification v2"
             }
           },
           {
@@ -486,8 +486,9 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "fe3cb8bfbc96d736",
+  "active": "9178482fcc1c5292",
   "lastOpenFiles": [
+    "01_units/pipelines/PPS2_assembly/python/import_pps1_csv_to_json_README.md",
     "01_units/pipelines/PPS2_assembly/python/__pycache__/render_markdown_pdf.cpython-313.pyc",
     "01_units/pipelines/PPS2_assembly/python/render_markdown_pdf.py",
     "01_units/pipelines/PPS2_assembly/python/__pycache__/generate_pps2_booklets.cpython-313.pyc",
@@ -499,9 +500,7 @@
     "01_units/pipelines/PPS2_assembly/python/generate_json_reports.py",
     "01_units/pipelines/PPS2_assembly/python/__pycache__/import_pps1_csv_to_json.cpython-313.pyc",
     "01_units/pipelines/PPS2_assembly/python/__pycache__",
-    "01_units/pipelines/PPS2_assembly/python/promote_pps1_buffered_jsons.py",
     "01_units/pipelines/PPS2_assembly/python/generate_pps2_booklets_README.md",
-    "01_units/pipelines/PPS2_assembly/python/import_pps1_csv_to_json_README.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage00_Generate_Layer0_Segmentation_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1C_scaffold_stage13_Layer0_Segmentation_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt.md",
