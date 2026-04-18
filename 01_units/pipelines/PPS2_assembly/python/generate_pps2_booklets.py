@@ -58,6 +58,7 @@ SECTION1_OVERVIEW_TABLE_PATTERN = re.compile(
 UNICODE_LATEX_REPLACEMENTS = {
     " ": r"\quad{}",
     "⇩": r"$\Downarrow$",
+    "●": r"\textbullet{}",
     "☐": r"$\square$ ",
     "☑": r"$\boxtimes$ ",
     "☒": r"$\boxtimes$ ",
@@ -1356,16 +1357,35 @@ def write_manifest(output_dir: Path, results: list[RenderResult]) -> Path:
     with manifest_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(
             handle,
-            fieldnames=["participant_id", "family_name", "given_name", "json_file", "pdf_file", "page_count", "status", "notes"],
+            fieldnames=[
+                "participant_id",
+                "json_file",
+                "family_name",
+                "given_name",
+                "display_name",
+                "pdf_file",
+                "page_count",
+                "status",
+                "notes",
+            ],
         )
         writer.writeheader()
         for result in results:
+            family_name = result.family_name.strip()
+            given_name = result.given_name.strip()
+            if family_name and given_name:
+                display_name = f"{family_name.upper()}, {given_name}"
+            elif family_name:
+                display_name = family_name.upper()
+            else:
+                display_name = given_name
             writer.writerow(
                 {
                     "participant_id": result.participant_id,
                     "family_name": result.family_name,
                     "given_name": result.given_name,
                     "json_file": result.student_file.name,
+                    "display_name": display_name,
                     "pdf_file": result.pdf_file.name,
                     "page_count": "" if result.page_count is None else result.page_count,
                     "status": result.status,
