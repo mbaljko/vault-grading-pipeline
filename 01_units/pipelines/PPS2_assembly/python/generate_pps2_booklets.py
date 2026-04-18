@@ -270,16 +270,34 @@ def build_two_column_latex_block(
 """
 
 
-def build_section1_overview_table(values: dict[str, str]) -> str:
-    """Build the Section 1 four-column overview table with fixed widths."""
+def parse_markdown_table_row(line: str) -> list[str]:
+    """Parse one markdown table row into stripped cell values."""
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def build_section1_overview_table(markdown_table: str) -> str:
+    """Build the Section 1 four-column overview table with fixed widths.
+
+    The source markdown table content is preserved; only the final column widths
+    are overridden through custom LaTeX.
+    """
+    table_lines = [line for line in markdown_table.splitlines() if line.strip()]
+    if len(table_lines) < 3:
+        return markdown_table
+
+    header_cells = parse_markdown_table_row(table_lines[0])
+    body_rows = [parse_markdown_table_row(line) for line in table_lines[2:]]
+
+    if len(header_cells) != 4 or any(len(row) != 4 for row in body_rows):
+        return markdown_table
+
     row_lines: list[str] = []
-    for dimension_code, dimension_label in SECTION1_OVERVIEW_ROWS:
-        development = escape_latex_text(render_placeholder_value(values.get(f"{dimension_code}-devt", "")))
-        status = escape_latex_text(render_placeholder_value(values.get(f"{dimension_code}-status", "")))
+    for row in body_rows:
         row_lines.append(
-            f"{escape_latex_text(dimension_code)} & "
-            f"{escape_latex_text(dimension_label)} & "
-            f"{development} & {status} \\\\"
+            f"{format_latex_table_cell(row[0])} & "
+            f"{format_latex_table_cell(row[1])} & "
+            f"{format_latex_table_cell(row[2])} & "
+            f"{format_latex_table_cell(row[3])} \\\\"
         )
 
     rows = "\n".join(row_lines)
@@ -294,12 +312,13 @@ def build_section1_overview_table(values: dict[str, str]) -> str:
   >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 6\\tabcolsep) * \\real{{0.20}}}}@{{}}}}
 \\toprule\\noalign{{}}
 \\begin{{minipage}}[b]{{\\linewidth}}\\raggedright\\normalfont\\normalsize\\bfseries
+{escape_latex_text(header_cells[0])}
 \\end{{minipage}} & \\begin{{minipage}}[b]{{\\linewidth}}\\raggedright\\normalfont\\normalsize\\bfseries
-Dimension
+{escape_latex_text(header_cells[1])}
 \\end{{minipage}} & \\begin{{minipage}}[b]{{\\linewidth}}\\raggedright\\normalfont\\normalsize\\bfseries
-PPS1 Devt
+{escape_latex_text(header_cells[2])}
 \\end{{minipage}} & \\begin{{minipage}}[b]{{\\linewidth}}\\raggedright\\normalfont\\normalsize\\bfseries
-PPS1 Position state
+{escape_latex_text(header_cells[3])}
 \\end{{minipage}} \\\\
 \\midrule\\noalign{{}}
 \\endhead
@@ -314,9 +333,12 @@ PPS1 Position state
 
 def replace_section1_overview_table(rendered_text: str, student_data: dict[str, Any]) -> str:
     """Replace the markdown Section 1 overview table with manual LaTeX."""
-    values = build_placeholder_context(student_data)
-    manual_table = build_section1_overview_table(values)
-    return SECTION1_OVERVIEW_TABLE_PATTERN.sub(lambda _: manual_table, rendered_text, count=1)
+    del student_data
+    return SECTION1_OVERVIEW_TABLE_PATTERN.sub(
+        lambda match: build_section1_overview_table(match.group(0)),
+        rendered_text,
+        count=1,
+    )
 
 
 def extract_placeholders(template_text: str) -> set[str]:
