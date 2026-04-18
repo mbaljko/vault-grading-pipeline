@@ -42,7 +42,7 @@ Selection heuristic:
 3. Section 2 takes its slots from the remaining pool while trying to avoid
     duplication with the TS selections. It prefers `B-*` and `C-*` dimensions,
     tries to include one from each of `B` and `C`, ranks development types as
-    `intro`, then `cont-reinf`, then `shift`, and only falls back to `D-*`
+    `intro`, then `continuity/reinforcement`, then `shift`, and only falls back to `D-*`
     when needed to fill the populated V slots.
     - `V1` and `V2` participate in this selection.
 4. Section 4 prefers dimensions from the remaining pool whose `-status` is
@@ -69,7 +69,7 @@ HUMAN_FRIENDLY_DIMENSIONS = {
 
 SECTION2_DEVELOPMENT_PRIORITY = {
     "intro": 0,
-    "cont-reinf": 1,
+    "continuity/reinforcement": 1,
     "shift": 2,
 }
 

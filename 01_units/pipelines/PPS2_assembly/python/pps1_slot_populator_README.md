@@ -44,7 +44,7 @@ The slot order is heuristic, not hard-coded per section.
 3. Section 2 takes as many dimensions as there are configured Section 2 slots from the remaining pool, while trying to avoid duplication with the TS selections.
   - It prefers `B-*` and `C-*` dimensions over `D-*`.
   - It tries to include one `B-*` and one `C-*` dimension when those families are still available.
-  - Within that pool, it ranks development types as `intro`, then `cont-reinf`, then `shift`.
+  - Within that pool, it ranks development types as `intro`, then `continuity/reinforcement`, then `shift`.
   - It falls back to `D-*` only when needed to fill the populated V slots.
   - `V1` and `V2` are populated.
 4. Section 4 prefers `in tension` dimensions from the remaining pool, then falls back to the remaining Section 2 order.

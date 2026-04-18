@@ -584,6 +584,13 @@ def derive_converged_development_value(
     return "conflicting", f"conflict: {normalized_tagset_value}(BCD)+{normalized_checkbox_value}(E1)"
 
 
+def format_converged_development_value(value: str) -> str:
+    """Format stored converged development labels for downstream JSON output."""
+    if value == "cont-reinf":
+        return "continuity/reinforcement"
+    return value
+
+
 def derive_d_tension_addendum(status_value: str) -> str:
     normalized_status = status_value.strip().lower()
     if normalized_status == "stable":
@@ -1018,7 +1025,7 @@ def populate_converged_development_values(
             checkbox_value=e1_fields.get(f"{dimension}-devt", ""),
             tagset_value=bcd2_fields.get(f"{dimension}-devt_tagset", ""),
         )
-        target[f"{dimension}-devt_converged"] = converged_value
+        target[f"{dimension}-devt_converged"] = format_converged_development_value(converged_value)
         if dimension.startswith("D-"):
             target[f"{dimension}-devt_convergenced_tension_addendum"] = derive_d_tension_addendum(
                 e2_fields.get(f"{dimension}-status", "")
