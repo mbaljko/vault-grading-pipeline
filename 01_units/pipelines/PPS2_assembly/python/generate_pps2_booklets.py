@@ -681,16 +681,8 @@ def apply_rendering_conversions(rendered_text: str, student_data: dict[str, Any]
     into a raw LaTeX page break so PDF and emitted .tex output preserve pagination.
     It also appends a final even-numbered page showing the student's name.
     """
-    converted_text = rendered_text
+    converted_text = replace_common_rendering_conversions(rendered_text)
     converted_text = replace_section1_overview_table(converted_text, student_data)
-    converted_text = number_question_placeholders(converted_text)
-    converted_text = replace_full_width_rules(converted_text)
-    converted_text = replace_combining_enclosing_circle(converted_text)
-    for source, replacement in UNICODE_LATEX_REPLACEMENTS.items():
-        converted_text = converted_text.replace(source, replacement)
-    converted_text = replace_answer_box_markers(converted_text)
-    converted_text = PAGE_BREAK_PATTERN.sub(lambda _: "\n\n\\newpage\n\n", converted_text)
-    converted_text = ensure_first_appendix_starts_on_odd_page(converted_text)
     converted_text = converted_text.rstrip()
     final_page = (
         "\n\n"
@@ -703,6 +695,21 @@ def apply_rendering_conversions(rendered_text: str, student_data: dict[str, Any]
         f"{build_final_page_with_instructions(student_data, converted_text)}"
     )
     return f"{converted_text}{final_page}"
+
+
+def replace_common_rendering_conversions(rendered_text: str) -> str:
+    """Apply source-only markdown conversions shared by booklet-like PDF renders."""
+
+    converted_text = rendered_text
+    converted_text = number_question_placeholders(converted_text)
+    converted_text = replace_full_width_rules(converted_text)
+    converted_text = replace_combining_enclosing_circle(converted_text)
+    for source, replacement in UNICODE_LATEX_REPLACEMENTS.items():
+        converted_text = converted_text.replace(source, replacement)
+    converted_text = replace_answer_box_markers(converted_text)
+    converted_text = PAGE_BREAK_PATTERN.sub(lambda _: "\n\n\\newpage\n\n", converted_text)
+    converted_text = ensure_first_appendix_starts_on_odd_page(converted_text)
+    return converted_text
 
 
 def replace_combining_enclosing_circle(text: str) -> str:
