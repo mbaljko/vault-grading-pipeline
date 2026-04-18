@@ -46,6 +46,7 @@ PAGE_BREAK_PATTERN = re.compile(
     re.IGNORECASE,
 )
 ANSWER_BOX_PATTERN = re.compile(r"\[answer-box:\s*([^\]]+)\]", re.IGNORECASE)
+AUDIT_NOTE_PATTERN = re.compile(r"\[audit-note:\s*([^\]]*)\]", re.IGNORECASE)
 FIRST_APPENDIX_HEADING_PATTERN = re.compile(r"^# APPENDIX:", re.MULTILINE)
 COMBINING_ENCLOSING_CIRCLE_PATTERN = re.compile(r"(.?)\u20DD")
 SECTION1_OVERVIEW_TABLE_PATTERN = re.compile(
@@ -524,6 +525,47 @@ def replace_answer_box_markers(rendered_text: str) -> str:
     return ANSWER_BOX_PATTERN.sub(replacer, rendered_text)
 
 
+def build_audit_note_latex(note_text: str) -> str:
+    """Build raw LaTeX for a small instructor-facing audit note."""
+    cleaned = note_text.strip()
+    if not cleaned:
+        return ""
+    return "\\noindent{\\fontsize{8}{9.5}\\selectfont " + escape_latex_text(cleaned) + "}\\par"
+
+
+def extract_audit_note_marker(rendered_text: str) -> tuple[str, str]:
+    """Remove audit-note markers from the body and return the extracted note text."""
+
+    extracted_note = ""
+
+    def replacer(match: re.Match[str]) -> str:
+        nonlocal extracted_note
+        extracted_note = match.group(1).strip()
+        return ""
+
+    return AUDIT_NOTE_PATTERN.sub(replacer, rendered_text), extracted_note
+
+
+def build_audit_note_footer_latex(note_text: str) -> str:
+    """Build LaTeX that applies the audit note as a footer on the current page only."""
+
+    cleaned = note_text.strip()
+    if not cleaned:
+        return ""
+    escaped_note = escape_latex_text(cleaned)
+    return (
+        "```{=latex}\n"
+        "\\fancypagestyle{auditnotepage}[fancy]{\n"
+        "  \\fancyfoot[L]{\\parbox[t]{\\textwidth}{\\raggedright\\fontsize{8}{9.5}\\selectfont "
+        + escaped_note
+        + "}}\n"
+        "  \\renewcommand{\\footrulewidth}{0pt}\n"
+        "}\n"
+        "\\thispagestyle{auditnotepage}\n"
+        "```\n"
+    )
+
+
 def ensure_first_appendix_starts_on_odd_page(rendered_text: str) -> str:
     """Insert a page gate so the first appendix starts on an odd-numbered page."""
 
@@ -738,7 +780,11 @@ def apply_rendering_conversions(rendered_text: str, student_data: dict[str, Any]
     """
     converted_text = replace_common_rendering_conversions(rendered_text)
     converted_text = replace_section1_overview_table(converted_text, student_data)
+    converted_text, audit_note_text = extract_audit_note_marker(converted_text)
     converted_text = converted_text.rstrip()
+    audit_note_footer = build_audit_note_footer_latex(audit_note_text)
+    if audit_note_footer:
+        converted_text = f"{converted_text}\n\n{audit_note_footer}".rstrip()
     final_page = (
         "\n\n"
         "\\clearpage\n"
