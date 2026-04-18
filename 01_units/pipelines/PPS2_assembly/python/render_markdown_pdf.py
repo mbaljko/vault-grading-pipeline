@@ -21,6 +21,9 @@ from generate_pps2_booklets import (
 )
 
 
+HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Render a standalone markdown file to PDF using the PPS2 LaTeX pipeline.")
     parser.add_argument("--markdown-path", type=Path, required=True, help="Path to the source markdown file.")
@@ -35,8 +38,8 @@ def parse_args() -> argparse.Namespace:
 def preprocess_standalone_markdown(source_markdown: str) -> str:
     """Apply only the markdown-to-LaTeX safety conversions needed for standalone renders."""
 
-    rendered = source_markdown
-    rendered = number_question_placeholders(rendered)
+    rendered = number_question_placeholders(source_markdown)
+    rendered = inject_short_heading_marks(rendered)
     rendered = replace_full_width_rules(rendered)
     rendered = replace_combining_enclosing_circle(rendered)
     for source, replacement in UNICODE_LATEX_REPLACEMENTS.items():
@@ -44,6 +47,33 @@ def preprocess_standalone_markdown(source_markdown: str) -> str:
     rendered = replace_answer_box_markers(rendered)
     rendered = PAGE_BREAK_PATTERN.sub(lambda _: "\n\n\\newpage\n\n", rendered)
     return rendered
+
+
+def build_short_heading_text(heading_text: str) -> str:
+    """Build a short running-header label from the final three heading words."""
+
+    cleaned = heading_text.replace("(", " ").replace(")", " ")
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if not cleaned:
+        return ""
+    words = [word.strip(".,:;!?[]{}") for word in cleaned.split()]
+    words = [word for word in words if word]
+    return " ".join(words[-3:])
+
+
+def inject_short_heading_marks(markdown_text: str) -> str:
+    """Insert raw LaTeX marks after markdown headings for short center headers."""
+
+    rendered_lines: list[str] = []
+    for line in markdown_text.splitlines():
+        rendered_lines.append(line)
+        match = HEADING_PATTERN.match(line)
+        if not match:
+            continue
+        short_heading = build_short_heading_text(match.group(2))
+        if short_heading:
+            rendered_lines.append(rf"\markright{{{short_heading}}}")
+    return "\n".join(rendered_lines)
 
 
 def main() -> int:
@@ -79,7 +109,7 @@ def main() -> int:
             pandoc_path=pandoc_path,
             latex_engine=latex_engine,
             latex_template=args.latex_template,
-            template_variables={"student_header_name": args.header_name},
+            template_variables={"student_header_name": args.header_name, "hide_center_header": "true"},
             verbose=args.verbose,
         )
         if not success:
@@ -93,7 +123,7 @@ def main() -> int:
                 tex_output_path=tex_output_path,
                 pandoc_path=pandoc_path,
                 latex_template=args.latex_template,
-                template_variables={"student_header_name": args.header_name},
+                template_variables={"student_header_name": args.header_name, "hide_center_header": "true"},
                 verbose=args.verbose,
             )
             if not tex_success:
