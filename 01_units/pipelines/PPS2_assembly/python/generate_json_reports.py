@@ -19,6 +19,7 @@ DEFAULT_OUTPUT_PATH = Path(
 )
 IGNORED_INPUT_DIR_NAMES = {
     "input_buffer_space",
+    "NON_SUBMISSIONS",
     "SAMPLE_student_data",
 }
 DIMENSIONS = (
