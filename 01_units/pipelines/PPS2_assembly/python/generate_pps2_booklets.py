@@ -528,14 +528,16 @@ def render_inline_markdown_to_latex(text: str) -> str:
     """Render a small supported subset of inline markdown into LaTeX."""
     parts: list[str] = []
     index = 0
-    pattern = re.compile(r"(\*\*[^*]+\*\*|`[^`]+`|==[^=]+==)")
+    pattern = re.compile(r"(\\qquad|\\quad|\*\*[^*]+\*\*|`[^`]+`|==[^=]+==)")
 
     for match in pattern.finditer(text):
         start, end = match.span()
         if start > index:
             parts.append(escape_latex_text(text[index:start]))
         token = match.group(0)
-        if token.startswith("**") and token.endswith("**"):
+        if token in {r"\quad", r"\qquad"}:
+            parts.append(token)
+        elif token.startswith("**") and token.endswith("**"):
             parts.append(f"\\textbf{{{escape_latex_text(token[2:-2])}}}")
         elif token.startswith("`") and token.endswith("`"):
             parts.append(f"\\texttt{{{escape_latex_text(token[1:-1])}}}")
