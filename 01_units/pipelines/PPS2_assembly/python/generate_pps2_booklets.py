@@ -57,6 +57,7 @@ SECTION1_OVERVIEW_TABLE_PATTERN = re.compile(
 )
 UNICODE_LATEX_REPLACEMENTS = {
     " ": r"\quad{}",
+    "⇩": r"$\Downarrow$",
     "☐": r"$\square$ ",
     "☑": r"$\boxtimes$ ",
     "☒": r"$\boxtimes$ ",
@@ -238,21 +239,42 @@ def format_latex_table_cell(value: str) -> str:
     return r"\par ".join(formatted_lines)
 
 
+def count_layout_words(value: str) -> int:
+    """Count words for approximate column-width balancing in two-column blocks."""
+    normalized = value.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+    return len(re.findall(r"\S+", normalized))
+
+
+def bounded_column_fractions(left_value: str, right_value: str) -> tuple[str, str]:
+    """Choose bounded relative widths proportional to each side's word count."""
+    left_words = count_layout_words(left_value)
+    right_words = count_layout_words(right_value)
+
+    if left_words <= 0 and right_words <= 0:
+        return "0.50", "0.50"
+
+    total_words = max(left_words + right_words, 1)
+    left_fraction = left_words / total_words
+    left_fraction = min(max(left_fraction, 0.35), 0.65)
+    right_fraction = 1.0 - left_fraction
+    return f"{left_fraction:.3f}", f"{right_fraction:.3f}"
+
+
 def build_two_column_latex_block(
     left_header: str,
     right_header: str,
     left_value: str,
     right_value: str,
-    column_fraction: str = "0.50",
 ) -> str:
+    left_fraction, right_fraction = bounded_column_fractions(left_value, right_value)
     return f"""
 
 \\begingroup
 \\compacttablefont
 \\renewcommand{{\\arraystretch}}{{0.92}}
 \\begin{{longtable}}[]{{@{{}}
-    >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 2\\tabcolsep) * \\real{{{column_fraction}}}}}
-    >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 2\\tabcolsep) * \\real{{{column_fraction}}}}}@{{}}}}
+    >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 2\\tabcolsep) * \\real{{{left_fraction}}}}}
+    >{{\\raggedright\\arraybackslash}}p{{(\\linewidth - 2\\tabcolsep) * \\real{{{right_fraction}}}}}@{{}}}}
 \\toprule\\noalign{{}}
 \\begin{{minipage}}[b]{{\\linewidth}}\\raggedright\\normalfont\\normalsize\\bfseries
 {escape_latex_text(left_header)}
