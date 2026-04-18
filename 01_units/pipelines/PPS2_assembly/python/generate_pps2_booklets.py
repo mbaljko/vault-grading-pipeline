@@ -56,9 +56,11 @@ SECTION1_OVERVIEW_TABLE_PATTERN = re.compile(
     re.MULTILINE,
 )
 UNICODE_LATEX_REPLACEMENTS = {
+    "\u200b": "",
     " ": r"\quad{}",
     "⇩": r"$\Downarrow$",
     "●": r"\textbullet{}",
+    "：": ":",
     "☐": r"$\square$ ",
     "☑": r"$\boxtimes$ ",
     "☒": r"$\boxtimes$ ",
