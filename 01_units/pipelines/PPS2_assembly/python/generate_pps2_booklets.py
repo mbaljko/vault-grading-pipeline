@@ -46,6 +46,7 @@ PAGE_BREAK_PATTERN = re.compile(
 )
 ANSWER_BOX_PATTERN = re.compile(r"\[answer-box:\s*([^\]]+)\]", re.IGNORECASE)
 FIRST_APPENDIX_HEADING_PATTERN = re.compile(r"^# APPENDIX:", re.MULTILINE)
+COMBINING_ENCLOSING_CIRCLE_PATTERN = re.compile(r"(.?)\u20DD")
 SECTION1_OVERVIEW_TABLE_PATTERN = re.compile(
     r"^\|\s*\| Dimension\s+\| PPS1 Devt\s+\| PPS1 Position state \|\n"
     r"^\| --- \| ---[^\n]*\n"
@@ -53,6 +54,7 @@ SECTION1_OVERVIEW_TABLE_PATTERN = re.compile(
     re.MULTILINE,
 )
 UNICODE_LATEX_REPLACEMENTS = {
+    " ": r"\quad{}",
     "☐": r"$\square$ ",
     "☑": r"$\boxtimes$ ",
     "☒": r"$\boxtimes$ ",
@@ -681,6 +683,7 @@ def apply_rendering_conversions(rendered_text: str, student_data: dict[str, Any]
     converted_text = replace_section1_overview_table(converted_text, student_data)
     converted_text = number_question_placeholders(converted_text)
     converted_text = replace_full_width_rules(converted_text)
+    converted_text = replace_combining_enclosing_circle(converted_text)
     for source, replacement in UNICODE_LATEX_REPLACEMENTS.items():
         converted_text = converted_text.replace(source, replacement)
     converted_text = replace_answer_box_markers(converted_text)
@@ -698,6 +701,18 @@ def apply_rendering_conversions(rendered_text: str, student_data: dict[str, Any]
         f"{build_final_page_with_instructions(student_data, converted_text)}"
     )
     return f"{converted_text}{final_page}"
+
+
+def replace_combining_enclosing_circle(text: str) -> str:
+    """Convert character-plus-U+20DD into LaTeX \textcircled{...}."""
+
+    def replacement(match: re.Match[str]) -> str:
+        enclosed = match.group(1)
+        if not enclosed:
+            return ""
+        return rf"\textcircled{{{escape_latex_text(enclosed)}}}"
+
+    return COMBINING_ENCLOSING_CIRCLE_PATTERN.sub(replacement, text)
 
 
 def ensure_runtime_dependencies() -> tuple[Path | None, str | None]:
