@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--markdown-path", type=Path, required=True, help="Path to the source markdown file.")
     parser.add_argument("--output-pdf-path", type=Path, required=True, help="Path to the output PDF file.")
     parser.add_argument("--latex-template", type=Path, help="Optional custom LaTeX template passed to pandoc.")
-    parser.add_argument("--header-name", default="PPS2 Instructions", help="Value passed as student_header_name to the LaTeX template.")
+    parser.add_argument("--header-name", default="PPS2 Instruction Booklet", help="Value passed as student_header_name to the LaTeX template.")
     parser.add_argument("--keep-tex", action="store_true", help="Also emit the intermediate LaTeX file next to the PDF.")
     parser.add_argument("--verbose", action="store_true", help="Print pandoc command details.")
     return parser.parse_args()
@@ -120,7 +120,11 @@ def main() -> int:
             pandoc_path=pandoc_path,
             latex_engine=latex_engine,
             latex_template=args.latex_template,
-            template_variables={"student_header_name": args.header_name, "hide_center_header": "true"},
+            template_variables={
+                "student_header_name": args.header_name,
+                "hide_center_header": "true",
+                "narrow_instruction_bottom_margin": "true",
+            },
             verbose=args.verbose,
         )
         if not success:
@@ -134,7 +138,11 @@ def main() -> int:
                 tex_output_path=tex_output_path,
                 pandoc_path=pandoc_path,
                 latex_template=args.latex_template,
-                template_variables={"student_header_name": args.header_name, "hide_center_header": "true"},
+                template_variables={
+                    "student_header_name": args.header_name,
+                    "hide_center_header": "true",
+                    "narrow_instruction_bottom_margin": "true",
+                },
                 verbose=args.verbose,
             )
             if not tex_success:
