@@ -4,10 +4,20 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
-from generate_pps2_booklets import ensure_runtime_dependencies, render_pdf, replace_common_rendering_conversions, render_tex
+from generate_pps2_booklets import (
+    PAGE_BREAK_PATTERN,
+    UNICODE_LATEX_REPLACEMENTS,
+    ensure_runtime_dependencies,
+    render_pdf,
+    render_tex,
+    replace_answer_box_markers,
+    replace_combining_enclosing_circle,
+    replace_full_width_rules,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -19,6 +29,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--keep-tex", action="store_true", help="Also emit the intermediate LaTeX file next to the PDF.")
     parser.add_argument("--verbose", action="store_true", help="Print pandoc command details.")
     return parser.parse_args()
+
+
+def preprocess_standalone_markdown(source_markdown: str) -> str:
+    """Apply only the markdown-to-LaTeX safety conversions needed for standalone renders."""
+
+    rendered = source_markdown
+    rendered = replace_full_width_rules(rendered)
+    rendered = replace_combining_enclosing_circle(rendered)
+    for source, replacement in UNICODE_LATEX_REPLACEMENTS.items():
+        rendered = rendered.replace(source, replacement)
+    rendered = replace_answer_box_markers(rendered)
+    rendered = PAGE_BREAK_PATTERN.sub(lambda _: "\n\n\\newpage\n\n", rendered)
+    return rendered
 
 
 def main() -> int:
@@ -42,7 +65,7 @@ def main() -> int:
         print(f"Failed to read markdown source: {error}", file=sys.stderr)
         return 1
 
-    rendered_markdown = replace_common_rendering_conversions(source_markdown)
+    rendered_markdown = preprocess_standalone_markdown(source_markdown)
     args.output_pdf_path.parent.mkdir(parents=True, exist_ok=True)
     temp_markdown_path = args.output_pdf_path.with_suffix(".rendered.md")
     temp_markdown_path.write_text(rendered_markdown, encoding="utf-8")
