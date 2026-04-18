@@ -98,6 +98,8 @@ class RenderResult:
     pdf_file: Path
     status: str
     message: str
+    family_name: str = ""
+    given_name: str = ""
     page_count: int | None = None
 
 
@@ -1169,6 +1171,8 @@ def build_duplicate_result(student_record: StudentRecord, duplicate_files: list[
         pdf_file=output_dir / f"{student_record.output_stem}.pdf",
         status="failed",
         message=f"duplicate participant_id '{student_record.participant_id}' found in: {other_files}",
+        family_name=str(student_record.student_data.get("FAMILY_NAME") or "").strip(),
+        given_name=str(student_record.student_data.get("GIVEN_NAME") or "").strip(),
     )
 
 
@@ -1196,7 +1200,15 @@ def render_student(
     missing_placeholders = sorted(set(unresolved) | {item for item in placeholders if item not in context})
     if missing_placeholders and not allow_missing:
         message = f"unresolved placeholders: {', '.join(missing_placeholders)}"
-        return RenderResult(student_file, participant_id, output_dir / f"{student_record.output_stem}.pdf", "skipped", message)
+        return RenderResult(
+            student_file,
+            participant_id,
+            output_dir / f"{student_record.output_stem}.pdf",
+            "skipped",
+            message,
+            str(student_record.student_data.get("FAMILY_NAME") or "").strip(),
+            str(student_record.student_data.get("GIVEN_NAME") or "").strip(),
+        )
 
     pdf_output_path = output_dir / f"{student_record.output_stem}.pdf"
     md_output_path = output_dir / f"{student_record.output_stem}.md"
@@ -1211,11 +1223,29 @@ def render_student(
                 pdf_output_path,
                 "dry-run",
                 f"would render with unresolved placeholders allowed: {', '.join(missing_placeholders)}",
+                str(student_record.student_data.get("FAMILY_NAME") or "").strip(),
+                str(student_record.student_data.get("GIVEN_NAME") or "").strip(),
             )
-        return RenderResult(student_file, participant_id, pdf_output_path, "dry-run", "would render successfully")
+        return RenderResult(
+            student_file,
+            participant_id,
+            pdf_output_path,
+            "dry-run",
+            "would render successfully",
+            str(student_record.student_data.get("FAMILY_NAME") or "").strip(),
+            str(student_record.student_data.get("GIVEN_NAME") or "").strip(),
+        )
 
     if pandoc_path is None:
-        return RenderResult(student_file, participant_id, pdf_output_path, "failed", "pandoc path was not configured")
+        return RenderResult(
+            student_file,
+            participant_id,
+            pdf_output_path,
+            "failed",
+            "pandoc path was not configured",
+            str(student_record.student_data.get("FAMILY_NAME") or "").strip(),
+            str(student_record.student_data.get("GIVEN_NAME") or "").strip(),
+        )
 
     with TemporaryDirectory(prefix=f"pps2_{participant_id}_") as temp_dir_name:
         temp_dir = Path(temp_dir_name)
@@ -1232,7 +1262,15 @@ def render_student(
             verbose=verbose,
         )
         if not success:
-            return RenderResult(student_file, participant_id, pdf_output_path, "failed", f"PDF conversion error: {message}")
+            return RenderResult(
+                student_file,
+                participant_id,
+                pdf_output_path,
+                "failed",
+                f"PDF conversion error: {message}",
+                str(student_record.student_data.get("FAMILY_NAME") or "").strip(),
+                str(student_record.student_data.get("GIVEN_NAME") or "").strip(),
+            )
 
         if keep_md:
             md_output_path.write_text(rendered_text, encoding="utf-8")
@@ -1247,7 +1285,15 @@ def render_student(
                 verbose=verbose,
             )
             if not tex_success:
-                return RenderResult(student_file, participant_id, pdf_output_path, "failed", f"LaTeX conversion error: {tex_message}")
+                return RenderResult(
+                    student_file,
+                    participant_id,
+                    pdf_output_path,
+                    "failed",
+                    f"LaTeX conversion error: {tex_message}",
+                    str(student_record.student_data.get("FAMILY_NAME") or "").strip(),
+                    str(student_record.student_data.get("GIVEN_NAME") or "").strip(),
+                )
 
     if missing_placeholders:
         return RenderResult(
@@ -1256,6 +1302,8 @@ def render_student(
             pdf_output_path,
             "succeeded",
             f"rendered with unresolved placeholders allowed: {', '.join(missing_placeholders)}",
+            str(student_record.student_data.get("FAMILY_NAME") or "").strip(),
+            str(student_record.student_data.get("GIVEN_NAME") or "").strip(),
             get_pdf_page_count(pdf_output_path),
         )
 
@@ -1265,6 +1313,8 @@ def render_student(
         pdf_output_path,
         "succeeded",
         "rendered successfully",
+        str(student_record.student_data.get("FAMILY_NAME") or "").strip(),
+        str(student_record.student_data.get("GIVEN_NAME") or "").strip(),
         get_pdf_page_count(pdf_output_path),
     )
 
@@ -1306,13 +1356,15 @@ def write_manifest(output_dir: Path, results: list[RenderResult]) -> Path:
     with manifest_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(
             handle,
-            fieldnames=["participant_id", "json_file", "pdf_file", "page_count", "status", "notes"],
+            fieldnames=["participant_id", "family_name", "given_name", "json_file", "pdf_file", "page_count", "status", "notes"],
         )
         writer.writeheader()
         for result in results:
             writer.writerow(
                 {
                     "participant_id": result.participant_id,
+                    "family_name": result.family_name,
+                    "given_name": result.given_name,
                     "json_file": result.student_file.name,
                     "pdf_file": result.pdf_file.name,
                     "page_count": "" if result.page_count is None else result.page_count,
@@ -1386,6 +1438,8 @@ def main() -> int:
                 pdf_file=args.output_dir / f"{student_file.stem}.pdf",
                 status="failed",
                 message=f"JSON error: {error}",
+                family_name="",
+                given_name="",
             )
             results.append(result)
             print_status(result)
