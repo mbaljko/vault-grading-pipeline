@@ -1027,8 +1027,8 @@ def percentile_nearest_rank(values: list[int], percentile: float) -> int | None:
     return ordered[index]
 
 
-def get_slot_word_count_thresholds(records: list[dict[str, object]]) -> dict[str, tuple[int | None, int | None]]:
-    thresholds: dict[str, tuple[int | None, int | None]] = {}
+def get_slot_word_count_thresholds(records: list[dict[str, object]]) -> dict[str, int | None]:
+    thresholds: dict[str, int | None] = {}
     for slot_label in SLOT_WORD_COUNT_ORDER:
         counts: list[int] = []
         for record in records:
@@ -1037,26 +1037,12 @@ def get_slot_word_count_thresholds(records: list[dict[str, object]]) -> dict[str
                 continue
             counts.append(get_slot_word_counts(payload)[slot_label])
         low = percentile_nearest_rank(counts, 0.05)
-        high = percentile_nearest_rank(counts, 0.95)
-        if low is not None and high is not None and low >= high:
-            thresholds[slot_label] = (None, None)
-        else:
-            thresholds[slot_label] = (low, high)
+        thresholds[slot_label] = low
     return thresholds
 
 
-def classify_slot_word_count(word_count: int, low: int | None, high: int | None) -> str:
-    if low is not None and word_count <= low:
-        return "very short"
-    if high is not None and word_count >= high:
-        return "very long"
-    return ""
-
-
-def format_slot_word_count_cell(word_count: int, flag: str) -> str:
-    if not flag:
-        return str(word_count)
-    return f"{word_count} ({flag})"
+def is_suspiciously_low_word_count(word_count: int, low: int | None) -> bool:
+    return low is not None and word_count <= low
 
 
 def duplicate_slot_dimensions(actual_dimensions: dict[str, str]) -> list[str]:
@@ -1395,45 +1381,7 @@ def build_slot_selection_analysis(records: list[dict[str, object]]) -> list[str]
     return lines
 
 
-def build_slot_word_count_overview_table(records: list[dict[str, object]]) -> list[str]:
-    thresholds = get_slot_word_count_thresholds(records)
-    sorted_records = sorted(
-        (
-            record
-            for record in records
-            if isinstance(record.get("payload"), dict)
-        ),
-        key=lambda record: (
-            str(record.get("student_pool") or ""),
-            get_record_json_filename(record),
-            str(record.get("path") or ""),
-        ),
-    )
-
-    lines = [
-        "| JSON file | Pool | TS1 | TS2 | TS3 | V1 | V2 | Slot1 | Slot2 | Slot3 |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-    ]
-    if not sorted_records:
-        lines.append("| (none) |  |  |  |  |  |  |  |  |  |")
-        return lines
-
-    for record in sorted_records:
-        payload = record.get("payload")
-        if not isinstance(payload, dict):
-            payload = {}
-        word_counts = get_slot_word_counts(payload)
-        cells = [get_record_json_filename(record), str(record.get("student_pool") or "")]
-        for slot_label in SLOT_WORD_COUNT_ORDER:
-            low, high = thresholds[slot_label]
-            flag = classify_slot_word_count(word_counts[slot_label], low, high)
-            cells.append(format_slot_word_count_cell(word_counts[slot_label], flag))
-        lines.append("| " + " | ".join(cell.replace("|", "/") for cell in cells) + " |")
-
-    return lines
-
-
-def build_slot_word_count_extreme_cases_table(records: list[dict[str, object]]) -> list[str]:
+def build_slot_word_count_low_cases_table(records: list[dict[str, object]]) -> list[str]:
     thresholds = get_slot_word_count_thresholds(records)
     rows: list[list[str]] = []
 
@@ -1442,29 +1390,29 @@ def build_slot_word_count_extreme_cases_table(records: list[dict[str, object]]) 
         if not isinstance(payload, dict):
             continue
         word_counts = get_slot_word_counts(payload)
+        flagged_cells: list[str] = []
         for slot_label in SLOT_WORD_COUNT_ORDER:
-            low, high = thresholds[slot_label]
-            flag = classify_slot_word_count(word_counts[slot_label], low, high)
-            if not flag:
-                continue
+            low = thresholds[slot_label]
+            if is_suspiciously_low_word_count(word_counts[slot_label], low):
+                flagged_cells.append(f"{word_counts[slot_label]} <= p05 ({low if low is not None else ''})")
+            else:
+                flagged_cells.append("")
+        if any(flagged_cells):
             rows.append(
                 [
                     get_record_json_filename(record),
                     str(record.get("student_pool") or ""),
-                    slot_label,
-                    str(word_counts[slot_label]),
-                    flag,
-                    f"p05={low if low is not None else ''}; p95={high if high is not None else ''}",
+                    *flagged_cells,
                 ]
             )
 
-    rows.sort(key=lambda row: (row[1], row[0], row[2], row[4], row[3]))
+    rows.sort(key=lambda row: (row[1], row[0]))
     lines = [
-        "| JSON file | Pool | Slot | Word count | Flag | Thresholds |",
-        "| --- | --- | --- | ---: | --- | --- |",
+        "| JSON file | Pool | TS1 | TS2 | TS3 | V1 | V2 | Slot1 | Slot2 | Slot3 |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     if not rows:
-        lines.append("| (none) |  |  |  |  |  |")
+        lines.append("| (none) |  |  |  |  |  |  |  |  |  |")
         return lines
 
     for row in rows:
@@ -1475,8 +1423,8 @@ def build_slot_word_count_extreme_cases_table(records: list[dict[str, object]]) 
 def build_slot_word_count_summary(records: list[dict[str, object]]) -> list[str]:
     thresholds = get_slot_word_count_thresholds(records)
     lines = [
-        "| Slot | p05 | p95 | Min | Max |",
-        "| --- | ---: | ---: | ---: | ---: |",
+        "| Slot | Low threshold (p05) | Min | Suspiciously low cases |",
+        "| --- | ---: | ---: | ---: |",
     ]
     for slot_label in SLOT_WORD_COUNT_ORDER:
         counts: list[int] = []
@@ -1486,10 +1434,11 @@ def build_slot_word_count_summary(records: list[dict[str, object]]) -> list[str]
                 continue
             counts.append(get_slot_word_counts(payload)[slot_label])
         if not counts:
-            lines.append(f"| {slot_label} |  |  |  |  |")
+            lines.append(f"| {slot_label} |  |  |  |")
             continue
-        low, high = thresholds[slot_label]
-        lines.append(f"| {slot_label} | {'' if low is None else low} | {'' if high is None else high} | {min(counts)} | {max(counts)} |")
+        low = thresholds[slot_label]
+        suspicious_count = sum(1 for count in counts if is_suspiciously_low_word_count(count, low))
+        lines.append(f"| {slot_label} | {'' if low is None else low} | {min(counts)} | {suspicious_count} |")
     return lines
 
 
@@ -1498,21 +1447,17 @@ def build_slot_word_count_analysis(records: list[dict[str, object]]) -> list[str
         "## Slot Word Count Overview",
         "",
         "Counts below are total words drawn from the populated text fields for each slot.",
-        "Extreme flags are relative to the current dataset slice using the 5th and 95th percentile cutoffs for each slot.",
+        "This section reports only suspiciously low word counts, using the 5th percentile cutoff for each slot within the current dataset slice.",
         "",
         "### All data",
         "",
-        "#### Threshold summary",
+        "#### Low-word-count summary",
         "",
         *build_slot_word_count_summary(records),
         "",
-        "#### Per-student overview",
+        "#### Suspiciously low cases",
         "",
-        *build_slot_word_count_overview_table(records),
-        "",
-        "#### Extreme cases",
-        "",
-        *build_slot_word_count_extreme_cases_table(records),
+        *build_slot_word_count_low_cases_table(records),
     ]
 
     for student_pool, pool_records in sorted(split_records_by_student_pool(records).items()):
@@ -1520,17 +1465,13 @@ def build_slot_word_count_analysis(records: list[dict[str, object]]) -> list[str
             "",
             f"### {student_pool}",
             "",
-            "#### Threshold summary",
+            "#### Low-word-count summary",
             "",
             *build_slot_word_count_summary(pool_records),
             "",
-            "#### Per-student overview",
+            "#### Suspiciously low cases",
             "",
-            *build_slot_word_count_overview_table(pool_records),
-            "",
-            "#### Extreme cases",
-            "",
-            *build_slot_word_count_extreme_cases_table(pool_records),
+            *build_slot_word_count_low_cases_table(pool_records),
         ])
 
     return lines

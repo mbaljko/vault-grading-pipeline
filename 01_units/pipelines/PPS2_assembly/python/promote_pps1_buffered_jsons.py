@@ -81,6 +81,28 @@ def load_group_memberships(activity_group_csv: Path) -> dict[str, set[str]]:
     return group_memberships
 
 
+def choose_student_pool(matched_groups: list[str]) -> str | None:
+    legacy_groups = {"student_data_SAS_SecM", "student_data_SAS_SecO"}
+    specific_groups = [group_name for group_name in matched_groups if group_name not in legacy_groups]
+    if len(specific_groups) > 1:
+        raise ValueError(
+            "Roster membership is ambiguous: multiple specific output groups are marked: "
+            + ", ".join(sorted(specific_groups))
+        )
+    if specific_groups:
+        return specific_groups[0]
+
+    matched_legacy_groups = [group_name for group_name in matched_groups if group_name in legacy_groups]
+    if len(matched_legacy_groups) > 1:
+        raise ValueError(
+            "Roster membership is ambiguous: multiple legacy section groups are marked: "
+            + ", ".join(sorted(matched_legacy_groups))
+        )
+    if matched_legacy_groups:
+        return matched_legacy_groups[0]
+    return None
+
+
 def main() -> int:
     args = parse_args()
 
@@ -116,13 +138,15 @@ def main() -> int:
         email = filename_to_email.get(filename, "")
         matched_groups = [group_name for group_name, emails in group_memberships.items() if email in emails]
 
-        if len(matched_groups) > 1:
+        try:
+            selected_group = choose_student_pool(matched_groups)
+        except ValueError as error:
             raise ValueError(
                 f"Roster membership is ambiguous for {filename}: email {email} appears in multiple output groups: {', '.join(sorted(matched_groups))}"
-            )
+            ) from error
 
-        if matched_groups:
-            student_pool = matched_groups[0]
+        if selected_group:
+            student_pool = selected_group
             primary_output_dir = group_output_dirs[student_pool]
         else:
             student_pool = "student_data_all_MINUS_SAS"
