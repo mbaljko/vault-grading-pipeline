@@ -298,9 +298,19 @@
               "icon": "lucide-file",
               "title": "import_pps1_csv_to_json_README"
             }
+          },
+          {
+            "id": "f0d1cdfc9f590c7f",
+            "type": "leaf",
+            "state": {
+              "type": "empty",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "New tab"
+            }
           }
         ],
-        "currentTab": 2
+        "currentTab": 20
       }
     ],
     "direction": "vertical"
@@ -446,13 +456,12 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification v2.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of __NOTE - Layer 1 SBO Human Verification v2"
+              "title": "Outline"
             }
           },
           {
@@ -486,8 +495,9 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "9178482fcc1c5292",
+  "active": "f0d1cdfc9f590c7f",
   "lastOpenFiles": [
+    "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification v2.md",
     "01_units/pipelines/PPS2_assembly/python/import_pps1_csv_to_json_README.md",
     "01_units/pipelines/PPS2_assembly/python/__pycache__/render_markdown_pdf.cpython-313.pyc",
     "01_units/pipelines/PPS2_assembly/python/render_markdown_pdf.py",

@@ -45,9 +45,12 @@ The slot order is heuristic, not hard-coded per section.
   - It prefers `B-*` and `C-*` dimensions over `D-*`.
   - It tries to include one `B-*` and one `C-*` dimension when those families are still available.
   - Within that pool, it ranks development types as `intro`, then `continuity/reinforcement`, then `shift`.
+  - It only uses dimensions whose `-devt_converged` value is known.
   - It falls back to `D-*` only when needed to fill the populated V slots.
   - `V1` and `V2` are populated.
 4. Section 4 prefers `in tension` dimensions from the remaining pool, then falls back to the remaining Section 2 order.
+
+If Section 2 cannot be fully populated under that rule, the slot populator leaves the missing Section 2 slots blank and writes an explicit `Policy2: ...` note into the configured slot-population audit field so the failure is visible in the derived JSON and downstream booklet audit note.
 
 This is why a slot such as `Sec1_TS1_dim` will always be a `B.*` dimension: the module selects the highest-priority remaining `B-*` dimension for `TS1`, then does the same for `C-*` and `D-*` for `TS2` and `TS3`.
 

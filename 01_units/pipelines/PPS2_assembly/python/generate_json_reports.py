@@ -933,14 +933,51 @@ def get_actual_slot_dimensions(payload: dict[str, object]) -> dict[str, str]:
     return {field: normalize_slot_dimension(payload.get(field)) for field in ALL_SLOT_FIELDS}
 
 
-def get_expected_slot_dimensions(payload: dict[str, object]) -> dict[str, str]:
+def get_expected_slot_selection(payload: dict[str, object]):
     normalized_payload = normalize_payload_for_slot_analysis(payload)
-    section1, section2, section3 = select_section_dimensions(SLOT_ANALYSIS_SCHEMA, normalized_payload)
+    return select_section_dimensions(SLOT_ANALYSIS_SCHEMA, normalized_payload)
+
+
+def get_expected_slot_dimensions(payload: dict[str, object]) -> dict[str, str]:
+    selection = get_expected_slot_selection(payload)
     return {
-        **dict(zip(SECTION1_SLOT_FIELDS, section1, strict=False)),
-        **dict(zip(SECTION2_SLOT_FIELDS, section2, strict=False)),
-        **dict(zip(SECTION3_SLOT_FIELDS, section3, strict=False)),
+        **dict(zip(SECTION1_SLOT_FIELDS, selection.section1_dims, strict=False)),
+        **dict(zip(SECTION2_SLOT_FIELDS, selection.section2_dims, strict=False)),
+        **dict(zip(SECTION3_SLOT_FIELDS, selection.section3_dims, strict=False)),
     }
+
+
+def describe_slot_policy_issues(payload: dict[str, object]) -> list[str]:
+    selection = get_expected_slot_selection(payload)
+    actual = get_actual_slot_dimensions(payload)
+    issues: list[str] = []
+
+    if len(selection.section2_dims) < len(SECTION2_SLOT_FIELDS):
+        blocked_dims = ", ".join(selection.section2_blocked_unknown_dims) or "none"
+        issues.append(
+            f"Section2 underfilled {len(selection.section2_dims)}/{len(SECTION2_SLOT_FIELDS)}; "
+            f"unknown-devt blocked={blocked_dims}"
+        )
+
+    for field in SECTION2_SLOT_FIELDS:
+        dimension = actual.get(field, "")
+        if dimension and not str(payload.get(f"{dimension}-devt_converged") or "").strip():
+            issues.append(f"{field} uses {dimension} with unknown devt")
+
+    expected_section2 = [
+        selection.section2_dims[index] if index < len(selection.section2_dims) else ""
+        for index in range(len(SECTION2_SLOT_FIELDS))
+    ]
+    actual_section2 = [actual.get(field, "") for field in SECTION2_SLOT_FIELDS]
+    if actual_section2 != expected_section2:
+        issues.append(
+            "actual V slots differ from policy-expected fill: "
+            + ", ".join(expected_section2)
+            + " vs "
+            + ", ".join(actual_section2)
+        )
+
+    return issues
 
 
 def format_slot_value(value: str) -> str:
@@ -1168,19 +1205,78 @@ def build_problematic_slot_selection_table(records: list[dict[str, object]], gro
     return lines
 
 
-def build_slot_selection_analysis_block(records: list[dict[str, object]]) -> list[str]:
-    straightforward_count = 0
-    problematic_count = 0
+def build_slot_policy_problem_table(records: list[dict[str, object]]) -> list[str]:
+    filtered_records: list[dict[str, object]] = []
     for record in records:
         payload = record.get("payload")
         if not isinstance(payload, dict):
             continue
+        if describe_slot_policy_issues(payload):
+            filtered_records.append(record)
+
+    filtered_records.sort(
+        key=lambda record: (
+            str(record.get("student_pool") or ""),
+            str((record.get("payload") or {}).get("participant_id") or ""),
+            str(record.get("path") or ""),
+        )
+    )
+
+    lines = [
+        "| Participant | Pool | V1 | V2 | Policy Notes |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    if not filtered_records:
+        lines.append("| (none) |  |  |  |  |")
+        return lines
+
+    for record in filtered_records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            payload = {}
+        actual = get_actual_slot_dimensions(payload)
+        participant_id = str(payload.get("participant_id") or Path(str(record.get("path") or "")).stem)
+        student_pool = str(record.get("student_pool") or "")
+        notes = "; ".join(describe_slot_policy_issues(payload))
+        cells = [
+            participant_id,
+            student_pool,
+            format_slot_value(actual.get("Sec2_V1_dim", "")),
+            format_slot_value(actual.get("Sec2_V2_dim", "")),
+            notes,
+        ]
+        lines.append("| " + " | ".join(cell.replace("|", "/") for cell in cells) + " |")
+
+    return lines
+
+
+def build_slot_selection_analysis_block(records: list[dict[str, object]]) -> list[str]:
+    straightforward_count = 0
+    problematic_count = 0
+    policy_problem_count = 0
+    for record in records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        if describe_slot_policy_issues(payload):
+            policy_problem_count += 1
         if describe_slot_selection_issues(payload):
             problematic_count += 1
         else:
             straightforward_count += 1
 
     return [
+        "#### Slot Filling Policy",
+        "",
+        "- Section 1 and Section 4 may fall back to dimensions whose converged development type is unknown.",
+        "- Section 2 may only use dimensions whose `-devt_converged` value is known.",
+        f"- Policy-compliant cases: {straightforward_count + problematic_count - policy_problem_count}",
+        f"- Policy-problem cases: {policy_problem_count}",
+        "",
+        "#### Policy-problem cases",
+        "",
+        *build_slot_policy_problem_table(records),
+        "",
         f"- Straightforward cases: {straightforward_count}",
         f"- Problematic cases: {problematic_count}",
         "",

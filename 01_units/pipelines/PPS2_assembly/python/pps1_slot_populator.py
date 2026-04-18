@@ -83,6 +83,15 @@ class SectionSlot:
     devt_explain_if_conflicting_field: str | None = None
 
 
+@dataclass(frozen=True)
+class SlotSelectionResult:
+    section1_dims: list[str]
+    section2_dims: list[str]
+    section3_dims: list[str]
+    section2_blocked_unknown_dims: list[str]
+    section2_required_slots: int
+
+
 def conflict_explanation(devt_type: str, health_value: str) -> str:
     if devt_type.strip() != "conflicting":
         return ""
@@ -150,6 +159,10 @@ def normalized_section2_development_type(record: dict[str, str], dimension: str)
     return record.get(f"{dimension}-devt_converged", "").strip().lower().replace("_", "-")
 
 
+def has_known_development_type(record: dict[str, str], dimension: str) -> bool:
+    return bool(record.get(f"{dimension}-devt_converged", "").strip())
+
+
 def rank_section2_dimensions(priority: list[str], record: dict[str, str], dimensions: list[str]) -> list[str]:
     priority_index = {dimension: index for index, dimension in enumerate(priority)}
 
@@ -173,7 +186,8 @@ def select_section2_dimensions(
     if section2_slot_count <= 0:
         return []
 
-    ranked_remaining = rank_section2_dimensions(priority, record, remaining)
+    eligible_remaining = [dimension for dimension in remaining if has_known_development_type(record, dimension)]
+    ranked_remaining = rank_section2_dimensions(priority, record, eligible_remaining)
     remaining_by_family = {
         family: [dimension for dimension in ranked_remaining if dimension.startswith(f"{family}-")]
         for family in ("B", "C", "D")
@@ -208,7 +222,7 @@ def select_section2_dimensions(
 def select_section_dimensions(
     schema: SlotPopulationSchema,
     record: dict[str, str],
-) -> tuple[list[str], list[str], list[str]]:
+) -> SlotSelectionResult:
     section1_slot_count = len(schema.section1_slots)
     section2_slot_count = len(schema.section2_slots)
     section3_slot_count = len(schema.section3_slots)
@@ -231,6 +245,7 @@ def select_section_dimensions(
         section1.extend(remaining[: section1_slot_count - len(section1)])
         remaining = [dimension for dimension in priority if dimension not in section1]
 
+    section2_blocked_unknown_dims = [dimension for dimension in remaining if not has_known_development_type(record, dimension)]
     section2 = select_section2_dimensions(section2_slot_count, priority, record, remaining)
     remaining_after_section2 = [dimension for dimension in remaining if dimension not in section2]
     tension_dims = [
@@ -240,7 +255,13 @@ def select_section_dimensions(
     ]
     tension_priority = ordered_unique(tension_dims + section2 + remaining_after_section2)
     section3 = tension_priority[:section3_slot_count]
-    return section1, section2, section3
+    return SlotSelectionResult(
+        section1_dims=section1,
+        section2_dims=section2,
+        section3_dims=section3,
+        section2_blocked_unknown_dims=section2_blocked_unknown_dims,
+        section2_required_slots=section2_slot_count,
+    )
 
 
 def describe_section1_reason(record: dict[str, str], dimension: str) -> str:
@@ -266,30 +287,36 @@ def describe_section3_reason(record: dict[str, str], dimension: str) -> str:
 
 def build_slot_population_audit_note(
     record: dict[str, str],
-    section1_dims: list[str],
-    section2_dims: list[str],
-    section3_dims: list[str],
+    selection: SlotSelectionResult,
 ) -> str:
     parts: list[str] = []
 
-    if section1_dims:
+    if selection.section1_dims:
         section1_notes = [
             f"TS{index}={dimension} {describe_section1_reason(record, dimension)}"
-            for index, dimension in enumerate(section1_dims, start=1)
+            for index, dimension in enumerate(selection.section1_dims, start=1)
         ]
         parts.append("TS: " + ", ".join(section1_notes))
 
-    if section2_dims:
+    if selection.section2_dims:
         section2_notes = [
             f"V{index}={dimension} {describe_section2_reason(record, dimension)}"
-            for index, dimension in enumerate(section2_dims, start=1)
+            for index, dimension in enumerate(selection.section2_dims, start=1)
         ]
         parts.append("V: " + ", ".join(section2_notes))
 
-    if section3_dims:
+    if len(selection.section2_dims) < selection.section2_required_slots:
+        blocked_dims = ", ".join(selection.section2_blocked_unknown_dims) or "none"
+        parts.append(
+            "Policy2: "
+            f"Section2 underfilled {len(selection.section2_dims)}/{selection.section2_required_slots}; "
+            f"unknown-devt blocked={blocked_dims}"
+        )
+
+    if selection.section3_dims:
         section3_notes = [
             f"Slot{index}={dimension} {describe_section3_reason(record, dimension)}"
-            for index, dimension in enumerate(section3_dims, start=1)
+            for index, dimension in enumerate(selection.section3_dims, start=1)
         ]
         parts.append("Sec4: " + ", ".join(section3_notes))
 
@@ -301,7 +328,10 @@ def populate_section_fields(
     target: dict[str, str],
     source_record: dict[str, str],
 ) -> None:
-    section1_dims, section2_dims, section3_dims = select_section_dimensions(schema, source_record)
+    selection = select_section_dimensions(schema, source_record)
+    section1_dims = selection.section1_dims
+    section2_dims = selection.section2_dims
+    section3_dims = selection.section3_dims
 
     for dimension, slot in zip(section1_dims, schema.section1_slots, strict=False):
         target[slot.dim_field] = display_dimension(schema, dimension, human_friendly=True)
@@ -349,7 +379,5 @@ def populate_section_fields(
     if schema.slot_population_audit_note_field:
         target[schema.slot_population_audit_note_field] = build_slot_population_audit_note(
             source_record,
-            section1_dims,
-            section2_dims,
-            section3_dims,
+            selection,
         )
