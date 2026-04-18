@@ -189,7 +189,8 @@
     "Sec4_Slot3_dim": "",
     "Sec4_Slot3_PPS1": "",
     "Sec4_Slot3_devt_type": "",
-    "Sec4_Slot3_devt_explain_if_conflicting": ""
+    "Sec4_Slot3_devt_explain_if_conflicting": "",
+    "audit_note": ""
   },
   "derivedFieldGroups": {
     "e1Derived": [
@@ -303,7 +304,8 @@
       "Sec4_Slot3_dim",
       "Sec4_Slot3_PPS1",
       "Sec4_Slot3_devt_type",
-      "Sec4_Slot3_devt_explain_if_conflicting"
+      "Sec4_Slot3_devt_explain_if_conflicting",
+      "audit_note"
     ]
   },
   "dimensions": [
@@ -429,6 +431,6 @@
     }
   ],
   "slotPopulation": {
-    "audit_note": ""
+    "audit_note": "audit_note"
   }
 }

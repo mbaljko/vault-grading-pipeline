@@ -57,8 +57,8 @@ Field source summary for generated JSON records:
     - `D-1-devt_convergenced_tension_addendum`,
         `D-2-devt_convergenced_tension_addendum`, and
         `D-3-devt_convergenced_tension_addendum` are additional D-only
-        converged fields. They store a note derived from the matching `D-*`
-        status field: `stable`, `under tension`, or `not known (not noted)`.
+        converged fields. They are set to `in tension` when the matching
+        `D-*` status field is `in tension`, otherwise they remain empty.
     - `B-1-devt_converged_health`, `B-2-devt_converged_health`,
         `B-3-devt_converged_health`, `C-1-devt_converged_health`,
         `C-2-devt_converged_health`, `C-3-devt_converged_health`,
@@ -258,6 +258,7 @@ class ImportSchema:
     section1_slots: list[SectionSlot]
     section2_slots: list[SectionSlot]
     section3_slots: list[SectionSlot]
+    slot_population_audit_note_field: str | None
     identity_fields: IdentityFields
 
 
@@ -288,6 +289,7 @@ def validate_slot_population_fields(
     section1_slots: list[SectionSlot],
     section2_slots: list[SectionSlot],
     section3_slots: list[SectionSlot],
+    slot_population_audit_note_field: str | None,
 ) -> None:
     section_derived_fields = set(derived_field_groups.get("sectionDerived", []))
     slot_fields = [
@@ -296,6 +298,8 @@ def validate_slot_population_fields(
         for field_name in (slot.dim_field, slot.ppp_field, slot.pps1_field)
         if field_name
     ]
+    if slot_population_audit_note_field:
+        slot_fields.append(slot_population_audit_note_field)
 
     missing_from_all_record_defaults = [field_name for field_name in slot_fields if field_name not in all_record_defaults]
     if missing_from_all_record_defaults:
@@ -337,6 +341,12 @@ def load_schema(schema_path: Path) -> ImportSchema:
         for group_name, field_names in raw_schema.get("derivedFieldGroups", {}).items()
         if isinstance(field_names, list)
     }
+    slot_population_config = raw_schema.get("slotPopulation", {})
+    slot_population_audit_note_field = None
+    if isinstance(slot_population_config, dict):
+        configured_audit_note_field = slot_population_config.get("audit_note")
+        if configured_audit_note_field:
+            slot_population_audit_note_field = str(configured_audit_note_field)
     section1_slots = parse_section_slots(raw_schema["section1Slots"])
     section2_slots = parse_section_slots(raw_schema["section2Slots"])
     section3_slots = parse_section_slots(raw_schema["section3Slots"])
@@ -357,6 +367,7 @@ def load_schema(schema_path: Path) -> ImportSchema:
         section1_slots=section1_slots,
         section2_slots=section2_slots,
         section3_slots=section3_slots,
+        slot_population_audit_note_field=slot_population_audit_note_field,
     )
 
     return ImportSchema(
@@ -371,6 +382,7 @@ def load_schema(schema_path: Path) -> ImportSchema:
         section1_slots=section1_slots,
         section2_slots=section2_slots,
         section3_slots=section3_slots,
+        slot_population_audit_note_field=slot_population_audit_note_field,
         identity_fields=identity_fields,
     )
 
@@ -570,15 +582,6 @@ def derive_converged_development_value(
         return unique_values[0], health
 
     return "conflicting", f"conflict: {normalized_tagset_value}(BCD)+{normalized_checkbox_value}(E1)"
-
-
-def derive_d_tension_addendum(status_value: str) -> str:
-    normalized_status = status_value.strip().lower()
-    if normalized_status == "stable":
-        return "stable"
-    if normalized_status == "in tension":
-        return "under tension"
-    return "not known (not noted)"
 
 
 def classify_cleaning_change(
@@ -1008,8 +1011,8 @@ def populate_converged_development_values(
         )
         target[f"{dimension}-devt_converged"] = converged_value
         if dimension.startswith("D-"):
-            target[f"{dimension}-devt_convergenced_tension_addendum"] = derive_d_tension_addendum(
-                e2_fields.get(f"{dimension}-status", "")
+            target[f"{dimension}-devt_convergenced_tension_addendum"] = (
+                "in tension" if e2_fields.get(f"{dimension}-status", "").strip() == "in tension" else ""
             )
         target[f"{dimension}-devt_converged_health"] = converged_health
 

@@ -112,6 +112,7 @@ class SlotPopulationSchema(Protocol):
     section1_slots: list[SectionSlot]
     section2_slots: list[SectionSlot]
     section3_slots: list[SectionSlot]
+    slot_population_audit_note_field: str | None
 
 
 def ordered_unique(values: list[str]) -> list[str]:
@@ -242,6 +243,59 @@ def select_section_dimensions(
     return section1, section2, section3
 
 
+def describe_section1_reason(record: dict[str, str], dimension: str) -> str:
+    if record.get(f"{dimension}-status") != "in tension":
+        return "non-tension"
+    return "family-fallback"
+
+
+def describe_section2_reason(record: dict[str, str], dimension: str) -> str:
+    devt_type = normalized_section2_development_type(record, dimension) or "none"
+    if dimension.startswith(("B-", "C-")):
+        return f"BC-pref/{devt_type}"
+    if dimension.startswith("D-"):
+        return f"D-fallback/{devt_type}"
+    return f"other/{devt_type}"
+
+
+def describe_section3_reason(record: dict[str, str], dimension: str) -> str:
+    if record.get(f"{dimension}-status") == "in tension":
+        return "tension-first"
+    return "remaining-fallback"
+
+
+def build_slot_population_audit_note(
+    record: dict[str, str],
+    section1_dims: list[str],
+    section2_dims: list[str],
+    section3_dims: list[str],
+) -> str:
+    parts: list[str] = []
+
+    if section1_dims:
+        section1_notes = [
+            f"TS{index}={dimension} {describe_section1_reason(record, dimension)}"
+            for index, dimension in enumerate(section1_dims, start=1)
+        ]
+        parts.append("TS: " + ", ".join(section1_notes))
+
+    if section2_dims:
+        section2_notes = [
+            f"V{index}={dimension} {describe_section2_reason(record, dimension)}"
+            for index, dimension in enumerate(section2_dims, start=1)
+        ]
+        parts.append("V: " + ", ".join(section2_notes))
+
+    if section3_dims:
+        section3_notes = [
+            f"Slot{index}={dimension} {describe_section3_reason(record, dimension)}"
+            for index, dimension in enumerate(section3_dims, start=1)
+        ]
+        parts.append("Sec4: " + ", ".join(section3_notes))
+
+    return " | ".join(parts)
+
+
 def populate_section_fields(
     schema: SlotPopulationSchema,
     target: dict[str, str],
@@ -291,3 +345,11 @@ def populate_section_fields(
                 devt_type,
                 source_record.get(f"{dimension}-devt_converged_health", ""),
             )
+
+    if schema.slot_population_audit_note_field:
+        target[schema.slot_population_audit_note_field] = build_slot_population_audit_note(
+            source_record,
+            section1_dims,
+            section2_dims,
+            section3_dims,
+        )
