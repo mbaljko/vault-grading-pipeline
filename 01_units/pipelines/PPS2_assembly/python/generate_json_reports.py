@@ -63,6 +63,17 @@ SECTION1_SLOT_FIELDS = ("Sec1_TS1_dim", "Sec1_TS2_dim", "Sec1_TS3_dim")
 SECTION2_SLOT_FIELDS = ("Sec2_V1_dim", "Sec2_V2_dim")
 SECTION3_SLOT_FIELDS = ("Sec4_Slot1_dim", "Sec4_Slot2_dim", "Sec4_Slot3_dim")
 ALL_SLOT_FIELDS = SECTION1_SLOT_FIELDS + SECTION2_SLOT_FIELDS + SECTION3_SLOT_FIELDS
+SLOT_WORD_COUNT_FIELDS = {
+    "TS1": ("Sec1_TS1_PPP", "Sec1_TS1_PPS1"),
+    "TS2": ("Sec1_TS2_PPP", "Sec1_TS2_PPS1"),
+    "TS3": ("Sec1_TS3_PPP", "Sec1_TS3_PPS1"),
+    "V1": ("Sec2_V1_PPP", "Sec2_V1_PPS1"),
+    "V2": ("Sec2_V2_PPP", "Sec2_V2_PPS1"),
+    "Slot1": ("Sec4_Slot1_PPS1",),
+    "Slot2": ("Sec4_Slot2_PPS1",),
+    "Slot3": ("Sec4_Slot3_PPS1",),
+}
+SLOT_WORD_COUNT_ORDER = tuple(SLOT_WORD_COUNT_FIELDS)
 HUMAN_FRIENDLY_TO_SHORT_DIMENSION = {
     "Institutional structures and organisational arrangements": "B-1",
     "Responsibility and accountability distribution": "B-2",
@@ -933,6 +944,18 @@ def get_actual_slot_dimensions(payload: dict[str, object]) -> dict[str, str]:
     return {field: normalize_slot_dimension(payload.get(field)) for field in ALL_SLOT_FIELDS}
 
 
+def get_record_json_filename(record: dict[str, object]) -> str:
+    path_value = str(record.get("path") or "")
+    if path_value:
+        return Path(path_value).name
+    payload = record.get("payload")
+    if isinstance(payload, dict):
+        participant_id = str(payload.get("participant_id") or "").strip()
+        if participant_id:
+            return f"{participant_id}.json"
+    return ""
+
+
 def get_expected_slot_selection(payload: dict[str, object]):
     normalized_payload = normalize_payload_for_slot_analysis(payload)
     return select_section_dimensions(SLOT_ANALYSIS_SCHEMA, normalized_payload)
@@ -982,6 +1005,60 @@ def describe_slot_policy_issues(payload: dict[str, object]) -> list[str]:
 
 def format_slot_value(value: str) -> str:
     return value or ""
+
+
+def count_words(value: object) -> int:
+    text = str(value or "").strip()
+    if not text:
+        return 0
+    return len(re.findall(r"\b\w+\b", text))
+
+
+def get_slot_word_counts(payload: dict[str, object]) -> dict[str, int]:
+    return {
+        slot_label: sum(count_words(payload.get(field, "")) for field in source_fields)
+        for slot_label, source_fields in SLOT_WORD_COUNT_FIELDS.items()
+    }
+
+
+def percentile_nearest_rank(values: list[int], percentile: float) -> int | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    index = round((len(ordered) - 1) * percentile)
+    return ordered[index]
+
+
+def get_slot_word_count_thresholds(records: list[dict[str, object]]) -> dict[str, tuple[int | None, int | None]]:
+    thresholds: dict[str, tuple[int | None, int | None]] = {}
+    for slot_label in SLOT_WORD_COUNT_ORDER:
+        counts: list[int] = []
+        for record in records:
+            payload = record.get("payload")
+            if not isinstance(payload, dict):
+                continue
+            counts.append(get_slot_word_counts(payload)[slot_label])
+        low = percentile_nearest_rank(counts, 0.05)
+        high = percentile_nearest_rank(counts, 0.95)
+        if low is not None and high is not None and low >= high:
+            thresholds[slot_label] = (None, None)
+        else:
+            thresholds[slot_label] = (low, high)
+    return thresholds
+
+
+def classify_slot_word_count(word_count: int, low: int | None, high: int | None) -> str:
+    if low is not None and word_count <= low:
+        return "very short"
+    if high is not None and word_count >= high:
+        return "very long"
+    return ""
+
+
+def format_slot_word_count_cell(word_count: int, flag: str) -> str:
+    if not flag:
+        return str(word_count)
+    return f"{word_count} ({flag})"
 
 
 def duplicate_slot_dimensions(actual_dimensions: dict[str, str]) -> list[str]:
@@ -1096,10 +1173,10 @@ def slot_analysis_row(record: dict[str, object], *, include_issues: bool) -> str
     if not isinstance(payload, dict):
         payload = {}
     actual = get_actual_slot_dimensions(payload)
-    participant_id = str(payload.get("participant_id") or Path(str(record.get("path") or "")).stem)
+    json_filename = get_record_json_filename(record)
     student_pool = str(record.get("student_pool") or "")
     cells = [
-        participant_id,
+        json_filename,
         student_pool,
         format_slot_value(actual.get("Sec1_TS1_dim", "")),
         format_slot_value(actual.get("Sec1_TS2_dim", "")),
@@ -1131,15 +1208,15 @@ def build_slot_selection_table(records: list[dict[str, object]], *, problematic:
     filtered_records.sort(
         key=lambda record: (
             str(record.get("student_pool") or ""),
-            str((record.get("payload") or {}).get("participant_id") or ""),
+            get_record_json_filename(record),
             str(record.get("path") or ""),
         )
     )
 
-    header = "| Participant | Pool | TS1 | TS2 | TS3 | V1 | V2 | Slot1 | Slot2 | Slot3 |"
+    header = "| JSON file | Pool | TS1 | TS2 | TS3 | V1 | V2 | Slot1 | Slot2 | Slot3 |"
     divider = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
     if problematic:
-        header = "| Participant | Pool | TS1 | TS2 | TS3 | V1 | V2 | Slot1 | Slot2 | Slot3 | Issues |"
+        header = "| JSON file | Pool | TS1 | TS2 | TS3 | V1 | V2 | Slot1 | Slot2 | Slot3 | Issues |"
         divider = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
 
     lines = [header, divider]
@@ -1180,12 +1257,12 @@ def build_problematic_slot_selection_table(records: list[dict[str, object]], gro
     filtered_records.sort(
         key=lambda record: (
             str(record.get("student_pool") or ""),
-            str((record.get("payload") or {}).get("participant_id") or ""),
+            get_record_json_filename(record),
             str(record.get("path") or ""),
         )
     )
 
-    header = "| Participant | Pool | " + " | ".join(labels) + " | Issues |"
+    header = "| JSON file | Pool | " + " | ".join(labels) + " | Issues |"
     divider = "| --- | --- | " + " | ".join("---" for _ in labels) + " | --- |"
     lines = [header, divider]
     if not filtered_records:
@@ -1197,10 +1274,10 @@ def build_problematic_slot_selection_table(records: list[dict[str, object]], gro
         if not isinstance(payload, dict):
             payload = {}
         actual = get_actual_slot_dimensions(payload)
-        participant_id = str(payload.get("participant_id") or Path(str(record.get("path") or "")).stem)
+        json_filename = get_record_json_filename(record)
         student_pool = str(record.get("student_pool") or "")
         issues = "; ".join(describe_slot_selection_issues_by_group(payload)[group])
-        cells = [participant_id, student_pool] + [format_slot_value(actual.get(field, "")) for field in fields] + [issues]
+        cells = [json_filename, student_pool] + [format_slot_value(actual.get(field, "")) for field in fields] + [issues]
         lines.append("| " + " | ".join(cell.replace("|", "/") for cell in cells) + " |")
     return lines
 
@@ -1217,13 +1294,13 @@ def build_slot_policy_problem_table(records: list[dict[str, object]]) -> list[st
     filtered_records.sort(
         key=lambda record: (
             str(record.get("student_pool") or ""),
-            str((record.get("payload") or {}).get("participant_id") or ""),
+            get_record_json_filename(record),
             str(record.get("path") or ""),
         )
     )
 
     lines = [
-        "| Participant | Pool | V1 | V2 | Policy Notes |",
+        "| JSON file | Pool | V1 | V2 | Policy Notes |",
         "| --- | --- | --- | --- | --- |",
     ]
     if not filtered_records:
@@ -1235,11 +1312,11 @@ def build_slot_policy_problem_table(records: list[dict[str, object]]) -> list[st
         if not isinstance(payload, dict):
             payload = {}
         actual = get_actual_slot_dimensions(payload)
-        participant_id = str(payload.get("participant_id") or Path(str(record.get("path") or "")).stem)
+        json_filename = get_record_json_filename(record)
         student_pool = str(record.get("student_pool") or "")
         notes = "; ".join(describe_slot_policy_issues(payload))
         cells = [
-            participant_id,
+            json_filename,
             student_pool,
             format_slot_value(actual.get("Sec2_V1_dim", "")),
             format_slot_value(actual.get("Sec2_V2_dim", "")),
@@ -1320,6 +1397,147 @@ def build_slot_selection_analysis(records: list[dict[str, object]]) -> list[str]
     return lines
 
 
+def build_slot_word_count_overview_table(records: list[dict[str, object]]) -> list[str]:
+    thresholds = get_slot_word_count_thresholds(records)
+    sorted_records = sorted(
+        (
+            record
+            for record in records
+            if isinstance(record.get("payload"), dict)
+        ),
+        key=lambda record: (
+            str(record.get("student_pool") or ""),
+            get_record_json_filename(record),
+            str(record.get("path") or ""),
+        ),
+    )
+
+    lines = [
+        "| JSON file | Pool | TS1 | TS2 | TS3 | V1 | V2 | Slot1 | Slot2 | Slot3 |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    if not sorted_records:
+        lines.append("| (none) |  |  |  |  |  |  |  |  |  |")
+        return lines
+
+    for record in sorted_records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            payload = {}
+        word_counts = get_slot_word_counts(payload)
+        cells = [get_record_json_filename(record), str(record.get("student_pool") or "")]
+        for slot_label in SLOT_WORD_COUNT_ORDER:
+            low, high = thresholds[slot_label]
+            flag = classify_slot_word_count(word_counts[slot_label], low, high)
+            cells.append(format_slot_word_count_cell(word_counts[slot_label], flag))
+        lines.append("| " + " | ".join(cell.replace("|", "/") for cell in cells) + " |")
+
+    return lines
+
+
+def build_slot_word_count_extreme_cases_table(records: list[dict[str, object]]) -> list[str]:
+    thresholds = get_slot_word_count_thresholds(records)
+    rows: list[list[str]] = []
+
+    for record in records:
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        word_counts = get_slot_word_counts(payload)
+        for slot_label in SLOT_WORD_COUNT_ORDER:
+            low, high = thresholds[slot_label]
+            flag = classify_slot_word_count(word_counts[slot_label], low, high)
+            if not flag:
+                continue
+            rows.append(
+                [
+                    get_record_json_filename(record),
+                    str(record.get("student_pool") or ""),
+                    slot_label,
+                    str(word_counts[slot_label]),
+                    flag,
+                    f"p05={low if low is not None else ''}; p95={high if high is not None else ''}",
+                ]
+            )
+
+    rows.sort(key=lambda row: (row[1], row[0], row[2], row[4], row[3]))
+    lines = [
+        "| JSON file | Pool | Slot | Word count | Flag | Thresholds |",
+        "| --- | --- | --- | ---: | --- | --- |",
+    ]
+    if not rows:
+        lines.append("| (none) |  |  |  |  |  |")
+        return lines
+
+    for row in rows:
+        lines.append("| " + " | ".join(cell.replace("|", "/") for cell in row) + " |")
+    return lines
+
+
+def build_slot_word_count_summary(records: list[dict[str, object]]) -> list[str]:
+    thresholds = get_slot_word_count_thresholds(records)
+    lines = [
+        "| Slot | p05 | p95 | Min | Max |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for slot_label in SLOT_WORD_COUNT_ORDER:
+        counts: list[int] = []
+        for record in records:
+            payload = record.get("payload")
+            if not isinstance(payload, dict):
+                continue
+            counts.append(get_slot_word_counts(payload)[slot_label])
+        if not counts:
+            lines.append(f"| {slot_label} |  |  |  |  |")
+            continue
+        low, high = thresholds[slot_label]
+        lines.append(f"| {slot_label} | {'' if low is None else low} | {'' if high is None else high} | {min(counts)} | {max(counts)} |")
+    return lines
+
+
+def build_slot_word_count_analysis(records: list[dict[str, object]]) -> list[str]:
+    lines = [
+        "## Slot Word Count Overview",
+        "",
+        "Counts below are total words drawn from the populated text fields for each slot.",
+        "Extreme flags are relative to the current dataset slice using the 5th and 95th percentile cutoffs for each slot.",
+        "",
+        "### All data",
+        "",
+        "#### Threshold summary",
+        "",
+        *build_slot_word_count_summary(records),
+        "",
+        "#### Per-student overview",
+        "",
+        *build_slot_word_count_overview_table(records),
+        "",
+        "#### Extreme cases",
+        "",
+        *build_slot_word_count_extreme_cases_table(records),
+    ]
+
+    for student_pool, pool_records in sorted(split_records_by_student_pool(records).items()):
+        lines.extend([
+            "",
+            f"### {student_pool}",
+            "",
+            "#### Threshold summary",
+            "",
+            *build_slot_word_count_summary(pool_records),
+            "",
+            "#### Per-student overview",
+            "",
+            *build_slot_word_count_overview_table(pool_records),
+            "",
+            "#### Extreme cases",
+            "",
+            *build_slot_word_count_extreme_cases_table(pool_records),
+        ])
+
+    return lines
+
+
 def build_report(records: list[dict[str, object]]) -> str:
     lines = [
         "# JSON Analysis Report",
@@ -1338,6 +1556,7 @@ def build_report(records: list[dict[str, object]]) -> str:
     lines.extend(["", *build_group_shift_count_analysis(records)])
     lines.extend(["", *build_converged_analysis(records)])
     lines.extend(["", *build_slot_selection_analysis(records)])
+    lines.extend(["", *build_slot_word_count_analysis(records)])
     lines.append("")
     return "\n".join(lines)
 
