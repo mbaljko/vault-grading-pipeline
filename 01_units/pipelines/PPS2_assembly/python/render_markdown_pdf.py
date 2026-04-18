@@ -12,6 +12,7 @@ from generate_pps2_booklets import (
     PAGE_BREAK_PATTERN,
     UNICODE_LATEX_REPLACEMENTS,
     ensure_runtime_dependencies,
+    number_question_placeholders,
     render_pdf,
     render_tex,
     replace_answer_box_markers,
@@ -35,6 +36,7 @@ def preprocess_standalone_markdown(source_markdown: str) -> str:
     """Apply only the markdown-to-LaTeX safety conversions needed for standalone renders."""
 
     rendered = source_markdown
+    rendered = number_question_placeholders(rendered)
     rendered = replace_full_width_rules(rendered)
     rendered = replace_combining_enclosing_circle(rendered)
     for source, replacement in UNICODE_LATEX_REPLACEMENTS.items():
@@ -100,6 +102,7 @@ def main() -> int:
     finally:
         temp_markdown_path.unlink(missing_ok=True)
 
+    print(f"Produced PDF: {args.output_pdf_path}")
     return 0
 
 
