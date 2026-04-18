@@ -31,6 +31,7 @@ import re
 import shutil
 import subprocess
 import sys
+from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -1355,7 +1356,9 @@ def print_summary(total: int, succeeded: int, skipped: int, failed: int) -> None
 
 def write_manifest(output_dir: Path, results: list[RenderResult]) -> Path:
     """Write a CSV manifest describing the render results."""
-    manifest_path = output_dir / "render_manifest.csv"
+    timestamp_suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
+    subdir_suffix = re.sub(r"[^A-Za-z0-9._-]+", "_", output_dir.name).strip("._-") or "output"
+    manifest_path = output_dir / f"render_manifest_{subdir_suffix}_{timestamp_suffix}.csv"
     with manifest_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(
             handle,
