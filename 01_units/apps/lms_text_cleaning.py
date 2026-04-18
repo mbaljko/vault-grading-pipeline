@@ -32,6 +32,7 @@ COMMON_MOJIBAKE_REPLACEMENTS = (
 HTML_BREAK_TOKENS = ("<br />", "<br/>", "<br>", "</p>", "</li>")
 TAG_RE = re.compile(r"<[^>]*>")
 LIST_ITEM_OPEN_RE = re.compile(r"<li\b[^>]*>", re.IGNORECASE)
+LIST_ITEM_LINE_RE = re.compile(r"^(?:[-*]|\d+[.)])\s+")
 LMS_RICH_TEXT_COLUMNS = frozenset(
     {
         "GenAIAttestation",
@@ -95,6 +96,45 @@ def strip_tags(value: str | None) -> str | None:
     return TAG_RE.sub("", value).strip()
 
 
+def unwrap_hard_wrapped_lines(value: str | None) -> str | None:
+    """Collapse single hard-wrap newlines while preserving paragraph gaps and list items."""
+    if value is None:
+        return None
+
+    normalized = value.replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not normalized:
+        return normalized
+
+    paragraphs = re.split(r"\n\s*\n", normalized)
+    rebuilt_paragraphs: list[str] = []
+
+    for paragraph in paragraphs:
+        lines = [re.sub(r"\s+", " ", line).strip() for line in paragraph.split("\n") if line.strip()]
+        if not lines:
+            continue
+
+        rebuilt_lines: list[str] = []
+        current_line = ""
+        for line in lines:
+            if LIST_ITEM_LINE_RE.match(line):
+                if current_line:
+                    rebuilt_lines.append(current_line)
+                current_line = line
+                continue
+
+            if current_line:
+                current_line = f"{current_line} {line}"
+            else:
+                current_line = line
+
+        if current_line:
+            rebuilt_lines.append(current_line)
+
+        rebuilt_paragraphs.append("\n".join(rebuilt_lines))
+
+    return "\n\n".join(rebuilt_paragraphs)
+
+
 def strip_html_fast_plain(raw: Any) -> str | None:
     if raw is None:
         return None
@@ -114,6 +154,7 @@ def strip_html_fast_plain(raw: Any) -> str | None:
         return None
     text = html.unescape(text)
     text = re.sub(r"\n{3,}", "\n\n", text)
+    text = unwrap_hard_wrapped_lines(text)
     return sanitise_mojibake(text)
 
 

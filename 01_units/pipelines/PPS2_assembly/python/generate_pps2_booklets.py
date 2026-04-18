@@ -527,6 +527,46 @@ def build_answer_box_latex(spec: AnswerBoxSpec) -> str:
     raise ValueError(f"Unsupported answer-box width '{spec.width}'.")
 
 
+def protect_answer_box_prompt_blocks(rendered_text: str) -> str:
+    """Keep a prompt line with the standalone answer box that follows it.
+
+    This targets the common booklet pattern where a single prompt line is
+    immediately followed by a standalone answer-box marker on the next line.
+    """
+
+    lines = rendered_text.splitlines()
+    if not lines:
+        return rendered_text
+
+    insertion_map: dict[int, str] = {}
+
+    for index, line in enumerate(lines[1:], start=1):
+        marker_match = ANSWER_BOX_PATTERN.fullmatch(line.strip())
+        if not marker_match:
+            continue
+        previous_line = lines[index - 1].strip()
+        if not previous_line:
+            continue
+        if previous_line.startswith(("#", "|", "<div", "```", "\\")):
+            continue
+        spec = parse_answer_box_spec(marker_match.group(1))
+        insertion_map.setdefault(
+            index - 1,
+            f"```{{=latex}}\n\\answerboxneedspace{{{spec.height}}}\n```",
+        )
+
+    if not insertion_map:
+        return rendered_text
+
+    rebuilt_lines: list[str] = []
+    for index, line in enumerate(lines):
+        insertion = insertion_map.get(index)
+        if insertion:
+            rebuilt_lines.append(insertion)
+        rebuilt_lines.append(line)
+    return "\n".join(rebuilt_lines)
+
+
 def replace_answer_box_markers(rendered_text: str) -> str:
     """Replace markdown answer-box markers with raw LaTeX answer boxes."""
 
@@ -829,6 +869,7 @@ def replace_common_rendering_conversions(rendered_text: str) -> str:
     converted_text = replace_combining_enclosing_circle(converted_text)
     for source, replacement in UNICODE_LATEX_REPLACEMENTS.items():
         converted_text = converted_text.replace(source, replacement)
+    converted_text = protect_answer_box_prompt_blocks(converted_text)
     converted_text = replace_answer_box_markers(converted_text)
     converted_text = PAGE_BREAK_PATTERN.sub(lambda _: "\n\n\\newpage\n\n", converted_text)
     converted_text = ensure_first_appendix_starts_on_odd_page(converted_text)
