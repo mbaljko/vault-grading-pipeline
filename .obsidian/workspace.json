@@ -497,6 +497,7 @@
   },
   "active": "f0d1cdfc9f590c7f",
   "lastOpenFiles": [
+    "01_units/pipelines/PPS2_assembly/python/__pycache__/promote_pps1_buffered_jsons.cpython-313.pyc",
     "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification v2.md",
     "01_units/pipelines/PPS2_assembly/python/import_pps1_csv_to_json_README.md",
     "01_units/pipelines/PPS2_assembly/python/__pycache__/render_markdown_pdf.cpython-313.pyc",
@@ -531,7 +532,6 @@
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage12b_DeriveLayer1ScoringManifest.md",
     "05_docs/01_design/pl1B_rubric_devt/__NOTE - Stabilising indicators.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11+12merged_Layer1.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - engagement - signal prompt.md"
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md"
   ]
 }

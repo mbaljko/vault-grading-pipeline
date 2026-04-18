@@ -17,11 +17,10 @@ DEFAULT_INPUT_ROOT = Path(
 DEFAULT_OUTPUT_PATH = Path(
     "/Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPS2-creation/JSON_reports/json_analysis_report.md"
 )
-PRIMARY_DATASET_DIR_NAMES = (
-    "student_data_all_MINUS_SAS",
-    "student_data_SAS_SecM",
-    "student_data_SAS_SecO",
-)
+IGNORED_INPUT_DIR_NAMES = {
+    "input_buffer_space",
+    "SAMPLE_student_data",
+}
 DIMENSIONS = (
     "B-1",
     "B-2",
@@ -126,9 +125,8 @@ def parse_args() -> argparse.Namespace:
 
 def load_promoted_json_records(input_root: Path) -> list[dict[str, object]]:
     records: list[dict[str, object]] = []
-    for dir_name in PRIMARY_DATASET_DIR_NAMES:
-        directory = input_root / dir_name
-        if not directory.exists():
+    for directory in sorted(path for path in input_root.iterdir() if path.is_dir()):
+        if directory.name in IGNORED_INPUT_DIR_NAMES:
             continue
         for json_path in sorted(directory.glob("*.json")):
             payload = json.loads(json_path.read_text(encoding="utf-8"))

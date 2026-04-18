@@ -31,14 +31,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--activity-group-csv", type=Path, required=True, help="Roster CSV containing section membership columns.")
     parser.add_argument("--audit-csv", type=Path, required=True, help="Importer audit CSV containing generated JSON filenames and emails.")
     parser.add_argument(
+        "--group-output-root",
+        type=Path,
+        required=True,
+        help="Root directory under which roster-derived output group directories will be created using CSV column headings.",
+    )
+    parser.add_argument(
         "--all-minus-sas-output-dir",
         type=Path,
         required=True,
         help="Final destination directory for non-SAS JSON files.",
     )
     parser.add_argument("--sample-output-dir", type=Path, required=True, help="Final destination directory for sampled JSON files.")
-    parser.add_argument("--section-m-output-dir", type=Path, required=True, help="Final destination directory for Section M JSON files.")
-    parser.add_argument("--section-o-output-dir", type=Path, required=True, help="Final destination directory for Section O JSON files.")
     return parser.parse_args()
 
 
@@ -59,6 +63,24 @@ def load_student_pool_by_filename(directories: list[Path]) -> dict[str, str]:
     return student_pool_by_filename
 
 
+def load_group_memberships(activity_group_csv: Path) -> dict[str, set[str]]:
+    group_memberships: dict[str, set[str]] = {}
+    with activity_group_csv.open(newline="", encoding="utf-8-sig") as csv_file:
+        reader = csv.DictReader(csv_file)
+        fieldnames = [field_name.strip() for field_name in reader.fieldnames or [] if field_name and field_name.strip()]
+        non_group_columns = {"First name", "Last name", "Email address"}
+        group_columns = [field_name for field_name in fieldnames if field_name not in non_group_columns]
+        group_memberships = {group_name: set() for group_name in group_columns}
+        for row in reader:
+            email = (row.get("Email address") or "").strip().casefold()
+            if not email:
+                continue
+            for group_name in group_columns:
+                if (row.get(group_name) or "").strip():
+                    group_memberships[group_name].add(email)
+    return group_memberships
+
+
 def main() -> int:
     args = parse_args()
 
@@ -71,46 +93,37 @@ def main() -> int:
             if output_json_path and email:
                 filename_to_email[Path(output_json_path).name] = email
 
-    section_m_emails: set[str] = set()
-    section_o_emails: set[str] = set()
-    with args.activity_group_csv.open(newline="", encoding="utf-8-sig") as csv_file:
-        reader = csv.DictReader(csv_file)
-        for row in reader:
-            email = (row.get("Email address") or "").strip().casefold()
-            if not email:
-                continue
-            if (row.get("student_data_SAS_SecM") or "").strip():
-                section_m_emails.add(email)
-            if (row.get("student_data_SAS_SecO") or "").strip():
-                section_o_emails.add(email)
+    group_memberships = load_group_memberships(args.activity_group_csv)
+    group_output_dirs = {
+        group_name: args.group_output_root / group_name
+        for group_name in sorted(group_memberships)
+    }
 
     sample_filenames = {path.name for path in args.sample_source_dir.glob("*.json")}
 
     clear_json_files(args.all_minus_sas_output_dir)
     clear_json_files(args.sample_output_dir)
-    clear_json_files(args.section_m_output_dir)
-    clear_json_files(args.section_o_output_dir)
+    for output_dir in group_output_dirs.values():
+        clear_json_files(output_dir)
 
-    promoted_all_minus_sas = 0
+    promoted_counts: dict[str, int] = {"student_data_all_MINUS_SAS": 0}
+    for group_name in group_output_dirs:
+        promoted_counts[group_name] = 0
     sampled = 0
-    promoted_sec_m = 0
-    promoted_sec_o = 0
 
     for staged_path in sorted(args.staged_dir.glob("*.json")):
         filename = staged_path.name
         email = filename_to_email.get(filename, "")
-        in_section_m = email in section_m_emails
-        in_section_o = email in section_o_emails
+        matched_groups = [group_name for group_name, emails in group_memberships.items() if email in emails]
 
-        if in_section_m and in_section_o:
-            raise ValueError(f"Roster membership is ambiguous for {filename}: email {email} appears in both SAS sections")
+        if len(matched_groups) > 1:
+            raise ValueError(
+                f"Roster membership is ambiguous for {filename}: email {email} appears in multiple output groups: {', '.join(sorted(matched_groups))}"
+            )
 
-        if in_section_m:
-            student_pool = "student_data_SAS_SecM"
-            primary_output_dir = args.section_m_output_dir
-        elif in_section_o:
-            student_pool = "student_data_SAS_SecO"
-            primary_output_dir = args.section_o_output_dir
+        if matched_groups:
+            student_pool = matched_groups[0]
+            primary_output_dir = group_output_dirs[student_pool]
         else:
             student_pool = "student_data_all_MINUS_SAS"
             primary_output_dir = args.all_minus_sas_output_dir
@@ -131,25 +144,19 @@ def main() -> int:
         if is_sample:
             shutil.copy2(primary_target_path, args.sample_output_dir / filename)
             sampled += 1
-        if student_pool == "student_data_SAS_SecM":
-            promoted_sec_m += 1
-        elif student_pool == "student_data_SAS_SecO":
-            promoted_sec_o += 1
-        else:
-            promoted_all_minus_sas += 1
+        promoted_counts[student_pool] = promoted_counts.get(student_pool, 0) + 1
 
-    print(f"Promoted {promoted_all_minus_sas} JSON files to {args.all_minus_sas_output_dir}")
+    print(f"Promoted {promoted_counts['student_data_all_MINUS_SAS']} JSON files to {args.all_minus_sas_output_dir}")
     print(f"Copied {sampled} sampled JSON files to {args.sample_output_dir}")
-    print(f"Promoted {promoted_sec_m} Section M JSON files to {args.section_m_output_dir}")
-    print(f"Promoted {promoted_sec_o} Section O JSON files to {args.section_o_output_dir}")
+    for group_name, output_dir in group_output_dirs.items():
+        print(f"Promoted {promoted_counts.get(group_name, 0)} JSON files to {output_dir}")
 
     schema = load_schema(DEFAULT_SCHEMA_PATH)
     audit_rows = load_audit_rows_from_csv(args.audit_csv, schema)
     student_pool_by_filename = load_student_pool_by_filename(
         [
             args.all_minus_sas_output_dir,
-            args.section_m_output_dir,
-            args.section_o_output_dir,
+            *group_output_dirs.values(),
             args.sample_output_dir,
         ]
     )
