@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib
 import json
 import re
 import shutil
@@ -95,6 +96,7 @@ class RenderResult:
     pdf_file: Path
     status: str
     message: str
+    page_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -319,6 +321,65 @@ def replace_section1_overview_table(rendered_text: str, student_data: dict[str, 
 def extract_placeholders(template_text: str) -> set[str]:
     """Extract unique placeholder names from the Markdown template."""
     return set(PLACEHOLDER_PATTERN.findall(template_text))
+
+def normalize_marks_heading_text(heading_text: str) -> str:
+    """Normalize a heading so template headings can be matched to marks rows."""
+
+    normalized = heading_text.strip()
+    normalized = re.sub(r"^#+\s*", "", normalized)
+    normalized = re.sub(r"\s*\(z marks\)\s*$", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"^\(Sec\d+\)\s*", "", normalized)
+    normalized = re.sub(r"^Q(?:x|\d+)\.\s*", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"^Section\s+\d+\s*:\s*", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized.strip().casefold()
+
+def load_injected_marks_map(marks_path: Path) -> dict[str, str]:
+    """Load heading-to-marks mappings from the injection marks markdown table."""
+
+    raw_lines = marks_path.read_text(encoding="utf-8").splitlines()
+    table_lines = [line.strip() for line in raw_lines if line.strip().startswith("|")]
+    if len(table_lines) < 3:
+        raise ValueError(f"Injection marks file has no markdown table rows: {marks_path}")
+
+    def parse_table_row(line: str) -> list[str]:
+        return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+    headers = parse_table_row(table_lines[0])
+    data_rows = [parse_table_row(line) for line in table_lines[2:] if set(line.replace("|", "").strip()) != {"-"}]
+
+    marks_by_heading: dict[str, str] = {}
+    for row_values in data_rows:
+        row = dict(zip(headers, row_values, strict=False))
+        heading_text = (row.get("heading_id") or row.get("heading_text") or "").strip()
+        marks = (row.get("marks") or "").strip()
+        full_heading_text = (row.get("heading_text") or "").strip()
+        if not full_heading_text or full_heading_text == "Overall Total":
+            continue
+        normalized_full_heading = normalize_marks_heading_text(full_heading_text)
+        if normalized_full_heading:
+            marks_by_heading[normalized_full_heading] = marks
+        normalized_heading_id = normalize_marks_heading_text(heading_text)
+        if normalized_heading_id:
+            marks_by_heading[normalized_heading_id] = marks
+    return marks_by_heading
+
+def inject_marks_into_template(template_text: str, marks_by_heading: dict[str, str]) -> str:
+    """Replace literal `(z marks)` placeholders with the matching marks values."""
+
+    rendered_lines: list[str] = []
+    for line in template_text.splitlines():
+        if "(z marks)" not in line:
+            rendered_lines.append(line)
+            continue
+
+        normalized_heading = normalize_marks_heading_text(line)
+        marks = marks_by_heading.get(normalized_heading, "")
+        replacement = f"({marks} marks)" if marks else ""
+        updated_line = re.sub(r"\s*\(z marks\)", f" {replacement}" if replacement else "", line)
+        rendered_lines.append(updated_line.rstrip())
+
+    return "\n".join(rendered_lines)
 
 
 def expand_table_macros(template_text: str, values: dict[str, str]) -> tuple[str, list[str], dict[str, str]]:
@@ -818,6 +879,41 @@ def format_pandoc_error(command: list[str], error: BaseException) -> str:
     return f"unexpected error while running pandoc command {command_text}: {error}"
 
 
+def get_pdf_page_count(pdf_path: Path) -> int | None:
+    """Return the PDF page count using pypdf, with macOS metadata as fallback."""
+
+    try:
+        pypdf = importlib.import_module("pypdf")
+        pdf_reader = getattr(pypdf, "PdfReader", None)
+    except Exception:
+        pdf_reader = None
+
+    if pdf_reader is not None:
+        try:
+            return len(pdf_reader(str(pdf_path)).pages)
+        except Exception:
+            pass
+
+    try:
+        completed = subprocess.run(
+            ["/usr/bin/mdls", "-name", "kMDItemNumberOfPages", "-raw", str(pdf_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return None
+
+    value = (completed.stdout or "").strip()
+    if not value or value == "(null)":
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
 def render_pdf(
     filled_markdown_path: Path,
     pdf_output_path: Path,
@@ -1029,9 +1125,17 @@ def render_student(
             pdf_output_path,
             "succeeded",
             f"rendered with unresolved placeholders allowed: {', '.join(missing_placeholders)}",
+            get_pdf_page_count(pdf_output_path),
         )
 
-    return RenderResult(student_file, participant_id, pdf_output_path, "succeeded", "rendered successfully")
+    return RenderResult(
+        student_file,
+        participant_id,
+        pdf_output_path,
+        "succeeded",
+        "rendered successfully",
+        get_pdf_page_count(pdf_output_path),
+    )
 
 
 def validate_paths(
@@ -1071,7 +1175,7 @@ def write_manifest(output_dir: Path, results: list[RenderResult]) -> Path:
     with manifest_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(
             handle,
-            fieldnames=["participant_id", "json_file", "pdf_file", "status", "notes"],
+            fieldnames=["participant_id", "json_file", "pdf_file", "page_count", "status", "notes"],
         )
         writer.writeheader()
         for result in results:
@@ -1080,6 +1184,7 @@ def write_manifest(output_dir: Path, results: list[RenderResult]) -> Path:
                     "participant_id": result.participant_id,
                     "json_file": result.student_file.name,
                     "pdf_file": result.pdf_file.name,
+                    "page_count": "" if result.page_count is None else result.page_count,
                     "status": result.status,
                     "notes": result.message,
                 }
@@ -1120,6 +1225,15 @@ def main() -> int:
     except OSError as error:
         print(f"Failed to read template: {error}", file=sys.stderr)
         return 1
+
+    marks_path = args.template.parent / "injection_marks.md"
+    if "(z marks)" in template_text:
+        try:
+            marks_by_heading = load_injected_marks_map(marks_path)
+        except (OSError, ValueError) as error:
+            print(f"Failed to load injection marks: {error}", file=sys.stderr)
+            return 1
+        template_text = inject_marks_into_template(template_text, marks_by_heading)
 
     placeholders = extract_placeholders(template_text)
     student_files = sorted(args.input_dir.glob("*.json"))

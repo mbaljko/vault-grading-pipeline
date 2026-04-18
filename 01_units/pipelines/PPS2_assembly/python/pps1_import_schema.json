@@ -427,5 +427,8 @@
       "devt_type": "Sec4_Slot3_devt_type",
       "devt_explain_if_conflicting": "Sec4_Slot3_devt_explain_if_conflicting"
     }
-  ]
+  ],
+  "slotPopulation": {
+    "audit_note": ""
+  }
 }

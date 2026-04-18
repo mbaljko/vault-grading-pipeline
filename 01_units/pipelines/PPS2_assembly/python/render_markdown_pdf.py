@@ -12,6 +12,8 @@ from generate_pps2_booklets import (
     PAGE_BREAK_PATTERN,
     UNICODE_LATEX_REPLACEMENTS,
     ensure_runtime_dependencies,
+    inject_marks_into_template,
+    load_injected_marks_map,
     number_question_placeholders,
     render_pdf,
     render_tex,
@@ -96,6 +98,15 @@ def main() -> int:
     except OSError as error:
         print(f"Failed to read markdown source: {error}", file=sys.stderr)
         return 1
+
+    if "(z marks)" in source_markdown:
+        marks_path = args.markdown_path.parent / "injection_marks.md"
+        try:
+            marks_by_heading = load_injected_marks_map(marks_path)
+        except (OSError, ValueError) as error:
+            print(f"Failed to load injection marks: {error}", file=sys.stderr)
+            return 1
+        source_markdown = inject_marks_into_template(source_markdown, marks_by_heading)
 
     rendered_markdown = preprocess_standalone_markdown(source_markdown)
     args.output_pdf_path.parent.mkdir(parents=True, exist_ok=True)
