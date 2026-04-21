@@ -49,9 +49,9 @@ Saturation rate definition:
 
 Output naming:
 - Run-scope report:
-	I_<assignment>_scoring_report_intra_<iteration>_<run>.md
+	I_<assignment>_Layer1_scoring_report_intra_<iteration>_<run>.md
 - Iteration-scope report:
-	I_<assignment>_scoring_report_inter_<iteration>_<run>.md
+	I_<assignment>_Layer1_scoring_report_inter_<iteration>_<run>.md
 """
 
 from __future__ import annotations
@@ -194,8 +194,8 @@ def parse_args() -> argparse.Namespace:
 def derive_assignment_output_prefix(manifest_path: Path) -> str:
 	match = re.match(r"^([A-Za-z0-9]+)_Layer1_", manifest_path.name)
 	if not match:
-		return "I"
-	return f"I_{match.group(1)}"
+		return "I_Layer1"
+	return f"I_{match.group(1)}_Layer1"
 
 
 def derive_iteration_label(input_path: Path, explicit_label: str | None) -> str:
