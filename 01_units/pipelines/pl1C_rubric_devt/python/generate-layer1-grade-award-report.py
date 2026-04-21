@@ -279,19 +279,26 @@ def build_histogram_rows(counts: Counter[str]) -> tuple[list[list[str]], str]:
     return rows, build_histogram_resolution_note(resolution)
 
 
-def build_component_indicator_table_rows(indicator_counts: dict[str, Counter[str]]) -> list[list[str]]:
-    preferred_bins = ["not_present", "present"]
-    rows: list[list[str]] = []
+def build_component_indicator_sections(
+    indicator_counts: dict[str, Counter[str]],
+    indicator_descriptions: dict[str, str],
+) -> list[str]:
+    sections: list[str] = []
     for indicator_id, counts in indicator_counts.items():
-        total = sum(counts.values())
-        ordered_bins = [item for item in preferred_bins if item in counts]
-        ordered_bins.extend(item for item in sorted(counts) if item not in ordered_bins)
-        count_summary = "<br>".join(f"{item}: {counts[item]}" for item in ordered_bins)
-        percent_summary = "<br>".join(
-            f"{item}: {(counts[item] / total * 100) if total else 0:.1f}%" for item in ordered_bins
-        )
-        rows.append([indicator_id, count_summary, percent_summary, str(total)])
-    return rows
+        histogram_rows, histogram_note = build_histogram_rows(counts)
+        description = indicator_descriptions.get(wildcard_indicator_id(indicator_id), "")
+        sections.extend([
+            f"#### `{indicator_id}`",
+        ])
+        if description:
+            sections.append(f"- {description}")
+        sections.extend([
+            "",
+            render_markdown_table(["evidence_status", "count", "%", "bar"], histogram_rows),
+            histogram_note,
+            "",
+        ])
+    return sections
 
 
 def generate_report(args: argparse.Namespace) -> Path:
@@ -338,11 +345,13 @@ def generate_report(args: argparse.Namespace) -> Path:
         f"## Layer 1 Grade Award Report: {assignment_id}",
         "",
         "### Metadata",
+        "",
         render_markdown_table(["field", "value"], metadata_rows),
         "",
         "### Indicator Results",
         "",
         "#### All Indicators",
+        "",
         render_markdown_table(["evidence_status", "count", "%", "bar"], overall_rows),
         overall_note,
         "",
@@ -355,6 +364,7 @@ def generate_report(args: argparse.Namespace) -> Path:
         if description:
             sections.append(f"- {description}")
         sections.extend([
+            "",
             render_markdown_table(["evidence_status", "count", "%", "bar"], histogram_rows),
             histogram_note,
             "",
@@ -368,9 +378,9 @@ def generate_report(args: argparse.Namespace) -> Path:
         for component_id, indicator_counts in component_indicator_counts.items():
             sections.extend([
                 f"### `{component_id}`",
-                render_markdown_table(["indicator", "counts", "%", "total"], build_component_indicator_table_rows(indicator_counts)),
                 "",
             ])
+            sections.extend(build_component_indicator_sections(indicator_counts, indicator_descriptions))
 
     output_path.write_text("\n".join(sections), encoding="utf-8")
     return output_path
