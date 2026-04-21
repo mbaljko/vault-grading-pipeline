@@ -554,7 +554,7 @@ def collect_row_identifier_set(rows: list[dict[str, str]]) -> set[str]:
     return identifiers
 
 
-def build_component_grade_rows(rows: list[dict[str, str]]) -> list[list[str]]:
+def build_component_score_histogram_sections(rows: list[dict[str, str]], grade_scale: list[str]) -> list[str]:
     component_grade_counts: dict[str, Counter[str]] = defaultdict(Counter)
     for row in rows:
         component_id = str(row.get("component_id", "")).strip() or "(unknown)"
@@ -562,13 +562,41 @@ def build_component_grade_rows(rows: list[dict[str, str]]) -> list[list[str]]:
         if component_score:
             component_grade_counts[component_id][component_score] += 1
 
-    table_rows: list[list[str]] = []
-    for component_id in sorted(component_grade_counts):
-        counts = component_grade_counts[component_id]
+    sections: list[str] = []
+    ordered_component_ids = sorted(component_grade_counts)
+    aggregate_counts: Counter[str] = Counter()
+    for component_id in ordered_component_ids:
+        aggregate_counts.update(component_grade_counts[component_id])
+
+    histogram_groups: list[tuple[str, Counter[str]]] = []
+    if aggregate_counts:
+        histogram_groups.append(("All Components", aggregate_counts))
+    histogram_groups.extend((component_id, component_grade_counts[component_id]) for component_id in ordered_component_ids)
+
+    for heading, counts in histogram_groups:
         total = sum(counts.values())
-        distribution = ", ".join(f"{grade}={counts[grade]}" for grade in sorted(counts))
-        table_rows.append([component_id, str(total), distribution])
-    return table_rows
+        ordered_scores = [score for score in grade_scale if score in counts]
+        ordered_scores.extend(score for score in sorted(counts) if score not in ordered_scores)
+        resolution = compute_histogram_resolution(max((counts[score] for score in ordered_scores), default=0))
+        table_rows = [
+            [
+                score,
+                str(counts[score]),
+                f"{(counts[score] / total * 100) if total else 0:.1f}%",
+                render_histogram_bar(counts[score], resolution),
+            ]
+            for score in ordered_scores
+        ]
+        table_rows.append(["Total", str(total), "100.0%", ""])
+        sections.extend(
+            [
+                f"#### {heading}" if heading == "All Components" else f"#### `{heading}`",
+                render_markdown_table(["component_score", "count", "%", "bar"], table_rows),
+                build_histogram_resolution_note(resolution),
+                "",
+            ]
+        )
+    return sections
 
 
 def build_numeric_distribution_rows(values: list[float]) -> list[list[str]]:
@@ -603,7 +631,7 @@ def generate_report(args: argparse.Namespace) -> Path:
         if parsed_value is not None
     ]
     numeric_summary = summarize_numeric(numeric_scores) if numeric_scores else None
-    component_grade_rows = build_component_grade_rows(rows)
+    component_score_histogram_sections = build_component_score_histogram_sections(rows, grade_scale)
     layer2_indicator_counts = aggregate_layer2_indicator_counts(scored_paths[0])
     layer3_dimension_counts = aggregate_layer3_dimension_counts(rows)
     snapshot_dir = args.component_registry.resolve().parent
@@ -664,18 +692,18 @@ def generate_report(args: argparse.Namespace) -> Path:
             ]
         )
 
-    if component_grade_rows:
+    if component_score_histogram_sections:
         sections.extend(
             [
-                "### Component Totals",
-                render_markdown_table(["component_id", "rows", "grade_distribution"], component_grade_rows),
+                "### Component Results",
                 "",
             ]
         )
+        sections.extend(component_score_histogram_sections)
 
     if layer3_dimension_rows or layer3_dimension_histogram_rows:
         sections.extend([
-            "## Layer 2/3 Report, Aggregate",
+            "## Layer 2 Details",
             "",
         ])
         if layer3_dimension_rows:
