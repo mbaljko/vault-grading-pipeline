@@ -497,6 +497,7 @@
   },
   "active": "f0d1cdfc9f590c7f",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/python/generate-layer3-grade-award-report.py",
     "01_units/pipelines/PPS2_assembly/python/identify_non_submissions.py",
     "01_units/pipelines/PPS2_assembly/python/__pycache__/promote_pps1_buffered_jsons.cpython-313.pyc",
     "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification v2.md",
@@ -510,7 +511,6 @@
     "01_units/pipelines/PPS2_assembly/python/pps1_slot_populator.py",
     "01_units/pipelines/PPS2_assembly/python/__pycache__/generate_json_reports.cpython-313.pyc",
     "01_units/pipelines/PPS2_assembly/python/generate_json_reports.py",
-    "01_units/pipelines/PPS2_assembly/python/__pycache__/import_pps1_csv_to_json.cpython-313.pyc",
     "01_units/pipelines/PPS2_assembly/python/generate_pps2_booklets_README.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage00_Generate_Layer0_Segmentation_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1C_scaffold_stage13_Layer0_Segmentation_Prompt.md",
