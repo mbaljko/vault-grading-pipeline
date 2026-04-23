@@ -14,6 +14,7 @@ The explicitly implemented `normalisation_rule` values are:
 - `lowercase_trim`: lowercases the input text, collapses repeated whitespace, and strips leading and trailing whitespace.
 - `lowercase_trim_strip_stage_suffix`: applies `lowercase_trim`, then removes a trailing `stage` suffix so labels like `documentation stage` normalize to `documentation`.
 - `lowercase_trim_strip_leading_determiner`: applies `lowercase_trim`, then removes a leading determiner so labels like `the committee` normalize to `committee`.
+- `lowercase_lemma_effect_terms`: applies `lowercase_trim`, then rewrites only configured effect-term inflections like `sequencing` -> `sequence` while preserving surrounding structural-feature text.
 
 
 The explicitly recognized `decision_rule` values are:
@@ -29,6 +30,19 @@ The explicitly recognized `decision_rule` values are:
 Legacy compatibility note:
 - `present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b`
 	is normalized to `present_if_canonical_mappings_are_distinct`
+
+The explicitly recognized `match_policy` values are:
+- `substring_any`: normalizes the segment and returns a match when any normalized allowed term appears as a substring within it.
+- `exact_or_alias`: splits the segment into candidate units and matches those units exactly against normalized allowed terms or aliases.
+- `exact_or_alias_article_insensitive`: matches exact normalized allowed terms or aliases while tolerating leading-article differences such as `the committee` vs `committee`.
+- `exact_or_alias_article_insensitive_any_conjunct`: extends the article-insensitive exact matcher by also testing conjunct-level candidates extracted from coordinated phrases.
+- `exact_or_alias_or_role`: evaluates the exact-or-alias matcher over the union of `allowed_terms` and `allowed_roles`.
+- `co_occurrence`: normalizes the segment and requires each configured term group in `required_term_groups` to meet `minimum_match_count_per_group`.
+- `co_occurrence_lemma`: normalizes both the segment and each registered group term using the configured `normalisation_rule`, then requires full phrase matches per group using boundary-safe phrase matching.
+- `absence_check`: reports a policy match unconditionally and leaves the final decision to the decision rule's excluded-term logic.
+- `canonical_inequality`: resolves left and right bound slots to canonical values and reports a match when those canonical mappings are distinct under the configured payload.
+
+Any other `match_policy` value hard-fails as unsupported.
 
 Any other `decision_rule` value hard-fails as unsupported.
 
@@ -57,6 +71,7 @@ SUPPORTED_NORMALISATION_RULES = {
 	"lowercase_trim",
 	"lowercase_trim_strip_stage_suffix",
 	"lowercase_trim_strip_leading_determiner",
+	"lowercase_lemma_effect_terms",
 }
 
 DECISION_RULE_ALIASES = {
@@ -80,6 +95,18 @@ SUPPORTED_BOUND_SEGMENT_RESOLUTION_POLICIES = {
 	"fallback_to_evidence_text",
 }
 
+SUPPORTED_MATCH_POLICIES = {
+	"substring_any",
+	"exact_or_alias",
+	"exact_or_alias_article_insensitive",
+	"exact_or_alias_article_insensitive_any_conjunct",
+	"exact_or_alias_or_role",
+	"co_occurrence",
+	"co_occurrence_lemma",
+	"absence_check",
+	"canonical_inequality",
+}
+
 LABEL_LINE_RE = re.compile(r"^\s*\[[^\]]+\]\s*$")
 LEADING_ARTICLE_RE = re.compile(r"^(?:the|a|an)\s+", re.IGNORECASE)
 CONJUNCTION_SPLIT_RE = re.compile(r"\s+and\s+|\s*,\s*", re.IGNORECASE)
@@ -87,6 +114,82 @@ TRAILING_STAGE_SUFFIX_RE = re.compile(r"\s+stage$", re.IGNORECASE)
 MATCH_PREFIX_RE = re.compile(
 	r"^(?:rule\s+that|requirement\s+to|institutional\s+demand\s+for|institutional\s+demand\s+of|obligation\s+to)\s+",
 	re.IGNORECASE,
+)
+EFFECT_TERM_LEMMA_MAP = {
+	"sequencing": "sequence",
+	"sequences": "sequence",
+	"sequenced": "sequence",
+	"structuring": "structure",
+	"structures": "structure",
+	"structured": "structure",
+	"allocating": "allocate",
+	"allocates": "allocate",
+	"allocation": "allocate",
+	"distributing": "distribute",
+	"distributes": "distribute",
+	"distribution": "distribute",
+	"redistributing": "redistribute",
+	"redistributes": "redistribute",
+	"redistribution": "redistribute",
+	"formalising": "formalise",
+	"formalises": "formalise",
+	"formalisation": "formalise",
+	"formalizing": "formalize",
+	"formalizes": "formalize",
+	"formalization": "formalize",
+	"organising": "organise",
+	"organises": "organise",
+	"organisation": "organise",
+	"organizing": "organize",
+	"organizes": "organize",
+	"organization": "organize",
+	"recording": "record",
+	"records": "record",
+	"recorded": "record",
+	"requiring": "require",
+	"requires": "require",
+	"requirement": "require",
+	"guiding": "guide",
+	"guides": "guide",
+	"guidance": "guide",
+	"ordering": "order",
+	"orders": "order",
+	"ordered": "order",
+	"orienting": "orient",
+	"orients": "orient",
+	"orientation": "orient",
+	"narrowing": "narrow",
+	"narrows": "narrow",
+	"narrowed": "narrow",
+	"focusing": "focus",
+	"focuses": "focus",
+	"focused": "focus",
+	"compiling": "compile",
+	"compiles": "compile",
+	"compilation": "compile",
+	"aligning": "align",
+	"aligns": "align",
+	"alignment": "align",
+	"expanding": "expand",
+	"expands": "expand",
+	"expansion": "expand",
+	"influencing": "influence",
+	"influences": "influence",
+	"imposing": "impose",
+	"imposes": "impose",
+	"pairing": "pair",
+	"pairs": "pair",
+	"shifting": "shift",
+	"shifts": "shift",
+	"reorganising": "reorganise",
+	"reorganises": "reorganise",
+	"reorganisation": "reorganise",
+	"reorganizing": "reorganize",
+	"reorganizes": "reorganize",
+	"reorganization": "reorganize",
+}
+EFFECT_TERM_LEMMA_RE = re.compile(
+	r"\b(?:" + "|".join(sorted((re.escape(term) for term in EFFECT_TERM_LEMMA_MAP), key=len, reverse=True)) + r")\b"
 )
 
 
@@ -101,6 +204,10 @@ class AliasMatch:
 
 def normalize_whitespace(value: str) -> str:
 	return " ".join(value.split())
+
+
+def apply_effect_term_lemma_map(value: str) -> str:
+	return EFFECT_TERM_LEMMA_RE.sub(lambda match: EFFECT_TERM_LEMMA_MAP[match.group(0)], value)
 
 
 def normalize_decision_rule_name(decision_rule: str) -> str:
@@ -122,6 +229,7 @@ def normalize_text(value: object, rule: str) -> str:
 		"lowercase_trim",
 		"lowercase_trim_strip_stage_suffix",
 		"lowercase_trim_strip_leading_determiner",
+		"lowercase_lemma_effect_terms",
 	}
 	normalized = text.replace("\r\n", "\n").replace("\r", "\n")
 	if rule in {
@@ -129,6 +237,7 @@ def normalize_text(value: object, rule: str) -> str:
 		"lowercase_trim",
 		"lowercase_trim_strip_stage_suffix",
 		"lowercase_trim_strip_leading_determiner",
+		"lowercase_lemma_effect_terms",
 	}:
 		normalized = normalized.lower()
 	if rule in trim_rules:
@@ -137,6 +246,8 @@ def normalize_text(value: object, rule: str) -> str:
 		normalized = TRAILING_STAGE_SUFFIX_RE.sub("", normalized)
 	if rule == "lowercase_trim_strip_leading_determiner":
 		normalized = LEADING_ARTICLE_RE.sub("", normalized, count=1)
+	if rule == "lowercase_lemma_effect_terms":
+		normalized = apply_effect_term_lemma_map(normalized)
 	return normalize_whitespace(normalized).strip() if rule in trim_rules else normalized.strip()
 
 
@@ -637,6 +748,55 @@ def co_occurrence_match(text: str, payload: Mapping[str, object], rule: str) -> 
 	return True
 
 
+def evaluate_co_occurrence_phrase_groups(
+	text: str,
+	payload: Mapping[str, object],
+	rule: str,
+) -> tuple[bool, str, dict[str, list[str]], dict[str, list[str]], int]:
+	normalized_text = normalize_text(text, rule)
+	minimum_match_count = int(payload.get("minimum_match_count_per_group", 0) or 0)
+	required_term_groups = {
+		str(group_name): [str(term) for term in group_terms]
+		for group_name, group_terms in dict(payload.get("required_term_groups", {})).items()
+	}
+	matched_terms_by_group: dict[str, list[str]] = {}
+	normalized_required_term_groups: dict[str, list[str]] = {}
+	if not required_term_groups:
+		return (False, normalized_text, normalized_required_term_groups, matched_terms_by_group, minimum_match_count)
+	for group_name, group_terms in required_term_groups.items():
+		normalized_terms = sorted({normalize_text(term, rule) for term in group_terms if normalize_text(term, rule)})
+		normalized_required_term_groups[group_name] = normalized_terms
+		matched_terms = [term for term in normalized_terms if phrase_appears_in_text(normalized_text, term)]
+		matched_terms_by_group[group_name] = matched_terms
+		if len(matched_terms) < max(minimum_match_count, 1):
+			return (
+				False,
+				normalized_text,
+				normalized_required_term_groups,
+				matched_terms_by_group,
+				minimum_match_count,
+			)
+	return (True, normalized_text, normalized_required_term_groups, matched_terms_by_group, minimum_match_count)
+
+
+def co_occurrence_lemma_match(text: str, payload: Mapping[str, object], rule: str) -> bool:
+	final_status, normalized_text, normalized_required_term_groups, matched_terms_by_group, minimum_match_count = (
+		evaluate_co_occurrence_phrase_groups(text, payload, rule)
+	)
+	logger.debug(
+		"Grouped-lemma evaluation match_policy=%s normalisation_rule=%s raw_segment=%r normalized_segment=%r required_term_groups=%s minimum_match_count_per_group=%s matched_terms_by_group=%s final_status=%s",
+		"co_occurrence_lemma",
+		rule,
+		text,
+		normalized_text,
+		normalized_required_term_groups,
+		minimum_match_count,
+		matched_terms_by_group,
+		final_status,
+	)
+	return final_status
+
+
 def evaluate_match_policy(
 	text: str,
 	payload: Mapping[str, object],
@@ -659,6 +819,8 @@ def evaluate_match_policy(
 		return role_or_term_match(candidates, payload, rule)
 	if match_policy == "co_occurrence":
 		return co_occurrence_match(text, payload, rule)
+	if match_policy == "co_occurrence_lemma":
+		return co_occurrence_lemma_match(text, payload, rule)
 	if match_policy == "absence_check":
 		return True
 	if match_policy == "canonical_inequality":
@@ -716,6 +878,26 @@ def apply_decision_rule(
 		)
 		return (evidence_status, "none")
 	if decision_rule == "present_if_minimum_group_matches_met_and_not_excluded":
+		if match_policy == "co_occurrence_lemma":
+			matched_excluded_terms = find_matched_excluded_terms(text, excluded_terms, rule)
+			policy_match, normalized_co_occurrence_text, normalized_required_term_groups, matched_terms_by_group, minimum_match_count = (
+				evaluate_co_occurrence_phrase_groups(text, payload, rule)
+			)
+			evidence_status = "present" if policy_match and not matched_excluded_terms else "not_present"
+			logger.debug(
+				"Decision rule %s match_policy=%s normalisation_rule=%s final_status=%s raw_segment=%r normalized_segment=%r required_term_groups=%s minimum_match_count_per_group=%s matched_terms_by_group=%s matched_excluded_terms=%s",
+				decision_rule,
+				match_policy,
+				rule,
+				evidence_status,
+				text,
+				normalized_co_occurrence_text,
+				normalized_required_term_groups,
+				minimum_match_count,
+				matched_terms_by_group,
+				matched_excluded_terms,
+			)
+			return (evidence_status, "none")
 		return ("present" if policy_match and not has_excluded else "not_present", "none")
 	if decision_rule == "present_if_no_excluded_terms_found":
 		return ("present" if not has_excluded else "not_present", "none")

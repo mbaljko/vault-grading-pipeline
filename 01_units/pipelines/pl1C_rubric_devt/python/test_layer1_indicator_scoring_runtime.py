@@ -115,8 +115,266 @@ BOUND_SEGMENT_POLICY_PAYLOAD = {
 	"bound_segment_resolution_policy": "hard_stay",
 }
 
+EFFECT_TERM_LEMMA_PAYLOAD = {
+	"normalisation_rule": "lowercase_lemma_effect_terms",
+	"match_policy": "co_occurrence_lemma",
+	"decision_rule": "present_if_minimum_group_matches_met_and_not_excluded",
+	"required_term_groups": {
+		"effect_forms": [
+			"sequence",
+			"structure",
+			"allocate",
+			"distribute",
+			"redistribute",
+			"formalise",
+			"formalize",
+			"organise",
+			"organize",
+			"record",
+			"require",
+			"guide",
+		],
+		"structural_features": [
+			"reviewer preparation",
+			"applications",
+			"capacity",
+			"visibility",
+			"scores",
+			"written justifications",
+			"categories",
+			"assignment",
+			"scheduling",
+		],
+	},
+	"minimum_match_count_per_group": 1,
+	"excluded_terms": [],
+	"bound_segment_resolution_policy": "hard_stay",
+}
+
+EFFECT_TERM_LEMMA_EXCLUDED_PAYLOAD = {
+	**EFFECT_TERM_LEMMA_PAYLOAD,
+	"excluded_terms": ["visibility"],
+}
+
 
 class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
+	def test_normalize_text_lemmatizes_sequence_effect_term(self) -> None:
+		self.assertIn(
+			"sequence reviewer preparation",
+			normalize_text("sequencing reviewer preparation", "lowercase_lemma_effect_terms"),
+		)
+
+	def test_normalize_text_lemmatizes_structure_effect_term(self) -> None:
+		self.assertIn(
+			"structure documentation",
+			normalize_text("structuring documentation", "lowercase_lemma_effect_terms"),
+		)
+
+	def test_normalize_text_lemmatizes_allocate_effect_term(self) -> None:
+		self.assertIn(
+			"allocate applications according to capacity",
+			normalize_text("allocating applications according to capacity", "lowercase_lemma_effect_terms"),
+		)
+
+	def test_normalize_text_lemmatizes_distribution_effect_term(self) -> None:
+		self.assertIn(
+			"distribute of workload",
+			normalize_text("distribution of workload", "lowercase_lemma_effect_terms"),
+		)
+
+	def test_normalize_text_lemmatizes_american_formalize_effect_term(self) -> None:
+		self.assertIn(
+			"formalize review order",
+			normalize_text("formalizing review order", "lowercase_lemma_effect_terms"),
+		)
+
+	def test_normalize_text_lemmatizes_british_formalise_effect_term(self) -> None:
+		self.assertIn(
+			"formalise review order",
+			normalize_text("formalising review order", "lowercase_lemma_effect_terms"),
+		)
+
+	def test_normalize_text_lemmatizes_record_effect_term(self) -> None:
+		self.assertIn(
+			"record documentation",
+			normalize_text("recording documentation", "lowercase_lemma_effect_terms"),
+		)
+
+	def test_normalize_text_lemmatizes_require_effect_term(self) -> None:
+		self.assertIn(
+			"require reviewers to align scores",
+			normalize_text("requiring reviewers to align scores", "lowercase_lemma_effect_terms"),
+		)
+
+	def test_normalize_text_lemmatizes_guide_effect_term(self) -> None:
+		self.assertIn(
+			"guide how reviewers explain",
+			normalize_text("guiding how reviewers explain", "lowercase_lemma_effect_terms"),
+		)
+
+	def test_normalize_text_lemmatizes_american_organize_effect_term(self) -> None:
+		self.assertIn(
+			"organize applications",
+			normalize_text("organizing applications", "lowercase_lemma_effect_terms"),
+		)
+
+	def test_normalize_text_lemmatizes_british_organise_effect_term(self) -> None:
+		self.assertIn(
+			"organise applications",
+			normalize_text("organising applications", "lowercase_lemma_effect_terms"),
+		)
+
+	def test_b_claim_core_06_effect_lemma_rule_scores_present_for_inflected_effect_terms(self) -> None:
+		segments = [
+			"sequencing reviewer preparation and organizing applications for efficient assignment and scheduling",
+			"allocating applications according to capacity",
+			"redistributing visibility",
+			"structuring how scores and written justifications are recorded across defined categories",
+		]
+		for segment in segments:
+			with self.subTest(segment=segment):
+				status, _ = apply_decision_rule(segment, EFFECT_TERM_LEMMA_PAYLOAD)
+				self.assertEqual(status, "present")
+
+	def test_co_occurrence_lemma_parse_preserves_required_term_groups(self) -> None:
+		payload = parse_scoring_payload(
+			'{'
+			'"scoring_mode":"deterministic",'
+			'"dependency_type":"segment",'
+			'"bound_segment_id":"05_Effect",'
+			'"normalisation_rule":"lowercase_lemma_effect_terms",'
+			'"match_policy":"co_occurrence_lemma",'
+			'"decision_rule":"present_if_minimum_group_matches_met_and_not_excluded",'
+			'"required_term_groups":{"effect_forms":["sequence"],"structural_features":["reviewer preparation","written justifications"]},'
+			'"minimum_match_count_per_group":1,'
+			'"excluded_terms":[]'
+			'}'
+		)
+		self.assertEqual(payload["match_policy"], "co_occurrence_lemma")
+		self.assertEqual(payload["required_term_groups"]["effect_forms"], ["sequence"])
+		self.assertEqual(
+			payload["required_term_groups"]["structural_features"],
+			["reviewer preparation", "written justifications"],
+		)
+
+	def test_co_occurrence_lemma_normalizes_segment_and_registry_terms(self) -> None:
+		status, _ = apply_decision_rule(
+			"recording documentation",
+			{
+				**EFFECT_TERM_LEMMA_PAYLOAD,
+				"required_term_groups": {
+					"effect_forms": ["record"],
+					"structural_features": ["documentation"],
+				},
+			},
+		)
+		self.assertEqual(status, "present")
+
+	def test_co_occurrence_lemma_uses_word_boundary_safe_phrase_matching(self) -> None:
+		status, _ = apply_decision_rule(
+			"review ordering only",
+			{
+				**EFFECT_TERM_LEMMA_PAYLOAD,
+				"required_term_groups": {
+					"effect_forms": ["order"],
+					"structural_features": ["view order"],
+				},
+			},
+		)
+		self.assertEqual(status, "not_present")
+
+	def test_co_occurrence_lemma_requires_minimum_count_per_group(self) -> None:
+		status, _ = apply_decision_rule(
+			"sequencing reviewer preparation for assignment",
+			{
+				**EFFECT_TERM_LEMMA_PAYLOAD,
+				"minimum_match_count_per_group": 2,
+				"required_term_groups": {
+					"effect_forms": ["sequence", "organize"],
+					"structural_features": ["reviewer preparation", "assignment"],
+				},
+			},
+		)
+		self.assertEqual(status, "not_present")
+
+	def test_co_occurrence_lemma_respects_excluded_terms_after_normalisation(self) -> None:
+		status, _ = apply_decision_rule(
+			"redistributing visibility",
+			EFFECT_TERM_LEMMA_EXCLUDED_PAYLOAD,
+		)
+		self.assertEqual(status, "not_present")
+
+	def test_co_occurrence_lemma_positive_example_sequence_and_organize(self) -> None:
+		status, _ = apply_decision_rule(
+			"sequencing reviewer preparation and organizing applications for efficient assignment and scheduling",
+			EFFECT_TERM_LEMMA_PAYLOAD,
+		)
+		self.assertEqual(status, "present")
+
+	def test_co_occurrence_lemma_positive_example_redistribute_visibility(self) -> None:
+		status, _ = apply_decision_rule(
+			"redistributing visibility",
+			EFFECT_TERM_LEMMA_PAYLOAD,
+		)
+		self.assertEqual(status, "present")
+
+	def test_co_occurrence_lemma_positive_example_allocate_capacity(self) -> None:
+		status, _ = apply_decision_rule(
+			"allocating applications according to capacity",
+			EFFECT_TERM_LEMMA_PAYLOAD,
+		)
+		self.assertEqual(status, "present")
+
+	def test_co_occurrence_lemma_negative_example_deciding(self) -> None:
+		status, _ = apply_decision_rule(
+			"deciding",
+			EFFECT_TERM_LEMMA_PAYLOAD,
+		)
+		self.assertEqual(status, "not_present")
+
+	def test_co_occurrence_lemma_negative_example_justification_without_effect_form(self) -> None:
+		status, _ = apply_decision_rule(
+			"the justification with both accountability obligations and community outcomes",
+			{
+				**EFFECT_TERM_LEMMA_PAYLOAD,
+				"required_term_groups": {
+					"effect_forms": ["guide", "require", "record"],
+					"structural_features": ["justification"],
+				},
+			},
+		)
+		self.assertEqual(status, "not_present")
+
+	def test_co_occurrence_lemma_negative_example_creating_categories(self) -> None:
+		status, _ = apply_decision_rule(
+			"creating categories",
+			{
+				**EFFECT_TERM_LEMMA_PAYLOAD,
+				"required_term_groups": {
+					"effect_forms": ["structure", "formalise"],
+					"structural_features": ["categories"],
+				},
+			},
+		)
+		self.assertEqual(status, "not_present")
+
+	def test_co_occurrence_lemma_logs_selected_policy_normalisation_and_matches(self) -> None:
+		with self.assertLogs("layer1_indicator_scoring_runtime", level="DEBUG") as captured:
+			status, _ = apply_decision_rule(
+				"redistributing visibility",
+				EFFECT_TERM_LEMMA_PAYLOAD,
+			)
+		self.assertEqual(status, "present")
+		joined_logs = "\n".join(captured.output)
+		self.assertIn("match_policy=co_occurrence_lemma", joined_logs)
+		self.assertIn("normalisation_rule=lowercase_lemma_effect_terms", joined_logs)
+		self.assertIn("normalized_segment='redistribute visibility'", joined_logs)
+		self.assertIn("matched_terms_by_group=", joined_logs)
+		self.assertIn("redistribute", joined_logs)
+		self.assertIn("visibility", joined_logs)
+		self.assertIn("matched_excluded_terms=[]", joined_logs)
+		self.assertIn("final_status=present", joined_logs)
+
 	def test_normalize_text_strips_leading_determiner_when_rule_requests_it(self) -> None:
 		self.assertEqual(
 			normalize_text("  The Committee  ", "lowercase_trim_strip_leading_determiner"),
@@ -424,6 +682,22 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 			'}'
 		)
 		self.assertEqual(payload["normalisation_rule"], "lowercase_trim_strip_leading_determiner")
+
+	def test_parse_scoring_payload_accepts_effect_lemma_normalisation_rule(self) -> None:
+		payload = parse_scoring_payload(
+			'{'
+			'"scoring_mode":"deterministic",'
+			'"dependency_type":"segment",'
+			'"bound_segment_id":"05_Effect",'
+			'"normalisation_rule":"lowercase_lemma_effect_terms",'
+			'"match_policy":"co_occurrence_lemma",'
+			'"decision_rule":"present_if_minimum_group_matches_met_and_not_excluded",'
+			'"required_term_groups":{"effect_forms":["sequence"],"structural_features":["reviewer preparation"]},'
+			'"minimum_match_count_per_group":1,'
+			'"excluded_terms":[]'
+			'}'
+		)
+		self.assertEqual(payload["normalisation_rule"], "lowercase_lemma_effect_terms")
 
 	def test_parse_scoring_payload_normalizes_legacy_canonical_distinct_rule_name(self) -> None:
 		payload = parse_scoring_payload(
