@@ -49,6 +49,22 @@ def format_markdown_table_cell(value: str) -> str:
 	return text.replace("|", "\\|").replace("\n", "<br>")
 
 
+def render_markdown_table(headers: list[str], rows: list[list[str]]) -> str:
+	lines = [
+		"| " + " | ".join(headers) + " |",
+		"| " + " | ".join(["---"] * len(headers)) + " |",
+	]
+	for row in rows:
+		lines.append("| " + " | ".join(row) + " |")
+	return "\n".join(lines)
+
+
+def sanitize_filename_fragment(value: str) -> str:
+	text = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value).strip())
+	text = text.strip("-.")
+	return text or "segment"
+
+
 def split_common_path_prefix(*paths: str) -> tuple[str, list[str]]:
 	normalized_paths = [str(path).strip() for path in paths if str(path).strip()]
 	if not normalized_paths:
@@ -100,6 +116,18 @@ def read_csv_rows(path: Path) -> list[dict[str, str]]:
 	with path.open("r", encoding="utf-8", newline="") as handle:
 		reader = csv.DictReader(handle)
 		return list(reader)
+
+
+def sort_runtime_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+	return sorted(
+		rows,
+		key=lambda row: (
+			row.get("component_id", ""),
+			row.get("operator_id", ""),
+			row.get("submission_id", ""),
+			row.get("segment_text", ""),
+		),
+	)
 
 
 def build_runtime_row_key(row: dict[str, str]) -> tuple[str, str, str, str]:
@@ -381,6 +409,168 @@ def build_staleness_summary(operator_specs_path: Path, file_paths: list[str]) ->
 	}
 
 
+def build_current_segment_match_details(
+	*,
+	current_runtime_files: list[str],
+	current_operator_specs: list[Any],
+) -> dict[str, dict[str, Any]]:
+	segment_details: dict[str, dict[str, Any]] = {}
+	for spec in current_operator_specs:
+		segment_id = str(getattr(spec, "segment_id", "")).strip()
+		if not segment_id:
+			continue
+		segment_entry = segment_details.setdefault(
+			segment_id,
+			{
+				"operator_ids": set(),
+				"matches": [],
+				"non_matches": [],
+			},
+		)
+		operator_id = str(getattr(spec, "operator_id", "")).strip()
+		if operator_id:
+			segment_entry["operator_ids"].add(operator_id)
+
+	for file_path_text in current_runtime_files:
+		file_path = Path(file_path_text)
+		for row in read_csv_rows(file_path):
+			segment_id = str(row.get("segment_id", "")).strip()
+			if not segment_id:
+				continue
+			segment_entry = segment_details.setdefault(
+				segment_id,
+				{
+					"operator_ids": set(),
+					"matches": [],
+					"non_matches": [],
+				},
+			)
+			operator_id = str(row.get("operator_id", "")).strip()
+			if operator_id:
+				segment_entry["operator_ids"].add(operator_id)
+			row_payload = {
+				"submission_id": str(row.get("submission_id", "")).strip(),
+				"component_id": str(row.get("component_id", "")).strip(),
+				"operator_id": operator_id,
+				"segment_text": str(row.get("segment_text", "")).strip(),
+				"extraction_status": str(row.get("extraction_status", "")).strip(),
+				"confidence": str(row.get("confidence", "")).strip(),
+				"flags": str(row.get("flags", "")).strip(),
+				"extraction_notes": str(row.get("extraction_notes", "")).strip(),
+			}
+			if row_payload["extraction_status"] == "ok":
+				segment_entry["matches"].append(row_payload)
+			else:
+				segment_entry["non_matches"].append(row_payload)
+
+	return {
+		segment_id: {
+			"operator_ids": sorted(details["operator_ids"]),
+			"matches": sort_runtime_rows(details["matches"]),
+			"non_matches": sort_runtime_rows(details["non_matches"]),
+		}
+		for segment_id, details in sorted(segment_details.items())
+	}
+
+
+def build_segment_match_detail_report(
+	*,
+	segment_id: str,
+	detail: dict[str, Any],
+	current_release: dict[str, str],
+	main_report_path: Path,
+) -> str:
+	operator_text = ", ".join(detail.get("operator_ids", [])) or "(none)"
+	match_rows = detail.get("matches", [])
+	non_match_rows = detail.get("non_matches", [])
+	lines = [
+		f"# AP2B Layer 0 Segment Detail: {segment_id}",
+		"",
+		"## Metadata",
+		"",
+		f"- Segment ID: {format_markdown_table_cell(segment_id)}",
+		f"- Operators: {format_markdown_table_cell(operator_text)}",
+		f"- Iteration: {format_markdown_table_cell(current_release.get('iteration', ''))}",
+		f"- Scoring run: {format_markdown_table_cell(current_release.get('scoring_run', ''))}",
+		f"- Parent report: {format_markdown_table_cell(str(main_report_path))}",
+		f"- Match rows: {len(match_rows)}",
+		f"- Non-match rows: {len(non_match_rows)}",
+		"",
+		"## Matches",
+		"",
+	]
+	if match_rows:
+		lines.append(
+			render_markdown_table(
+				["submission_id", "component_id", "operator_id", "segment_text", "confidence", "flags"],
+				[
+					[
+						format_markdown_table_cell(row.get("submission_id", "")),
+						format_markdown_table_cell(row.get("component_id", "")),
+						format_markdown_table_cell(row.get("operator_id", "")),
+						format_markdown_table_cell(row.get("segment_text", "")),
+						format_markdown_table_cell(row.get("confidence", "")),
+						format_markdown_table_cell(row.get("flags", "")),
+					]
+					for row in match_rows
+				],
+			)
+		)
+	else:
+		lines.append("No matches for this segment in the current runtime output.")
+	lines.extend([
+		"",
+		"## Non-Matches",
+		"",
+	])
+	if non_match_rows:
+		lines.append(
+			render_markdown_table(
+				[
+					"submission_id",
+					"component_id",
+					"operator_id",
+					"extraction_status",
+					"extraction_notes",
+					"confidence",
+					"flags",
+				],
+				[
+					[
+						format_markdown_table_cell(row.get("submission_id", "")),
+						format_markdown_table_cell(row.get("component_id", "")),
+						format_markdown_table_cell(row.get("operator_id", "")),
+						format_markdown_table_cell(row.get("extraction_status", "")),
+						format_markdown_table_cell(row.get("extraction_notes", "")),
+						format_markdown_table_cell(row.get("confidence", "")),
+						format_markdown_table_cell(row.get("flags", "")),
+					]
+					for row in non_match_rows
+				],
+			)
+		)
+	else:
+		lines.append("No non-matches for this segment in the current runtime output.")
+	return "\n".join(lines).rstrip() + "\n"
+
+
+def build_segment_match_detail_output_paths(
+	*,
+	main_output_md_path: Path,
+	current_release: dict[str, str],
+	segment_match_details: dict[str, dict[str, Any]],
+) -> dict[str, Path]:
+	assignment_id = main_output_md_path.name.split("_", 1)[0].strip() or "AP2B"
+	iteration_label = current_release.get("iteration", "").strip()
+	base_stem = f"{assignment_id}_Layer0_iter{iteration_label}" if iteration_label else f"{assignment_id}_Layer0"
+	return {
+		segment_id: main_output_md_path.with_name(
+			f"{base_stem}__segment_{sanitize_filename_fragment(segment_id)}.md"
+		)
+		for segment_id in sorted(segment_match_details)
+	}
+
+
 def build_markdown_report(payload: dict[str, Any]) -> str:
 	current_release = payload["current_release"]
 	baseline_release = payload["baseline_release"]
@@ -388,6 +578,7 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
 	stitched_diff = payload["stitched_diff"]
 	operator_spec_diff = payload.get("operator_spec_diff", {})
 	staleness = payload.get("staleness", {})
+	segment_match_details = payload.get("current_segment_match_details", {})
 	lines = [
 		"# AP2B Layer 0 Iter-To-Iter Diff Report",
 		"",
@@ -637,6 +828,31 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
 					f"| {format_markdown_table_cell(segment_text)} | {count} |"
 				)
 
+	if segment_match_details:
+		lines.extend([
+			"",
+			"## Segment Detail Files",
+			"",
+			"Detailed match and non-match tables are emitted as separate markdown files, one per current registry `segment_id`.",
+			"",
+			"| Segment ID | Operators | Match Rows | Non-Match Rows | Output File |",
+			"| --- | --- | ---: | ---: | --- |",
+		])
+		for segment_id, detail in segment_match_details.items():
+			operator_text = ", ".join(detail.get("operator_ids", [])) or "(none)"
+			match_rows = detail.get("matches", [])
+			non_match_rows = detail.get("non_matches", [])
+			output_file = payload.get("segment_detail_reports", {}).get(segment_id, "")
+			lines.append(
+				"| {segment_id} | {operators} | {match_count} | {non_match_count} | {output_file} |".format(
+					segment_id=format_markdown_table_cell(segment_id),
+					operators=format_markdown_table_cell(operator_text),
+					match_count=len(match_rows),
+					non_match_count=len(non_match_rows),
+					output_file=format_markdown_table_cell(output_file),
+				)
+			)
+
 	return "\n".join(lines).rstrip() + "\n"
 
 
@@ -703,8 +919,8 @@ def main() -> int:
 		comparator=compare_stitched_files,
 	)
 	operator_spec_diff = {}
+	current_operator_specs = load_operator_specs(str(current_operator_specs_path))
 	if baseline_operator_specs_path is not None and baseline_operator_specs_path.is_file():
-		current_operator_specs = load_operator_specs(str(current_operator_specs_path))
 		baseline_operator_specs = load_operator_specs(str(baseline_operator_specs_path))
 		operator_spec_diff = build_operator_spec_diff(
 			current_specs=current_operator_specs,
@@ -722,6 +938,15 @@ def main() -> int:
 		output_md_arg=args.output_md,
 		output_json_arg=args.output_json,
 	)
+	segment_match_details = build_current_segment_match_details(
+		current_runtime_files=runtime_diff.get("current_files", []),
+		current_operator_specs=current_operator_specs,
+	)
+	segment_detail_output_paths = build_segment_match_detail_output_paths(
+		main_output_md_path=output_md_path,
+		current_release=current_release,
+		segment_match_details=segment_match_details,
+	)
 	report_payload = {
 		"current_release": current_release,
 		"baseline_release": baseline_release,
@@ -729,13 +954,31 @@ def main() -> int:
 		"stitched_diff": stitched_diff,
 		"operator_spec_diff": operator_spec_diff,
 		"staleness": staleness,
+		"current_segment_match_details": segment_match_details,
+		"segment_detail_reports": {
+			segment_id: str(path)
+			for segment_id, path in segment_detail_output_paths.items()
+		},
 	}
 	output_json_path.parent.mkdir(parents=True, exist_ok=True)
 	output_json_path.write_text(json.dumps(report_payload, indent=2) + "\n", encoding="utf-8")
 	output_md_path.parent.mkdir(parents=True, exist_ok=True)
 	output_md_path.write_text(build_markdown_report(report_payload), encoding="utf-8")
+	for segment_id, detail in segment_match_details.items():
+		segment_output_path = segment_detail_output_paths[segment_id]
+		segment_output_path.write_text(
+			build_segment_match_detail_report(
+				segment_id=segment_id,
+				detail=detail,
+				current_release=current_release,
+				main_report_path=output_md_path,
+			),
+			encoding="utf-8",
+		)
 	print(f"report_md={output_md_path}")
 	print(f"report_json={output_json_path}")
+	for segment_id, segment_output_path in sorted(segment_detail_output_paths.items()):
+		print(f"segment_report[{segment_id}]={segment_output_path}")
 	print(f"runtime_changed_rows={runtime_diff['changed_row_count']}")
 	print(f"stitched_changed_rows={stitched_diff['changed_row_count']}")
 	return 0
