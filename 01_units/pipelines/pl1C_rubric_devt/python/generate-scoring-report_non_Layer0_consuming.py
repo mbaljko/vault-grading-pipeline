@@ -1612,27 +1612,6 @@ def resolve_submission_id_from_row(row: dict[str, str]) -> str:
 	return ""
 
 
-def derive_layer1_input_csv_path_from_scored_csv(scored_csv_path: Path, component_id: str) -> Path | None:
-	match = LAYER1_SCORED_OUTPUT_RE.match(scored_csv_path.name)
-	if match is None:
-		return None
-	if match.group("component_id") != component_id:
-		return None
-	if len(scored_csv_path.parents) < 4:
-		return None
-	registry_dir = scored_csv_path.parents[3]
-	run_label = scored_csv_path.parents[1].name
-	assignment = match.group("assignment")
-	version = match.group("version")
-	return (
-		registry_dir
-		/ "02_scoring_inputs"
-		/ run_label
-		/ "layer1_from_layer0"
-		/ f"{assignment}_Layer1_input_from_Layer0_{component_id}_{version}.csv"
-	)
-
-
 def derive_layer0_stitched_csv_path_from_scored_csv(scored_csv_path: Path) -> Path | None:
 	if len(scored_csv_path.parents) < 4:
 		return None
