@@ -1915,6 +1915,10 @@ def append_total_count_row(rows: list[list[str]], label_columns: list[str], tota
 	return [*rows, [*label_columns, str(total_count)]]
 
 
+def prepend_identifier_columns(rows: list[list[str]], identifier_values: list[str]) -> list[list[str]]:
+	return [[*identifier_values, *row] for row in rows]
+
+
 def build_status_count_rows(status_counts: Counter[str]) -> list[list[str]]:
 	total_count = sum(status_counts.values())
 	rows = [
@@ -2007,6 +2011,7 @@ def render_indicator_segment_report(
 	manifest_path: Path,
 	comparison_scope: str,
 	current_label: str,
+	template_id: str,
 	component_id: str,
 	indicator_id: str,
 	sbo_identifier: str,
@@ -2025,6 +2030,8 @@ def render_indicator_segment_report(
 	non_matching_row_count: int,
 	missing_input_row_count: int,
 ) -> str:
+	identifier_headers = ["template_id", "indicator_id"]
+	identifier_values = [template_id or "(none)", indicator_id]
 	parts = [
 		"---",
 		f'generated_at_utc: "{datetime.now(timezone.utc).isoformat(timespec="seconds")}"',
@@ -2072,8 +2079,8 @@ def render_indicator_segment_report(
 	if status_rows:
 		parts.append(
 			render_markdown_table(
-				["evidence_status", "count", "%"],
-				status_rows,
+				[*identifier_headers, "evidence_status", "count", "%"],
+				prepend_identifier_columns(status_rows, identifier_values),
 			)
 		)
 	else:
@@ -2095,11 +2102,14 @@ def render_indicator_segment_report(
 	if matching_summary_rows:
 		parts.append(
 			render_markdown_table(
-				["evidence_status", *segment_column_labels, "count"],
-				append_total_count_row(
-					matching_summary_rows,
-					["present", *("total" if index == 0 else "" for index, _ in enumerate(segment_column_labels))],
-					sum(matching_segment_counts.values()),
+				[*identifier_headers, "evidence_status", *segment_column_labels, "count"],
+				prepend_identifier_columns(
+					append_total_count_row(
+						matching_summary_rows,
+						["present", *("total" if index == 0 else "" for index, _ in enumerate(segment_column_labels))],
+						sum(matching_segment_counts.values()),
+					),
+					identifier_values,
 				),
 			)
 		)
@@ -2119,11 +2129,14 @@ def render_indicator_segment_report(
 	if non_matching_summary_rows:
 		parts.append(
 			render_markdown_table(
-				["evidence_status", *segment_column_labels, "count"],
-				append_total_count_row(
-					non_matching_summary_rows,
-					["not_present", *("total" if index == 0 else "" for index, _ in enumerate(segment_column_labels))],
-					sum(non_matching_segment_counts.values()),
+				[*identifier_headers, "evidence_status", *segment_column_labels, "count"],
+				prepend_identifier_columns(
+					append_total_count_row(
+						non_matching_summary_rows,
+						["not_present", *("total" if index == 0 else "" for index, _ in enumerate(segment_column_labels))],
+						sum(non_matching_segment_counts.values()),
+					),
+					identifier_values,
 				),
 			)
 		)
@@ -2142,7 +2155,12 @@ def render_indicator_segment_report(
 		bound_segment_id=bound_segment_id,
 	)
 	if matching_detail_rows:
-		parts.append(render_markdown_table(["original_submission", *segment_column_labels], matching_detail_rows))
+		parts.append(
+			render_markdown_table(
+				[*identifier_headers, "original_submission", *segment_column_labels],
+				prepend_identifier_columns(matching_detail_rows, identifier_values),
+			)
+		)
 	else:
 		parts.append("No matching segment details.")
 	parts.extend([
@@ -2156,7 +2174,12 @@ def render_indicator_segment_report(
 		bound_segment_id=bound_segment_id,
 	)
 	if non_matching_detail_rows:
-		parts.append(render_markdown_table(["original_submission", *segment_column_labels], non_matching_detail_rows))
+		parts.append(
+			render_markdown_table(
+				[*identifier_headers, "original_submission", *segment_column_labels],
+				prepend_identifier_columns(non_matching_detail_rows, identifier_values),
+			)
+		)
 	else:
 		parts.append("No non-matching segment details.")
 	parts.append("")
@@ -2184,6 +2207,10 @@ def render_indicator_slot_group_segment_report(
 	missing_input_row_count: int,
 ) -> str:
 	group_label = format_slot_group_label(local_slot)
+	identifier_headers = ["template_id", "indicator_id"]
+	template_label = ", ".join(template_ids) if template_ids else "(none)"
+	indicator_label = ", ".join(row[1] for row in indicator_members) if indicator_members else "(none)"
+	identifier_values = [template_label, indicator_label]
 	parts = [
 		"---",
 		f'generated_at_utc: "{datetime.now(timezone.utc).isoformat(timespec="seconds")}"',
@@ -2242,8 +2269,8 @@ def render_indicator_slot_group_segment_report(
 	if status_rows:
 		parts.append(
 			render_markdown_table(
-				["evidence_status", "count", "%"],
-				status_rows,
+				[*identifier_headers, "evidence_status", "count", "%"],
+				prepend_identifier_columns(status_rows, identifier_values),
 			)
 		)
 	else:
@@ -2265,11 +2292,14 @@ def render_indicator_slot_group_segment_report(
 	if matching_summary_rows:
 		parts.append(
 			render_markdown_table(
-				["evidence_status", *segment_column_labels, "count"],
-				append_total_count_row(
-					matching_summary_rows,
-					["present", *("total" if index == 0 else "" for index, _ in enumerate(segment_column_labels))],
-					sum(matching_segment_counts.values()),
+				[*identifier_headers, "evidence_status", *segment_column_labels, "count"],
+				prepend_identifier_columns(
+					append_total_count_row(
+						matching_summary_rows,
+						["present", *("total" if index == 0 else "" for index, _ in enumerate(segment_column_labels))],
+						sum(matching_segment_counts.values()),
+					),
+					identifier_values,
 				),
 			)
 		)
@@ -2289,11 +2319,14 @@ def render_indicator_slot_group_segment_report(
 	if non_matching_summary_rows:
 		parts.append(
 			render_markdown_table(
-				["evidence_status", *segment_column_labels, "count"],
-				append_total_count_row(
-					non_matching_summary_rows,
-					["not_present", *("total" if index == 0 else "" for index, _ in enumerate(segment_column_labels))],
-					sum(non_matching_segment_counts.values()),
+				[*identifier_headers, "evidence_status", *segment_column_labels, "count"],
+				prepend_identifier_columns(
+					append_total_count_row(
+						non_matching_summary_rows,
+						["not_present", *("total" if index == 0 else "" for index, _ in enumerate(segment_column_labels))],
+						sum(non_matching_segment_counts.values()),
+					),
+					identifier_values,
 				),
 			)
 		)
@@ -2312,7 +2345,12 @@ def render_indicator_slot_group_segment_report(
 		bound_segment_id=bound_segment_id,
 	)
 	if matching_detail_rows:
-		parts.append(render_markdown_table(["original_submission", *segment_column_labels], matching_detail_rows))
+		parts.append(
+			render_markdown_table(
+				[*identifier_headers, "original_submission", *segment_column_labels],
+				prepend_identifier_columns(matching_detail_rows, identifier_values),
+			)
+		)
 	else:
 		parts.append("No matching segment details.")
 	parts.extend([
@@ -2326,7 +2364,12 @@ def render_indicator_slot_group_segment_report(
 		bound_segment_id=bound_segment_id,
 	)
 	if non_matching_detail_rows:
-		parts.append(render_markdown_table(["original_submission", *segment_column_labels], non_matching_detail_rows))
+		parts.append(
+			render_markdown_table(
+				[*identifier_headers, "original_submission", *segment_column_labels],
+				prepend_identifier_columns(non_matching_detail_rows, identifier_values),
+			)
+		)
 	else:
 		parts.append("No non-matching segment details.")
 	parts.append("")
@@ -3618,6 +3661,7 @@ def main() -> int:
 				manifest_path=manifest_path,
 				comparison_scope=comparison_scope,
 				current_label=current_label,
+				template_id=template_id,
 				component_id=component_id,
 				indicator_id=indicator_id,
 				sbo_identifier=indicator_spec.get("sbo_identifier", ""),
