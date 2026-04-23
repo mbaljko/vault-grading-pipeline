@@ -118,6 +118,49 @@ def read_csv_rows(path: Path) -> list[dict[str, str]]:
 		return list(reader)
 
 
+def build_submission_component_key(row: dict[str, str]) -> tuple[str, str]:
+	return (
+		str(row.get("component_id", "")).strip(),
+		str(row.get("submission_id") or row.get("source_submission_id") or "").strip(),
+	)
+
+
+def escape_markdown_table_cell(value: str) -> str:
+	normalized = str(value).replace("\r\n", "\n").replace("\r", "\n")
+	return normalized.replace("|", "\\|").replace("\n", "<br>")
+
+
+def format_original_submission_entry(component_id: str, submission_id: str, source_response_text: str) -> str:
+	identifier = f"{component_id} / submission_id={submission_id}" if component_id else f"submission_id={submission_id}"
+	text = source_response_text.strip() or "(missing source submission text)"
+	return f"{identifier}\n{text}"
+
+
+def highlight_segment_text_in_submission(source_entry: str, segment_text: str) -> str:
+	normalized_entry = source_entry.replace("\r\n", "\n").replace("\r", "\n")
+	normalized_segment = segment_text.replace("\r\n", "\n").replace("\r", "\n").strip()
+	if not normalized_segment:
+		return normalized_entry
+	exact_pattern = re.compile(re.escape(normalized_segment))
+	if exact_pattern.search(normalized_entry):
+		return exact_pattern.sub(lambda match: f"<mark>{match.group(0)}</mark>", normalized_entry)
+	ignore_case_pattern = re.compile(re.escape(normalized_segment), re.IGNORECASE)
+	if ignore_case_pattern.search(normalized_entry):
+		return ignore_case_pattern.sub(lambda match: f"<mark>{match.group(0)}</mark>", normalized_entry)
+	return normalized_entry
+
+
+def index_stitched_rows_by_component_submission(stitched_files: list[str]) -> dict[tuple[str, str], dict[str, str]]:
+	indexed_rows: dict[tuple[str, str], dict[str, str]] = {}
+	for file_path_text in stitched_files:
+		for row in read_csv_rows(Path(file_path_text)):
+			component_id, submission_id = build_submission_component_key(row)
+			if not component_id or not submission_id:
+				continue
+			indexed_rows[(component_id, submission_id)] = row
+	return indexed_rows
+
+
 def sort_runtime_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
 	return sorted(
 		rows,
@@ -412,9 +455,11 @@ def build_staleness_summary(operator_specs_path: Path, file_paths: list[str]) ->
 def build_current_segment_match_details(
 	*,
 	current_runtime_files: list[str],
+	current_stitched_files: list[str],
 	current_operator_specs: list[Any],
 ) -> dict[str, dict[str, Any]]:
 	segment_details: dict[str, dict[str, Any]] = {}
+	stitched_rows_index = index_stitched_rows_by_component_submission(current_stitched_files)
 	for spec in current_operator_specs:
 		segment_id = str(getattr(spec, "segment_id", "")).strip()
 		if not segment_id:
@@ -458,6 +503,12 @@ def build_current_segment_match_details(
 				"flags": str(row.get("flags", "")).strip(),
 				"extraction_notes": str(row.get("extraction_notes", "")).strip(),
 			}
+			stitched_row = stitched_rows_index.get((row_payload["component_id"], row_payload["submission_id"]))
+			row_payload["original_submission"] = format_original_submission_entry(
+				row_payload["component_id"],
+				row_payload["submission_id"],
+				str((stitched_row or {}).get("source_response_text", "")),
+			)
 			if row_payload["extraction_status"] == "ok":
 				segment_entry["matches"].append(row_payload)
 			else:
@@ -502,13 +553,17 @@ def build_segment_match_detail_report(
 	if match_rows:
 		lines.append(
 			render_markdown_table(
-				["submission_id", "component_id", "operator_id", "segment_text", "confidence", "flags"],
+				["operator_id", "original_submission", "segment_text", "confidence", "flags"],
 				[
 					[
-						format_markdown_table_cell(row.get("submission_id", "")),
-						format_markdown_table_cell(row.get("component_id", "")),
 						format_markdown_table_cell(row.get("operator_id", "")),
-						format_markdown_table_cell(row.get("segment_text", "")),
+						escape_markdown_table_cell(
+							highlight_segment_text_in_submission(
+								str(row.get("original_submission", "")),
+								str(row.get("segment_text", "")),
+							)
+						),
+						escape_markdown_table_cell(row.get("segment_text", "")),
 						format_markdown_table_cell(row.get("confidence", "")),
 						format_markdown_table_cell(row.get("flags", "")),
 					]
@@ -527,9 +582,9 @@ def build_segment_match_detail_report(
 		lines.append(
 			render_markdown_table(
 				[
-					"submission_id",
-					"component_id",
 					"operator_id",
+					"original_submission",
+					"segment_text",
 					"extraction_status",
 					"extraction_notes",
 					"confidence",
@@ -537,9 +592,14 @@ def build_segment_match_detail_report(
 				],
 				[
 					[
-						format_markdown_table_cell(row.get("submission_id", "")),
-						format_markdown_table_cell(row.get("component_id", "")),
 						format_markdown_table_cell(row.get("operator_id", "")),
+						escape_markdown_table_cell(
+							highlight_segment_text_in_submission(
+								str(row.get("original_submission", "")),
+								str(row.get("segment_text", "")),
+							)
+						),
+						escape_markdown_table_cell(row.get("segment_text", "")),
 						format_markdown_table_cell(row.get("extraction_status", "")),
 						format_markdown_table_cell(row.get("extraction_notes", "")),
 						format_markdown_table_cell(row.get("confidence", "")),
@@ -940,6 +1000,7 @@ def main() -> int:
 	)
 	segment_match_details = build_current_segment_match_details(
 		current_runtime_files=runtime_diff.get("current_files", []),
+		current_stitched_files=stitched_diff.get("current_files", []),
 		current_operator_specs=current_operator_specs,
 	)
 	segment_detail_output_paths = build_segment_match_detail_output_paths(

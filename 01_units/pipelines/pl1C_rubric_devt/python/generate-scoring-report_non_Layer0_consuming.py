@@ -1633,13 +1633,17 @@ def derive_layer0_stitched_csv_path_from_scored_csv(scored_csv_path: Path) -> Pa
 		return None
 	registry_dir = scored_csv_path.parents[3]
 	run_label = scored_csv_path.parents[1].name
-	stitched_dir = registry_dir / "03_diagnostics" / run_label / "layer0_runtime"
-	if not stitched_dir.exists() or not stitched_dir.is_dir():
-		return None
-	matches = sorted(stitched_dir.glob("*output-wide-stitched.csv"))
-	if not matches:
-		return None
-	return matches[0]
+	stitched_dir_candidates = [
+		registry_dir / "02_scoring_outputs" / run_label / "layer0_1_engine_outputs_postprocessed",
+		registry_dir / "03_diagnostics" / run_label / "layer0_runtime",
+	]
+	for stitched_dir in stitched_dir_candidates:
+		if not stitched_dir.exists() or not stitched_dir.is_dir():
+			continue
+		matches = sorted(stitched_dir.glob("*output-wide-stitched.csv"))
+		if matches:
+			return matches[0]
+	return None
 
 
 def index_input_rows_by_component_submission(rows: list[dict[str, str]]) -> dict[tuple[str, str], dict[str, str]]:
