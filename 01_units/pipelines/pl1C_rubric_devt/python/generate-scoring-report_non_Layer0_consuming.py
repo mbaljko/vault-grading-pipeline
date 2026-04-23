@@ -458,26 +458,31 @@ def discover_component_deterministic_scored_csv_paths_in_dir(
 ) -> list[Path]:
 	if not directory.exists() or not directory.is_dir():
 		return []
+	combined_patterns = []
 	if expected_version_label:
-		combined_pattern = f"*{component_id}*_Layer1_indicator_scoring_v{expected_version_label}_output.csv"
-	else:
-		combined_pattern = f"*{component_id}*_Layer1_indicator_scoring_v*_output.csv"
-	combined_matches = sorted(
-		candidate_path
-		for candidate_path in directory.glob(combined_pattern)
-		if candidate_path.is_file() and not candidate_path.name.endswith("-wide.csv")
-	)
-	if combined_matches:
-		return combined_matches
+		combined_patterns.append(f"*{component_id}*_Layer1_indicator_scoring_v{expected_version_label}_output.csv")
+	combined_patterns.append(f"*{component_id}*_Layer1_indicator_scoring_v*_output.csv")
+	for combined_pattern in combined_patterns:
+		combined_matches = sorted(
+			candidate_path
+			for candidate_path in directory.glob(combined_pattern)
+			if candidate_path.is_file() and not candidate_path.name.endswith("-wide.csv")
+		)
+		if combined_matches:
+			return combined_matches
+	per_indicator_patterns = []
 	if expected_version_label:
-		per_indicator_pattern = f"*{component_id}*_Layer1_indicator_module_v{expected_version_label}_*_output.csv"
-	else:
-		per_indicator_pattern = f"*{component_id}*_Layer1_indicator_module_v*_*_output.csv"
-	return sorted(
-		candidate_path
-		for candidate_path in directory.glob(per_indicator_pattern)
-		if candidate_path.is_file() and not candidate_path.name.endswith("-wide.csv")
-	)
+		per_indicator_patterns.append(f"*{component_id}*_Layer1_indicator_module_v{expected_version_label}_*_output.csv")
+	per_indicator_patterns.append(f"*{component_id}*_Layer1_indicator_module_v*_*_output.csv")
+	for per_indicator_pattern in per_indicator_patterns:
+		per_indicator_matches = sorted(
+			candidate_path
+			for candidate_path in directory.glob(per_indicator_pattern)
+			if candidate_path.is_file() and not candidate_path.name.endswith("-wide.csv")
+		)
+		if per_indicator_matches:
+			return per_indicator_matches
+	return []
 
 
 def discover_component_scored_csv_paths_in_dir(
@@ -1633,16 +1638,16 @@ def derive_layer0_stitched_csv_path_from_scored_csv(scored_csv_path: Path) -> Pa
 		return None
 	registry_dir = scored_csv_path.parents[3]
 	run_label = scored_csv_path.parents[1].name
-	stitched_dir_candidates = [
-		registry_dir / "02_scoring_outputs" / run_label / "layer0_1_engine_outputs_postprocessed",
-		registry_dir / "03_diagnostics" / run_label / "layer0_runtime",
-	]
-	for stitched_dir in stitched_dir_candidates:
-		if not stitched_dir.exists() or not stitched_dir.is_dir():
-			continue
-		matches = sorted(stitched_dir.glob("*output-wide-stitched.csv"))
-		if matches:
-			return matches[0]
+	stitched_dir = registry_dir / "02_scoring_outputs" / run_label / "layer0_1_engine_outputs_postprocessed"
+	if not stitched_dir.exists() or not stitched_dir.is_dir():
+		return None
+	assignment_match = re.match(r"^RUN_(?P<assignment>[A-Za-z0-9]+)_.+_Layer1_indicator_(?:scoring|module)_.*\.csv$", scored_csv_path.name)
+	if assignment_match is None:
+		return None
+	assignment_id = assignment_match.group("assignment")
+	matches = sorted(stitched_dir.glob(f"RUN_{assignment_id}_Layer0_operator_engine_v*_output-wide-stitched.csv"))
+	if matches:
+		return matches[0]
 	return None
 
 
@@ -1769,6 +1774,8 @@ def derive_segment_field_suffix(record_id: str, segment_id: str) -> str:
 		return "Claim"
 	match = re.fullmatch(r"S(\d+)", record_text, re.IGNORECASE)
 	if match is not None:
+		if segment_text.startswith(f"{match.group(1)}_"):
+			return segment_text
 		return f"{match.group(1)}_{segment_text}"
 	return segment_text
 
@@ -1855,7 +1862,7 @@ def map_segment_bucket_to_columns(
 		return [segment_bucket]
 	if len(column_specs) == 1:
 		return [segment_bucket]
-	if segment_bucket in {"(blank segment text)", "(missing Layer 1 input row)"}:
+	if segment_bucket in {"(blank segment text)", "(missing segment source row)"}:
 		return [segment_bucket for _ in column_specs]
 	segment_pairs = parse_paired_segment_bucket(segment_bucket)
 	segment_values_by_label = {label: value for label, value in segment_pairs}
@@ -1882,7 +1889,7 @@ def highlight_segment_text_in_submission(source_entry: str, segment_text: str) -
 	normalized_segment = segment_text.replace("\r\n", "\n").replace("\r", "\n").strip()
 	if not normalized_segment:
 		return normalized_entry
-	if normalized_segment in {"(blank segment text)", "(missing Layer 1 input row)"}:
+	if normalized_segment in {"(blank segment text)", "(missing segment source row)"}:
 		return normalized_entry
 	paired_segments = parse_paired_segment_bucket(normalized_segment)
 	if paired_segments:
@@ -2029,7 +2036,7 @@ def render_indicator_segment_report(
 	required_layer0_records: str,
 	segment_field: str,
 	scored_csv_path: Path | None,
-	input_csv_path: Path | None,
+	segment_source_csv_path: Path | None,
 	status_counts: Counter[str],
 	matching_segment_counts: Counter[str],
 	non_matching_segment_counts: Counter[str],
@@ -2070,10 +2077,10 @@ def render_indicator_segment_report(
 				["required_layer0_records", required_layer0_records or "(none)"],
 				["segment_field", segment_field or "evidence_text"],
 				["scored_csv", str(scored_csv_path) if scored_csv_path is not None else ""],
-				["layer1_input_csv", str(input_csv_path) if input_csv_path is not None else ""],
+				["layer0_stitched_csv", str(segment_source_csv_path) if segment_source_csv_path is not None else ""],
 				["matching_row_count", str(matching_row_count)],
 				["non_matching_row_count", str(non_matching_row_count)],
-				["missing_input_row_count", str(missing_input_row_count)],
+				["missing_segment_source_row_count", str(missing_input_row_count)],
 				["unique_matching_segment_texts", str(len(matching_segment_counts))],
 				["unique_non_matching_segment_texts", str(len(non_matching_segment_counts))],
 			],
@@ -3526,8 +3533,7 @@ def main() -> int:
 		),
 		encoding="utf-8",
 	)
-	input_rows_by_component_submission: dict[str, dict[tuple[str, str], dict[str, str]]] = {}
-	input_csv_path_by_component: dict[str, Path] = {}
+	segment_rows_by_component_submission: dict[str, dict[tuple[str, str], dict[str, str]]] = {}
 	scored_csv_path_by_component: dict[str, Path] = {}
 	stitched_csv_path_by_component: dict[str, Path] = {}
 	source_rows_by_component_submission: dict[str, dict[tuple[str, str], dict[str, str]]] = {}
@@ -3538,13 +3544,6 @@ def main() -> int:
 		if not resolved_scored_paths:
 			continue
 		scored_csv_path_by_component[component_id] = resolved_scored_paths[0]
-		input_csv_path = derive_layer1_input_csv_path_from_scored_csv(resolved_scored_paths[0], component_id)
-		if input_csv_path is None or not input_csv_path.exists() or not input_csv_path.is_file():
-			continue
-		input_csv_path_by_component[component_id] = input_csv_path
-		input_rows_by_component_submission[component_id] = index_input_rows_by_component_submission(
-			load_scored_rows(input_csv_path)
-		)
 		stitched_csv_path = derive_layer0_stitched_csv_path_from_scored_csv(resolved_scored_paths[0])
 		if stitched_csv_path is None or not stitched_csv_path.exists() or not stitched_csv_path.is_file():
 			continue
@@ -3553,6 +3552,7 @@ def main() -> int:
 		if stitched_index is None:
 			stitched_index = index_input_rows_by_component_submission(load_scored_rows(stitched_csv_path))
 			stitched_rows_by_path[stitched_csv_path] = stitched_index
+		segment_rows_by_component_submission[component_id] = stitched_index
 		source_rows_by_component_submission[component_id] = stitched_index
 	for component_id, indicator_id in sorted(
 		indicator_segment_specs,
@@ -3580,7 +3580,7 @@ def main() -> int:
 		matching_row_count = 0
 		non_matching_row_count = 0
 		missing_input_row_count = 0
-		input_rows_index = input_rows_by_component_submission.get(component_id, {})
+		input_rows_index = segment_rows_by_component_submission.get(component_id, {})
 		source_rows_index = source_rows_by_component_submission.get(component_id, {})
 		for scored_row in scored_rows_by_component.get(component_id, []):
 			if (scored_row.get("indicator_id") or "").strip() != indicator_id:
@@ -3596,7 +3596,7 @@ def main() -> int:
 				(source_row.get("source_response_text") or "") if source_row is not None else "",
 			)
 			if input_row is None:
-				segment_bucket = "(missing Layer 1 input row)"
+				segment_bucket = "(missing segment source row)"
 				missing_input_row_count += 1
 			else:
 				segment_bucket = derive_segment_bucket_from_input_row(
@@ -3647,7 +3647,7 @@ def main() -> int:
 				required_layer0_records=required_layer0_records,
 				segment_field=segment_field,
 				scored_csv_path=scored_csv_path_by_component.get(component_id),
-				input_csv_path=input_csv_path_by_component.get(component_id),
+				segment_source_csv_path=stitched_csv_path_by_component.get(component_id),
 				status_counts=status_counts,
 				matching_segment_counts=matching_segment_counts,
 				non_matching_segment_counts=non_matching_segment_counts,
