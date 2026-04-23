@@ -789,7 +789,14 @@ def build_machine_normalized_indicator_definition(record: dict[str, str]) -> str
         parts.append(f"Dependency type: {dependency_type}.")
     if match_policy:
         parts.append(f"Match policy: {match_policy}.")
-    for field_name in ["allowed_terms", "allowed_aliases", "allowed_roles", "required_term_groups", "minimum_match_count_per_group"]:
+    for field_name in [
+        "allowed_terms",
+        "allowed_aliases",
+        "allowed_roles",
+        "required_term_groups",
+        "minimum_match_count_per_group",
+        "bound_segment_resolution_policy",
+    ]:
         field_value = record.get(field_name, "").strip()
         if field_value:
             parts.append(f"{field_name}: {field_value}.")
@@ -844,11 +851,20 @@ def build_machine_normalized_indicator_guidance(record: dict[str, str]) -> str:
     parts: list[str] = []
     scoring_mode = record.get("scoring_mode", "").strip()
     normalisation_rule = record.get("normalisation_rule", "").strip()
+    bound_segment_resolution_policy = record.get("bound_segment_resolution_policy", "").strip()
     excluded_terms = record.get("excluded_terms", "").strip()
     if scoring_mode:
         parts.append(f"Execute in scoring_mode={scoring_mode}.")
     if normalisation_rule:
         parts.append(f"Apply normalisation_rule={normalisation_rule} before matching.")
+    if bound_segment_resolution_policy == "hard_stay":
+        parts.append(
+            "Use bound_segment_resolution_policy=hard_stay so blank bound segments do not fall back to broader text fields."
+        )
+    elif bound_segment_resolution_policy == "fallback_to_evidence_text":
+        parts.append(
+            "Use bound_segment_resolution_policy=fallback_to_evidence_text so blank bound segments may fall through to evidence_text and response_text."
+        )
     if excluded_terms:
         parts.append(f"Excluded terms: {excluded_terms}.")
     parts.append("Consume only Layer 0-derived evidence; do not reconstruct omitted source text.")
@@ -943,6 +959,7 @@ def build_layer1_indicator_scoring_payload(record: dict[str, str]) -> str:
         "dependency_type": record.get("dependency_type", "").strip(),
         "required_layer0_records": parse_semicolon_separated_values(record.get("required_layer0_records", "")),
         "bound_segment_id": record.get("bound_segment_id", "").strip(),
+        "bound_segment_resolution_policy": record.get("bound_segment_resolution_policy", "").strip(),
         "normalisation_rule": record.get("normalisation_rule", "").strip(),
         "match_policy": record.get("match_policy", "").strip(),
         "allowed_terms": parse_semicolon_separated_values(record.get("allowed_terms", "")),
