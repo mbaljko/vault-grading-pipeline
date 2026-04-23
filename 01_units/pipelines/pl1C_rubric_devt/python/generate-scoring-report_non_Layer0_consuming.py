@@ -1760,31 +1760,61 @@ def derive_segment_report_column_specs(
 	return [("segment_text", "segment_text")]
 
 
-def derive_segment_field_label(component_id: str, bound_segment_id: str) -> str:
+def derive_segment_field_suffix(record_id: str, segment_id: str) -> str:
+	record_text = record_id.strip()
+	segment_text = segment_id.strip()
+	if not segment_text:
+		return ""
+	if segment_text.lower() == "claim":
+		return "Claim"
+	match = re.fullmatch(r"S(\d+)", record_text, re.IGNORECASE)
+	if match is not None:
+		return f"{match.group(1)}_{segment_text}"
+	return segment_text
+
+
+def derive_segment_field_names(
+	component_id: str,
+	required_layer0_records: str,
+	bound_segment_id: str,
+) -> list[tuple[str, str]]:
+	column_specs = derive_segment_report_column_specs(required_layer0_records, bound_segment_id)
 	segment_ids = parse_bound_segment_ids(bound_segment_id)
+	record_ids = parse_required_layer0_record_ids(required_layer0_records)
 	if not segment_ids:
-		return "evidence_text"
-	if len(segment_ids) == 1:
-		return f"segment_text_{component_id}__{segment_ids[0]}"
-	return " + ".join(f"segment_text_{component_id}__{segment_id}" for segment_id in segment_ids)
+		return [("evidence_text", "evidence_text")]
+	if len(column_specs) == 1 and column_specs[0][0] == "segment_text":
+		if len(segment_ids) == 1:
+			return [(f"segment_text_{component_id}__{segment_ids[0]}", segment_ids[0])]
+		return [(f"segment_text_{component_id}__{segment_id}", segment_id) for segment_id in segment_ids]
+	if record_ids and len(record_ids) == len(segment_ids):
+		return [
+			(f"segment_text_{component_id}__{derive_segment_field_suffix(record_id, segment_id)}", segment_id)
+			for record_id, segment_id in zip(record_ids, segment_ids)
+		]
+	return [
+		(f"segment_text_{component_id}__{display_label.split(' (', 1)[0]}", segment_id)
+		for segment_id, display_label in column_specs
+	]
 
 
 def derive_segment_bucket_from_input_row(
 	input_row: dict[str, str],
 	component_id: str,
+	required_layer0_records: str,
 	bound_segment_id: str,
 	source_response_text: str = "",
 ) -> str:
-	segment_ids = parse_bound_segment_ids(bound_segment_id)
+	segment_field_names = derive_segment_field_names(component_id, required_layer0_records, bound_segment_id)
+	segment_ids = [segment_id for _, segment_id in segment_field_names]
 	if not segment_ids:
 		return normalize_segment_bucket_label((input_row.get("evidence_text") or "").strip())
 	if len(segment_ids) == 1:
-		segment_field = f"segment_text_{component_id}__{segment_ids[0]}"
+		segment_field, _ = segment_field_names[0]
 		return normalize_segment_bucket_label((input_row.get(segment_field) or "").strip())
 	segment_parts: list[str] = []
 	has_non_blank_segment = False
-	for segment_id in segment_ids:
-		segment_field = f"segment_text_{component_id}__{segment_id}"
+	for segment_field, segment_id in segment_field_names:
 		raw_segment_value = (input_row.get(segment_field) or "").strip()
 		if raw_segment_value:
 			has_non_blank_segment = True
@@ -3537,7 +3567,9 @@ def main() -> int:
 		template_id = (base_row_info.get("template_id") or "").strip()
 		required_layer0_records = (base_row_info.get("required_layer0_records") or "").strip()
 		bound_segment_id = indicator_spec.get("bound_segment_id", "")
-		segment_field = derive_segment_field_label(component_id, bound_segment_id)
+		segment_field = " + ".join(
+			field_name for field_name, _ in derive_segment_field_names(component_id, required_layer0_records, bound_segment_id)
+		)
 		status_counts: Counter[str] = Counter()
 		matching_segment_counts: Counter[str] = Counter()
 		non_matching_segment_counts: Counter[str] = Counter()
@@ -3570,6 +3602,7 @@ def main() -> int:
 				segment_bucket = derive_segment_bucket_from_input_row(
 					input_row,
 					component_id,
+					required_layer0_records,
 					bound_segment_id,
 					(source_row.get("source_response_text") or "") if source_row is not None else "",
 				)
