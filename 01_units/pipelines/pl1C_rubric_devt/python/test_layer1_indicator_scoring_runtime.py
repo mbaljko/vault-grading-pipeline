@@ -1,6 +1,17 @@
+import importlib.util
+from pathlib import Path
 import unittest
 
 from layer1_indicator_scoring_runtime import apply_decision_rule
+
+
+_GENERATOR_PATH = Path(__file__).with_name("generate-layer1-indicator-scoring-module.py")
+_GENERATOR_SPEC = importlib.util.spec_from_file_location("generate_layer1_indicator_scoring_module", _GENERATOR_PATH)
+if _GENERATOR_SPEC is None or _GENERATOR_SPEC.loader is None:
+	raise RuntimeError(f"Unable to load generator module from {_GENERATOR_PATH}")
+_GENERATOR_MODULE = importlib.util.module_from_spec(_GENERATOR_SPEC)
+_GENERATOR_SPEC.loader.exec_module(_GENERATOR_MODULE)
+parse_scoring_payload = _GENERATOR_MODULE.parse_scoring_payload
 
 
 PAYLOAD = {
@@ -59,6 +70,31 @@ CANONICAL_INEQUALITY_PAYLOAD = {
 	"excluded_terms": [],
 }
 
+STAGE_TOKEN_PAYLOAD = {
+	"normalisation_rule": "lowercase_trim",
+	"match_policy": "exact_or_alias_article_insensitive_any_conjunct",
+	"decision_rule": "present_if_any_stage_token_matches_after_normalisation_and_not_excluded",
+	"allowed_terms": [
+		"preliminary screening",
+		"individual reviewer assessment",
+		"reviewer assignment",
+		"committee deliberation",
+		"documentation",
+		"categorisation",
+	],
+	"allowed_aliases": {
+		"categorization": "categorisation",
+		"pre screening": "preliminary screening",
+		"deliberation": "committee deliberation",
+		"reviewer assessment": "individual reviewer assessment",
+	},
+	"excluded_terms": [
+		"reviewer preparation",
+		"file preparation",
+		"individual reviewers examining",
+	],
+}
+
 
 class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 	def test_prefix_stripping_rule_that_logs_original_and_stripped_segment(self) -> None:
@@ -107,6 +143,91 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 			component_id="SectionB3Response",
 		)
 		self.assertEqual(status, "present")
+
+	def test_stage_token_rule_matches_stage_inside_longer_span(self) -> None:
+		status, _ = apply_decision_rule(
+			"the preliminary screening and assignment stage",
+			STAGE_TOKEN_PAYLOAD,
+		)
+		self.assertEqual(status, "present")
+
+	def test_stage_token_rule_matches_alias_inside_longer_span(self) -> None:
+		status, _ = apply_decision_rule(
+			"the pre screening stage",
+			STAGE_TOKEN_PAYLOAD,
+		)
+		self.assertEqual(status, "present")
+
+	def test_stage_token_rule_matches_multiple_canonical_stages_in_coordinated_span(self) -> None:
+		status, _ = apply_decision_rule(
+			"the preliminary screening, categorization, and reviewer assignment stage",
+			STAGE_TOKEN_PAYLOAD,
+		)
+		self.assertEqual(status, "present")
+
+	def test_stage_token_rule_rejects_role_only_string(self) -> None:
+		status, _ = apply_decision_rule(
+			"the reviewer preparation stage",
+			STAGE_TOKEN_PAYLOAD,
+		)
+		self.assertEqual(status, "not_present")
+
+	def test_stage_token_rule_rejects_non_stage_phrase(self) -> None:
+		status, _ = apply_decision_rule(
+			"individual reviewers examining stage",
+			STAGE_TOKEN_PAYLOAD,
+		)
+		self.assertEqual(status, "not_present")
+
+	def test_stage_token_rule_respects_excluded_terms_even_when_other_stage_text_exists(self) -> None:
+		status, _ = apply_decision_rule(
+			"the reviewer preparation and documentation stage",
+			STAGE_TOKEN_PAYLOAD,
+		)
+		self.assertEqual(status, "not_present")
+
+	def test_stage_token_rule_logs_raw_normalized_alias_and_excluded_diagnostics(self) -> None:
+		with self.assertLogs("layer1_indicator_scoring_runtime", level="DEBUG") as captured:
+			status, _ = apply_decision_rule("the pre screening and documentation stage", STAGE_TOKEN_PAYLOAD)
+		self.assertEqual(status, "present")
+		joined_logs = "\n".join(captured.output)
+		self.assertIn("raw_segment='the pre screening and documentation stage'", joined_logs)
+		self.assertIn("normalized_segment='the pre screening and documentation stage'", joined_logs)
+		self.assertIn("matched_canonical_terms=", joined_logs)
+		self.assertIn("preliminary screening", joined_logs)
+		self.assertIn("documentation", joined_logs)
+		self.assertIn("matched_excluded_terms=[]", joined_logs)
+		self.assertIn("final_status=present", joined_logs)
+
+	def test_apply_decision_rule_raises_for_unsupported_decision_rule(self) -> None:
+		with self.assertRaisesRegex(ValueError, "Unsupported Layer 1 decision_rule: unsupported_rule"):
+			apply_decision_rule(
+				"documentation stage",
+				{
+					"normalisation_rule": "lowercase_trim",
+					"match_policy": "substring_any",
+					"decision_rule": "unsupported_rule",
+					"allowed_terms": ["documentation"],
+					"allowed_aliases": {},
+					"excluded_terms": [],
+				},
+			)
+
+	def test_parse_scoring_payload_raises_for_unsupported_decision_rule(self) -> None:
+		with self.assertRaisesRegex(ValueError, "Unsupported Layer 1 decision_rule: unsupported_rule"):
+			parse_scoring_payload(
+				'{'
+				'"scoring_mode":"deterministic",'
+				'"dependency_type":"segment",'
+				'"bound_segment_id":"01_DemandA",'
+				'"normalisation_rule":"lowercase_trim",'
+				'"match_policy":"substring_any",'
+				'"decision_rule":"unsupported_rule",'
+				'"allowed_terms":["documentation"],'
+				'"allowed_aliases":{},'
+				'"excluded_terms":[]'
+				'}'
+			)
 
 
 if __name__ == "__main__":

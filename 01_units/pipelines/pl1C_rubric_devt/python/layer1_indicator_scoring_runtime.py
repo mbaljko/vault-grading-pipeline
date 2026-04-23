@@ -16,6 +16,17 @@ from typing import Mapping
 
 logger = logging.getLogger(__name__)
 
+SUPPORTED_DECISION_RULES = {
+	"present_if_any_allowed_term_found",
+	"present_if_exact_match_or_alias_and_not_excluded",
+	"present_if_matches_stage_or_role_and_not_excluded",
+	"present_if_any_stage_token_matches_after_normalisation_and_not_excluded",
+	"present_if_minimum_group_matches_met_and_not_excluded",
+	"present_if_no_excluded_terms_found",
+	"present_if_any_allowed_term_found_and_not_only_excluded",
+	"present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b",
+}
+
 LABEL_LINE_RE = re.compile(r"^\s*\[[^\]]+\]\s*$")
 LEADING_ARTICLE_RE = re.compile(r"^(?:the|a|an)\s+", re.IGNORECASE)
 CONJUNCTION_SPLIT_RE = re.compile(r"\s+and\s+|\s*,\s*", re.IGNORECASE)
@@ -378,6 +389,39 @@ def extract_canonical_mentions_from_text(
 	]
 
 
+def find_matched_excluded_terms(text: str, excluded_terms: list[str], rule: str) -> list[str]:
+	normalized_text = normalize_text(text, rule)
+	return [excluded_term for excluded_term in excluded_terms if excluded_term and excluded_term in normalized_text]
+
+
+def extract_stage_token_matches_after_normalisation(
+	text: str,
+	payload: Mapping[str, object],
+	rule: str,
+	excluded_terms: list[str] | None = None,
+) -> list[AliasMatch]:
+	excluded_terms = excluded_terms or []
+	normalized_text = normalize_text(text, rule)
+	expanded_candidates = expand_candidates_with_conjuncts(extract_candidate_units(text, rule), rule)
+	matches = resolve_matches_for_candidates(expanded_candidates, payload, rule, excluded_terms)
+	matched_excluded_terms = find_matched_excluded_terms(text, excluded_terms, rule)
+	matched_canonical_terms = sorted({match.canonical for match in matches})
+	logger.debug(
+		"Stage-token evaluation raw_segment=%r normalized_segment=%r expanded_candidates=%s matched_excluded_terms=%s matched_canonical_terms=%s",
+		text,
+		normalized_text,
+		expanded_candidates,
+		matched_excluded_terms,
+		matched_canonical_terms,
+	)
+	return matches
+
+
+def stage_token_match_after_normalisation(text: str, payload: Mapping[str, object], rule: str) -> bool:
+	excluded_terms = [normalize_text(term, rule) for term in payload.get("excluded_terms", []) if normalize_text(term, rule)]
+	return bool(extract_stage_token_matches_after_normalisation(text, payload, rule, excluded_terms))
+
+
 def canonical_inequality_match(
 	row: Mapping[str, object],
 	component_id: str,
@@ -476,6 +520,8 @@ def apply_decision_rule(
 	rule = str(payload.get("normalisation_rule", "") or "").strip()
 	decision_rule = str(payload.get("decision_rule", "") or "").strip()
 	match_policy = str(payload.get("match_policy", "") or "").strip()
+	if decision_rule not in SUPPORTED_DECISION_RULES:
+		raise ValueError(f"Unsupported Layer 1 decision_rule: {decision_rule}")
 	excluded_terms = [normalize_text(term, rule) for term in payload.get("excluded_terms", []) if normalize_text(term, rule)]
 	normalized_text = normalize_text(text, rule)
 	has_excluded = any(term in normalized_text for term in excluded_terms)
@@ -496,6 +542,21 @@ def apply_decision_rule(
 		return ("present" if policy_match and not has_excluded else "not_present", "none")
 	if decision_rule == "present_if_matches_stage_or_role_and_not_excluded":
 		return ("present" if policy_match and not has_excluded else "not_present", "none")
+	if decision_rule == "present_if_any_stage_token_matches_after_normalisation_and_not_excluded":
+		matches = extract_stage_token_matches_after_normalisation(text, payload, rule, excluded_terms)
+		matched_excluded_terms = find_matched_excluded_terms(text, excluded_terms, rule)
+		matched_canonical_terms = sorted({match.canonical for match in matches})
+		evidence_status = "present" if matches and not matched_excluded_terms else "not_present"
+		logger.debug(
+			"Decision rule %s final_status=%s raw_segment=%r normalized_segment=%r matched_canonical_terms=%s matched_excluded_terms=%s",
+			decision_rule,
+			evidence_status,
+			text,
+			normalized_text,
+			matched_canonical_terms,
+			matched_excluded_terms,
+		)
+		return (evidence_status, "none")
 	if decision_rule == "present_if_minimum_group_matches_met_and_not_excluded":
 		return ("present" if policy_match and not has_excluded else "not_present", "none")
 	if decision_rule == "present_if_no_excluded_terms_found":
@@ -504,7 +565,7 @@ def apply_decision_rule(
 		return ("present" if policy_match else "not_present", "none")
 	if decision_rule == "present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b":
 		return ("present" if policy_match and not has_excluded else "not_present", "none")
-	return ("present" if policy_match else "not_present", "none")
+	raise ValueError(f"Unsupported Layer 1 decision_rule: {decision_rule}")
 
 
 def score_indicator_from_row(
@@ -572,5 +633,6 @@ def score_indicator_from_row(
 
 
 __all__ = [
+	"SUPPORTED_DECISION_RULES",
 	"score_indicator_from_row",
 ]

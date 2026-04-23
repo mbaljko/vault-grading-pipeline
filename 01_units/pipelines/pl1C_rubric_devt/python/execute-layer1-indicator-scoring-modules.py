@@ -20,6 +20,8 @@ As of the current runtime, the explicitly recognized `decision_rule` values are:
 - `present_if_any_allowed_term_found_and_not_only_excluded`
 - `present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b`
 
+- note to self: make this `present_if_canonical_mappings_are_distinct`
+
 Any other `decision_rule` value may still run, but it falls through to the
 runtime default behavior: return `present` when the resolved `match_policy`
 matches and `not_present` otherwise.
