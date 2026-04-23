@@ -115,6 +115,14 @@ MATCH_PREFIX_RE = re.compile(
 	r"^(?:rule\s+that|requirement\s+to|institutional\s+demand\s+for|institutional\s+demand\s+of|obligation\s+to)\s+",
 	re.IGNORECASE,
 )
+EFFECT_TERM_PHRASE_LEMMA_MAP = {
+	"putting into words": "put into words",
+	"puts into words": "put into words",
+	"put into words": "put into words",
+}
+EFFECT_TERM_PHRASE_LEMMA_RE = re.compile(
+	r"\b(?:" + "|".join(sorted((re.escape(term) for term in EFFECT_TERM_PHRASE_LEMMA_MAP), key=len, reverse=True)) + r")\b"
+)
 EFFECT_TERM_LEMMA_MAP = {
 	"sequencing": "sequence",
 	"sequences": "sequence",
@@ -206,6 +214,10 @@ def normalize_whitespace(value: str) -> str:
 	return " ".join(value.split())
 
 
+def apply_effect_term_phrase_lemma_map(value: str) -> str:
+	return EFFECT_TERM_PHRASE_LEMMA_RE.sub(lambda match: EFFECT_TERM_PHRASE_LEMMA_MAP[match.group(0)], value)
+
+
 def apply_effect_term_lemma_map(value: str) -> str:
 	return EFFECT_TERM_LEMMA_RE.sub(lambda match: EFFECT_TERM_LEMMA_MAP[match.group(0)], value)
 
@@ -247,6 +259,7 @@ def normalize_text(value: object, rule: str) -> str:
 	if rule == "lowercase_trim_strip_leading_determiner":
 		normalized = LEADING_ARTICLE_RE.sub("", normalized, count=1)
 	if rule == "lowercase_lemma_effect_terms":
+		normalized = apply_effect_term_phrase_lemma_map(normalized)
 		normalized = apply_effect_term_lemma_map(normalized)
 	return normalize_whitespace(normalized).strip() if rule in trim_rules else normalized.strip()
 

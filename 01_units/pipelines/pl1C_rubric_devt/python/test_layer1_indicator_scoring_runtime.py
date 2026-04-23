@@ -156,6 +156,14 @@ EFFECT_TERM_LEMMA_EXCLUDED_PAYLOAD = {
 	"excluded_terms": ["visibility"],
 }
 
+PUT_INTO_WORDS_PAYLOAD = {
+	**EFFECT_TERM_LEMMA_PAYLOAD,
+	"required_term_groups": {
+		"effect_forms": ["put into words"],
+		"structural_features": ["justification"],
+	},
+}
+
 
 class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 	def test_normalize_text_lemmatizes_sequence_effect_term(self) -> None:
@@ -222,6 +230,15 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 		self.assertIn(
 			"organise applications",
 			normalize_text("organising applications", "lowercase_lemma_effect_terms"),
+		)
+
+	def test_normalize_text_lemmatizes_putting_into_words_phrase(self) -> None:
+		self.assertEqual(
+			normalize_text(
+				"putting into words the formally written justification requirements",
+				"lowercase_lemma_effect_terms",
+			),
+			"put into words the formally written justification requirements",
 		)
 
 	def test_b_claim_core_06_effect_lemma_rule_scores_present_for_inflected_effect_terms(self) -> None:
@@ -322,6 +339,13 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 		status, _ = apply_decision_rule(
 			"allocating applications according to capacity",
 			EFFECT_TERM_LEMMA_PAYLOAD,
+		)
+		self.assertEqual(status, "present")
+
+	def test_b_claim_core_06_put_into_words_segment_scores_present(self) -> None:
+		status, _ = apply_decision_rule(
+			"putting into words the formally written justification requirements",
+			PUT_INTO_WORDS_PAYLOAD,
 		)
 		self.assertEqual(status, "present")
 
