@@ -26,6 +26,14 @@ Legacy compatibility note:
 	is normalized to `present_if_canonical_mappings_are_distinct`
 
 Any other `decision_rule` value now hard-fails as unsupported.
+
+Bound-segment text resolution note:
+- indicators may declare `bound_segment_resolution_policy`
+- `hard_stay` is the default and keeps scoring pinned to the declared
+	`bound_segment_id`; if that segment is blank, the indicator scores from blank
+	rather than falling through to broader text fields
+- `fallback_to_evidence_text` explicitly allows a blank bound segment to fall
+	through to `evidence_text` and then `response_text`
 """
 
 from __future__ import annotations

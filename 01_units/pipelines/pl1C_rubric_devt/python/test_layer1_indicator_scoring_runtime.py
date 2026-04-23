@@ -2,7 +2,7 @@ import importlib.util
 from pathlib import Path
 import unittest
 
-from layer1_indicator_scoring_runtime import apply_decision_rule
+from layer1_indicator_scoring_runtime import apply_decision_rule, score_indicator_from_row
 
 
 _GENERATOR_PATH = Path(__file__).with_name("generate-layer1-indicator-scoring-module.py")
@@ -43,6 +43,7 @@ PAYLOAD = {
 		"fairness",
 		"efficiency",
 	],
+		"bound_segment_resolution_policy": "hard_stay",
 }
 
 CANONICAL_INEQUALITY_PAYLOAD = {
@@ -93,6 +94,25 @@ STAGE_TOKEN_PAYLOAD = {
 		"file preparation",
 		"individual reviewers examining",
 	],
+	"bound_segment_resolution_policy": "hard_stay",
+}
+
+BOUND_SEGMENT_POLICY_PAYLOAD = {
+	"normalisation_rule": "lowercase_trim_strip_stage_suffix",
+	"match_policy": "exact_or_alias",
+	"decision_rule": "present_if_any_stage_token_matches_after_normalisation_and_not_excluded",
+	"allowed_terms": [
+		"preliminary screening",
+		"reviewer assignment",
+		"committee deliberation",
+	],
+	"allowed_aliases": {
+		"assignment": "reviewer assignment",
+		"screening": "preliminary screening",
+	},
+	"excluded_terms": [],
+	"bound_segment_id": "04_WorkflowOrRole",
+	"bound_segment_resolution_policy": "hard_stay",
 }
 
 
@@ -227,6 +247,73 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 					"allowed_aliases": {},
 					"excluded_terms": [],
 				},
+			)
+
+	def test_score_indicator_from_row_hard_stays_on_blank_bound_segment_by_default(self) -> None:
+		result = score_indicator_from_row(
+			{
+				"participant_id": "8156972",
+				"component_id": "SectionB1Response",
+				"segment_text_SectionB1Response__04_WorkflowOrRole": "",
+				"evidence_text": "[SectionB1Response__03_Mechanism]\nscheduling and reviewer assignment",
+			},
+			component_id="SectionB1Response",
+			indicator_id="I14",
+			payload=BOUND_SEGMENT_POLICY_PAYLOAD,
+		)
+		self.assertEqual(result["evidence_status"], "not_present")
+
+	def test_score_indicator_from_row_can_fallback_when_policy_overrides_default(self) -> None:
+		result = score_indicator_from_row(
+			{
+				"participant_id": "8156972",
+				"component_id": "SectionB1Response",
+				"segment_text_SectionB1Response__04_WorkflowOrRole": "",
+				"evidence_text": "[SectionB1Response__03_Mechanism]\nscheduling and reviewer assignment",
+			},
+			component_id="SectionB1Response",
+			indicator_id="I14",
+			payload={
+				**BOUND_SEGMENT_POLICY_PAYLOAD,
+				"bound_segment_resolution_policy": "fallback_to_evidence_text",
+			},
+		)
+		self.assertEqual(result["evidence_status"], "present")
+
+	def test_parse_scoring_payload_defaults_bound_segment_resolution_policy_to_hard_stay(self) -> None:
+		payload = parse_scoring_payload(
+			'{'
+			'"scoring_mode":"deterministic",'
+			'"dependency_type":"segment",'
+			'"bound_segment_id":"04_WorkflowOrRole",'
+			'"normalisation_rule":"lowercase_trim",'
+			'"match_policy":"exact_or_alias",'
+			'"decision_rule":"present_if_exact_match_or_alias_and_not_excluded",'
+			'"allowed_terms":["documentation"],'
+			'"allowed_aliases":{},'
+			'"excluded_terms":[]'
+			'}'
+		)
+		self.assertEqual(payload["bound_segment_resolution_policy"], "hard_stay")
+
+	def test_parse_scoring_payload_raises_for_unsupported_bound_segment_resolution_policy(self) -> None:
+		with self.assertRaisesRegex(
+			ValueError,
+			"Unsupported Layer 1 bound_segment_resolution_policy: unsupported_policy",
+		):
+			parse_scoring_payload(
+				'{'
+				'"scoring_mode":"deterministic",'
+				'"dependency_type":"segment",'
+				'"bound_segment_id":"04_WorkflowOrRole",'
+				'"normalisation_rule":"lowercase_trim",'
+				'"match_policy":"exact_or_alias",'
+				'"decision_rule":"present_if_exact_match_or_alias_and_not_excluded",'
+				'"allowed_terms":["documentation"],'
+				'"allowed_aliases":{},'
+				'"excluded_terms":[],'
+				'"bound_segment_resolution_policy":"unsupported_policy"'
+				'}'
 			)
 
 	def test_parse_scoring_payload_raises_for_unsupported_decision_rule(self) -> None:

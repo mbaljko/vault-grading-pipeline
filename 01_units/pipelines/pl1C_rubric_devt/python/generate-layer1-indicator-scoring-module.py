@@ -9,7 +9,11 @@ import re
 import sys
 from pathlib import Path
 
-from layer1_indicator_scoring_runtime import SUPPORTED_DECISION_RULES, normalize_decision_rule_name
+from layer1_indicator_scoring_runtime import (
+	SUPPORTED_BOUND_SEGMENT_RESOLUTION_POLICIES,
+	SUPPORTED_DECISION_RULES,
+	normalize_decision_rule_name,
+)
 
 
 MANIFEST_REQUIRED_HEADERS = [
@@ -122,6 +126,14 @@ def parse_scoring_payload(payload_json: str) -> dict[str, object]:
 	if decision_rule not in SUPPORTED_DECISION_RULES:
 		raise ValueError(f"Unsupported Layer 1 decision_rule: {decision_rule}")
 	payload["decision_rule"] = decision_rule
+	bound_segment_resolution_policy = str(payload.get("bound_segment_resolution_policy", "") or "").strip()
+	if not bound_segment_resolution_policy:
+		bound_segment_resolution_policy = "hard_stay"
+	if bound_segment_resolution_policy not in SUPPORTED_BOUND_SEGMENT_RESOLUTION_POLICIES:
+		raise ValueError(
+			f"Unsupported Layer 1 bound_segment_resolution_policy: {bound_segment_resolution_policy}"
+		)
+	payload["bound_segment_resolution_policy"] = bound_segment_resolution_policy
 	return payload
 
 

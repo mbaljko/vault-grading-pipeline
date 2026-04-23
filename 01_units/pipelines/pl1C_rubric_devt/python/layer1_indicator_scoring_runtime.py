@@ -31,6 +31,11 @@ SUPPORTED_DECISION_RULES = {
 	"present_if_canonical_mappings_are_distinct",
 }
 
+SUPPORTED_BOUND_SEGMENT_RESOLUTION_POLICIES = {
+	"hard_stay",
+	"fallback_to_evidence_text",
+}
+
 LABEL_LINE_RE = re.compile(r"^\s*\[[^\]]+\]\s*$")
 LEADING_ARTICLE_RE = re.compile(r"^(?:the|a|an)\s+", re.IGNORECASE)
 CONJUNCTION_SPLIT_RE = re.compile(r"\s+and\s+|\s*,\s*", re.IGNORECASE)
@@ -263,13 +268,25 @@ def resolve_component_id(row: Mapping[str, object], component_id: str) -> str:
 	return value or component_id
 
 
+def normalize_bound_segment_resolution_policy(payload: Mapping[str, object]) -> str:
+	policy = str(payload.get("bound_segment_resolution_policy", "") or "").strip()
+	if not policy:
+		return "hard_stay"
+	if policy not in SUPPORTED_BOUND_SEGMENT_RESOLUTION_POLICIES:
+		raise ValueError(f"Unsupported Layer 1 bound_segment_resolution_policy: {policy}")
+	return policy
+
+
 def resolve_indicator_text(row: Mapping[str, object], component_id: str, payload: Mapping[str, object]) -> str:
 	bound_segment_id = str(payload.get("bound_segment_id", "") or "").strip()
+	bound_segment_resolution_policy = normalize_bound_segment_resolution_policy(payload)
 	if bound_segment_id:
 		segment_field = f"segment_text_{component_id}__{bound_segment_id}"
 		segment_value = str(row.get(segment_field, "") or "").strip()
 		if segment_value:
 			return segment_value
+		if bound_segment_resolution_policy == "hard_stay":
+			return ""
 	for field_name in ["evidence_text", "response_text"]:
 		field_value = str(row.get(field_name, "") or "").strip()
 		if field_value:
