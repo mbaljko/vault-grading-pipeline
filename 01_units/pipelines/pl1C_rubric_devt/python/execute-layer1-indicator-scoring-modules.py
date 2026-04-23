@@ -121,13 +121,17 @@ def derive_layer0_stitched_csv_path_from_layer1_input(input_csv_path: Path) -> P
 		return None
 	registry_dir = input_csv_path.parents[3]
 	run_label = input_csv_path.parents[1].name
-	stitched_dir = registry_dir / "03_diagnostics" / run_label / "layer0_runtime"
-	if not stitched_dir.exists() or not stitched_dir.is_dir():
-		return None
-	matches = sorted(stitched_dir.glob("*output-wide-stitched.csv"))
-	if not matches:
-		return None
-	return matches[0]
+	candidate_dirs = [
+		registry_dir / "03_diagnostics" / run_label / "layer0_runtime",
+		registry_dir / "02_scoring_outputs" / run_label / "layer0_1_engine_outputs_postprocessed",
+	]
+	for stitched_dir in candidate_dirs:
+		if not stitched_dir.exists() or not stitched_dir.is_dir():
+			continue
+		matches = sorted(stitched_dir.glob("*output-wide-stitched.csv"))
+		if matches:
+			return matches[0]
+	return None
 
 
 def index_rows_by_component_submission(rows: list[dict[str, str]]) -> dict[tuple[str, str], dict[str, str]]:
@@ -154,7 +158,9 @@ def enrich_rows_with_source_response_text(rows: list[dict[str, str]], input_csv_
 		enriched_row = dict(row)
 		stitched_row = stitched_index.get((component_id, submission_id))
 		if stitched_row is not None:
-			enriched_row.setdefault("source_response_text", str(stitched_row.get("source_response_text", "") or ""))
+			stitched_source_text = str(stitched_row.get("source_response_text", "") or "")
+			if stitched_source_text:
+				enriched_row["source_response_text"] = stitched_source_text
 		enriched_rows.append(enriched_row)
 	return enriched_rows
 
@@ -165,6 +171,10 @@ def resolve_output_path(output_dir: Path, output_file_stem: str, output_format: 
 
 def derive_wide_output_path(output_path: Path) -> Path:
 	return output_path.with_name(f"{output_path.stem}-wide{output_path.suffix}")
+
+
+def derive_stitched_wide_output_path(output_path: Path) -> Path:
+	return output_path.with_name(f"{output_path.stem}-wide-stitched{output_path.suffix}")
 
 
 def derive_version_family_prefix(output_file_stem: str) -> str:
@@ -206,7 +216,13 @@ def write_grouped_wide_csv(headers: list[str], rows: list[list[str]], output_pat
 		writer.writerows(rows)
 
 
-def build_wide_rows(combined_rows: list[dict[str, str]], target_component_id: str) -> tuple[list[str], list[list[str]]]:
+
+def build_wide_rows(
+	combined_rows: list[dict[str, str]],
+	target_component_id: str,
+	*,
+	source_response_text_by_submission: dict[str, str] | None = None,
+) -> tuple[list[str], list[list[str]]]:
 	grouped_by_submission: dict[str, dict[str, str]] = {}
 	indicator_ids = sorted({row.get("indicator_id", "") for row in combined_rows if row.get("indicator_id", "")}, key=indicator_sort_key)
 	for row in combined_rows:
@@ -218,9 +234,15 @@ def build_wide_rows(combined_rows: list[dict[str, str]], target_component_id: st
 			submission_id,
 			{"submission_id": submission_id, "component_id": target_component_id},
 		)
+		if source_response_text_by_submission is not None:
+			source_response_text = source_response_text_by_submission.get(submission_id, "")
+			if source_response_text and not wide_row.get("source_response_text", ""):
+				wide_row["source_response_text"] = source_response_text
 		wide_row[f"indicator_{indicator_id}_evidence_status"] = row.get("evidence_status", "")
 		wide_row[f"indicator_{indicator_id}_flags"] = row.get("flags", "")
 	headers = ["submission_id", "component_id"]
+	if source_response_text_by_submission is not None:
+		headers.append("source_response_text")
 	for indicator_id in indicator_ids:
 		headers.extend([
 			f"indicator_{indicator_id}_evidence_status",
@@ -244,6 +266,11 @@ def main() -> int:
 		if args.combined_output_file is not None:
 			remove_stale_combined_outputs(args.combined_output_file.resolve())
 		combined_rows: list[dict[str, str]] = []
+		source_response_text_by_submission = {
+			resolve_submission_id_from_row(row): str(row.get("source_response_text", "") or "")
+			for row in component_rows
+			if resolve_submission_id_from_row(row)
+		}
 		for module in modules:
 			indicator_id = str(getattr(module, "INDICATOR_ID", "")).strip()
 			indicator_rows = [module.score_indicator_row(row) for row in component_rows]
@@ -255,6 +282,16 @@ def main() -> int:
 			write_scored_rows(combined_rows, combined_output_path)
 			headers, wide_rows = build_wide_rows(combined_rows, args.target_component_id)
 			write_grouped_wide_csv(headers, wide_rows, derive_wide_output_path(combined_output_path))
+			stitched_headers, stitched_wide_rows = build_wide_rows(
+				combined_rows,
+				args.target_component_id,
+				source_response_text_by_submission=source_response_text_by_submission,
+			)
+			write_grouped_wide_csv(
+				stitched_headers,
+				stitched_wide_rows,
+				derive_stitched_wide_output_path(combined_output_path),
+			)
 	except (FileNotFoundError, ValueError) as exc:
 		print(f"Error: {exc}", file=sys.stderr)
 		return 1
