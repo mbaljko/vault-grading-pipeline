@@ -971,12 +971,12 @@ def find_layer1_base_row(
     base_rows: list[dict[str, str]],
     *,
     local_slot: str,
-    bound_segment_id: str,
+    bound_segment_id: str | None = None,
 ) -> dict[str, str] | None:
     for row in base_rows:
         if row.get("local_slot", "").strip() != local_slot:
             continue
-        if row.get("bound_segment_id", "").strip() != bound_segment_id:
+        if bound_segment_id is not None and row.get("bound_segment_id", "").strip() != bound_segment_id:
             continue
         return row
     return None
@@ -991,17 +991,24 @@ def build_layer1_indicator_scoring_payload_with_context(
     if match_policy != "canonical_inequality":
         return serialize_scoring_payload(payload)
 
-    demand_a_row = find_layer1_base_row(base_rows, local_slot="01", bound_segment_id="DemandA")
-    demand_b_row = find_layer1_base_row(base_rows, local_slot="02", bound_segment_id="DemandB")
+    demand_a_row = find_layer1_base_row(base_rows, local_slot="01")
+    demand_b_row = find_layer1_base_row(base_rows, local_slot="02")
     if demand_a_row is None or demand_b_row is None:
         raise ValueError(
-            "canonical_inequality requires active Layer 1 DemandA slot 01 and DemandB slot 02 source rows."
+            "canonical_inequality requires active Layer 1 source rows for local slots 01 and 02."
+        )
+
+    left_segment_id = demand_a_row.get("bound_segment_id", "").strip()
+    right_segment_id = demand_b_row.get("bound_segment_id", "").strip()
+    if not left_segment_id or not right_segment_id:
+        raise ValueError(
+            "canonical_inequality requires bound_segment_id values on the active Layer 1 source rows for local slots 01 and 02."
         )
 
     payload.update(
         {
-            "left_segment_id": "DemandA",
-            "right_segment_id": "DemandB",
+            "left_segment_id": left_segment_id,
+            "right_segment_id": right_segment_id,
             "left_allowed_terms": parse_semicolon_separated_values(demand_a_row.get("allowed_terms", "")),
             "left_allowed_aliases": parse_alias_mapping(demand_a_row.get("allowed_aliases", "")),
             "right_allowed_terms": parse_semicolon_separated_values(demand_b_row.get("allowed_terms", "")),
