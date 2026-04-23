@@ -71,10 +71,10 @@ CANONICAL_INEQUALITY_PAYLOAD = {
 	"excluded_terms": [],
 }
 
-STAGE_TOKEN_PAYLOAD = {
+STAGE_PHRASE_PAYLOAD = {
 	"normalisation_rule": "lowercase_trim",
 	"match_policy": "exact_or_alias_article_insensitive_any_conjunct",
-	"decision_rule": "present_if_any_stage_token_matches_after_normalisation_and_not_excluded",
+	"decision_rule": "present_if_any_stage_phrase_matches_after_normalisation_and_not_excluded",
 	"allowed_terms": [
 		"preliminary screening",
 		"individual reviewer assessment",
@@ -100,7 +100,7 @@ STAGE_TOKEN_PAYLOAD = {
 BOUND_SEGMENT_POLICY_PAYLOAD = {
 	"normalisation_rule": "lowercase_trim_strip_stage_suffix",
 	"match_policy": "exact_or_alias",
-	"decision_rule": "present_if_any_stage_token_matches_after_normalisation_and_not_excluded",
+	"decision_rule": "present_if_any_stage_phrase_matches_after_normalisation_and_not_excluded",
 	"allowed_terms": [
 		"preliminary screening",
 		"reviewer assignment",
@@ -192,51 +192,86 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 		)
 		self.assertEqual(status, "present")
 
-	def test_stage_token_rule_matches_stage_inside_longer_span(self) -> None:
+	def test_stage_phrase_rule_matches_preliminary_screening_stage(self) -> None:
 		status, _ = apply_decision_rule(
-			"the preliminary screening and assignment stage",
-			STAGE_TOKEN_PAYLOAD,
+			"the preliminary screening stage",
+			STAGE_PHRASE_PAYLOAD,
 		)
 		self.assertEqual(status, "present")
 
-	def test_stage_token_rule_matches_alias_inside_longer_span(self) -> None:
+	def test_stage_phrase_rule_matches_individual_reviewer_assessment_stage(self) -> None:
 		status, _ = apply_decision_rule(
-			"the pre screening stage",
-			STAGE_TOKEN_PAYLOAD,
+			"the individual reviewer assessment stage",
+			STAGE_PHRASE_PAYLOAD,
 		)
 		self.assertEqual(status, "present")
 
-	def test_stage_token_rule_matches_multiple_canonical_stages_in_coordinated_span(self) -> None:
+	def test_stage_phrase_rule_matches_committee_deliberation_stage(self) -> None:
 		status, _ = apply_decision_rule(
-			"the preliminary screening, categorization, and reviewer assignment stage",
-			STAGE_TOKEN_PAYLOAD,
+			"the committee deliberation stage",
+			STAGE_PHRASE_PAYLOAD,
 		)
 		self.assertEqual(status, "present")
 
-	def test_stage_token_rule_rejects_role_only_string(self) -> None:
+	def test_stage_phrase_rule_matches_documentation_stage(self) -> None:
+		status, _ = apply_decision_rule(
+			"the documentation stage",
+			STAGE_PHRASE_PAYLOAD,
+		)
+		self.assertEqual(status, "present")
+
+	def test_stage_phrase_rule_matches_reviewer_assignment_phase(self) -> None:
+		status, _ = apply_decision_rule(
+			"the reviewer assignment phase",
+			STAGE_PHRASE_PAYLOAD,
+		)
+		self.assertEqual(status, "present")
+
+	def test_stage_phrase_rule_matches_multiple_canonical_stages_in_coordinated_span(self) -> None:
+		status, _ = apply_decision_rule(
+			"the preliminary screening, categorisation, and reviewer assignment stage",
+			STAGE_PHRASE_PAYLOAD,
+		)
+		self.assertEqual(status, "present")
+
+	def test_stage_phrase_rule_rejects_role_only_string(self) -> None:
+		status, _ = apply_decision_rule(
+			"a reviewer",
+			STAGE_PHRASE_PAYLOAD,
+		)
+		self.assertEqual(status, "not_present")
+
+	def test_stage_phrase_rule_rejects_reviewer_preparation(self) -> None:
+		status, _ = apply_decision_rule(
+			"reviewer preparation",
+			STAGE_PHRASE_PAYLOAD,
+		)
+		self.assertEqual(status, "not_present")
+
+	def test_stage_phrase_rule_rejects_reviewer_preparation_stage(self) -> None:
 		status, _ = apply_decision_rule(
 			"the reviewer preparation stage",
-			STAGE_TOKEN_PAYLOAD,
+			STAGE_PHRASE_PAYLOAD,
 		)
 		self.assertEqual(status, "not_present")
 
-	def test_stage_token_rule_rejects_non_stage_phrase(self) -> None:
+	def test_stage_phrase_rule_rejects_file_preparation(self) -> None:
+		status, _ = apply_decision_rule(
+			"file preparation",
+			STAGE_PHRASE_PAYLOAD,
+		)
+		self.assertEqual(status, "not_present")
+
+	def test_stage_phrase_rule_rejects_non_stage_phrase(self) -> None:
 		status, _ = apply_decision_rule(
 			"individual reviewers examining stage",
-			STAGE_TOKEN_PAYLOAD,
+			STAGE_PHRASE_PAYLOAD,
 		)
 		self.assertEqual(status, "not_present")
 
-	def test_stage_token_rule_respects_excluded_terms_even_when_other_stage_text_exists(self) -> None:
-		status, _ = apply_decision_rule(
-			"the reviewer preparation and documentation stage",
-			STAGE_TOKEN_PAYLOAD,
-		)
-		self.assertEqual(status, "not_present")
-
-	def test_stage_token_rule_logs_raw_normalized_alias_and_excluded_diagnostics(self) -> None:
+	def test_stage_phrase_rule_logs_raw_normalized_alias_and_excluded_diagnostics(self) -> None:
 		with self.assertLogs("layer1_indicator_scoring_runtime", level="DEBUG") as captured:
-			status, _ = apply_decision_rule("the pre screening and documentation stage", STAGE_TOKEN_PAYLOAD)
+			status, _ = apply_decision_rule("the pre screening and documentation stage", STAGE_PHRASE_PAYLOAD)
 		self.assertEqual(status, "present")
 		joined_logs = "\n".join(captured.output)
 		self.assertIn("raw_segment='the pre screening and documentation stage'", joined_logs)

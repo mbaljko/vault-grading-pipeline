@@ -20,7 +20,7 @@ The explicitly recognized `decision_rule` values are:
 - `present_if_any_allowed_term_found`
 - `present_if_exact_match_or_alias_and_not_excluded`
 - `present_if_matches_stage_or_role_and_not_excluded`
-- `present_if_any_stage_token_matches_after_normalisation_and_not_excluded`
+- `present_if_any_stage_phrase_matches_after_normalisation_and_not_excluded`
 - `present_if_minimum_group_matches_met_and_not_excluded`
 - `present_if_no_excluded_terms_found`
 - `present_if_any_allowed_term_found_and_not_only_excluded`
@@ -61,13 +61,14 @@ SUPPORTED_NORMALISATION_RULES = {
 
 DECISION_RULE_ALIASES = {
 	"present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b": "present_if_canonical_mappings_are_distinct",
+	"present_if_any_stage_token_matches_after_normalisation_and_not_excluded": "present_if_any_stage_phrase_matches_after_normalisation_and_not_excluded",
 }
 
 SUPPORTED_DECISION_RULES = {
 	"present_if_any_allowed_term_found",
 	"present_if_exact_match_or_alias_and_not_excluded",
 	"present_if_matches_stage_or_role_and_not_excluded",
-	"present_if_any_stage_token_matches_after_normalisation_and_not_excluded",
+	"present_if_any_stage_phrase_matches_after_normalisation_and_not_excluded",
 	"present_if_minimum_group_matches_met_and_not_excluded",
 	"present_if_no_excluded_terms_found",
 	"present_if_any_allowed_term_found_and_not_only_excluded",
@@ -486,7 +487,13 @@ def find_matched_excluded_terms(text: str, excluded_terms: list[str], rule: str)
 	return [excluded_term for excluded_term in excluded_terms if excluded_term and excluded_term in normalized_text]
 
 
-def extract_stage_token_matches_after_normalisation(
+def phrase_appears_in_text(text: str, phrase: str) -> bool:
+	if not text or not phrase:
+		return False
+	return bool(re.search(rf"(?<![a-z0-9]){re.escape(phrase)}(?![a-z0-9])", text))
+
+
+def extract_stage_phrase_matches_after_normalisation(
 	text: str,
 	payload: Mapping[str, object],
 	rule: str,
@@ -494,24 +501,50 @@ def extract_stage_token_matches_after_normalisation(
 ) -> list[AliasMatch]:
 	excluded_terms = excluded_terms or []
 	normalized_text = normalize_text(text, rule)
-	expanded_candidates = expand_candidates_with_conjuncts(extract_candidate_units(text, rule), rule)
-	matches = resolve_matches_for_candidates(expanded_candidates, payload, rule, excluded_terms)
+	if not normalized_text:
+		logger.debug(
+			"Stage-phrase evaluation raw_segment=%r normalized_segment=%r matched_excluded_terms=%s matched_canonical_terms=%s",
+			text,
+			normalized_text,
+			[],
+			[],
+		)
+		return []
+	entries = build_allowed_match_entries(
+		list(payload.get("allowed_terms", [])),
+		dict(payload.get("allowed_aliases", {})),
+		rule,
+	)
+	matches: list[AliasMatch] = []
+	seen_canonicals: set[str] = set()
+	for pattern_text, canonical, is_alias in sorted(entries, key=lambda item: (-len(item[0]), item[0])):
+		if canonical in seen_canonicals or not phrase_appears_in_text(normalized_text, pattern_text):
+			continue
+		matches.append(
+			AliasMatch(
+				candidate=normalized_text,
+				canonical=canonical,
+				matched_text=pattern_text,
+				matched_span=pattern_text,
+				is_alias=is_alias,
+			)
+		)
+		seen_canonicals.add(canonical)
 	matched_excluded_terms = find_matched_excluded_terms(text, excluded_terms, rule)
 	matched_canonical_terms = sorted({match.canonical for match in matches})
 	logger.debug(
-		"Stage-token evaluation raw_segment=%r normalized_segment=%r expanded_candidates=%s matched_excluded_terms=%s matched_canonical_terms=%s",
+		"Stage-phrase evaluation raw_segment=%r normalized_segment=%r matched_excluded_terms=%s matched_canonical_terms=%s",
 		text,
 		normalized_text,
-		expanded_candidates,
 		matched_excluded_terms,
 		matched_canonical_terms,
 	)
 	return matches
 
 
-def stage_token_match_after_normalisation(text: str, payload: Mapping[str, object], rule: str) -> bool:
+def stage_phrase_match_after_normalisation(text: str, payload: Mapping[str, object], rule: str) -> bool:
 	excluded_terms = [normalize_text(term, rule) for term in payload.get("excluded_terms", []) if normalize_text(term, rule)]
-	return bool(extract_stage_token_matches_after_normalisation(text, payload, rule, excluded_terms))
+	return bool(extract_stage_phrase_matches_after_normalisation(text, payload, rule, excluded_terms))
 
 
 def canonical_inequality_match(
@@ -634,8 +667,8 @@ def apply_decision_rule(
 		return ("present" if policy_match and not has_excluded else "not_present", "none")
 	if decision_rule == "present_if_matches_stage_or_role_and_not_excluded":
 		return ("present" if policy_match and not has_excluded else "not_present", "none")
-	if decision_rule == "present_if_any_stage_token_matches_after_normalisation_and_not_excluded":
-		matches = extract_stage_token_matches_after_normalisation(text, payload, rule, excluded_terms)
+	if decision_rule == "present_if_any_stage_phrase_matches_after_normalisation_and_not_excluded":
+		matches = extract_stage_phrase_matches_after_normalisation(text, payload, rule, excluded_terms)
 		matched_excluded_terms = find_matched_excluded_terms(text, excluded_terms, rule)
 		matched_canonical_terms = sorted({match.canonical for match in matches})
 		evidence_status = "present" if matches and not matched_excluded_terms else "not_present"
