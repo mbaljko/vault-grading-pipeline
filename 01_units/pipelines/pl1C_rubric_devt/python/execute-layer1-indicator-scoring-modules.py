@@ -15,16 +15,17 @@ As of the current runtime, the explicitly recognized `decision_rule` values are:
 - `present_if_any_allowed_term_found`
 - `present_if_exact_match_or_alias_and_not_excluded`
 - `present_if_matches_stage_or_role_and_not_excluded`
+- `present_if_any_stage_token_matches_after_normalisation_and_not_excluded`
 - `present_if_minimum_group_matches_met_and_not_excluded`
 - `present_if_no_excluded_terms_found`
 - `present_if_any_allowed_term_found_and_not_only_excluded`
+- `present_if_canonical_mappings_are_distinct`
+
+Legacy compatibility note:
 - `present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b`
+	is normalized to `present_if_canonical_mappings_are_distinct`
 
-- note to self: make this `present_if_canonical_mappings_are_distinct`
-
-Any other `decision_rule` value may still run, but it falls through to the
-runtime default behavior: return `present` when the resolved `match_policy`
-matches and `not_present` otherwise.
+Any other `decision_rule` value now hard-fails as unsupported.
 """
 
 from __future__ import annotations

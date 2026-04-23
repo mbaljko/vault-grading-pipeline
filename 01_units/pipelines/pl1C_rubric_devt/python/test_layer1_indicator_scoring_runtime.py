@@ -48,7 +48,7 @@ PAYLOAD = {
 CANONICAL_INEQUALITY_PAYLOAD = {
 	"normalisation_rule": "lowercase_trim",
 	"match_policy": "canonical_inequality",
-	"decision_rule": "present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b",
+	"decision_rule": "present_if_canonical_mappings_are_distinct",
 	"left_segment_id": "DemandA",
 	"right_segment_id": "DemandB",
 	"left_allowed_terms": [
@@ -144,6 +144,22 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 		)
 		self.assertEqual(status, "present")
 
+	def test_canonical_distinct_rule_accepts_legacy_decision_rule_alias(self) -> None:
+		status, _ = apply_decision_rule(
+			"",
+			{
+				**CANONICAL_INEQUALITY_PAYLOAD,
+				"decision_rule": "present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b",
+			},
+			row={
+				"component_id": "SectionB2Response",
+				"segment_text_SectionB2Response__DemandA": "published evaluation criteria",
+				"segment_text_SectionB2Response__DemandB": "balanced workload distribution",
+			},
+			component_id="SectionB2Response",
+		)
+		self.assertEqual(status, "present")
+
 	def test_stage_token_rule_matches_stage_inside_longer_span(self) -> None:
 		status, _ = apply_decision_rule(
 			"the preliminary screening and assignment stage",
@@ -228,6 +244,26 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 				'"excluded_terms":[]'
 				'}'
 			)
+
+	def test_parse_scoring_payload_normalizes_legacy_canonical_distinct_rule_name(self) -> None:
+		payload = parse_scoring_payload(
+			'{'
+			'"scoring_mode":"deterministic",'
+			'"dependency_type":"segment",'
+			'"bound_segment_id":"01_DemandA",'
+			'"normalisation_rule":"lowercase_trim",'
+			'"match_policy":"canonical_inequality",'
+			'"decision_rule":"present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b",'
+			'"left_segment_id":"DemandA",'
+			'"right_segment_id":"DemandB",'
+			'"left_allowed_terms":["published evaluation criteria"],'
+			'"right_allowed_terms":["published evaluation criteria"],'
+			'"left_allowed_aliases":{},'
+			'"right_allowed_aliases":{},'
+			'"excluded_terms":[]'
+			'}'
+		)
+		self.assertEqual(payload["decision_rule"], "present_if_canonical_mappings_are_distinct")
 
 
 if __name__ == "__main__":

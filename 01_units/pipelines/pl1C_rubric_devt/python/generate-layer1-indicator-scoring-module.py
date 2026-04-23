@@ -9,7 +9,7 @@ import re
 import sys
 from pathlib import Path
 
-from layer1_indicator_scoring_runtime import SUPPORTED_DECISION_RULES
+from layer1_indicator_scoring_runtime import SUPPORTED_DECISION_RULES, normalize_decision_rule_name
 
 
 MANIFEST_REQUIRED_HEADERS = [
@@ -118,9 +118,10 @@ def parse_scoring_payload(payload_json: str) -> dict[str, object]:
 	]:
 		if required_key not in payload:
 			raise ValueError(f"Layer 1 scoring payload is missing required key: {required_key}")
-	decision_rule = str(payload.get("decision_rule", "") or "").strip()
+	decision_rule = normalize_decision_rule_name(str(payload.get("decision_rule", "") or "").strip())
 	if decision_rule not in SUPPORTED_DECISION_RULES:
 		raise ValueError(f"Unsupported Layer 1 decision_rule: {decision_rule}")
+	payload["decision_rule"] = decision_rule
 	return payload
 
 

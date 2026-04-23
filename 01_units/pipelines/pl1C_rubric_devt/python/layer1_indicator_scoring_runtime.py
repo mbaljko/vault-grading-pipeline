@@ -16,6 +16,10 @@ from typing import Mapping
 
 logger = logging.getLogger(__name__)
 
+DECISION_RULE_ALIASES = {
+	"present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b": "present_if_canonical_mappings_are_distinct",
+}
+
 SUPPORTED_DECISION_RULES = {
 	"present_if_any_allowed_term_found",
 	"present_if_exact_match_or_alias_and_not_excluded",
@@ -24,7 +28,7 @@ SUPPORTED_DECISION_RULES = {
 	"present_if_minimum_group_matches_met_and_not_excluded",
 	"present_if_no_excluded_terms_found",
 	"present_if_any_allowed_term_found_and_not_only_excluded",
-	"present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b",
+	"present_if_canonical_mappings_are_distinct",
 }
 
 LABEL_LINE_RE = re.compile(r"^\s*\[[^\]]+\]\s*$")
@@ -47,6 +51,10 @@ class AliasMatch:
 
 def normalize_whitespace(value: str) -> str:
 	return " ".join(value.split())
+
+
+def normalize_decision_rule_name(decision_rule: str) -> str:
+	return DECISION_RULE_ALIASES.get(decision_rule, decision_rule)
 
 
 def normalize_text(value: object, rule: str) -> str:
@@ -518,7 +526,7 @@ def apply_decision_rule(
 	component_id: str = "",
 ) -> tuple[str, str]:
 	rule = str(payload.get("normalisation_rule", "") or "").strip()
-	decision_rule = str(payload.get("decision_rule", "") or "").strip()
+	decision_rule = normalize_decision_rule_name(str(payload.get("decision_rule", "") or "").strip())
 	match_policy = str(payload.get("match_policy", "") or "").strip()
 	if decision_rule not in SUPPORTED_DECISION_RULES:
 		raise ValueError(f"Unsupported Layer 1 decision_rule: {decision_rule}")
@@ -563,7 +571,7 @@ def apply_decision_rule(
 		return ("present" if not has_excluded else "not_present", "none")
 	if decision_rule == "present_if_any_allowed_term_found_and_not_only_excluded":
 		return ("present" if policy_match else "not_present", "none")
-	if decision_rule == "present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b":
+	if decision_rule == "present_if_canonical_mappings_are_distinct":
 		return ("present" if policy_match and not has_excluded else "not_present", "none")
 	raise ValueError(f"Unsupported Layer 1 decision_rule: {decision_rule}")
 
@@ -633,6 +641,7 @@ def score_indicator_from_row(
 
 
 __all__ = [
+	"DECISION_RULE_ALIASES",
 	"SUPPORTED_DECISION_RULES",
 	"score_indicator_from_row",
 ]
