@@ -4,6 +4,50 @@
 The Layer 1 deterministic path compiles machine-readable indicator payloads into
 small Python modules. Those generated modules delegate the matching mechanics to
 this runtime so the policy implementation stays centralized and auditable.
+
+This file is the authoritative implementation surface for Layer 1 registry
+`normalisation_rule`, `decision_rule`, `match_policy`, and bound-segment
+text-resolution semantics.
+
+The explicitly implemented `normalisation_rule` values are:
+- `lowercase`
+- `lowercase_trim`
+
+Currently used Layer 1 payload values observed in generated manifests include:
+- `lowercase`
+- `lowercase_trim`
+- `lowercase_trim_strip_stage_suffix`
+
+Used but not yet explicitly implemented as a distinct runtime branch:
+- `lowercase_trim_strip_stage_suffix`
+
+At present, `lowercase_trim_strip_stage_suffix` may still participate in stage-
+token matching indirectly via the broader candidate preprocessing path, but it
+is not a dedicated `normalisation_rule` case in `normalize_text(...)`.
+
+The explicitly recognized `decision_rule` values are:
+- `present_if_any_allowed_term_found`
+- `present_if_exact_match_or_alias_and_not_excluded`
+- `present_if_matches_stage_or_role_and_not_excluded`
+- `present_if_any_stage_token_matches_after_normalisation_and_not_excluded`
+- `present_if_minimum_group_matches_met_and_not_excluded`
+- `present_if_no_excluded_terms_found`
+- `present_if_any_allowed_term_found_and_not_only_excluded`
+- `present_if_canonical_mappings_are_distinct`
+
+Legacy compatibility note:
+- `present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b`
+	is normalized to `present_if_canonical_mappings_are_distinct`
+
+Any other `decision_rule` value hard-fails as unsupported.
+
+Bound-segment text resolution note:
+- indicators may declare `bound_segment_resolution_policy`
+- `hard_stay` is the default and keeps scoring pinned to the declared
+	`bound_segment_id`; if that segment is blank, the indicator scores from blank
+	rather than falling through to broader text fields
+- `fallback_to_evidence_text` explicitly allows a blank bound segment to fall
+	through to `evidence_text` and then `response_text`
 """
 
 from __future__ import annotations

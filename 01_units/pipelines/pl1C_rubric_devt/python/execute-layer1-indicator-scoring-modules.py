@@ -2,38 +2,19 @@
 """Execute deterministic Layer 1 indicator-scoring modules over a Layer 1 input CSV.
 
 This script is an executor only. It does not implement Layer 1 registry
-`decision_rule` or `match_policy` semantics itself.
+`normalisation_rule`, `decision_rule`, or `match_policy` semantics itself.
 
 Control flow:
 - this script loads generated per-indicator modules from `--module-dir`
 - each generated module exposes `score_indicator_row(...)`
 - that generated function delegates to `layer1_indicator_scoring_runtime.py`
 - the runtime is therefore the authoritative implementation surface for
-	`decision_rule` and `match_policy`
+	`normalisation_rule`, `decision_rule`, `match_policy`, and bound-segment
+	text resolution
 
-As of the current runtime, the explicitly recognized `decision_rule` values are:
-- `present_if_any_allowed_term_found`
-- `present_if_exact_match_or_alias_and_not_excluded`
-- `present_if_matches_stage_or_role_and_not_excluded`
-- `present_if_any_stage_token_matches_after_normalisation_and_not_excluded`
-- `present_if_minimum_group_matches_met_and_not_excluded`
-- `present_if_no_excluded_terms_found`
-- `present_if_any_allowed_term_found_and_not_only_excluded`
-- `present_if_canonical_mappings_are_distinct`
-
-Legacy compatibility note:
-- `present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b`
-	is normalized to `present_if_canonical_mappings_are_distinct`
-
-Any other `decision_rule` value now hard-fails as unsupported.
-
-Bound-segment text resolution note:
-- indicators may declare `bound_segment_resolution_policy`
-- `hard_stay` is the default and keeps scoring pinned to the declared
-	`bound_segment_id`; if that segment is blank, the indicator scores from blank
-	rather than falling through to broader text fields
-- `fallback_to_evidence_text` explicitly allows a blank bound segment to fall
-	through to `evidence_text` and then `response_text`
+Implementation notes for supported `normalisation_rule` handling,
+`decision_rule` values, legacy aliases, and bound-segment resolution policies
+live in `layer1_indicator_scoring_runtime.py`.
 """
 
 from __future__ import annotations
