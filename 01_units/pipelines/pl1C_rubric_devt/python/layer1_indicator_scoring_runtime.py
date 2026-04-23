@@ -17,14 +17,14 @@ The explicitly implemented `normalisation_rule` values are:
 
 
 The explicitly recognized `decision_rule` values are:
-- `present_if_any_allowed_term_found`
-- `present_if_exact_match_or_alias_and_not_excluded`
-- `present_if_matches_stage_or_role_and_not_excluded`
-- `present_if_any_stage_phrase_matches_after_normalisation_and_not_excluded`
-- `present_if_minimum_group_matches_met_and_not_excluded`
-- `present_if_no_excluded_terms_found`
-- `present_if_any_allowed_term_found_and_not_only_excluded`
-- `present_if_canonical_mappings_are_distinct`
+- `present_if_any_allowed_term_found`: returns `present` when the configured `match_policy` finds any allowed term in the segment, without applying excluded-term veto logic.
+- `present_if_exact_match_or_alias_and_not_excluded`: returns `present` when an allowed term or alias resolves successfully under the exact-match family of policies and no excluded term is present.
+- `present_if_matches_stage_or_role_and_not_excluded`: returns `present` when the configured policy finds an allowed stage, role, or equivalent mapped term and the segment is not vetoed by excluded terms.
+- `present_if_any_stage_phrase_matches_after_normalisation_and_not_excluded`: returns `present` only when the normalized segment contains a full registered stage phrase or full approved alias phrase, and no excluded term is present.
+- `present_if_minimum_group_matches_met_and_not_excluded`: returns `present` when the co-occurrence/group matcher finds the required minimum number of terms per configured group and no excluded term is present.
+- `present_if_no_excluded_terms_found`: returns `present` whenever the segment contains none of the configured excluded terms, regardless of allowed-term matching.
+- `present_if_any_allowed_term_found_and_not_only_excluded`: returns `present` when the configured policy finds an allowed term match; this rule does not independently veto on excluded-term presence.
+- `present_if_canonical_mappings_are_distinct`: returns `present` when the left and right slots resolve to different canonical values, with excluded terms still able to veto the result.
 
 Legacy compatibility note:
 - `present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b`
@@ -591,7 +591,17 @@ def co_occurrence_match(text: str, payload: Mapping[str, object], rule: str) -> 
 	normalized_text = normalize_text(text, rule)
 	minimum_match_count = int(payload.get("minimum_match_count_per_group", 0) or 0)
 	required_term_groups = dict(payload.get("required_term_groups", {}))
+	matched_terms_by_group: dict[str, list[str]] = {}
 	if not required_term_groups:
+		logger.debug(
+			"Grouped-term evaluation raw_segment=%r normalized_segment=%r required_term_groups=%s minimum_match_count_per_group=%s matched_terms_by_group=%s final_status=%s",
+			text,
+			normalized_text,
+			required_term_groups,
+			minimum_match_count,
+			matched_terms_by_group,
+			False,
+		)
 		return False
 	for group_terms in required_term_groups.values():
 		matched_terms = {
@@ -599,8 +609,31 @@ def co_occurrence_match(text: str, payload: Mapping[str, object], rule: str) -> 
 			for term in group_terms
 			if normalize_text(term, rule) and normalize_text(term, rule) in normalized_text
 		}
+		group_name = next(
+			(name for name, terms in required_term_groups.items() if terms is group_terms),
+			"",
+		)
+		matched_terms_by_group[group_name] = sorted(matched_terms)
 		if len(matched_terms) < max(minimum_match_count, 1):
+			logger.debug(
+				"Grouped-term evaluation raw_segment=%r normalized_segment=%r required_term_groups=%s minimum_match_count_per_group=%s matched_terms_by_group=%s final_status=%s",
+				text,
+				normalized_text,
+				required_term_groups,
+				minimum_match_count,
+				matched_terms_by_group,
+				False,
+			)
 			return False
+	logger.debug(
+		"Grouped-term evaluation raw_segment=%r normalized_segment=%r required_term_groups=%s minimum_match_count_per_group=%s matched_terms_by_group=%s final_status=%s",
+		text,
+		normalized_text,
+		required_term_groups,
+		minimum_match_count,
+		matched_terms_by_group,
+		True,
+	)
 	return True
 
 
