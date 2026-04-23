@@ -1,5 +1,29 @@
 #!/usr/bin/env python3
-"""Execute deterministic Layer 1 indicator-scoring modules over a Layer 1 input CSV."""
+"""Execute deterministic Layer 1 indicator-scoring modules over a Layer 1 input CSV.
+
+This script is an executor only. It does not implement Layer 1 registry
+`decision_rule` or `match_policy` semantics itself.
+
+Control flow:
+- this script loads generated per-indicator modules from `--module-dir`
+- each generated module exposes `score_indicator_row(...)`
+- that generated function delegates to `layer1_indicator_scoring_runtime.py`
+- the runtime is therefore the authoritative implementation surface for
+	`decision_rule` and `match_policy`
+
+As of the current runtime, the explicitly recognized `decision_rule` values are:
+- `present_if_any_allowed_term_found`
+- `present_if_exact_match_or_alias_and_not_excluded`
+- `present_if_matches_stage_or_role_and_not_excluded`
+- `present_if_minimum_group_matches_met_and_not_excluded`
+- `present_if_no_excluded_terms_found`
+- `present_if_any_allowed_term_found_and_not_only_excluded`
+- `present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b`
+
+Any other `decision_rule` value may still run, but it falls through to the
+runtime default behavior: return `present` when the resolved `match_policy`
+matches and `not_present` otherwise.
+"""
 
 from __future__ import annotations
 
