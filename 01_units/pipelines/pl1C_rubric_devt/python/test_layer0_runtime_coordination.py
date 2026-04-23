@@ -3,7 +3,11 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from layer0_runtime.boundaries import find_anchor_occurrences
-from layer0_runtime.families import run_right_np_after_anchor_before_marker, run_span_after_marker_before_marker
+from layer0_runtime.families import (
+	run_local_effect_phrase_after_marker,
+	run_right_np_after_anchor_before_marker,
+	run_span_after_marker_before_marker,
+)
 from layer0_runtime.models import OperatorSpec
 
 
@@ -37,6 +41,8 @@ def make_spec(*, operator_id: str, family: str, anchor_patterns: list[str], stop
 		ambiguous_status="ambiguous",
 		malformed_status="malformed",
 		instance_status="active",
+		anchor_precondition_patterns=[],
+		anchor_selection_policy="first_match",
 	)
 
 
@@ -195,6 +201,46 @@ class Layer0RuntimeCoordinationTests(unittest.TestCase):
 
 		self.assertGreaterEqual(len(occurrences), 2)
 		self.assertEqual(text[occurrences[0][0]:occurrences[0][1]].lower(), "interacts with")
+
+	def test_local_effect_uses_first_by_after_shaping_and_stops_before_second_by(self) -> None:
+		text = "The mechanism shapes reviewer preparation by sequencing attention by surfacing criterion-linked excerpts."
+		spec = OperatorSpec(
+			assessment_id="AP2B",
+			component_id="SectionB1Response",
+			cid="SecB1",
+			template_id="B_claim_seg_05",
+			local_slot="05",
+			operator_id="S05",
+			operator_identifier="O_AP2B_TEST_S05",
+			operator_identifier_shortid="S05",
+			operator_short_description="test local effect operator",
+			segment_id="05_Effect",
+			output_mode="span",
+			family="local_effect_phrase_after_marker",
+			anchor_patterns=["by"],
+			direction="right",
+			start_rule="immediate_post_anchor",
+			end_rule="local_effect_boundary",
+			stop_markers=["by", "comma_new_clause", "subordinate_extension", "sentence_end"],
+			target_type="local_effect_phrase",
+			allow_coordination=True,
+			skip_later_candidates=False,
+			operator_definition="test definition",
+			operator_guidance="test guidance",
+			failure_mode_guidance="test failure guidance",
+			decision_procedure="test decision procedure",
+			missing_status="missing",
+			ambiguous_status="ambiguous",
+			malformed_status="malformed",
+			instance_status="active",
+			anchor_precondition_patterns=["shaping", "shapes"],
+			anchor_selection_policy="first_after_precondition",
+		)
+
+		result = run_local_effect_phrase_after_marker(text, spec)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "sequencing attention")
 
 
 if __name__ == "__main__":

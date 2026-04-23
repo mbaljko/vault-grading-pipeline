@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from dataclasses import asdict
+from dataclasses import field
 from typing import Any, Literal
 
 
@@ -36,6 +37,8 @@ class OperatorSpec:
 	ambiguous_status: str
 	malformed_status: str
 	instance_status: str
+	anchor_precondition_patterns: list[str] = field(default_factory=list)
+	anchor_selection_policy: str = "first_match"
 
 
 @dataclass(frozen=True)

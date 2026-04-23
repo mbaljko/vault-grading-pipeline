@@ -92,6 +92,14 @@ def validate_spec(spec: OperatorSpec) -> None:
 		"local_effect_phrase_after_marker",
 	} and not spec.stop_markers:
 		raise ValueError(f"OperatorSpec requires stop_markers: {spec.operator_id!r}")
+	if spec.anchor_selection_policy not in {"first_match", "first_after_precondition"}:
+		raise ValueError(
+			f"Unsupported anchor_selection_policy for {spec.operator_id}: {spec.anchor_selection_policy!r}"
+		)
+	if spec.anchor_selection_policy == "first_after_precondition" and not spec.anchor_precondition_patterns:
+		raise ValueError(
+			f"OperatorSpec requires anchor_precondition_patterns when anchor_selection_policy is 'first_after_precondition': {spec.operator_id!r}"
+		)
 
 
 def validate_specs(specs: list[OperatorSpec]) -> None:

@@ -93,6 +93,12 @@ def main() -> int:
 	print(f"Operator specs JSON output: {json_output_path}")
 	if py_output_path is not None:
 		print(f"Operator specs Python output: {py_output_path}")
+	audit = operator_specs_payload.get("audit", {})
+	warnings = audit.get("warnings", []) if isinstance(audit, dict) else []
+	if warnings:
+		print(f"Operator spec audit warnings: {len(warnings)}")
+		for warning in warnings:
+			print(f"WARNING: {warning}")
 	print(f"Operator specs written: {len(operator_specs_payload['operator_specs'])}")
 	return 0
 

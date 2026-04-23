@@ -142,9 +142,13 @@ def run_span_after_marker_before_marker(text: str, spec: OperatorSpec) -> Family
 
 
 def run_local_effect_phrase_after_marker(text: str, spec: OperatorSpec) -> FamilyExecution:
-	workflow_occurrences = find_anchor_occurrences(text, ["shaping"])
-	workflow_end = workflow_occurrences[0][1] if workflow_occurrences else 0
-	by_occurrences = [occ for occ in find_anchor_occurrences(text, spec.anchor_patterns) if occ[0] >= workflow_end]
+	anchor_search_start = 0
+	if spec.anchor_selection_policy == "first_after_precondition":
+		precondition_occurrences = find_anchor_occurrences(text, spec.anchor_precondition_patterns)
+		if not precondition_occurrences:
+			return _missing_result("anchor precondition not found")
+		anchor_search_start = precondition_occurrences[0][1]
+	by_occurrences = [occ for occ in find_anchor_occurrences(text, spec.anchor_patterns) if occ[0] >= anchor_search_start]
 	if not by_occurrences:
 		return _missing_result("workflow/effect anchor sequence not found")
 	_, anchor_end, _ = by_occurrences[0]

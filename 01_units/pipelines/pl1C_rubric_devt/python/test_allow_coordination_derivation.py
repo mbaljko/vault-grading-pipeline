@@ -1,6 +1,7 @@
 import unittest
 
 from generate_schema_from_segmentation_registry import (
+	audit_decision_procedure_text,
 	build_operator_specs_payload,
 	collect_coordination_text,
 	default_allow_coordination_for_family,
@@ -189,6 +190,43 @@ class AllowCoordinationDerivationTests(unittest.TestCase):
 			operator_specs_payload["operator_specs"][0]["anchor_patterns"],
 			["shaping", "to influence"],
 		)
+
+	def test_decision_procedure_audit_warns_for_unencoded_sequencing_directives(self) -> None:
+		warnings = audit_decision_procedure_text(
+			{
+				"operator_id": "S05",
+				"decision_procedure": "Step 2: Locate the first by that follows shaping (ignore any subsequent by tokens).",
+			}
+		)
+
+		self.assertEqual(len(warnings), 3)
+		self.assertTrue(any("S05" in warning for warning in warnings))
+		self.assertTrue(any("ignore subsequent" in warning for warning in warnings))
+		self.assertTrue(any("ordinal sequencing" in warning for warning in warnings))
+		self.assertTrue(any("numbered steps" in warning for warning in warnings))
+
+	def test_decision_procedure_audit_suppresses_encoded_by_after_shaping_directives(self) -> None:
+		warnings = audit_decision_procedure_text(
+			{
+				"operator_id": "S05",
+				"decision_procedure": "Step 2: Locate the first by that follows shaping (ignore any subsequent by tokens).",
+				"anchor_precondition_patterns": "shaping",
+				"anchor_selection_policy": "first_after_precondition",
+				"stop_markers": "by, comma_new_clause, subordinate_extension, sentence_end",
+			}
+		)
+
+		self.assertEqual(warnings, [])
+
+	def test_decision_procedure_audit_ignores_numbering_when_no_unencoded_directive_remains(self) -> None:
+		warnings = audit_decision_procedure_text(
+			{
+				"operator_id": "S01",
+				"decision_procedure": "Step 1: Locate the anchor.\n\nStep 2: Extract the span.\n\nStep 3: Return ok.",
+			}
+		)
+
+		self.assertEqual(warnings, [])
 
 
 if __name__ == "__main__":

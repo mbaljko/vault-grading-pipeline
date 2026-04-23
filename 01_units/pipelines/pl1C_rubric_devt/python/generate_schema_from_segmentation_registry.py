@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -217,6 +217,33 @@ PREPROCESSING_RULE_ALIAS_RE = re.compile(
 	flags=re.IGNORECASE,
 )
 
+DECISION_PROCEDURE_AUDIT_PATTERNS = (
+	(
+		re.compile(r"\bignore\s+(?:any\s+)?subsequent\b", flags=re.IGNORECASE),
+		"contains an 'ignore subsequent ...' directive that is not separately machine-encoded",
+	),
+	(
+		re.compile(r"\bignore\s+later\b", flags=re.IGNORECASE),
+		"contains an 'ignore later ...' directive that is not separately machine-encoded",
+	),
+	(
+		re.compile(r"\bexclude\s+(?:any\s+)?later\b", flags=re.IGNORECASE),
+		"contains an 'exclude later ...' directive that is not separately machine-encoded",
+	),
+	(
+		re.compile(r"\bprefer\s+the\s+first\b|\bprefer\s+first\b", flags=re.IGNORECASE),
+		"contains a 'prefer first ...' directive that is not separately machine-encoded",
+	),
+	(
+		re.compile(r"\bfirst\s+\w+\b.*\bfollows\b", flags=re.IGNORECASE),
+		"contains ordinal sequencing language that is not separately machine-encoded",
+	),
+	(
+		re.compile(r"(?:^|\n)\s*(?:step\s*\d+|\d+[.)])\s*", flags=re.IGNORECASE),
+		"contains numbered steps; only a limited subset of prose is operationalized into machine fields",
+	),
+)
+
 
 @dataclass(frozen=True)
 class OperatorSpec:
@@ -248,6 +275,8 @@ class OperatorSpec:
 	ambiguous_status: str
 	malformed_status: str
 	instance_status: str
+	anchor_precondition_patterns: list[str] = field(default_factory=list)
+	anchor_selection_policy: str = "first_match"
 
 
 def parse_args() -> argparse.Namespace:
@@ -336,6 +365,35 @@ def parse_preprocessing_rule_anchor_aliases(value: object) -> list[tuple[str, st
 		if source_text and target_text:
 			alias_rules.append((source_text, target_text))
 	return alias_rules
+
+
+def audit_decision_procedure_text(row: dict[str, object]) -> list[str]:
+	decision_procedure = str(row.get("decision_procedure", "")).strip()
+	if not decision_procedure:
+		return []
+	operator_label = str(row.get("operator_id") or row.get("template_id") or "(unknown operator)").strip()
+	encoded_preconditions = parse_runtime_list(row.get("anchor_precondition_patterns", ""), lowercase=True)
+	encoded_selection_policy = collapse_internal_whitespace(str(row.get("anchor_selection_policy", ""))).lower()
+	encoded_stop_markers = parse_runtime_list(row.get("stop_markers", ""), lowercase=True)
+	warnings: list[str] = []
+	numbered_step_message = "contains numbered steps; only a limited subset of prose is operationalized into machine fields"
+	has_numbered_steps = False
+	has_unencoded_directive_warning = False
+	for pattern, message in DECISION_PROCEDURE_AUDIT_PATTERNS:
+		if not pattern.search(decision_procedure):
+			continue
+		if message == numbered_step_message:
+			has_numbered_steps = True
+			continue
+		if "ignore subsequent" in message and encoded_selection_policy == "first_after_precondition" and encoded_preconditions and "by" in encoded_stop_markers:
+			continue
+		if "ordinal sequencing" in message and encoded_selection_policy == "first_after_precondition" and encoded_preconditions:
+			continue
+		has_unencoded_directive_warning = True
+		warnings.append(f"{operator_label}: decision_procedure {message}.")
+	if has_numbered_steps and has_unencoded_directive_warning:
+		warnings.append(f"{operator_label}: decision_procedure {numbered_step_message}.")
+	return warnings
 
 
 def apply_preprocessing_rule_anchor_aliases(anchor_patterns: list[str], preprocessing_rules: object) -> list[str]:
@@ -1331,6 +1389,8 @@ def expand_registry_instances(registry: dict[str, object]) -> dict[str, object]:
 			for optional_field in [
 				"runtime_family",
 				"anchor_patterns",
+				"anchor_precondition_patterns",
+				"anchor_selection_policy",
 				"stop_markers",
 				"target_type",
 				"allow_coordination",
@@ -1491,6 +1551,16 @@ def compile_operator_spec(row: dict[str, object]) -> OperatorSpec:
 	if behavior is None:
 		raise ValueError(f"No runtime behavior defaults found for family {family!r}.")
 	allow_coordination = derive_allow_coordination(row, family)
+	anchor_precondition_patterns = parse_runtime_list(row.get("anchor_precondition_patterns", ""), lowercase=True)
+	anchor_selection_policy = collapse_internal_whitespace(str(row.get("anchor_selection_policy", ""))).lower() or "first_match"
+	if anchor_selection_policy not in {"first_match", "first_after_precondition"}:
+		raise ValueError(
+			f"Unsupported anchor_selection_policy for {row.get('template_id', '')!r}: {anchor_selection_policy!r}"
+		)
+	if anchor_selection_policy == "first_after_precondition" and not anchor_precondition_patterns:
+		raise ValueError(
+			f"anchor_selection_policy 'first_after_precondition' requires anchor_precondition_patterns for {row.get('template_id', '')!r}."
+		)
 
 	output_mode = str(row["output_mode"]).strip().lower()
 	if family == "status_only_anchor_detector":
@@ -1529,6 +1599,8 @@ def compile_operator_spec(row: dict[str, object]) -> OperatorSpec:
 		ambiguous_status="ambiguous",
 		malformed_status="malformed",
 		instance_status=str(row["instance_status"]),
+		anchor_precondition_patterns=anchor_precondition_patterns,
+		anchor_selection_policy=anchor_selection_policy,
 	)
 
 
@@ -1565,13 +1637,32 @@ def compile_all_operator_specs(data: dict[str, object]) -> list[OperatorSpec]:
 	return compiled_specs
 
 
+def build_operator_spec_audit(expanded_payload: dict[str, object]) -> dict[str, object]:
+	warnings: list[str] = []
+	seen_warnings: set[tuple[str, str]] = set()
+	for row in list(expanded_payload.get("expanded_instances", [])):
+		template_label = str(row.get("source_template_id") or row.get("template_id") or row.get("operator_id") or "").strip()
+		for warning in audit_decision_procedure_text(row):
+			seen_key = (template_label, warning.split(": ", 1)[-1])
+			if seen_key in seen_warnings:
+				continue
+			seen_warnings.add(seen_key)
+			warnings.append(warning)
+	return {
+		"warning_count": len(warnings),
+		"warnings": warnings,
+	}
+
+
 def build_operator_specs_payload(expanded_payload: dict[str, object]) -> dict[str, object]:
 	compiled_specs = compile_all_operator_specs(expanded_payload)
+	audit = build_operator_spec_audit(expanded_payload)
 	return {
 		"generated_at_utc": datetime.now(timezone.utc).isoformat(),
 		"assessment_id": str(expanded_payload.get("assessment_id", "")),
 		"source_registry_version": str(expanded_payload.get("source_registry_version", "")),
 		"spec_version": "01",
+		"audit": audit,
 		"operator_specs": [asdict(spec) for spec in compiled_specs],
 	}
 
