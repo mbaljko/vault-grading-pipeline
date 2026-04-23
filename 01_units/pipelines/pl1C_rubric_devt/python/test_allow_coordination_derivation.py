@@ -10,6 +10,7 @@ from generate_schema_from_segmentation_registry import (
 	derive_allow_coordination,
 	derive_stop_markers,
 	expand_registry_instances,
+	validate_decision_procedure_encoding,
 )
 
 
@@ -227,6 +228,63 @@ class AllowCoordinationDerivationTests(unittest.TestCase):
 		)
 
 		self.assertEqual(warnings, [])
+
+	def test_decision_procedure_audit_suppresses_encoded_first_candidate_directives(self) -> None:
+		warnings = audit_decision_procedure_text(
+			{
+				"operator_id": "S02",
+				"decision_procedure": "Step 2: Identify the first local noun phrase immediately after the anchor. Step 4: Stop before through, a clause-introducing comma, or another clear clause boundary.",
+				"candidate_selection_policy": "first_local_candidate",
+				"later_candidate_handling": "ignore_later_candidates",
+				"stop_markers": "through, comma, clause_boundary",
+			}
+		)
+
+		self.assertEqual(warnings, [])
+
+	def test_decision_procedure_encoding_requires_first_candidate_field(self) -> None:
+		with self.assertRaisesRegex(ValueError, "candidate_selection_policy='first_local_candidate'"):
+			validate_decision_procedure_encoding(
+				{
+					"operator_id": "S02",
+					"decision_procedure": "Step 2: Identify the first local noun phrase immediately after the anchor.",
+				}
+			)
+
+	def test_decision_procedure_encoding_requires_clause_boundary_marker(self) -> None:
+		with self.assertRaisesRegex(ValueError, "stop_markers including one of"):
+			validate_decision_procedure_encoding(
+				{
+					"operator_id": "S03",
+					"decision_procedure": "Step 4: Stop before shaping, a clause-introducing comma, or another clear clause boundary.",
+					"candidate_selection_policy": "first_local_candidate",
+					"later_candidate_handling": "ignore_later_candidates",
+					"stop_markers": "shaping",
+				}
+			)
+
+	def test_decision_procedure_audit_suppresses_encoded_anchor_precondition_selection(self) -> None:
+		warnings = audit_decision_procedure_text(
+			{
+				"operator_id": "S05",
+				"decision_procedure": "Step 2: Locate the first by that follows shaping (ignore any subsequent by tokens).",
+				"anchor_precondition_patterns": "shaping",
+				"anchor_selection_policy": "first_after_precondition",
+				"stop_markers": "by, comma_new_clause, subordinate_extension, sentence_end",
+			}
+		)
+
+		self.assertEqual(warnings, [])
+
+	def test_decision_procedure_encoding_requires_anchor_selection_policy(self) -> None:
+		with self.assertRaisesRegex(ValueError, "anchor_selection_policy='first_after_precondition'"):
+			validate_decision_procedure_encoding(
+				{
+					"operator_id": "S05",
+					"decision_procedure": "Step 2: Locate the first by that follows shaping (ignore any subsequent by tokens).",
+					"stop_markers": "by, comma_new_clause, subordinate_extension, sentence_end",
+				}
+			)
 
 
 if __name__ == "__main__":

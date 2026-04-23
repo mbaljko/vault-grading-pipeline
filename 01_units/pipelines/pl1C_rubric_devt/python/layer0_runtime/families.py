@@ -98,7 +98,13 @@ def run_right_np_after_anchor_before_marker(text: str, spec: OperatorSpec) -> Fa
 	_, anchor_end, _ = anchor
 	stop_index = _right_scan_stop_index(text, anchor_end, spec)
 	doc = parse_text(text)
-	chunk = first_right_noun_chunk(doc, anchor_end, stop_index, allow_coordination=spec.allow_coordination)
+	chunk = first_right_noun_chunk(
+		doc,
+		anchor_end,
+		stop_index,
+		allow_coordination=spec.allow_coordination,
+		candidate_selection_policy=spec.candidate_selection_policy,
+	)
 	if chunk is not None:
 		chunk_start, chunk_end, chunk_text = chunk
 		segment_text = trim_span(text[chunk_start:chunk_end])
@@ -126,6 +132,7 @@ def run_span_after_marker_before_marker(text: str, spec: OperatorSpec) -> Family
 		stop_index,
 		allow_coordination=spec.allow_coordination,
 		stop_on_infinitive=True,
+		candidate_selection_policy=spec.candidate_selection_policy,
 	)
 	segment_text = ""
 	if chunk is not None:

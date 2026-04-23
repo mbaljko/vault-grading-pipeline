@@ -244,6 +244,28 @@ DECISION_PROCEDURE_AUDIT_PATTERNS = (
 	),
 )
 
+FIRST_CANDIDATE_DIRECTIVE_RE = re.compile(
+	r"\bfirst\s+local\s+(?:noun\s+phrase|structural-effect\s+phrase|effect\s+phrase)\b|\bfirst\s+noun\s+phrase\b",
+	flags=re.IGNORECASE,
+)
+IGNORE_LATER_CANDIDATE_DIRECTIVE_RE = re.compile(
+	r"\bany\s+later\s+(?:noun\s+phrase|phrase|candidate)\b|\blater\s+phrase\s+outside\s+the\s+first\s+local\s+slot\b|\bafter\s+the\s+first\s+candidate\b",
+	flags=re.IGNORECASE,
+)
+ANCHOR_PRECONDITION_SELECTION_DIRECTIVE_RE = re.compile(
+	r"\bfirst\s+[a-z][a-z_-]*\s+(?:that\s+)?(?:follows|after)\s+[a-z][a-z_-]*\b",
+	flags=re.IGNORECASE,
+)
+CLAUSE_BOUNDARY_DIRECTIVE_MARKER_REQUIREMENTS = (
+	(re.compile(r"\bclause-introducing\s+comma\b|\bnew-clause\s+comma\b", flags=re.IGNORECASE), {"comma", "comma_new_clause"}),
+	(re.compile(r"\bclear\s+clause\s+boundary\b|\banother\s+clear\s+clause\s+boundary\b", flags=re.IGNORECASE), {"clause_boundary"}),
+	(re.compile(r"\bsentence\s+start\b", flags=re.IGNORECASE), {"sentence_start"}),
+	(re.compile(r"\bsentence\s+end\b", flags=re.IGNORECASE), {"sentence_end"}),
+	(re.compile(r"\bsubordinate\s+extension\b", flags=re.IGNORECASE), {"subordinate_extension"}),
+	(re.compile(r"\bsecond\s+\"?by\"?\b|\ba\s+second\s+\"?by\"?\b", flags=re.IGNORECASE), {"by"}),
+	(re.compile(r"\bconjunction\s+boundary\b", flags=re.IGNORECASE), {"conjunction_boundary"}),
+)
+
 
 @dataclass(frozen=True)
 class OperatorSpec:
@@ -277,6 +299,8 @@ class OperatorSpec:
 	instance_status: str
 	anchor_precondition_patterns: list[str] = field(default_factory=list)
 	anchor_selection_policy: str = "first_match"
+	candidate_selection_policy: str = "unspecified"
+	later_candidate_handling: str = "unspecified"
 
 
 def parse_args() -> argparse.Namespace:
@@ -374,7 +398,14 @@ def audit_decision_procedure_text(row: dict[str, object]) -> list[str]:
 	operator_label = str(row.get("operator_id") or row.get("template_id") or "(unknown operator)").strip()
 	encoded_preconditions = parse_runtime_list(row.get("anchor_precondition_patterns", ""), lowercase=True)
 	encoded_selection_policy = collapse_internal_whitespace(str(row.get("anchor_selection_policy", ""))).lower()
-	encoded_stop_markers = parse_runtime_list(row.get("stop_markers", ""), lowercase=True)
+	encoded_candidate_selection_policy = collapse_internal_whitespace(str(row.get("candidate_selection_policy", ""))).lower()
+	encoded_later_candidate_handling = collapse_internal_whitespace(str(row.get("later_candidate_handling", ""))).lower()
+	encoded_stop_markers = set(parse_runtime_list(row.get("stop_markers", ""), lowercase=True))
+	has_encoded_anchor_precondition_selection = (
+		encoded_selection_policy == "first_after_precondition" and bool(encoded_preconditions)
+	)
+	has_candidate_selection_directive = FIRST_CANDIDATE_DIRECTIVE_RE.search(decision_procedure) is not None
+	has_anchor_precondition_selection_directive = ANCHOR_PRECONDITION_SELECTION_DIRECTIVE_RE.search(decision_procedure) is not None
 	warnings: list[str] = []
 	numbered_step_message = "contains numbered steps; only a limited subset of prose is operationalized into machine fields"
 	has_numbered_steps = False
@@ -385,15 +416,81 @@ def audit_decision_procedure_text(row: dict[str, object]) -> list[str]:
 		if message == numbered_step_message:
 			has_numbered_steps = True
 			continue
-		if "ignore subsequent" in message and encoded_selection_policy == "first_after_precondition" and encoded_preconditions and "by" in encoded_stop_markers:
+		if "ignore subsequent" in message and has_encoded_anchor_precondition_selection and "by" in encoded_stop_markers:
 			continue
-		if "ordinal sequencing" in message and encoded_selection_policy == "first_after_precondition" and encoded_preconditions:
+		if "ignore later" in message and encoded_later_candidate_handling == "ignore_later_candidates":
+			continue
+		if "exclude later" in message and encoded_later_candidate_handling == "ignore_later_candidates":
+			continue
+		if "prefer first" in message:
+			if has_candidate_selection_directive and encoded_candidate_selection_policy == "first_local_candidate":
+				continue
+			if has_anchor_precondition_selection_directive and has_encoded_anchor_precondition_selection:
+				continue
+		if "ordinal sequencing" in message and has_encoded_anchor_precondition_selection:
 			continue
 		has_unencoded_directive_warning = True
 		warnings.append(f"{operator_label}: decision_procedure {message}.")
 	if has_numbered_steps and has_unencoded_directive_warning:
 		warnings.append(f"{operator_label}: decision_procedure {numbered_step_message}.")
+	if FIRST_CANDIDATE_DIRECTIVE_RE.search(decision_procedure) and encoded_candidate_selection_policy != "first_local_candidate":
+		has_unencoded_directive_warning = True
+		warnings.append(
+			f"{operator_label}: decision_procedure contains a 'first candidate' directive that is not separately machine-encoded."
+		)
+	if IGNORE_LATER_CANDIDATE_DIRECTIVE_RE.search(decision_procedure) and encoded_later_candidate_handling != "ignore_later_candidates":
+		has_unencoded_directive_warning = True
+		warnings.append(
+			f"{operator_label}: decision_procedure contains an 'ignore later candidates' directive that is not separately machine-encoded."
+		)
+	for pattern, required_markers in CLAUSE_BOUNDARY_DIRECTIVE_MARKER_REQUIREMENTS:
+		if not pattern.search(decision_procedure):
+			continue
+		if encoded_stop_markers.intersection(required_markers):
+			continue
+		has_unencoded_directive_warning = True
+		warnings.append(
+			f"{operator_label}: decision_procedure contains a clause/stop-boundary directive that is not separately machine-encoded."
+		)
+		break
 	return warnings
+
+
+def validate_decision_procedure_encoding(row: dict[str, object]) -> None:
+	decision_procedure = str(row.get("decision_procedure", "")).strip()
+	if not decision_procedure:
+		return
+	operator_label = str(row.get("operator_id") or row.get("template_id") or "(unknown operator)").strip()
+	anchor_precondition_patterns = parse_runtime_list(row.get("anchor_precondition_patterns", ""), lowercase=True)
+	anchor_selection_policy = collapse_internal_whitespace(str(row.get("anchor_selection_policy", ""))).lower()
+	candidate_selection_policy = collapse_internal_whitespace(str(row.get("candidate_selection_policy", ""))).lower()
+	later_candidate_handling = collapse_internal_whitespace(str(row.get("later_candidate_handling", ""))).lower()
+	encoded_stop_markers = set(parse_runtime_list(row.get("stop_markers", ""), lowercase=True))
+	if ANCHOR_PRECONDITION_SELECTION_DIRECTIVE_RE.search(decision_procedure):
+		if anchor_selection_policy != "first_after_precondition":
+			raise ValueError(
+				f"{operator_label}: decision_procedure requires anchor_selection_policy='first_after_precondition'."
+			)
+		if not anchor_precondition_patterns:
+			raise ValueError(
+				f"{operator_label}: decision_procedure requires non-empty anchor_precondition_patterns."
+			)
+	if FIRST_CANDIDATE_DIRECTIVE_RE.search(decision_procedure) and candidate_selection_policy != "first_local_candidate":
+		raise ValueError(
+			f"{operator_label}: decision_procedure requires candidate_selection_policy='first_local_candidate'."
+		)
+	if IGNORE_LATER_CANDIDATE_DIRECTIVE_RE.search(decision_procedure) and later_candidate_handling != "ignore_later_candidates":
+		raise ValueError(
+			f"{operator_label}: decision_procedure requires later_candidate_handling='ignore_later_candidates'."
+		)
+	for pattern, required_markers in CLAUSE_BOUNDARY_DIRECTIVE_MARKER_REQUIREMENTS:
+		if not pattern.search(decision_procedure):
+			continue
+		if encoded_stop_markers.intersection(required_markers):
+			continue
+		raise ValueError(
+			f"{operator_label}: decision_procedure requires stop_markers including one of {sorted(required_markers)!r}."
+		)
 
 
 def apply_preprocessing_rule_anchor_aliases(anchor_patterns: list[str], preprocessing_rules: object) -> list[str]:
@@ -1391,6 +1488,8 @@ def expand_registry_instances(registry: dict[str, object]) -> dict[str, object]:
 				"anchor_patterns",
 				"anchor_precondition_patterns",
 				"anchor_selection_policy",
+				"candidate_selection_policy",
+				"later_candidate_handling",
 				"stop_markers",
 				"target_type",
 				"allow_coordination",
@@ -1542,6 +1641,7 @@ def compile_operator_spec(row: dict[str, object]) -> OperatorSpec:
 		raise ValueError(f"Expanded instance row is missing required fields before compilation: {missing}; row={row!r}")
 	if str(row.get("instance_status", "")).strip().lower() != "active":
 		raise ValueError(f"Inactive instance row encountered during compilation: {row!r}")
+	validate_decision_procedure_encoding(row)
 
 	family = assign_family(row)
 	anchor_patterns = derive_anchor_patterns(row, family)
@@ -1553,6 +1653,12 @@ def compile_operator_spec(row: dict[str, object]) -> OperatorSpec:
 	allow_coordination = derive_allow_coordination(row, family)
 	anchor_precondition_patterns = parse_runtime_list(row.get("anchor_precondition_patterns", ""), lowercase=True)
 	anchor_selection_policy = collapse_internal_whitespace(str(row.get("anchor_selection_policy", ""))).lower() or "first_match"
+	candidate_selection_policy = (
+		collapse_internal_whitespace(str(row.get("candidate_selection_policy", ""))).lower() or "unspecified"
+	)
+	later_candidate_handling = (
+		collapse_internal_whitespace(str(row.get("later_candidate_handling", ""))).lower() or "unspecified"
+	)
 	if anchor_selection_policy not in {"first_match", "first_after_precondition"}:
 		raise ValueError(
 			f"Unsupported anchor_selection_policy for {row.get('template_id', '')!r}: {anchor_selection_policy!r}"
@@ -1560,6 +1666,14 @@ def compile_operator_spec(row: dict[str, object]) -> OperatorSpec:
 	if anchor_selection_policy == "first_after_precondition" and not anchor_precondition_patterns:
 		raise ValueError(
 			f"anchor_selection_policy 'first_after_precondition' requires anchor_precondition_patterns for {row.get('template_id', '')!r}."
+		)
+	if candidate_selection_policy not in {"unspecified", "first_local_candidate"}:
+		raise ValueError(
+			f"Unsupported candidate_selection_policy for {row.get('template_id', '')!r}: {candidate_selection_policy!r}"
+		)
+	if later_candidate_handling not in {"unspecified", "ignore_later_candidates"}:
+		raise ValueError(
+			f"Unsupported later_candidate_handling for {row.get('template_id', '')!r}: {later_candidate_handling!r}"
 		)
 
 	output_mode = str(row["output_mode"]).strip().lower()
@@ -1601,6 +1715,8 @@ def compile_operator_spec(row: dict[str, object]) -> OperatorSpec:
 		instance_status=str(row["instance_status"]),
 		anchor_precondition_patterns=anchor_precondition_patterns,
 		anchor_selection_policy=anchor_selection_policy,
+		candidate_selection_policy=candidate_selection_policy,
+		later_candidate_handling=later_candidate_handling,
 	)
 
 

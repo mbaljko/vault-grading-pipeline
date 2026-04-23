@@ -100,6 +100,14 @@ def validate_spec(spec: OperatorSpec) -> None:
 		raise ValueError(
 			f"OperatorSpec requires anchor_precondition_patterns when anchor_selection_policy is 'first_after_precondition': {spec.operator_id!r}"
 		)
+	if spec.candidate_selection_policy not in {"unspecified", "first_local_candidate"}:
+		raise ValueError(
+			f"Unsupported candidate_selection_policy for {spec.operator_id}: {spec.candidate_selection_policy!r}"
+		)
+	if spec.later_candidate_handling not in {"unspecified", "ignore_later_candidates"}:
+		raise ValueError(
+			f"Unsupported later_candidate_handling for {spec.operator_id}: {spec.later_candidate_handling!r}"
+		)
 
 
 def validate_specs(specs: list[OperatorSpec]) -> None:

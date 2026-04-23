@@ -39,6 +39,8 @@ class OperatorSpec:
 	instance_status: str
 	anchor_precondition_patterns: list[str] = field(default_factory=list)
 	anchor_selection_policy: str = "first_match"
+	candidate_selection_policy: str = "unspecified"
+	later_candidate_handling: str = "unspecified"
 
 
 @dataclass(frozen=True)
