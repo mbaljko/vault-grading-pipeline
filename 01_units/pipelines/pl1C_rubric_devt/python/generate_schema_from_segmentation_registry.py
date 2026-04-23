@@ -212,6 +212,11 @@ ALLOW_COORDINATION_SIGNAL_PHRASES = (
 TRUTHY_VALUES = {"1", "true", "yes", "y", "on"}
 FALSY_VALUES = {"0", "false", "no", "n", "off"}
 
+PREPROCESSING_RULE_ALIAS_RE = re.compile(
+	r'normalize\s+["`]?([^"`]+?)["`]?\s*->\s*["`]?([^"`]+?)["`]?\s+for\s+anchor\s+detection\s+only',
+	flags=re.IGNORECASE,
+)
+
 
 @dataclass(frozen=True)
 class OperatorSpec:
@@ -306,6 +311,44 @@ def parse_runtime_list(value: object, *, lowercase: bool = False) -> list[str]:
 			continue
 		items.append(item.lower() if lowercase else item)
 	return items
+
+
+def parse_preprocessing_rule_anchor_aliases(value: object) -> list[tuple[str, str]]:
+	raw_value = str(value).strip()
+	if not raw_value:
+		return []
+	normalized = (
+		raw_value.replace("<br>", "\n")
+		.replace("<br/>", "\n")
+		.replace("<br />", "\n")
+		.replace("→", "->")
+	)
+	alias_rules: list[tuple[str, str]] = []
+	for part in re.split(r"[;\n]+", normalized):
+		candidate = collapse_internal_whitespace(part)
+		if not candidate:
+			continue
+		match = PREPROCESSING_RULE_ALIAS_RE.search(candidate)
+		if match is None:
+			continue
+		source_text = collapse_internal_whitespace(match.group(1)).lower()
+		target_text = collapse_internal_whitespace(match.group(2)).lower()
+		if source_text and target_text:
+			alias_rules.append((source_text, target_text))
+	return alias_rules
+
+
+def apply_preprocessing_rule_anchor_aliases(anchor_patterns: list[str], preprocessing_rules: object) -> list[str]:
+	if not anchor_patterns:
+		return []
+	expanded_patterns = list(anchor_patterns)
+	seen_patterns = {pattern.lower() for pattern in expanded_patterns if pattern.strip()}
+	for source_text, target_text in parse_preprocessing_rule_anchor_aliases(preprocessing_rules):
+		if target_text not in seen_patterns or source_text in seen_patterns:
+			continue
+		expanded_patterns.append(source_text)
+		seen_patterns.add(source_text)
+	return expanded_patterns
 
 
 def parse_optional_bool(value: object) -> bool | None:
@@ -1285,7 +1328,14 @@ def expand_registry_instances(registry: dict[str, object]) -> dict[str, object]:
 					"_source_template_order": int(template_row.get("meta", {}).get("source_row_index", 0)),
 				}
 			)
-			for optional_field in ["runtime_family", "anchor_patterns", "stop_markers", "target_type", "allow_coordination"]:
+			for optional_field in [
+				"runtime_family",
+				"anchor_patterns",
+				"stop_markers",
+				"target_type",
+				"allow_coordination",
+				"preprocessing_rules",
+			]:
 				optional_value = extract_normalized_row_value(template_row, optional_field)
 				if optional_value:
 					expanded_instances[-1][optional_field] = optional_value
@@ -1360,32 +1410,32 @@ def combined_instruction_text(row: dict[str, object]) -> str:
 def derive_anchor_patterns(row: dict[str, object], family: str) -> list[str]:
 	explicit_anchor_patterns = parse_runtime_list(row.get("anchor_patterns", ""), lowercase=True)
 	if explicit_anchor_patterns:
-		return explicit_anchor_patterns
+		return apply_preprocessing_rule_anchor_aliases(explicit_anchor_patterns, row.get("preprocessing_rules", ""))
 	text = combined_instruction_text(row)
 	local_slot = str(row.get("local_slot", "")).strip()
 	if family == "status_only_anchor_detector":
 		if any(pattern in text for pattern in INTERACT_ANCHOR_PATTERNS):
-			return INTERACT_ANCHOR_PATTERNS
+			return apply_preprocessing_rule_anchor_aliases(INTERACT_ANCHOR_PATTERNS, row.get("preprocessing_rules", ""))
 		raise ValueError(f"Anchor patterns cannot be derived for status-only operator {row.get('template_id', '')!r}.")
 	if local_slot == "00":
 		if any(pattern in text for pattern in INTERACT_ANCHOR_PATTERNS):
-			return INTERACT_ANCHOR_PATTERNS
+			return apply_preprocessing_rule_anchor_aliases(INTERACT_ANCHOR_PATTERNS, row.get("preprocessing_rules", ""))
 		raise ValueError(f"Anchor patterns cannot be derived for template {row.get('template_id', '')!r}.")
 	if local_slot in {"01", "02"}:
 		if any(pattern in text for pattern in INTERACT_ANCHOR_PATTERNS):
-			return INTERACT_ANCHOR_PATTERNS
+			return apply_preprocessing_rule_anchor_aliases(INTERACT_ANCHOR_PATTERNS, row.get("preprocessing_rules", ""))
 		raise ValueError(f"Anchor patterns cannot be derived for template {row.get('template_id', '')!r}.")
 	if local_slot == "03":
 		if "through" in text:
-			return ["through"]
+			return apply_preprocessing_rule_anchor_aliases(["through"], row.get("preprocessing_rules", ""))
 		raise ValueError(f"Anchor patterns cannot be derived for template {row.get('template_id', '')!r}.")
 	if local_slot == "04":
 		if "shaping" in text:
-			return ["shaping"]
+			return apply_preprocessing_rule_anchor_aliases(["shaping"], row.get("preprocessing_rules", ""))
 		raise ValueError(f"Anchor patterns cannot be derived for template {row.get('template_id', '')!r}.")
 	if local_slot == "05":
 		if "by" in text and "shaping" in text:
-			return ["by"]
+			return apply_preprocessing_rule_anchor_aliases(["by"], row.get("preprocessing_rules", ""))
 		raise ValueError(f"Anchor patterns cannot be derived for template {row.get('template_id', '')!r}.")
 	raise ValueError(f"Anchor patterns cannot be derived for template {row.get('template_id', '')!r}.")
 

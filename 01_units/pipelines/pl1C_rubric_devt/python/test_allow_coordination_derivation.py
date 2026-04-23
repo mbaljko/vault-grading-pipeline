@@ -1,12 +1,14 @@
 import unittest
 
 from generate_schema_from_segmentation_registry import (
+	build_operator_specs_payload,
 	collect_coordination_text,
 	default_allow_coordination_for_family,
 	derive_anchor_patterns,
 	detect_coordination_support,
 	derive_allow_coordination,
 	derive_stop_markers,
+	expand_registry_instances,
 )
 
 
@@ -86,6 +88,107 @@ class AllowCoordinationDerivationTests(unittest.TestCase):
 		}
 
 		self.assertFalse(derive_allow_coordination(row, "right_np_after_anchor_before_marker"))
+
+	def test_preprocessing_rules_add_anchor_alias_and_survive_expansion(self) -> None:
+		preprocessing_rules = 'Normalize "to influence" -> "shaping" for anchor detection only (non-destructive).'
+		registry = {
+			"registry_metadata": {
+				"assessment_id": "AP2B",
+				"registry_version": "04",
+			},
+			"identifier_construction_rules": [
+				{
+					"row_id": "id-1",
+					"execution_fields": {"field": "operator_identifier"},
+					"source_text": {
+						"rule": {
+							"raw": "O_{assessment_id}_{cid}_{operator_id}",
+							"single_line": "O_{assessment_id}_{cid}_{operator_id}",
+							"lines": ["O_{assessment_id}_{cid}_{operator_id}"],
+						}
+					},
+				},
+				{
+					"row_id": "id-2",
+					"execution_fields": {"field": "operator_identifier_shortid"},
+					"source_text": {
+						"rule": {
+							"raw": "operator_id",
+							"single_line": "operator_id",
+							"lines": ["operator_id"],
+						}
+					},
+				},
+				{
+					"row_id": "id-3",
+					"execution_fields": {"field": "cid derivation rule"},
+					"source_text": {
+						"rule": {
+							"raw": 'Start with component_id; replace "Section" with "Sec"; remove "Response"',
+							"single_line": 'Start with component_id; replace "Section" with "Sec"; remove "Response"',
+							"lines": ['Start with component_id; replace "Section" with "Sec"; remove "Response"'],
+						}
+					},
+				},
+			],
+			"reuse_rules": [
+				{
+					"row_id": "reuse-1",
+					"execution_fields": {
+						"rule_id": "RR1",
+						"template_group": "B_claim_seg",
+						"applies_to_component_pattern": "SectionB1Response",
+						"expansion_mode": "per_component",
+						"component_block_rule": "CB1",
+						"local_slot_source": "template.local_slot",
+						"operator_id_format": "{component_block}{local_slot}",
+						"assessment_id": "AP2B",
+						"status": "active",
+					},
+					"source_text": {},
+				},
+			],
+			"component_block_rules": [
+				{
+					"row_id": "block-1",
+					"execution_fields": {
+						"block_rule_id": "CB1",
+						"component_id": "SectionB1Response",
+						"component_block": "S",
+					},
+					"source_text": {},
+				},
+			],
+			"operator_templates": [
+				{
+					"row_id": "template-1",
+					"execution_fields": {
+						"template_id": "B_claim_seg_04",
+						"local_slot": "04",
+						"output_mode": "span",
+						"segment_id": "04_Workflow",
+						"status": "active",
+						"preprocessing_rules": preprocessing_rules,
+					},
+					"source_text": {
+						"operator_short_description": {"raw": "workflow", "single_line": "workflow", "lines": ["workflow"]},
+						"operator_definition": {"raw": "Extract the phrase after shaping.", "single_line": "Extract the phrase after shaping.", "lines": ["Extract the phrase after shaping."]},
+						"operator_guidance": {"raw": "Use the shaping anchor.", "single_line": "Use the shaping anchor.", "lines": ["Use the shaping anchor."]},
+						"failure_mode_guidance": {"raw": "Mark missing if absent.", "single_line": "Mark missing if absent.", "lines": ["Mark missing if absent."]},
+						"decision_procedure": {"raw": "Find the shaping marker then capture the workflow phrase.", "single_line": "Find the shaping marker then capture the workflow phrase.", "lines": ["Find the shaping marker then capture the workflow phrase."]},
+					},
+				},
+			],
+		}
+
+		expanded_payload = expand_registry_instances(registry)
+		self.assertEqual(expanded_payload["expanded_instances"][0]["preprocessing_rules"], preprocessing_rules)
+
+		operator_specs_payload = build_operator_specs_payload(expanded_payload)
+		self.assertEqual(
+			operator_specs_payload["operator_specs"][0]["anchor_patterns"],
+			["shaping", "to influence"],
+		)
 
 
 if __name__ == "__main__":
