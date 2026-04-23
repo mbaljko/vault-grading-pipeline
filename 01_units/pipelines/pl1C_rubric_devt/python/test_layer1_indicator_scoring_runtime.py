@@ -2,7 +2,7 @@ import importlib.util
 from pathlib import Path
 import unittest
 
-from layer1_indicator_scoring_runtime import apply_decision_rule, score_indicator_from_row
+from layer1_indicator_scoring_runtime import apply_decision_rule, normalize_text, score_indicator_from_row
 
 
 _GENERATOR_PATH = Path(__file__).with_name("generate-layer1-indicator-scoring-module.py")
@@ -117,6 +117,18 @@ BOUND_SEGMENT_POLICY_PAYLOAD = {
 
 
 class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
+	def test_normalize_text_strips_leading_determiner_when_rule_requests_it(self) -> None:
+		self.assertEqual(
+			normalize_text("  The Committee  ", "lowercase_trim_strip_leading_determiner"),
+			"committee",
+		)
+
+	def test_normalize_text_preserves_non_determiner_prefix_for_leading_determiner_rule(self) -> None:
+		self.assertEqual(
+			normalize_text("committee deliberation", "lowercase_trim_strip_leading_determiner"),
+			"committee deliberation",
+		)
+
 	def test_prefix_stripping_rule_that_logs_original_and_stripped_segment(self) -> None:
 		with self.assertLogs("layer1_indicator_scoring_runtime", level="DEBUG") as captured:
 			status, _ = apply_decision_rule("the rule that reviewers must score applications independently", PAYLOAD)
@@ -249,6 +261,20 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 				},
 			)
 
+	def test_apply_decision_rule_raises_for_unsupported_normalisation_rule(self) -> None:
+		with self.assertRaisesRegex(ValueError, "Unsupported Layer 1 normalisation_rule: unsupported_rule"):
+			apply_decision_rule(
+				"documentation stage",
+				{
+					"normalisation_rule": "unsupported_rule",
+					"match_policy": "substring_any",
+					"decision_rule": "present_if_any_allowed_term_found",
+					"allowed_terms": ["documentation"],
+					"allowed_aliases": {},
+					"excluded_terms": [],
+				},
+			)
+
 	def test_score_indicator_from_row_hard_stays_on_blank_bound_segment_by_default(self) -> None:
 		result = score_indicator_from_row(
 			{
@@ -331,6 +357,38 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 				'"excluded_terms":[]'
 				'}'
 			)
+
+	def test_parse_scoring_payload_raises_for_unsupported_normalisation_rule(self) -> None:
+		with self.assertRaisesRegex(ValueError, "Unsupported Layer 1 normalisation_rule: unsupported_rule"):
+			parse_scoring_payload(
+				'{'
+				'"scoring_mode":"deterministic",'
+				'"dependency_type":"segment",'
+				'"bound_segment_id":"01_DemandA",'
+				'"normalisation_rule":"unsupported_rule",'
+				'"match_policy":"substring_any",'
+				'"decision_rule":"present_if_any_allowed_term_found",'
+				'"allowed_terms":["documentation"],'
+				'"allowed_aliases":{},'
+				'"excluded_terms":[]'
+				'}'
+			)
+
+	def test_parse_scoring_payload_accepts_strip_leading_determiner_normalisation_rule(self) -> None:
+		payload = parse_scoring_payload(
+			'{'
+			'"scoring_mode":"deterministic",'
+			'"dependency_type":"segment",'
+			'"bound_segment_id":"04_WorkflowOrRole",'
+			'"normalisation_rule":"lowercase_trim_strip_leading_determiner",'
+			'"match_policy":"exact_or_alias",'
+			'"decision_rule":"present_if_exact_match_or_alias_and_not_excluded",'
+			'"allowed_terms":["committee"],'
+			'"allowed_aliases":{},'
+			'"excluded_terms":[]'
+			'}'
+		)
+		self.assertEqual(payload["normalisation_rule"], "lowercase_trim_strip_leading_determiner")
 
 	def test_parse_scoring_payload_normalizes_legacy_canonical_distinct_rule_name(self) -> None:
 		payload = parse_scoring_payload(
