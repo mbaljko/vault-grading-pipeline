@@ -85,6 +85,11 @@ def parse_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(
 		description="Compare AP2B Layer 0 runtime and stitched outputs between the current release and a baseline release."
 	)
+	parser.add_argument(
+		"--layer0-config-key",
+		default="layer0_calibration",
+		help="Top-level pipeline_paths key to read Layer 0 config from (default: layer0_calibration; production: layer0_prod).",
+	)
 	parser.add_argument("--baseline-iteration", help="Optional baseline iteration, for example 04 or iter04.")
 	parser.add_argument("--baseline-run", help="Optional baseline scoring run, defaults to the baseline release scoring_run or current scoring_run.")
 	parser.add_argument("--output-md", type=Path, help="Optional Markdown output path.")
@@ -186,10 +191,33 @@ def build_stitched_row_key(row: dict[str, str]) -> tuple[str, str]:
 	return (row.get("submission_id", ""), row.get("component_id", ""))
 
 
-def collect_current_release_context(pipeline_paths_path: Path) -> tuple[dict[str, str], dict[str, Any], Path]:
+def collect_current_release_context(
+	pipeline_paths_path: Path,
+	*,
+	layer0_config_key: str,
+) -> tuple[dict[str, str], dict[str, Any], Path]:
 	payload = load_json(pipeline_paths_path)
-	release_config = build_release_config(payload)
-	operator_specs_path = resolve_operator_specs_path(pipeline_paths_path).resolve()
+	if layer0_config_key == "layer0_calibration":
+		release_config = build_release_config(payload)
+		operator_specs_path = resolve_operator_specs_path(pipeline_paths_path).resolve()
+	else:
+		layer0_block = payload.get(layer0_config_key, {})
+		release_block = layer0_block.get("release", {})
+		iteration = normalize_iteration(str(release_block.get("iteration", "")))
+		filename_version = str(release_block.get("filename_version") or iteration)
+		release_config = {
+			"iteration": iteration,
+			"registry_version": str(release_block.get("registry_version") or iteration),
+			"registry_file_version": str(release_block.get("registry_file_version") or filename_version),
+			"filename_version": filename_version,
+			"scoring_run": str(release_block.get("scoring_run", "")),
+		}
+		operator_specs_cfg = layer0_block.get("layer0_run_operator_engine", {}).get("operator_specs_input", {})
+		assignment_pipelines_root = pipeline_paths_path.parent / "01_pipelines"
+		operator_specs_path = (
+			assignment_pipelines_root
+			/ build_assignment_relative_path(operator_specs_cfg, release_config)
+		).resolve()
 	return release_config, payload, operator_specs_path
 
 
@@ -199,6 +227,7 @@ def discover_baseline_release(
 	current_release: dict[str, str],
 	baseline_iteration_arg: str | None,
 	baseline_run_arg: str | None,
+	allow_same_release_baseline: bool = False,
 ) -> dict[str, str]:
 	if baseline_iteration_arg:
 		baseline_iteration = normalize_iteration(baseline_iteration_arg)
@@ -210,8 +239,14 @@ def discover_baseline_release(
 		}
 	previous_operator_specs_path = discover_previous_operator_specs_path(current_operator_specs_path)
 	if previous_operator_specs_path is None:
+		if allow_same_release_baseline:
+			fallback = current_release.copy()
+			fallback["scoring_run"] = baseline_run_arg or current_release.get("scoring_run", "")
+			return fallback
 		raise FileNotFoundError(
-			f"Could not discover a previous Layer 0 release before {current_operator_specs_path}"
+			"Could not discover a previous Layer 0 release before "
+			f"{current_operator_specs_path}. Provide --baseline-iteration (and optionally --baseline-run), "
+			"or create an earlier release iteration first."
 		)
 	baseline_release = parse_release_from_operator_specs_path(previous_operator_specs_path)
 	baseline_release["scoring_run"] = baseline_run_arg or current_release.get("scoring_run", "")
@@ -221,17 +256,28 @@ def resolve_operator_specs_path_for_release(current_operator_specs_path: Path, r
 	current_match = _OPERATOR_SPECS_FILENAME_PATTERN.match(current_operator_specs_path.name)
 	if current_match is None:
 		return None
-	runs_root = current_operator_specs_path.parents[4]
 	prefix = current_match.group("prefix")
 	iteration = release_config.get("iteration", "")
-	registry_version = release_config.get("registry_version", "")
-	if not iteration or not registry_version:
+	if not iteration:
 		return None
-	candidates = sorted(
-		runs_root.glob(
-			f"iter{iteration}/stage13/registry_v{registry_version}/00_rubric_sibling_files/{prefix}_v*.json"
+	registry_version = release_config.get("registry_version", "")
+	candidates: list[Path] = []
+	path_text = str(current_operator_specs_path)
+	if "/stage13/registry_v" in path_text:
+		if not registry_version:
+			return None
+		runs_root = current_operator_specs_path.parents[4]
+		candidates = sorted(
+			runs_root.glob(
+				f"iter{iteration}/stage13/registry_v{registry_version}/00_rubric_sibling_files/{prefix}_v*.json"
+			)
 		)
-	)
+	elif "/00_rubric_sibling_files/" in path_text:
+		runs_root = current_operator_specs_path.parents[2]
+		candidates = sorted(runs_root.glob(f"iter{iteration}/00_rubric_sibling_files/{prefix}_v*.json"))
+	elif "/00_sources/prompts/" in path_text:
+		runs_root = current_operator_specs_path.parents[3]
+		candidates = sorted(runs_root.glob(f"iter{iteration}/00_sources/prompts/{prefix}_v*.json"))
 	if not candidates:
 		return None
 	return candidates[-1].resolve()
@@ -240,6 +286,7 @@ def resolve_operator_specs_path_for_release(current_operator_specs_path: Path, r
 def resolve_report_output_paths(
 	*,
 	payload: dict[str, Any],
+	layer0_config_key: str,
 	pipeline_paths_path: Path,
 	current_release: dict[str, str],
 	baseline_release: dict[str, str],
@@ -248,7 +295,7 @@ def resolve_report_output_paths(
 ) -> tuple[Path, Path]:
 	if output_md_arg and output_json_arg:
 		return output_md_arg.resolve(), output_json_arg.resolve()
-	report_config = payload["layer0_calibration"]["layer0_segmentation_report"]["diagnostics_output"]
+	report_config = payload[layer0_config_key]["layer0_segmentation_report"]["diagnostics_output"]
 	assignment_pipelines_root = pipeline_paths_path.parent / "01_pipelines"
 	release_for_dir = current_release.copy()
 	output_dir = assignment_pipelines_root / build_assignment_relative_path(
@@ -920,7 +967,10 @@ def main() -> int:
 	args = parse_args()
 	script_path = Path(__file__).resolve()
 	pipeline_paths_path = resolve_pipeline_paths_path(script_path)
-	current_release, payload, current_operator_specs_path = collect_current_release_context(pipeline_paths_path)
+	current_release, payload, current_operator_specs_path = collect_current_release_context(
+		pipeline_paths_path,
+		layer0_config_key=args.layer0_config_key,
+	)
 	_segmentation_case_type, _operator_spec_type, _execute_operator, load_operator_specs = load_pipeline_runtime(
 		pipeline_paths_path
 	)
@@ -929,6 +979,7 @@ def main() -> int:
 		current_release=current_release,
 		baseline_iteration_arg=args.baseline_iteration,
 		baseline_run_arg=args.baseline_run,
+		allow_same_release_baseline=(args.layer0_config_key != "layer0_calibration"),
 	)
 	if not baseline_release.get("registry_file_version"):
 		baseline_operator_specs_path = resolve_operator_specs_path_for_release(
@@ -946,25 +997,25 @@ def main() -> int:
 		pipeline_paths_path=pipeline_paths_path,
 		payload=payload,
 		release_config=current_release,
-		config_path=["layer0_calibration", "layer0_run_operator_engine", "output"],
+		config_path=[args.layer0_config_key, "layer0_run_operator_engine", "output"],
 	)
 	baseline_runtime_dir = resolve_layer0_artifact_dir(
 		pipeline_paths_path=pipeline_paths_path,
 		payload=payload,
 		release_config=baseline_release,
-		config_path=["layer0_calibration", "layer0_run_operator_engine", "output"],
+		config_path=[args.layer0_config_key, "layer0_run_operator_engine", "output"],
 	)
 	current_stitched_dir = resolve_layer0_artifact_dir(
 		pipeline_paths_path=pipeline_paths_path,
 		payload=payload,
 		release_config=current_release,
-		config_path=["layer0_calibration", "layer0_postprocess_segments", "output"],
+		config_path=[args.layer0_config_key, "layer0_postprocess_segments", "output"],
 	)
 	baseline_stitched_dir = resolve_layer0_artifact_dir(
 		pipeline_paths_path=pipeline_paths_path,
 		payload=payload,
 		release_config=baseline_release,
-		config_path=["layer0_calibration", "layer0_postprocess_segments", "output"],
+		config_path=[args.layer0_config_key, "layer0_postprocess_segments", "output"],
 	)
 	runtime_diff = compare_artifact_dirs(
 		current_dir=current_runtime_dir,
@@ -992,6 +1043,7 @@ def main() -> int:
 	)
 	output_md_path, output_json_path = resolve_report_output_paths(
 		payload=payload,
+		layer0_config_key=args.layer0_config_key,
 		pipeline_paths_path=pipeline_paths_path,
 		current_release=current_release,
 		baseline_release=baseline_release,
