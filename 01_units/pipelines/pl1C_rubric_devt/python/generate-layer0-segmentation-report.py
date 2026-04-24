@@ -678,6 +678,119 @@ def build_segment_match_detail_output_paths(
 	}
 
 
+def build_segment_appendix_output_path(*, main_output_md_path: Path) -> Path:
+	return main_output_md_path.with_name(f"{main_output_md_path.stem}__current_extracted_segments_by_type.md")
+
+
+def build_runtime_extracted_segments_by_id(runtime_diff: dict[str, Any]) -> dict[str, Counter[str]]:
+	runtime_extracted_segments_by_id: defaultdict[str, Counter[str]] = defaultdict(Counter)
+	for item in runtime_diff.get("per_file", []):
+		for segment_entry in item.get("current_extracted_segments", []):
+			segment_id = segment_entry.get("segment_id", "")
+			segment_text = segment_entry.get("segment_text", "")
+			count = int(segment_entry.get("count", 0))
+			if segment_id and segment_text:
+				runtime_extracted_segments_by_id[segment_id][segment_text] += count
+	return dict(runtime_extracted_segments_by_id)
+
+
+def build_segment_appendix_markdown_report(payload: dict[str, Any], *, main_report_path: Path) -> str:
+	current_release = payload["current_release"]
+	runtime_diff = payload["runtime_diff"]
+	segment_match_details = payload.get("current_segment_match_details", {})
+	runtime_extracted_segments_by_id = build_runtime_extracted_segments_by_id(runtime_diff)
+	all_segment_ids = sorted(set(runtime_extracted_segments_by_id) | set(segment_match_details))
+
+	lines = [
+		"# AP2B Layer 0 Segment Appendix: Current Extracted Segments By Segment Type",
+		"",
+		f"- Parent report: `{main_report_path}`",
+		f"- Iteration: {format_markdown_table_cell(current_release.get('iteration', ''))}",
+		f"- Scoring run: {format_markdown_table_cell(current_release.get('scoring_run', ''))}",
+	]
+
+	if not all_segment_ids:
+		lines.extend([
+			"",
+			"No extracted segments were found in the current runtime outputs.",
+		])
+		return "\n".join(lines).rstrip() + "\n"
+
+	lines.extend([
+		"",
+		"## Segment Metadata Overview",
+		"",
+		render_markdown_table(
+			[
+				"segment_id",
+				"operators",
+				"unique extracted texts",
+				"total extracted rows",
+				"match rows",
+				"non-match rows",
+				"distinct components",
+				"distinct submissions",
+			],
+			[
+				[
+					format_markdown_table_cell(segment_id),
+					format_markdown_table_cell(", ".join(segment_match_details.get(segment_id, {}).get("operator_ids", [])) or "(none)"),
+					str(len(runtime_extracted_segments_by_id.get(segment_id, {}))),
+					str(sum(runtime_extracted_segments_by_id.get(segment_id, {}).values())),
+					str(len(segment_match_details.get(segment_id, {}).get("matches", []))),
+					str(len(segment_match_details.get(segment_id, {}).get("non_matches", []))),
+					str(
+						len(
+							{
+								str(row.get("component_id", "")).strip()
+								for row in (
+									segment_match_details.get(segment_id, {}).get("matches", [])
+									+ segment_match_details.get(segment_id, {}).get("non_matches", [])
+								)
+								if str(row.get("component_id", "")).strip()
+							}
+						)
+					),
+					str(
+						len(
+							{
+								str(row.get("submission_id", "")).strip()
+								for row in (
+									segment_match_details.get(segment_id, {}).get("matches", [])
+									+ segment_match_details.get(segment_id, {}).get("non_matches", [])
+								)
+								if str(row.get("submission_id", "")).strip()
+							}
+						)
+					),
+				]
+				for segment_id in all_segment_ids
+			],
+		),
+		"",
+		"## Current Extracted Segments By Segment Type",
+		"",
+		"This appendix lists the current release's extracted segment texts grouped by segment type, with counts for each distinct extracted text.",
+	])
+
+	for segment_id in all_segment_ids:
+		lines.extend([
+			"",
+			f"### {format_markdown_table_cell(segment_id)}",
+			"",
+			"| Extracted Segment | Count |",
+			"| --- | ---: |",
+		])
+		segment_counter = runtime_extracted_segments_by_id.get(segment_id, {})
+		if segment_counter:
+			for segment_text, count in sorted(segment_counter.items(), key=lambda item: (-item[1], item[0])):
+				lines.append(f"| {format_markdown_table_cell(segment_text)} | {count} |")
+		else:
+			lines.append("| (none) | 0 |")
+
+	return "\n".join(lines).rstrip() + "\n"
+
+
 def build_markdown_report(payload: dict[str, Any]) -> str:
 	current_release = payload["current_release"]
 	baseline_release = payload["baseline_release"]
@@ -851,14 +964,7 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
 					)
 			lines.append("")
 
-	runtime_extracted_segments_by_id: defaultdict[str, Counter[str]] = defaultdict(Counter)
-	for item in runtime_diff.get("per_file", []):
-		for segment_entry in item.get("current_extracted_segments", []):
-			segment_id = segment_entry.get("segment_id", "")
-			segment_text = segment_entry.get("segment_text", "")
-			count = int(segment_entry.get("count", 0))
-			if segment_id and segment_text:
-				runtime_extracted_segments_by_id[segment_id][segment_text] += count
+	runtime_extracted_segments_by_id = build_runtime_extracted_segments_by_id(runtime_diff)
 
 	lines.extend([
 		"",
@@ -917,23 +1023,9 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
 			"",
 			"## Appendix: Current Extracted Segments By Segment Type",
 			"",
-			"This appendix lists the current release's extracted segment texts grouped by segment type, with counts for each distinct extracted text.",
+			"This appendix has been moved to a separate markdown file.",
+			f"- Appendix file: `{payload.get('segment_appendix_report', '')}`",
 		])
-		for segment_id in all_segment_ids:
-			lines.extend([
-				"",
-				f"### {format_markdown_table_cell(segment_id)}",
-				"",
-				"| Extracted Segment | Count |",
-				"| --- | ---: |",
-			])
-			for segment_text, count in sorted(
-				runtime_extracted_segments_by_id[segment_id].items(),
-				key=lambda item: (-item[1], item[0]),
-			):
-				lines.append(
-					f"| {format_markdown_table_cell(segment_text)} | {count} |"
-				)
 
 	if segment_match_details:
 		lines.extend([
@@ -1060,6 +1152,7 @@ def main() -> int:
 		current_release=current_release,
 		segment_match_details=segment_match_details,
 	)
+	segment_appendix_output_path = build_segment_appendix_output_path(main_output_md_path=output_md_path)
 	report_payload = {
 		"current_release": current_release,
 		"baseline_release": baseline_release,
@@ -1072,11 +1165,16 @@ def main() -> int:
 			segment_id: str(path)
 			for segment_id, path in segment_detail_output_paths.items()
 		},
+		"segment_appendix_report": str(segment_appendix_output_path),
 	}
 	output_json_path.parent.mkdir(parents=True, exist_ok=True)
 	output_json_path.write_text(json.dumps(report_payload, indent=2) + "\n", encoding="utf-8")
 	output_md_path.parent.mkdir(parents=True, exist_ok=True)
 	output_md_path.write_text(build_markdown_report(report_payload), encoding="utf-8")
+	segment_appendix_output_path.write_text(
+		build_segment_appendix_markdown_report(report_payload, main_report_path=output_md_path),
+		encoding="utf-8",
+	)
 	for segment_id, detail in segment_match_details.items():
 		segment_output_path = segment_detail_output_paths[segment_id]
 		segment_output_path.write_text(
@@ -1090,6 +1188,7 @@ def main() -> int:
 		)
 	print(f"report_md={output_md_path}")
 	print(f"report_json={output_json_path}")
+	print(f"segment_appendix_report={segment_appendix_output_path}")
 	for segment_id, segment_output_path in sorted(segment_detail_output_paths.items()):
 		print(f"segment_report[{segment_id}]={segment_output_path}")
 	print(f"runtime_changed_rows={runtime_diff['changed_row_count']}")

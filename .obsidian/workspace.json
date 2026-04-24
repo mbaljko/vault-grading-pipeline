@@ -486,8 +486,9 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "fe3cb8bfbc96d736",
+  "active": "e5174a9fca7b05c1",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/python/generate-layer0-segmentation-report.py",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate_layer0-segmentation-report.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/execute-layer1-indicator-scoring-modules.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/ap2b_l0_case_checking.cpython-313.pyc",
@@ -500,7 +501,6 @@
     "01_units/pipelines/PPS2_assembly/python/__pycache__/promote_pps1_buffered_jsons.cpython-313.pyc",
     "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification v2.md",
     "01_units/pipelines/PPS2_assembly/python/import_pps1_csv_to_json_README.md",
-    "01_units/pipelines/PPS2_assembly/python/__pycache__/render_markdown_pdf.cpython-313.pyc",
     "01_units/pipelines/PPS2_assembly/python/pps1_slot_populator_README.md",
     "01_units/pipelines/PPS2_assembly/python/generate_pps2_booklets_README.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage00_Generate_Layer0_Segmentation_Prompt.md",
