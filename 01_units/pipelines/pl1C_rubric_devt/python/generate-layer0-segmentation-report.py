@@ -718,56 +718,6 @@ def build_segment_appendix_markdown_report(payload: dict[str, Any], *, main_repo
 
 	lines.extend([
 		"",
-		"## Segment Metadata Overview",
-		"",
-		render_markdown_table(
-			[
-				"segment_id",
-				"operators",
-				"unique extracted texts",
-				"total extracted rows",
-				"match rows",
-				"non-match rows",
-				"distinct components",
-				"distinct submissions",
-			],
-			[
-				[
-					format_markdown_table_cell(segment_id),
-					format_markdown_table_cell(", ".join(segment_match_details.get(segment_id, {}).get("operator_ids", [])) or "(none)"),
-					str(len(runtime_extracted_segments_by_id.get(segment_id, {}))),
-					str(sum(runtime_extracted_segments_by_id.get(segment_id, {}).values())),
-					str(len(segment_match_details.get(segment_id, {}).get("matches", []))),
-					str(len(segment_match_details.get(segment_id, {}).get("non_matches", []))),
-					str(
-						len(
-							{
-								str(row.get("component_id", "")).strip()
-								for row in (
-									segment_match_details.get(segment_id, {}).get("matches", [])
-									+ segment_match_details.get(segment_id, {}).get("non_matches", [])
-								)
-								if str(row.get("component_id", "")).strip()
-							}
-						)
-					),
-					str(
-						len(
-							{
-								str(row.get("submission_id", "")).strip()
-								for row in (
-									segment_match_details.get(segment_id, {}).get("matches", [])
-									+ segment_match_details.get(segment_id, {}).get("non_matches", [])
-								)
-								if str(row.get("submission_id", "")).strip()
-							}
-						)
-					),
-				]
-				for segment_id in all_segment_ids
-			],
-		),
-		"",
 		"## Current Extracted Segments By Segment Type",
 		"",
 		"This appendix lists the current release's extracted segment texts grouped by segment type, with counts for each distinct extracted text.",
@@ -1019,7 +969,92 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
 
 	all_segment_ids = sorted(runtime_extracted_segments_by_id)
 	if all_segment_ids:
+		segment_rows: list[dict[str, Any]] = []
+		for segment_id in all_segment_ids:
+			detail = segment_match_details.get(segment_id, {})
+			match_rows = len(detail.get("matches", []))
+			non_match_rows = len(detail.get("non_matches", []))
+			texts_examined = match_rows + non_match_rows
+			unique_extracted_texts = len(runtime_extracted_segments_by_id.get(segment_id, {}))
+			distinct_components = len(
+				{
+					str(row.get("component_id", "")).strip()
+					for row in (detail.get("matches", []) + detail.get("non_matches", []))
+					if str(row.get("component_id", "")).strip()
+				}
+			)
+			distinct_submissions = len(
+				{
+					str(row.get("submission_id", "")).strip()
+					for row in (detail.get("matches", []) + detail.get("non_matches", []))
+					if str(row.get("submission_id", "")).strip()
+				}
+			)
+			segment_rows.append(
+				{
+					"segment_id": segment_id,
+					"operators": ", ".join(detail.get("operator_ids", [])) or "(none)",
+					"texts_examined": texts_examined,
+					"match_rows": match_rows,
+					"non_match_rows": non_match_rows,
+					"unique_extracted_texts": unique_extracted_texts,
+					"distinct_components": distinct_components,
+					"distinct_submissions": distinct_submissions,
+				}
+			)
+
+		def format_share_of_texts_examined(count: int, texts_examined: int) -> str:
+			if texts_examined <= 0:
+				return f"{count} (0.0%)"
+			return f"{count} ({(count / texts_examined) * 100:.1f}%)"
+
 		lines.extend([
+			"",
+			"## Segment Metadata Overview",
+			"",
+			render_markdown_table(
+				[
+					"segment_id",
+					"operators",
+					"texts examined",
+					"match rows",
+					"non-match rows",
+					"unique extracted texts",
+				],
+				[
+					[
+						format_markdown_table_cell(str(row["segment_id"])),
+						format_markdown_table_cell(str(row["operators"])),
+						format_markdown_table_cell(str(row["texts_examined"])),
+						format_markdown_table_cell(format_share_of_texts_examined(int(row["match_rows"]), int(row["texts_examined"]))),
+						format_markdown_table_cell(format_share_of_texts_examined(int(row["non_match_rows"]), int(row["texts_examined"]))),
+						format_markdown_table_cell(str(row["unique_extracted_texts"])),
+					]
+					for row in segment_rows
+				],
+			),
+			"",
+			render_markdown_table(
+				[
+					"segment_id",
+					"operators",
+					"texts examined",
+					"",
+					"distinct components",
+					"distinct submissions",
+				],
+				[
+					[
+						format_markdown_table_cell(str(row["segment_id"])),
+						format_markdown_table_cell(str(row["operators"])),
+						format_markdown_table_cell(str(row["texts_examined"])),
+						"",
+						format_markdown_table_cell(str(row["distinct_components"])),
+						format_markdown_table_cell(str(row["distinct_submissions"])),
+					]
+					for row in segment_rows
+				],
+			),
 			"",
 			"## Appendix: Current Extracted Segments By Segment Type",
 			"",
