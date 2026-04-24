@@ -55,6 +55,18 @@ OPERATOR_REQUIRED_FIELDS = {
 	"segment_id",
 	"status",
 }
+OPERATOR_OPTIONAL_EXECUTION_FIELDS = {
+	"runtime_family",
+	"anchor_patterns",
+	"anchor_precondition_patterns",
+	"anchor_selection_policy",
+	"candidate_selection_policy",
+	"later_candidate_handling",
+	"stop_markers",
+	"target_type",
+	"allow_coordination",
+	"preprocessing_rules",
+}
 IDENTIFIER_RULE_SOURCE_TEXT_FIELDS = {"rule"}
 COMPONENT_BLOCK_SOURCE_TEXT_FIELDS: set[str] = set()
 OPERATOR_SOURCE_TEXT_FIELDS = {
@@ -929,8 +941,10 @@ def build_normalized_row(
 	source_row_index: int,
 	source_text_fields: set[str],
 	provenance_only_fields: set[str] | None = None,
+	optional_execution_fields: set[str] | None = None,
 ) -> dict[str, object]:
 	provenance_only_fields = provenance_only_fields or set()
+	optional_execution_fields = optional_execution_fields or set()
 	execution_fields: dict[str, str] = {}
 	source_text: dict[str, dict[str, object]] = {}
 	missing_execution_fields: list[str] = []
@@ -947,7 +961,7 @@ def build_normalized_row(
 			continue
 		normalized_value = normalize_scalar_value(field_name, value)
 		execution_fields[field_name] = normalized_value
-		if not normalized_value:
+		if not normalized_value and field_name not in optional_execution_fields:
 			missing_execution_fields.append(field_name)
 
 	if execution_fields.get("block_rule_id", "") and execution_fields.get("component_id", ""):
@@ -1039,6 +1053,7 @@ def normalize_operator_templates(rows: list[dict[str, str]]) -> list[dict[str, o
 				source_row_index=row_index,
 				source_text_fields=OPERATOR_SOURCE_TEXT_FIELDS,
 				provenance_only_fields=PROVENANCE_ONLY_FIELDS,
+				optional_execution_fields=OPERATOR_OPTIONAL_EXECUTION_FIELDS,
 			)
 		)
 	return normalized_rows
