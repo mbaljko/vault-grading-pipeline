@@ -298,19 +298,9 @@
               "icon": "lucide-file",
               "title": "import_pps1_csv_to_json_README"
             }
-          },
-          {
-            "id": "f0d1cdfc9f590c7f",
-            "type": "leaf",
-            "state": {
-              "type": "empty",
-              "state": {},
-              "icon": "lucide-file",
-              "title": "New tab"
-            }
           }
         ],
-        "currentTab": 20
+        "currentTab": 19
       }
     ],
     "direction": "vertical"
@@ -456,12 +446,13 @@
             "state": {
               "type": "outline",
               "state": {
+                "file": "01_units/pipelines/PPS2_assembly/python/import_pps1_csv_to_json_README.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline"
+              "title": "Outline of import_pps1_csv_to_json_README"
             }
           },
           {
@@ -495,7 +486,7 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "f0d1cdfc9f590c7f",
+  "active": "fe3cb8bfbc96d736",
   "lastOpenFiles": [
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate_layer0-segmentation-report.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/execute-layer1-indicator-scoring-modules.cpython-313.pyc",
