@@ -112,12 +112,21 @@ def resolve_scored_csv_paths(path_inputs: list[Path]) -> list[Path]:
         resolved = path_input.resolve()
         candidates: list[Path]
         if resolved.is_dir():
-            candidates = sorted(resolved.glob("*_Layer1_indicator_scoring_*_output.csv"))
+            # Support both historical and current combined Layer 1 output filename schemes.
+            patterns = [
+                "*_Layer1_indicator_scoring_*_output.csv",
+                "*_Layer1_SBO_scoring_prompt_*_output.csv",
+            ]
+            candidates = []
+            for pattern in patterns:
+                candidates.extend(sorted(resolved.glob(pattern)))
         elif resolved.is_file():
             candidates = [resolved]
         else:
             raise FileNotFoundError(f"Scored-text path not found: {resolved}")
         for candidate in candidates:
+            if "_indicator_module_" in candidate.name:
+                continue
             if candidate.name.endswith("-wide.csv"):
                 continue
             if candidate in seen_paths:
