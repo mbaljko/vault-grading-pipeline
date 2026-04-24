@@ -881,21 +881,22 @@ def generate_report(args: argparse.Namespace) -> Path:
             (component_id, component_percentages.get(component_id, []))
             for component_id in scale_info.bound_component_ids
         ]
+        component_distribution_section: list[str] = []
         if component_series:
             component_histogram_rows, component_histogram_note = build_multi_histogram_rows(component_series)
-            sections.extend(
-                [
-                    "#### Components",
-                    "Component order: " + ", ".join(component_id for component_id, _ in component_series),
-                    "",
-                    render_markdown_table(
-                        ["Bin", "Count", "Bar"],
-                        component_histogram_rows,
-                    ),
-                    component_histogram_note,
-                    "",
-                ]
-            )
+            component_distribution_section = [
+                "#### Components",
+                "Component order: " + ", ".join(component_id for component_id, _ in component_series),
+                "",
+                render_markdown_table(
+                    ["Bin", "Count", "Bar"],
+                    component_histogram_rows,
+                ),
+                component_histogram_note,
+                "",
+            ]
+    else:
+        component_distribution_section = []
 
     if numeric_summary is not None:
         sections.extend(
@@ -968,6 +969,9 @@ def generate_report(args: argparse.Namespace) -> Path:
                 "",
             ]
         )
+
+    if component_distribution_section:
+        sections.extend(component_distribution_section)
 
     if component_grade_headers and component_grade_rows:
         sections.extend(
