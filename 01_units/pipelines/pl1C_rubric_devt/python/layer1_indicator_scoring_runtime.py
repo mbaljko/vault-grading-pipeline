@@ -693,14 +693,9 @@ def canonical_inequality_match(
 		dict(payload.get("right_allowed_aliases", {})),
 		rule,
 	)
-	source_response_text = str(row.get("source_response_text", "") or row.get("response_text", "") or "").strip()
 	if left_canonical and right_canonical:
 		return left_canonical != right_canonical
-	if not left_canonical and not right_canonical:
-		return bool(left_text or right_text or source_response_text)
-	if left_text and right_text:
-		return True
-	return bool(left_canonical or right_canonical)
+	return False
 
 
 def role_or_term_match(candidates: list[str], payload: Mapping[str, object], rule: str) -> bool:
@@ -936,8 +931,7 @@ def score_indicator_from_row(
 		right_segment_id = str(payload.get("right_segment_id", "DemandB") or "DemandB").strip()
 		left_text = resolve_segment_text_by_id(row, resolved_component_id, left_segment_id)
 		right_text = resolve_segment_text_by_id(row, resolved_component_id, right_segment_id)
-		source_response_text = str(row.get("source_response_text", "") or row.get("response_text", "") or "").strip()
-		if not left_text and not right_text and not source_response_text:
+		if not left_text and not right_text:
 			return {
 				"submission_id": resolve_submission_id(row),
 				"component_id": resolved_component_id,
