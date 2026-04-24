@@ -17,6 +17,12 @@ KNOWN_FAMILIES = {
 	"local_effect_phrase_after_marker",
 	"status_only_anchor_detector",
 	"claim_text_passthrough_if_anchor",
+	"claim_text_passthrough_no_anchor",
+}
+
+ANCHOR_OPTIONAL_FAMILIES = {
+	"status_only_anchor_detector",
+	"claim_text_passthrough_no_anchor",
 }
 
 
@@ -84,7 +90,7 @@ def validate_spec(spec: OperatorSpec) -> None:
 		raise ValueError(f"Unknown operator family for {spec.operator_id}: {spec.family!r}")
 	if spec.instance_status.lower() != "active":
 		raise ValueError(f"Inactive OperatorSpec cannot be loaded for execution: {spec.operator_id!r}")
-	if spec.family != "status_only_anchor_detector" and not spec.anchor_patterns:
+	if spec.family not in ANCHOR_OPTIONAL_FAMILIES and not spec.anchor_patterns:
 		raise ValueError(f"OperatorSpec requires anchor_patterns: {spec.operator_id!r}")
 	if spec.family in {
 		"right_np_after_anchor_before_marker",

@@ -4,6 +4,7 @@ from generate_schema_from_segmentation_registry import (
 	audit_decision_procedure_text,
 	build_operator_specs_payload,
 	collect_coordination_text,
+	compile_operator_spec,
 	default_allow_coordination_for_family,
 	derive_anchor_patterns,
 	detect_coordination_support,
@@ -81,6 +82,51 @@ class AllowCoordinationDerivationTests(unittest.TestCase):
 			derive_stop_markers(row, "span_after_marker_before_marker"),
 			["sentence_end", "comma"],
 		)
+
+	def test_no_anchor_passthrough_family_derives_empty_anchor_patterns(self) -> None:
+		row = {
+			"template_id": "B_claim_seg_00",
+			"local_slot": "00",
+			"anchor_patterns": "",
+		}
+
+		self.assertEqual(
+			derive_anchor_patterns(row, "claim_text_passthrough_no_anchor"),
+			[],
+		)
+
+	def test_compile_operator_spec_supports_no_anchor_passthrough_family(self) -> None:
+		row = {
+			"assessment_id": "AP2B",
+			"component_id": "SectionB1Response",
+			"cid": "SecB1",
+			"template_id": "B_claim_seg_00",
+			"local_slot": "00",
+			"operator_id": "S00",
+			"operator_identifier": "O_AP2B_SecB1_S00",
+			"operator_identifier_shortid": "S00",
+			"operator_short_description": "extract full response claim unit",
+			"operator_definition": "Return the trimmed full response text.",
+			"operator_guidance": "Emit the trimmed full response text when non-empty.",
+			"failure_mode_guidance": "missing when empty; malformed when unrecoverable.",
+			"decision_procedure": "Trim the full response text and emit it when non-empty.",
+			"output_mode": "span",
+			"segment_id": "00_Claim",
+			"template_group": "B_claim_seg",
+			"rule_id": "RR1",
+			"component_block": "S",
+			"instance_status": "active",
+			"source_template_id": "B_claim_seg_00",
+			"source_rule_id": "RR1",
+			"runtime_family": "claim_text_passthrough_no_anchor",
+			"anchor_patterns": "",
+		}
+
+		spec = compile_operator_spec(row)
+
+		self.assertEqual(spec.family, "claim_text_passthrough_no_anchor")
+		self.assertEqual(spec.anchor_patterns, [])
+		self.assertEqual(spec.target_type, "claim_text")
 
 	def test_explicit_allow_coordination_override_beats_template_default(self) -> None:
 		row = {

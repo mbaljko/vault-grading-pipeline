@@ -182,6 +182,13 @@ FAMILY_BEHAVIOR = {
 		"allow_coordination": False,
 		"skip_later_candidates": False,
 	},
+	"claim_text_passthrough_no_anchor": {
+		"direction": "none",
+		"start_rule": "full_text_without_anchor",
+		"end_rule": "full_text",
+		"allow_coordination": False,
+		"skip_later_candidates": False,
+	},
 }
 
 ALLOW_COORDINATION_TEMPLATE_OVERRIDES = {
@@ -540,6 +547,7 @@ def default_allow_coordination_for_family(family: str) -> bool:
 		"span_after_marker_before_marker": False,
 		"local_effect_phrase_after_marker": True,
 		"status_only_anchor_detector": False,
+		"claim_text_passthrough_no_anchor": False,
 	}
 	return default_by_family.get(family, False)
 
@@ -1570,6 +1578,8 @@ def derive_anchor_patterns(row: dict[str, object], family: str) -> list[str]:
 	explicit_anchor_patterns = parse_runtime_list(row.get("anchor_patterns", ""), lowercase=True)
 	if explicit_anchor_patterns:
 		return apply_preprocessing_rule_anchor_aliases(explicit_anchor_patterns, row.get("preprocessing_rules", ""))
+	if family == "claim_text_passthrough_no_anchor":
+		return []
 	text = combined_instruction_text(row)
 	local_slot = str(row.get("local_slot", "")).strip()
 	if family == "status_only_anchor_detector":
@@ -1606,6 +1616,8 @@ def derive_stop_markers(row: dict[str, object], family: str) -> list[str]:
 		if unknown_markers:
 			raise ValueError(f"Unknown explicit stop markers for {row.get('template_id', '')!r}: {unknown_markers}")
 		return explicit_stop_markers
+	if family == "claim_text_passthrough_no_anchor":
+		return []
 	if family == "status_only_anchor_detector":
 		return []
 	local_slot = str(row.get("local_slot", "")).strip()
@@ -1624,6 +1636,8 @@ def derive_target_type(row: dict[str, object], family: str) -> str:
 	explicit_target_type = collapse_internal_whitespace(str(row.get("target_type", ""))).lower()
 	if explicit_target_type:
 		return explicit_target_type
+	if family == "claim_text_passthrough_no_anchor":
+		return "claim_text"
 	if family == "status_only_anchor_detector":
 		return "status_only"
 	local_slot = str(row.get("local_slot", "")).strip()

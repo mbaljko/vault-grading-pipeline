@@ -4,10 +4,12 @@ from unittest.mock import patch
 
 from layer0_runtime.boundaries import find_anchor_occurrences
 from layer0_runtime.families import (
+	run_claim_text_passthrough_no_anchor,
 	run_local_effect_phrase_after_marker,
 	run_right_np_after_anchor_before_marker,
 	run_span_after_marker_before_marker,
 )
+from layer0_runtime.loader import validate_spec
 from layer0_runtime.models import OperatorSpec
 
 
@@ -201,6 +203,49 @@ class Layer0RuntimeCoordinationTests(unittest.TestCase):
 
 		self.assertGreaterEqual(len(occurrences), 2)
 		self.assertEqual(text[occurrences[0][0]:occurrences[0][1]].lower(), "interacts with")
+
+	def test_claim_text_passthrough_no_anchor_returns_trimmed_full_text(self) -> None:
+		text = "  This is the full claim text for downstream evaluation.  "
+		spec = OperatorSpec(
+			assessment_id="AP2B",
+			component_id="SectionB1Response",
+			cid="SecB1",
+			template_id="B_claim_seg_00",
+			local_slot="00",
+			operator_id="S00",
+			operator_identifier="O_AP2B_TEST_S00",
+			operator_identifier_shortid="S00",
+			operator_short_description="test no-anchor claim passthrough",
+			segment_id="00_Claim",
+			output_mode="span",
+			family="claim_text_passthrough_no_anchor",
+			anchor_patterns=[],
+			direction="none",
+			start_rule="full_text_without_anchor",
+			end_rule="full_text",
+			stop_markers=[],
+			target_type="claim_text",
+			allow_coordination=False,
+			skip_later_candidates=False,
+			operator_definition="test definition",
+			operator_guidance="test guidance",
+			failure_mode_guidance="test failure guidance",
+			decision_procedure="test decision procedure",
+			missing_status="missing",
+			ambiguous_status="ambiguous",
+			malformed_status="malformed",
+			instance_status="active",
+			anchor_precondition_patterns=[],
+			anchor_selection_policy="first_match",
+			candidate_selection_policy="unspecified",
+			later_candidate_handling="unspecified",
+		)
+
+		validate_spec(spec)
+		result = run_claim_text_passthrough_no_anchor(text, spec)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "This is the full claim text for downstream evaluation")
 
 	def test_local_effect_uses_first_by_after_shaping_and_stops_before_second_by(self) -> None:
 		text = "The mechanism shapes reviewer preparation by sequencing attention by surfacing criterion-linked excerpts."

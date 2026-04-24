@@ -186,6 +186,13 @@ def run_claim_text_passthrough_if_anchor(text: str, spec: OperatorSpec) -> Famil
 	return _ok_result(segment_text)
 
 
+def run_claim_text_passthrough_no_anchor(text: str, spec: OperatorSpec) -> FamilyExecution:
+	segment_text = trim_span(text)
+	if not segment_text:
+		return _missing_result("claim text is empty")
+	return _ok_result(segment_text)
+
+
 FAMILY_EXECUTORS = {
 	"left_np_before_anchor": run_left_np_before_anchor,
 	"right_np_after_anchor_before_marker": run_right_np_after_anchor_before_marker,
@@ -193,4 +200,5 @@ FAMILY_EXECUTORS = {
 	"local_effect_phrase_after_marker": run_local_effect_phrase_after_marker,
 	"status_only_anchor_detector": run_status_only_anchor_detector,
 	"claim_text_passthrough_if_anchor": run_claim_text_passthrough_if_anchor,
+	"claim_text_passthrough_no_anchor": run_claim_text_passthrough_no_anchor,
 }
