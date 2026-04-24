@@ -44,6 +44,7 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument("--output-file-stem", type=str, required=True)
 	parser.add_argument("--output-format", type=str, default="csv")
 	parser.add_argument("--combined-output-file", type=Path, required=False)
+	parser.add_argument("--source-response-text-csv", type=Path, required=False)
 	return parser.parse_args()
 
 
@@ -150,6 +151,35 @@ def derive_layer0_stitched_csv_path_from_layer1_input(input_csv_path: Path) -> P
 	return None
 
 
+def resolve_source_response_text_csv(
+	explicit_source_csv: Path | None,
+	input_csv_path: Path,
+) -> Path | None:
+	if explicit_source_csv is not None:
+		candidate = explicit_source_csv.resolve()
+		if candidate.exists() and candidate.is_file():
+			return candidate
+		print(
+			f"Notice: source_response_text enrichment skipped: explicit source file not found: {candidate}",
+			file=sys.stderr,
+		)
+		return None
+	derived = derive_layer0_stitched_csv_path_from_layer1_input(input_csv_path)
+	if derived is None:
+		print(
+			"Notice: source_response_text enrichment skipped: no stitched Layer 0 source file could be derived from --layer1-input-csv",
+			file=sys.stderr,
+		)
+		return None
+	if not derived.exists() or not derived.is_file():
+		print(
+			f"Notice: source_response_text enrichment skipped: derived source file not found: {derived}",
+			file=sys.stderr,
+		)
+		return None
+	return derived.resolve()
+
+
 def index_rows_by_component_submission(rows: list[dict[str, str]]) -> dict[tuple[str, str], dict[str, str]]:
 	indexed_rows: dict[tuple[str, str], dict[str, str]] = {}
 	for row in rows:
@@ -161,13 +191,24 @@ def index_rows_by_component_submission(rows: list[dict[str, str]]) -> dict[tuple
 	return indexed_rows
 
 
-def enrich_rows_with_source_response_text(rows: list[dict[str, str]], input_csv_path: Path) -> list[dict[str, str]]:
-	stitched_csv_path = derive_layer0_stitched_csv_path_from_layer1_input(input_csv_path)
-	if stitched_csv_path is None or not stitched_csv_path.exists() or not stitched_csv_path.is_file():
+def enrich_rows_with_source_response_text(
+	rows: list[dict[str, str]],
+	input_csv_path: Path,
+	explicit_source_csv: Path | None = None,
+) -> list[dict[str, str]]:
+	stitched_csv_path = resolve_source_response_text_csv(explicit_source_csv, input_csv_path)
+	if stitched_csv_path is None:
 		return rows
-	stitched_rows = load_scored_rows(stitched_csv_path.resolve())
+	stitched_rows = load_scored_rows(stitched_csv_path)
+	if stitched_rows and "source_response_text" not in stitched_rows[0]:
+		print(
+			f"Notice: source_response_text enrichment skipped: source file has no 'source_response_text' column: {stitched_csv_path}",
+			file=sys.stderr,
+		)
+		return rows
 	stitched_index = index_rows_by_component_submission(stitched_rows)
 	enriched_rows: list[dict[str, str]] = []
+	matched_rows = 0
 	for row in rows:
 		component_id = str(row.get("component_id", "") or "").strip()
 		submission_id = resolve_submission_id_from_row(row)
@@ -177,7 +218,13 @@ def enrich_rows_with_source_response_text(rows: list[dict[str, str]], input_csv_
 			stitched_source_text = str(stitched_row.get("source_response_text", "") or "")
 			if stitched_source_text:
 				enriched_row["source_response_text"] = stitched_source_text
+				matched_rows += 1
 		enriched_rows.append(enriched_row)
+	if matched_rows == 0:
+		print(
+			f"Notice: source_response_text enrichment skipped: no matching rows found in source file {stitched_csv_path}",
+			file=sys.stderr,
+		)
 	return enriched_rows
 
 
@@ -273,7 +320,11 @@ def main() -> int:
 	try:
 		input_rows = load_scored_rows(args.layer1_input_csv.resolve())
 		validate_input_rows(input_rows, args.layer1_input_csv)
-		input_rows = enrich_rows_with_source_response_text(input_rows, args.layer1_input_csv.resolve())
+		input_rows = enrich_rows_with_source_response_text(
+			input_rows,
+			args.layer1_input_csv.resolve(),
+			args.source_response_text_csv,
+		)
 		component_rows = filter_component_rows(input_rows, args.target_component_id)
 		modules = load_indicator_modules(args.module_dir.resolve(), args.target_component_id, args.output_file_stem)
 		output_dir = args.output_dir.resolve()
