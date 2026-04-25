@@ -52,7 +52,7 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument("--output-format", type=str, default="csv")
 	parser.add_argument("--combined-output-file", type=Path, required=False)
 	parser.add_argument("--source-response-text-csv", type=Path, required=False)
-	parser.add_argument("--recovery-allowlist-csv", type=Path, required=False)
+	parser.add_argument("--recovery-allowlist-csv", type=Path, required=False, action="append")
 	parser.add_argument("--recovery-now-utc", type=str, required=False)
 	return parser.parse_args()
 
@@ -98,29 +98,35 @@ def build_recovery_registry_rows_from_allowlist(
 def apply_recovery_overlay_if_configured(
 	scored_rows: list[dict[str, str]],
 	*,
-	recovery_allowlist_csv: Path | None,
+	recovery_allowlist_csvs: list[Path] | None,
 	recovery_now_utc: str | None,
 ) -> list[dict[str, str]]:
-	if recovery_allowlist_csv is None:
+	if not recovery_allowlist_csvs:
 		return scored_rows
-	allowlist_path = recovery_allowlist_csv.resolve()
-	if not allowlist_path.exists() or not allowlist_path.is_file():
-		print(
-			f"Notice: recovery overlay skipped: allowlist CSV not found: {allowlist_path}",
-			file=sys.stderr,
-		)
-		return scored_rows
-	try:
-		allowlist_rows = load_recovery_allowlist_csv(str(allowlist_path))
-	except (FileNotFoundError, ValueError) as exc:
-		print(f"Notice: recovery overlay skipped: {exc}", file=sys.stderr)
-		return scored_rows
+	allowlist_rows: list[dict[str, str]] = []
+	recovery_source_refs: list[str] = []
+	for recovery_allowlist_csv in recovery_allowlist_csvs:
+		allowlist_path = recovery_allowlist_csv.resolve()
+		if not allowlist_path.exists() or not allowlist_path.is_file():
+			print(
+				f"Notice: recovery overlay skipped missing allowlist CSV: {allowlist_path}",
+				file=sys.stderr,
+			)
+			continue
+		try:
+			loaded_rows = load_recovery_allowlist_csv(str(allowlist_path))
+		except (FileNotFoundError, ValueError) as exc:
+			print(f"Notice: recovery overlay skipped for {allowlist_path}: {exc}", file=sys.stderr)
+			continue
+		if loaded_rows:
+			allowlist_rows.extend(loaded_rows)
+			recovery_source_refs.append(str(allowlist_path))
 	if not allowlist_rows:
 		return scored_rows
 	membership_index = build_recovery_membership_index(allowlist_rows)
 	recovery_registry_rows = build_recovery_registry_rows_from_allowlist(
 		allowlist_rows,
-		recovery_source_ref=str(allowlist_path),
+		recovery_source_ref=",".join(recovery_source_refs),
 	)
 	if not recovery_registry_rows:
 		return scored_rows
@@ -427,7 +433,7 @@ def main() -> int:
 			indicator_rows = [module.score_indicator_row(row) for row in component_rows]
 			indicator_rows = apply_recovery_overlay_if_configured(
 				indicator_rows,
-				recovery_allowlist_csv=args.recovery_allowlist_csv,
+				recovery_allowlist_csvs=args.recovery_allowlist_csv,
 				recovery_now_utc=args.recovery_now_utc,
 			)
 			output_path = resolve_output_path(output_dir, args.output_file_stem, args.output_format, indicator_id)

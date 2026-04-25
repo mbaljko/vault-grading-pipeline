@@ -2538,19 +2538,37 @@ def render_indicator_slot_group_segment_report(
 	]
 	status_rows: list[list[str]] = []
 	status_rollup_rows: list[list[str]] = []
+	# aggregate counts by indicator_id across all members for the slot-level roll-up
+	slot_rollup_counts: Counter[str] = Counter()
+	slot_disaggregated_counts: Counter[str] = Counter()
+	slot_blank_count = 0
 	for member_row in indicator_members:
 		component_id = member_row[0]
 		indicator_id = member_row[1]
 		member_key = (component_id, indicator_id)
 		member_status_counts = status_counts_by_member.get(member_key, Counter())
 		member_blank_count = int(not_present_blank_count_by_member.get(member_key, 0))
+		slot_rollup_counts.update(member_status_counts)
+		slot_disaggregated_counts.update(member_status_counts)
+		slot_blank_count += member_blank_count
 		for row in build_status_rollup_rows(member_status_counts):
 			status_rollup_rows.append([component_id, indicator_id, *row])
 		for row in build_status_count_rows(member_status_counts, member_blank_count):
 			status_rows.append([component_id, indicator_id, *row])
 	if status_rows:
+		slot_rollup_summary = build_status_rollup_rows(slot_rollup_counts)
+		slot_disaggregated_summary = build_status_count_rows(slot_disaggregated_counts, slot_blank_count)
 		parts.extend([
 			"#### Roll-Up (present vs not_present)",
+			"",
+			"##### Roll-Up over slot",
+			"",
+			render_markdown_table(
+				["evidence_status", "count", "%"],
+				slot_rollup_summary,
+			),
+			"",
+			"##### Roll-Up by indicator_id",
 			"",
 			render_markdown_table(
 				["component_id", "indicator_id", "evidence_status", "count", "%"],
@@ -2558,6 +2576,15 @@ def render_indicator_slot_group_segment_report(
 			),
 			"",
 			"#### Disaggregated",
+			"",
+			"##### Disaggregated over slot",
+			"",
+			render_markdown_table(
+				["evidence_status", "count", "%"],
+				slot_disaggregated_summary,
+			),
+			"",
+			"##### Disaggregated by indicator_id",
 			"",
 		])
 		parts.append(
@@ -2622,17 +2649,6 @@ def render_indicator_slot_group_segment_report(
 			bound_segment_id=bound_segment_id,
 		)
 		matching_summary_rows.extend([[component_id, indicator_id, *row] for row in member_rows])
-		if member_matching_counts:
-			total_segment_columns = ["total" if index == 0 else "" for index, _ in enumerate(segment_column_labels)]
-			matching_summary_rows.append(
-				[
-					component_id,
-					indicator_id,
-					"present",
-					*total_segment_columns,
-					str(sum(member_matching_counts.values())),
-				]
-			)
 	if matching_summary_rows:
 		parts.append(
 			render_markdown_table(
@@ -2661,17 +2677,6 @@ def render_indicator_slot_group_segment_report(
 			bound_segment_id=bound_segment_id,
 		)
 		matching_recovery_summary_rows.extend([[component_id, indicator_id, *row] for row in member_rows])
-		if member_matching_recovery_counts:
-			total_segment_columns = ["total" if index == 0 else "" for index, _ in enumerate(segment_column_labels)]
-			matching_recovery_summary_rows.append(
-				[
-					component_id,
-					indicator_id,
-					"present_recovery",
-					*total_segment_columns,
-					str(sum(member_matching_recovery_counts.values())),
-				]
-			)
 	if matching_recovery_summary_rows:
 		parts.append(
 			render_markdown_table(
@@ -2699,17 +2704,6 @@ def render_indicator_slot_group_segment_report(
 			bound_segment_id=bound_segment_id,
 		)
 		non_matching_summary_rows.extend([[component_id, indicator_id, *row] for row in member_rows])
-		if member_non_matching_counts:
-			total_segment_columns = ["total" if index == 0 else "" for index, _ in enumerate(segment_column_labels)]
-			non_matching_summary_rows.append(
-				[
-					component_id,
-					indicator_id,
-					"not_present",
-					*total_segment_columns,
-					str(sum(member_non_matching_counts.values())),
-				]
-			)
 	if non_matching_summary_rows:
 		parts.append(
 			render_markdown_table(
