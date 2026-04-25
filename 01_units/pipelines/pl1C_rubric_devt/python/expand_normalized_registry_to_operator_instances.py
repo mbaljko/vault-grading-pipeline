@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Expand a normalized Layer 0 registry into concrete operator-instance rows."""
+"""Expand a normalized Layer 0 registry into concrete operator-instance rows.
+
+Supported registry field values are documented in:
+- `layer0_registry_supported_values.md`
+"""
 
 from __future__ import annotations
 

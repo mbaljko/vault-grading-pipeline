@@ -6,6 +6,9 @@ This script currently implements:
 - Step 1: parse registry Markdown into a raw registry JSON artifact
 - Step 1: emit a normalized registry JSON artifact that separates execution
   fields from source text while preserving provenance
+
+Supported registry field values are documented in:
+- `layer0_registry_supported_values.md`
 """
 
 from __future__ import annotations
