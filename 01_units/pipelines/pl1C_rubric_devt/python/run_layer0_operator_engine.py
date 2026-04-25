@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Execute compiled Layer 0 OperatorSpecs against a runtime CSV dataset."""
+"""Execute compiled Layer 0 OperatorSpecs against a runtime CSV dataset.
+
+The engine behavior is registry-driven via compiled operator specs, including
+anchor patterns, precondition policies, stop markers, and coordination rules.
+Diagnostics output preserves boundary_misparse events for boundary-audit flows.
+"""
 
 from __future__ import annotations
 

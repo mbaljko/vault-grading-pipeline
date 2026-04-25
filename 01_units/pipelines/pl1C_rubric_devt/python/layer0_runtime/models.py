@@ -1,3 +1,10 @@
+"""Datamodels used by the deterministic Layer 0 operator runtime.
+
+These contracts define registry-derived operator specs, extraction outputs, and
+diagnostic payloads. Extraction flags include boundary_misparse to represent
+boundary-recovery failures distinct from pure absence.
+"""
+
 from __future__ import annotations
 
 import json
@@ -53,7 +60,7 @@ class ExtractionResult:
 	extraction_status: Literal["ok", "missing", "ambiguous", "malformed"]
 	extraction_notes: str
 	confidence: Literal["high", "medium", "low"]
-	flags: Literal["none", "needs_review"]
+	flags: Literal["none", "needs_review", "boundary_misparse"]
 
 
 @dataclass(frozen=True)
@@ -71,7 +78,7 @@ class FamilyExecution:
 	extraction_status: Literal["ok", "missing", "ambiguous", "malformed"]
 	extraction_notes: str
 	confidence: Literal["high", "medium", "low"]
-	flags: Literal["none", "needs_review"]
+	flags: Literal["none", "needs_review", "boundary_misparse"]
 
 
 def _validate_optional_choice(field_name: str, value: str | None, allowed_values: set[str]) -> None:
@@ -112,7 +119,7 @@ class SegmentationCase:
 		_validate_optional_choice(
 			"expected_flags",
 			self.expected_flags,
-			{"none", "needs_review"},
+			{"none", "needs_review", "boundary_misparse"},
 		)
 
 	def to_dict(self) -> dict[str, Any]:

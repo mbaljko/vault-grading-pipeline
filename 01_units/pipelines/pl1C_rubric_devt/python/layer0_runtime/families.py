@@ -1,9 +1,23 @@
+"""Family executors for deterministic Layer 0 span extraction.
+
+This module turns compiled OperatorSpec fields into runtime behavior, including
+anchor matching, anchor-precondition policies, stop-marker boundaries,
+coordination controls, and boundary_misparse diagnostics when boundary recovery
+is likely incomplete.
+"""
+
 from __future__ import annotations
 
 from .boundaries import find_anchor_occurrences, find_first_stop_marker, find_left_boundary, trim_span
 from .diagnostics import disagreement_note
 from .models import FamilyExecution, OperatorSpec
-from .nlp_utils import first_right_noun_chunk, nearest_left_noun_chunk, parse_text
+from .nlp_utils import (
+	first_right_noun_chunk,
+	has_likely_np_continuation,
+	has_plausible_nounish_candidate,
+	nearest_left_noun_chunk,
+	parse_text,
+)
 
 
 def _missing_result(note: str) -> FamilyExecution:
@@ -46,7 +60,39 @@ def _ok_result(segment_text: str, confidence: str = "high", note: str = "", need
 	)
 
 
+def _boundary_misparse_result(
+	segment_text: str,
+	*,
+	note: str,
+	confidence: str = "medium",
+	status: str = "ok",
+) -> FamilyExecution:
+	return FamilyExecution(
+		segment_text=segment_text,
+		extraction_status=status,
+		extraction_notes=note,
+		confidence=confidence,
+		flags="boundary_misparse",
+	)
+
+
+
 def _first_anchor(text: str, spec: OperatorSpec) -> tuple[int, int, str] | None:
+	if spec.anchor_selection_policy == "first_after_precondition":
+		if not spec.anchor_precondition_patterns:
+			return None
+		precondition_occurrences = find_anchor_occurrences(text, spec.anchor_precondition_patterns)
+		if not precondition_occurrences:
+			return None
+		search_start = precondition_occurrences[0][1]
+		anchor_occurrences = [
+			occurrence
+			for occurrence in find_anchor_occurrences(text, spec.anchor_patterns)
+			if occurrence[0] >= search_start
+		]
+		if not anchor_occurrences:
+			return None
+		return anchor_occurrences[0]
 	occurrences = find_anchor_occurrences(text, spec.anchor_patterns)
 	if not occurrences:
 		return None
@@ -105,18 +151,39 @@ def run_right_np_after_anchor_before_marker(text: str, spec: OperatorSpec) -> Fa
 		allow_coordination=spec.allow_coordination,
 		candidate_selection_policy=spec.candidate_selection_policy,
 	)
+	right_limit = stop_index if stop_index is not None else len(text)
 	if chunk is not None:
 		chunk_start, chunk_end, chunk_text = chunk
 		segment_text = trim_span(text[chunk_start:chunk_end])
 		if segment_text:
+			if has_likely_np_continuation(
+				text,
+				chunk_end,
+				right_limit,
+				allow_coordination=spec.allow_coordination,
+			):
+				return _boundary_misparse_result(
+					segment_text,
+					note="candidate found but appears truncated before a likely local continuation",
+				)
 			return _ok_result(segment_text)
-	span_end = stop_index if stop_index is not None else len(text)
+	span_end = right_limit
 	fallback_text = trim_span(text[anchor_end:span_end])
 	if not fallback_text:
+		if has_plausible_nounish_candidate(text, anchor_end, len(text)):
+			return _boundary_misparse_result(
+				"",
+				note="anchor found but boundary recovery failed despite a plausible local candidate",
+				status="missing",
+				confidence="low",
+			)
 		return _missing_result("anchor found but no recoverable post-anchor noun phrase")
 	if len(fallback_text.split()) > 10:
 		return _ambiguous_result("multiple candidate noun phrase boundaries")
-	return _ok_result(fallback_text, confidence="medium", note="fallback post-anchor span recovery", needs_review=True)
+	return _boundary_misparse_result(
+		fallback_text,
+		note="fallback post-anchor span recovery; boundary may be imprecise",
+	)
 
 
 def run_span_after_marker_before_marker(text: str, spec: OperatorSpec) -> FamilyExecution:
@@ -142,6 +209,13 @@ def run_span_after_marker_before_marker(text: str, spec: OperatorSpec) -> Family
 		span_end = stop_index if stop_index is not None else len(text)
 		segment_text = trim_span(text[anchor_end:span_end])
 	if not segment_text:
+		if has_plausible_nounish_candidate(text, anchor_end, len(text)):
+			return _boundary_misparse_result(
+				"",
+				note="anchor found but span boundary recovery failed despite a plausible local candidate",
+				status="missing",
+				confidence="low",
+			)
 		return _missing_result("anchor found but no recoverable span after marker")
 	if len(segment_text.split()) > 14:
 		return _ambiguous_result("marker span boundary unclear")
@@ -149,16 +223,12 @@ def run_span_after_marker_before_marker(text: str, spec: OperatorSpec) -> Family
 
 
 def run_local_effect_phrase_after_marker(text: str, spec: OperatorSpec) -> FamilyExecution:
-	anchor_search_start = 0
-	if spec.anchor_selection_policy == "first_after_precondition":
-		precondition_occurrences = find_anchor_occurrences(text, spec.anchor_precondition_patterns)
-		if not precondition_occurrences:
-			return _missing_result("anchor precondition not found")
-		anchor_search_start = precondition_occurrences[0][1]
-	by_occurrences = [occ for occ in find_anchor_occurrences(text, spec.anchor_patterns) if occ[0] >= anchor_search_start]
-	if not by_occurrences:
-		return _missing_result("workflow/effect anchor sequence not found")
-	_, anchor_end, _ = by_occurrences[0]
+	anchor = _first_anchor(text, spec)
+	if anchor is None:
+		if spec.anchor_selection_policy == "first_after_precondition":
+			return _missing_result("workflow/effect anchor sequence not found")
+		return _missing_result("anchor not found")
+	_, anchor_end, _ = anchor
 	stop_index = find_first_stop_marker(text, anchor_end, spec.stop_markers)
 	span_end = stop_index if stop_index is not None else len(text)
 	segment_text = trim_span(text[anchor_end:span_end])

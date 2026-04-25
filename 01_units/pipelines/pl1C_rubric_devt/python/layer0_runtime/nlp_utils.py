@@ -1,3 +1,12 @@
+"""NLP and heuristic span expansion helpers for Layer 0 runtime families.
+
+The helpers here support generic, registry-driven extraction behavior:
+- first-local candidate selection,
+- noun phrase expansion with local attachments,
+- optional compact coordination expansion,
+- and fallback nounish span recovery when full parsing is unavailable.
+"""
+
 from __future__ import annotations
 
 import re
@@ -26,8 +35,27 @@ _RIGHT_NP_BLOCKING_TOKENS = {
 	"as",
 	"whereas",
 	"unless",
+	"through",
+	"shaping",
+	"by",
 	"directly",
 	"then",
+}
+
+_LOCAL_NP_ATTACHMENT_PREPOSITIONS = {
+	"of",
+	"for",
+	"to",
+	"in",
+	"on",
+	"with",
+	"within",
+}
+
+_LOCAL_NP_ATTACHMENT_PARTICIPLES = {
+	"tied",
+	"linked",
+	"based",
 }
 
 _LIKELY_VERB_TOKENS = {
@@ -132,6 +160,111 @@ def _leading_nounish_span(text: str) -> tuple[int, int, str] | None:
 	return (start, end, candidate)
 
 
+def _attachment_intro_length(text: str) -> int | None:
+	preposition_match = re.match(
+		r"\s+(of|for|to|in|on|with|within)\s+",
+		text,
+		flags=re.IGNORECASE,
+	)
+	if preposition_match is not None and preposition_match.group(1).lower() in _LOCAL_NP_ATTACHMENT_PREPOSITIONS:
+		return preposition_match.end()
+
+	participle_match = re.match(
+		r"\s+(tied|linked|based)\s+to\s+",
+		text,
+		flags=re.IGNORECASE,
+	)
+	if participle_match is not None and participle_match.group(1).lower() in _LOCAL_NP_ATTACHMENT_PARTICIPLES:
+		return participle_match.end()
+	return None
+
+
+def _looks_like_clause_break(text: str) -> bool:
+	if re.match(r"\s*[.;:!?]", text):
+		return True
+	if re.match(
+		r"\s*,\s*(?:and|but|or|yet|so|which|that|because|while|when|although|though|who|where|since|as|whereas|unless|then|therefore|thus|however|directly)\b",
+		text,
+		flags=re.IGNORECASE,
+	):
+		return True
+	return False
+
+
+def _extend_posthead_local_modifiers(text: str, start: int, end: int, right_limit: int, *, allow_coordination: bool) -> tuple[int, int, str]:
+	current_end = end
+	while current_end < right_limit:
+		remainder = text[current_end:right_limit]
+		if _looks_like_clause_break(remainder):
+			break
+
+		attachment_length = _attachment_intro_length(remainder)
+		if attachment_length is not None:
+			item_start = current_end + attachment_length
+			item = _leading_nounish_span(text[item_start:right_limit])
+			if item is None:
+				break
+			rel_start, rel_end, _ = item
+			if rel_start != 0:
+				break
+			current_end = item_start + rel_end
+			if allow_coordination:
+				_, current_end, _ = _extend_compact_coordination(text, start, current_end, right_limit)
+			continue
+
+		if allow_coordination:
+			_, extended_end, _ = _extend_compact_coordination(text, start, current_end, right_limit)
+			if extended_end > current_end:
+				current_end = extended_end
+				continue
+		break
+
+	return (start, current_end, text[start:current_end])
+
+
+def has_likely_np_continuation(
+	text: str,
+	span_end: int,
+	right_limit: int,
+	*,
+	allow_coordination: bool,
+) -> bool:
+	remainder = text[span_end:right_limit]
+	if not remainder.strip():
+		return False
+	if _attachment_intro_length(remainder) is not None:
+		return True
+	if allow_coordination:
+		if re.match(r"\s*(?:,\s*)?(?:and|or)\s+", remainder, flags=re.IGNORECASE):
+			return True
+	return False
+
+
+def has_plausible_nounish_candidate(text: str, start_index: int, right_limit: int) -> bool:
+	return _leading_nounish_span(text[start_index:right_limit]) is not None
+
+
+def expand_noun_phrase_span(
+	text: str,
+	start: int,
+	end: int,
+	right_limit: int,
+	*,
+	allow_coordination: bool,
+) -> tuple[int, int, str]:
+	expanded_start, expanded_end, expanded_text = start, end, text[start:end]
+	if allow_coordination:
+		expanded_start, expanded_end, expanded_text = _extend_compact_coordination(text, expanded_start, expanded_end, right_limit)
+	expanded_start, expanded_end, expanded_text = _extend_posthead_local_modifiers(
+		text,
+		expanded_start,
+		expanded_end,
+		right_limit,
+		allow_coordination=allow_coordination,
+	)
+	return (expanded_start, expanded_end, expanded_text)
+
+
 def _find_infinitive_boundary(text: str, start: int, right_limit: int) -> int | None:
 	search_text = text[start:right_limit]
 	for match in re.finditer(r"\bto\s+([A-Za-z][A-Za-z\-']*)\b", search_text, flags=re.IGNORECASE):
@@ -210,8 +343,13 @@ def first_right_noun_chunk(
 	]
 	if eligible:
 		chunk_start, chunk_end, chunk_text = min(eligible, key=lambda chunk: (chunk[0], chunk[1]))
-		if allow_coordination:
-			chunk_start, chunk_end, chunk_text = _extend_compact_coordination(doc.text, chunk_start, chunk_end, right_limit)
+		chunk_start, chunk_end, chunk_text = expand_noun_phrase_span(
+			doc.text,
+			chunk_start,
+			chunk_end,
+			right_limit,
+			allow_coordination=allow_coordination,
+		)
 		return (chunk_start, chunk_end, chunk_text)
 	if doc is None:
 		return None
@@ -221,11 +359,11 @@ def first_right_noun_chunk(
 	start, end, chunk_text = fallback_span
 	absolute_start = anchor_end + start
 	absolute_end = anchor_end + end
-	if allow_coordination:
-		absolute_start, absolute_end, chunk_text = _extend_compact_coordination(
-			doc.text,
-			absolute_start,
-			absolute_end,
-			right_limit,
-		)
+	absolute_start, absolute_end, chunk_text = expand_noun_phrase_span(
+		doc.text,
+		absolute_start,
+		absolute_end,
+		right_limit,
+		allow_coordination=allow_coordination,
+	)
 	return (absolute_start, absolute_end, chunk_text)

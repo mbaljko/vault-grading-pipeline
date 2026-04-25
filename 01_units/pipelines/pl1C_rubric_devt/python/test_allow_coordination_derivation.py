@@ -128,6 +128,52 @@ class AllowCoordinationDerivationTests(unittest.TestCase):
 		self.assertEqual(spec.anchor_patterns, [])
 		self.assertEqual(spec.target_type, "claim_text")
 
+	def test_compile_operator_spec_uses_registry_anchor_patterns_directly(self) -> None:
+		row = {
+			"assessment_id": "AP2B",
+			"component_id": "SectionB1Response",
+			"cid": "SecB1",
+			"template_id": "B_claim_seg_02",
+			"local_slot": "02",
+			"operator_id": "S02",
+			"operator_identifier": "O_AP2B_SecB1_S02",
+			"operator_identifier_shortid": "S02",
+			"operator_short_description": "extract demand B",
+			"operator_definition": "Extract demand B after interaction anchor.",
+			"operator_guidance": "Use declared anchor patterns and first-local-candidate policy.",
+			"failure_mode_guidance": "Missing if anchor absent.",
+			"decision_procedure": "Identify the first local noun phrase immediately after the anchor.",
+			"output_mode": "span",
+			"segment_id": "02_DemandB",
+			"template_group": "B_claim_seg",
+			"rule_id": "RR1",
+			"component_block": "S",
+			"instance_status": "active",
+			"source_template_id": "B_claim_seg_02",
+			"source_rule_id": "RR1",
+			"anchor_patterns": "interact with, interacts with, connect with, connects with, interact, interacts, intersect with, intersects with",
+			"stop_markers": "through, comma, clause_boundary",
+			"allow_coordination": "true",
+			"candidate_selection_policy": "first_local_candidate",
+			"later_candidate_handling": "ignore_later_candidates",
+		}
+
+		spec = compile_operator_spec(row)
+
+		self.assertEqual(
+			spec.anchor_patterns,
+			[
+				"interact with",
+				"interacts with",
+				"connect with",
+				"connects with",
+				"interact",
+				"interacts",
+				"intersect with",
+				"intersects with",
+			],
+		)
+
 	def test_explicit_allow_coordination_override_beats_template_default(self) -> None:
 		row = {
 			"template_id": "B_claim_seg_02",

@@ -204,6 +204,118 @@ class Layer0RuntimeCoordinationTests(unittest.TestCase):
 		self.assertGreaterEqual(len(occurrences), 2)
 		self.assertEqual(text[occurrences[0][0]:occurrences[0][1]].lower(), "interacts with")
 
+	@patch("layer0_runtime.families.parse_text")
+	def test_right_np_expands_attached_pp_phrase(self, mock_parse_text) -> None:
+		text = "Institutions interacts with throughput expectations tied to funding-cycle schedules through reviewer assignment logic."
+		mock_parse_text.side_effect = self._fallback_doc
+		spec = make_spec(
+			operator_id="S102",
+			family="right_np_after_anchor_before_marker",
+			anchor_patterns=["interacts with"],
+			stop_markers=["through", "comma", "clause_boundary"],
+			allow_coordination=True,
+		)
+
+		result = run_right_np_after_anchor_before_marker(text, spec)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "throughput expectations tied to funding-cycle schedules")
+
+	@patch("layer0_runtime.families.parse_text")
+	def test_right_np_expands_coordination_and_pp(self, mock_parse_text) -> None:
+		text = "Institutions interacts with documentation and record-keeping standards for audit through reviewer assignment logic."
+		mock_parse_text.side_effect = self._fallback_doc
+		spec = make_spec(
+			operator_id="S102",
+			family="right_np_after_anchor_before_marker",
+			anchor_patterns=["interacts with"],
+			stop_markers=["through", "comma", "clause_boundary"],
+			allow_coordination=True,
+		)
+
+		result = run_right_np_after_anchor_before_marker(text, spec)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "documentation and record-keeping standards for audit")
+
+	@patch("layer0_runtime.families.parse_text")
+	def test_anchor_precondition_policy_applies_generically(self, mock_parse_text) -> None:
+		text = "Demands interact with communities and shaping control text by sequencing attention by surfacing excerpts."
+		mock_parse_text.side_effect = self._fallback_doc
+		spec = OperatorSpec(
+			assessment_id="AP2B",
+			component_id="SectionB1Response",
+			cid="SecB1",
+			template_id="B_claim_seg_05",
+			local_slot="05",
+			operator_id="S05",
+			operator_identifier="O_AP2B_TEST_S05",
+			operator_identifier_shortid="S05",
+			operator_short_description="test precondition policy",
+			segment_id="05_Effect",
+			output_mode="span",
+			family="local_effect_phrase_after_marker",
+			anchor_patterns=["by"],
+			direction="right",
+			start_rule="immediate_post_anchor",
+			end_rule="first_stop_marker",
+			stop_markers=["by", "comma_new_clause", "subordinate_extension", "sentence_end"],
+			target_type="local_effect_phrase",
+			allow_coordination=True,
+			skip_later_candidates=False,
+			operator_definition="test definition",
+			operator_guidance="test guidance",
+			failure_mode_guidance="test failure guidance",
+			decision_procedure="test decision procedure",
+			missing_status="missing",
+			ambiguous_status="ambiguous",
+			malformed_status="malformed",
+			instance_status="active",
+			anchor_precondition_patterns=["shaping"],
+			anchor_selection_policy="first_after_precondition",
+			candidate_selection_policy="first_local_candidate",
+			later_candidate_handling="ignore_later_candidates",
+		)
+
+		result = run_local_effect_phrase_after_marker(text, spec)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "sequencing attention")
+
+	@patch("layer0_runtime.families.parse_text")
+	def test_boundary_misparse_emitted_for_failed_boundary_recovery(self, mock_parse_text) -> None:
+		text = "Institutions interacts with, documentation and record-keeping standards through reviewer assignment logic."
+		mock_parse_text.side_effect = self._fallback_doc
+		spec = make_spec(
+			operator_id="S102",
+			family="right_np_after_anchor_before_marker",
+			anchor_patterns=["interacts with"],
+			stop_markers=["comma", "clause_boundary"],
+			allow_coordination=False,
+		)
+
+		result = run_right_np_after_anchor_before_marker(text, spec)
+
+		self.assertEqual(result.extraction_status, "missing")
+		self.assertEqual(result.flags, "boundary_misparse")
+
+	@patch("layer0_runtime.families.parse_text")
+	def test_missing_emitted_for_true_absence(self, mock_parse_text) -> None:
+		text = "Institutions document policies without any interaction anchor."
+		mock_parse_text.side_effect = self._fallback_doc
+		spec = make_spec(
+			operator_id="S102",
+			family="right_np_after_anchor_before_marker",
+			anchor_patterns=["interacts with"],
+			stop_markers=["through", "comma", "clause_boundary"],
+			allow_coordination=True,
+		)
+
+		result = run_right_np_after_anchor_before_marker(text, spec)
+
+		self.assertEqual(result.extraction_status, "missing")
+		self.assertNotEqual(result.flags, "boundary_misparse")
+
 	def test_claim_text_passthrough_no_anchor_returns_trimmed_full_text(self) -> None:
 		text = "  This is the full claim text for downstream evaluation.  "
 		spec = OperatorSpec(
