@@ -105,6 +105,14 @@ POSITIVE_EVIDENCE_STATUS_VALUES = {
 	"supported",
 	"met",
 }
+_WARNINGS_EMITTED: set[str] = set()
+
+
+def emit_warning_once(message: str) -> None:
+	if message in _WARNINGS_EMITTED:
+		return
+	_WARNINGS_EMITTED.add(message)
+	print(f"Warning: {message}", file=sys.stderr)
 
 
 @dataclass(frozen=True)
@@ -1613,20 +1621,58 @@ def resolve_submission_id_from_row(row: dict[str, str]) -> str:
 
 
 def derive_layer0_stitched_csv_path_from_scored_csv(scored_csv_path: Path) -> Path | None:
-	if len(scored_csv_path.parents) < 4:
-		return None
-	registry_dir = scored_csv_path.parents[3]
-	run_label = scored_csv_path.parents[1].name
-	stitched_dir = registry_dir / "02_scoring_outputs" / run_label / "layer0_1_engine_outputs_postprocessed"
-	if not stitched_dir.exists() or not stitched_dir.is_dir():
-		return None
-	assignment_match = re.match(r"^RUN_(?P<assignment>[A-Za-z0-9]+)_.+_Layer1_indicator_(?:scoring|module)_.*\.csv$", scored_csv_path.name)
+	assignment_match = re.match(
+		r"^RUN_(?P<assignment>[A-Za-z0-9]+)_.+_Layer1_indicator_(?:scoring|module)_.*\.csv$",
+		scored_csv_path.name,
+	)
 	if assignment_match is None:
+		emit_warning_once(
+			f"Could not derive assignment from Layer1 scored CSV name; skipping Layer0 stitched lookup for {scored_csv_path}"
+		)
 		return None
 	assignment_id = assignment_match.group("assignment")
-	matches = sorted(stitched_dir.glob(f"RUN_{assignment_id}_Layer0_operator_engine_v*_output-wide-stitched.csv"))
-	if matches:
-		return matches[0]
+
+	if len(scored_csv_path.parents) < 4:
+		emit_warning_once(
+			f"Scored CSV path is too shallow for Layer0 stitched lookup; expected at least 4 parent levels for {scored_csv_path}"
+		)
+		return None
+
+	legacy_registry_dir = scored_csv_path.parents[3]
+	legacy_run_label = scored_csv_path.parents[1].name
+	legacy_primary_dir = legacy_registry_dir / "02_scoring_outputs" / legacy_run_label / "layer0_1_engine_outputs_postprocessed"
+
+	iteration_dir = find_numeric_label_container(scored_csv_path, "iter")
+	base_outputs_dir = iteration_dir / "02_scoring_outputs" if iteration_dir is not None else None
+	fallback_dirs: list[Path] = []
+	if base_outputs_dir is not None and base_outputs_dir.exists() and base_outputs_dir.is_dir():
+		fallback_dirs.append(base_outputs_dir / "layer0_1_engine_outputs_postprocessed")
+		for run_dir in sorted(
+			child for child in base_outputs_dir.iterdir() if child.is_dir() and parse_numeric_label(child.name, "run") is not None
+		):
+			fallback_dirs.append(run_dir / "layer0_1_engine_outputs_postprocessed")
+
+	search_dirs: list[Path] = [legacy_primary_dir]
+	for fallback_dir in fallback_dirs:
+		if fallback_dir not in search_dirs:
+			search_dirs.append(fallback_dir)
+
+	for directory_index, stitched_dir in enumerate(search_dirs):
+		if not stitched_dir.exists() or not stitched_dir.is_dir():
+			continue
+		matches = sorted(stitched_dir.glob(f"RUN_{assignment_id}_Layer0_operator_engine_v*_output-wide-stitched.csv"))
+		if matches:
+			if directory_index > 0:
+				emit_warning_once(
+					"Layer0 stitched CSV primary path was not found; "
+					f"falling back from {legacy_primary_dir} to {stitched_dir} for {scored_csv_path.name}"
+				)
+			return matches[0]
+
+	emit_warning_once(
+		"Layer0 stitched CSV not found for scored CSV "
+		f"{scored_csv_path}. Checked: " + ", ".join(str(path) for path in search_dirs)
+	)
 	return None
 
 
