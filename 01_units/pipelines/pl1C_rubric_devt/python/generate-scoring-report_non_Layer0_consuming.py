@@ -99,6 +99,7 @@ LAYER1_SCORED_OUTPUT_RE = re.compile(
 POSITIVE_EVIDENCE_STATUS_VALUES = {
 	"positive",
 	"present",
+	"present_recovery",
 	"yes",
 	"true",
 	"1",
@@ -712,6 +713,8 @@ def summarize_score_value(evidence_status: str) -> str:
 	normalized = evidence_status.strip().lower()
 	if normalized == "present":
 		return "P"
+	if normalized == "present_recovery":
+		return "PR"
 	if normalized == "not_present":
 		return "N"
 	return evidence_status.strip()
@@ -1587,6 +1590,19 @@ def is_separator_row(cells: list[str]) -> bool:
 	return all(bool(SEPARATOR_CELL_RE.match(cell.replace(" ", ""))) for cell in cells)
 
 
+def parse_truthy(value: str) -> bool:
+	return value.strip().lower() in {"1", "true", "yes", "y"}
+
+
+def derive_report_evidence_status(row: dict[str, str]) -> str:
+	effective_status = (row.get("evidence_status_effective") or row.get("evidence_status") or "").strip()
+	if not effective_status:
+		return ""
+	if parse_truthy((row.get("recovery_applied") or "").strip()) and effective_status.lower() == "present":
+		return "present_recovery"
+	return effective_status
+
+
 def load_scored_rows(input_path: Path) -> list[dict[str, str]]:
 	rows: list[dict[str, str]] = []
 	with input_path.open("r", encoding="utf-8-sig", newline="") as handle:
@@ -1601,9 +1617,9 @@ def load_scored_rows(input_path: Path) -> list[dict[str, str]]:
 					continue
 				normalized_key = key.strip().lstrip("\ufeff")
 				normalized_row[normalized_key] = (value or "").strip()
-			effective_status = (normalized_row.get("evidence_status_effective") or "").strip()
-			if effective_status:
-				normalized_row["evidence_status"] = effective_status
+			report_status = derive_report_evidence_status(normalized_row)
+			if report_status:
+				normalized_row["evidence_status"] = report_status
 			rows.append(normalized_row)
 	return rows
 
@@ -1977,7 +1993,11 @@ def build_status_count_rows(status_counts: Counter[str], not_present_blank_count
 	not_present_total = status_counts.get("not_present", 0)
 	not_present_non_blank = not_present_total - not_present_blank_count
 	rows: list[list[str]] = []
-	for status, count in sorted(status_counts.items(), key=lambda item: (-item[1], item[0].lower())):
+	preferred_order = {"not_present": 0, "present": 1, "present_recovery": 2}
+	for status, count in sorted(
+		status_counts.items(),
+		key=lambda item: (preferred_order.get(item[0], 99), -item[1], item[0].lower()),
+	):
 		if status == "not_present" and not_present_blank_count > 0:
 			rows.append([
 				"not_present (non-blank)",
@@ -2000,6 +2020,21 @@ def build_status_count_rows(status_counts: Counter[str], not_present_blank_count
 	return [*rows, ["total", str(total_count), format_rate(total_count, total_count)]]
 
 
+def build_status_rollup_rows(status_counts: Counter[str]) -> list[list[str]]:
+	total_count = sum(status_counts.values())
+	if total_count <= 0:
+		return []
+	present_count = sum(
+		count for status, count in status_counts.items() if status.strip().lower() in POSITIVE_EVIDENCE_STATUS_VALUES
+	)
+	not_present_count = total_count - present_count
+	return [
+		["present", str(present_count), format_rate(present_count, total_count)],
+		["not_present", str(not_present_count), format_rate(not_present_count, total_count)],
+		["total", str(total_count), format_rate(total_count, total_count)],
+	]
+
+
 def split_detail_entries_by_blank(
 	detail_entries: list[tuple[str, str]],
 ) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
@@ -2008,6 +2043,38 @@ def split_detail_entries_by_blank(
 	for entry in detail_entries:
 		(blank if entry[1] in BLANK_SEGMENT_BUCKETS else non_blank).append(entry)
 	return blank, non_blank
+
+
+def build_redundant_recovery_rows(
+	present_detail_entries: list[tuple[str, str]],
+	present_recovery_detail_entries: list[tuple[str, str]],
+	*,
+	required_layer0_records: str = "",
+	bound_segment_id: str = "",
+) -> tuple[list[list[str]], int]:
+	present_counter = Counter(present_detail_entries)
+	present_recovery_counter = Counter(present_recovery_detail_entries)
+	overlapping_entries = [
+		entry for entry in present_recovery_counter.keys()
+		if entry in present_counter
+	]
+	overlapping_entries.sort(key=lambda item: (segment_text_sort_key(item[1]), item[1], item[0].lower()))
+	rows: list[list[str]] = []
+	redundant_row_count = 0
+	for source_entry, segment_text in overlapping_entries:
+		overlap_count = min(
+			present_counter[(source_entry, segment_text)],
+			present_recovery_counter[(source_entry, segment_text)],
+		)
+		redundant_row_count += overlap_count
+		highlighted_source_entry = highlight_segment_text_in_submission(source_entry, segment_text)
+		segment_columns = map_segment_bucket_to_columns(segment_text, required_layer0_records, bound_segment_id)
+		rows.append([
+			escape_markdown_table_cell(highlighted_source_entry),
+			*(escape_markdown_table_cell(value) for value in segment_columns),
+			str(overlap_count),
+		])
+	return rows, redundant_row_count
 
 
 def build_segment_detail_rows(
@@ -2099,8 +2166,10 @@ def render_indicator_segment_report(
 	segment_source_csv_path: Path | None,
 	status_counts: Counter[str],
 	matching_segment_counts: Counter[str],
+	matching_recovery_segment_counts: Counter[str],
 	non_matching_segment_counts: Counter[str],
 	matching_detail_entries: list[tuple[str, str]],
+	matching_recovery_detail_entries: list[tuple[str, str]],
 	non_matching_detail_entries: list[tuple[str, str]],
 	matching_row_count: int,
 	non_matching_row_count: int,
@@ -2154,6 +2223,17 @@ def render_indicator_segment_report(
 	]
 	status_rows = build_status_count_rows(status_counts, not_present_blank_count)
 	if status_rows:
+		parts.extend([
+			"#### Roll-Up (present vs not_present)",
+			"",
+			render_markdown_table(
+				[*identifier_headers, "evidence_status", "count", "%"],
+				prepend_identifier_columns(build_status_rollup_rows(status_counts), identifier_values),
+			),
+			"",
+			"#### Disaggregated",
+			"",
+		])
 		parts.append(
 			render_markdown_table(
 				[*identifier_headers, "evidence_status", "count", "%"],
@@ -2162,14 +2242,39 @@ def render_indicator_segment_report(
 		)
 	else:
 		parts.append("No scored rows.")
+	segment_column_labels = derive_segment_report_column_labels(required_layer0_records, bound_segment_id)
+	redundant_recovery_rows, redundant_recovery_row_count = build_redundant_recovery_rows(
+		matching_detail_entries,
+		matching_recovery_detail_entries,
+		required_layer0_records=required_layer0_records,
+		bound_segment_id=bound_segment_id,
+	)
+	parts.extend([
+		"",
+		"### Redundant Recovery",
+		"",
+	])
+	if redundant_recovery_rows:
+		parts.extend([
+			f"Rows where evidence_status = present_recovery also appear in evidence pool present: {redundant_recovery_row_count}",
+			"",
+			render_markdown_table(
+				[*identifier_headers, "original_submission", *segment_column_labels, "redundant_count"],
+				prepend_identifier_columns(redundant_recovery_rows, identifier_values),
+			),
+		])
+	else:
+		parts.append("none")
 	parts.extend([
 		"",
 		"### Indicator-Segment Texts Summary",
 		"",
 		"#### Matching Segment Texts Summary",
 		"",
+		"##### present",
+		f"Row count = {sum(matching_segment_counts.values())}",
+		"",
 	])
-	segment_column_labels = derive_segment_report_column_labels(required_layer0_records, bound_segment_id)
 	matching_summary_rows = build_segment_summary_rows(
 		matching_segment_counts,
 		"present",
@@ -2192,6 +2297,37 @@ def render_indicator_segment_report(
 		)
 	else:
 		parts.append("No matching segment texts.")
+	parts.extend([
+		"",
+		"##### present_recovery",
+		f"Row count = {sum(matching_recovery_segment_counts.values())}",
+		"",
+	])
+	matching_recovery_summary_rows = build_segment_summary_rows(
+		matching_recovery_segment_counts,
+		"present_recovery",
+		required_layer0_records=required_layer0_records,
+		bound_segment_id=bound_segment_id,
+	)
+	if matching_recovery_summary_rows:
+		parts.append(
+			render_markdown_table(
+				[*identifier_headers, "evidence_status", *segment_column_labels, "count"],
+				prepend_identifier_columns(
+					append_total_count_row(
+						matching_recovery_summary_rows,
+						[
+							"present_recovery",
+							*("total" if index == 0 else "" for index, _ in enumerate(segment_column_labels)),
+						],
+						sum(matching_recovery_segment_counts.values()),
+					),
+					identifier_values,
+				),
+			)
+		)
+	else:
+		parts.append("No present_recovery segment texts.")
 	parts.extend([
 		"",
 		"#### Non-Matching Segment Texts Summary",
@@ -2225,6 +2361,9 @@ def render_indicator_segment_report(
 		"",
 		"#### Matching Segment Texts Detail",
 		"",
+		"##### present",
+		f"Row count = {len(matching_detail_entries)}",
+		"",
 	])
 	matching_detail_rows = build_segment_detail_rows(
 		matching_detail_entries,
@@ -2240,6 +2379,26 @@ def render_indicator_segment_report(
 		)
 	else:
 		parts.append("No matching segment details.")
+	parts.extend([
+		"",
+		"##### present_recovery",
+		f"Row count = {len(matching_recovery_detail_entries)}",
+		"",
+	])
+	matching_recovery_detail_rows = build_segment_detail_rows(
+		matching_recovery_detail_entries,
+		required_layer0_records=required_layer0_records,
+		bound_segment_id=bound_segment_id,
+	)
+	if matching_recovery_detail_rows:
+		parts.append(
+			render_markdown_table(
+				[*identifier_headers, "original_submission", *segment_column_labels],
+				prepend_identifier_columns(matching_recovery_detail_rows, identifier_values),
+			)
+		)
+	else:
+		parts.append("No present_recovery segment details.")
 	blank_non_matching_entries, non_blank_non_matching_entries = split_detail_entries_by_blank(
 		non_matching_detail_entries
 	)
@@ -2300,8 +2459,10 @@ def render_indicator_slot_group_segment_report(
 	bound_segment_id: str,
 	status_counts_by_member: dict[tuple[str, str], Counter[str]],
 	matching_segment_counts_by_member: dict[tuple[str, str], Counter[str]],
+	matching_recovery_segment_counts_by_member: dict[tuple[str, str], Counter[str]],
 	non_matching_segment_counts_by_member: dict[tuple[str, str], Counter[str]],
 	matching_detail_entries_by_member: dict[tuple[str, str], list[tuple[str, str]]],
+	matching_recovery_detail_entries_by_member: dict[tuple[str, str], list[tuple[str, str]]],
 	non_matching_detail_entries_by_member: dict[tuple[str, str], list[tuple[str, str]]],
 	matching_row_count: int,
 	non_matching_row_count: int,
@@ -2376,15 +2537,29 @@ def render_indicator_slot_group_segment_report(
 		"",
 	]
 	status_rows: list[list[str]] = []
+	status_rollup_rows: list[list[str]] = []
 	for member_row in indicator_members:
 		component_id = member_row[0]
 		indicator_id = member_row[1]
 		member_key = (component_id, indicator_id)
 		member_status_counts = status_counts_by_member.get(member_key, Counter())
 		member_blank_count = int(not_present_blank_count_by_member.get(member_key, 0))
+		for row in build_status_rollup_rows(member_status_counts):
+			status_rollup_rows.append([component_id, indicator_id, *row])
 		for row in build_status_count_rows(member_status_counts, member_blank_count):
 			status_rows.append([component_id, indicator_id, *row])
 	if status_rows:
+		parts.extend([
+			"#### Roll-Up (present vs not_present)",
+			"",
+			render_markdown_table(
+				["component_id", "indicator_id", "evidence_status", "count", "%"],
+				status_rollup_rows,
+			),
+			"",
+			"#### Disaggregated",
+			"",
+		])
 		parts.append(
 			render_markdown_table(
 				["component_id", "indicator_id", "evidence_status", "count", "%"],
@@ -2393,14 +2568,47 @@ def render_indicator_slot_group_segment_report(
 		)
 	else:
 		parts.append("No scored rows.")
+	segment_column_labels = derive_segment_report_column_labels(required_layer0_records, bound_segment_id)
+	redundant_recovery_rows: list[list[str]] = []
+	redundant_recovery_row_count = 0
+	for member_row in indicator_members:
+		component_id = member_row[0]
+		indicator_id = member_row[1]
+		member_key = (component_id, indicator_id)
+		member_redundant_rows, member_redundant_count = build_redundant_recovery_rows(
+			matching_detail_entries_by_member.get(member_key, []),
+			matching_recovery_detail_entries_by_member.get(member_key, []),
+			required_layer0_records=required_layer0_records,
+			bound_segment_id=bound_segment_id,
+		)
+		redundant_recovery_row_count += member_redundant_count
+		redundant_recovery_rows.extend([[component_id, indicator_id, *row] for row in member_redundant_rows])
+	parts.extend([
+		"",
+		"### Redundant Recovery",
+		"",
+	])
+	if redundant_recovery_rows:
+		parts.extend([
+			f"Rows where evidence_status = present_recovery also appear in evidence pool present: {redundant_recovery_row_count}",
+			"",
+			render_markdown_table(
+				["component_id", "indicator_id", "original_submission", *segment_column_labels, "redundant_count"],
+				redundant_recovery_rows,
+			),
+		])
+	else:
+		parts.append("none")
 	parts.extend([
 		"",
 		"### Indicator-Segment Texts Summary",
 		"",
 		"#### Matching Segment Texts Summary",
 		"",
+		"##### present",
+		f"Row count = {sum(sum(counts.values()) for counts in matching_segment_counts_by_member.values())}",
+		"",
 	])
-	segment_column_labels = derive_segment_report_column_labels(required_layer0_records, bound_segment_id)
 	matching_summary_rows: list[list[str]] = []
 	for member_row in indicator_members:
 		component_id = member_row[0]
@@ -2434,6 +2642,45 @@ def render_indicator_slot_group_segment_report(
 		)
 	else:
 		parts.append("No matching segment texts.")
+	parts.extend([
+		"",
+		"##### present_recovery",
+		f"Row count = {sum(sum(counts.values()) for counts in matching_recovery_segment_counts_by_member.values())}",
+		"",
+	])
+	matching_recovery_summary_rows: list[list[str]] = []
+	for member_row in indicator_members:
+		component_id = member_row[0]
+		indicator_id = member_row[1]
+		member_key = (component_id, indicator_id)
+		member_matching_recovery_counts = matching_recovery_segment_counts_by_member.get(member_key, Counter())
+		member_rows = build_segment_summary_rows(
+			member_matching_recovery_counts,
+			"present_recovery",
+			required_layer0_records=required_layer0_records,
+			bound_segment_id=bound_segment_id,
+		)
+		matching_recovery_summary_rows.extend([[component_id, indicator_id, *row] for row in member_rows])
+		if member_matching_recovery_counts:
+			total_segment_columns = ["total" if index == 0 else "" for index, _ in enumerate(segment_column_labels)]
+			matching_recovery_summary_rows.append(
+				[
+					component_id,
+					indicator_id,
+					"present_recovery",
+					*total_segment_columns,
+					str(sum(member_matching_recovery_counts.values())),
+				]
+			)
+	if matching_recovery_summary_rows:
+		parts.append(
+			render_markdown_table(
+				["component_id", "indicator_id", "evidence_status", *segment_column_labels, "count"],
+				matching_recovery_summary_rows,
+			)
+		)
+	else:
+		parts.append("No present_recovery segment texts.")
 	parts.extend([
 		"",
 		"#### Non-Matching Segment Texts Summary",
@@ -2478,6 +2725,9 @@ def render_indicator_slot_group_segment_report(
 		"",
 		"#### Matching Segment Texts Detail",
 		"",
+		"##### present",
+		f"Row count = {sum(len(entries) for entries in matching_detail_entries_by_member.values())}",
+		"",
 	])
 	matching_detail_rows: list[list[str]] = []
 	for member_row in indicator_members:
@@ -2499,6 +2749,32 @@ def render_indicator_slot_group_segment_report(
 		)
 	else:
 		parts.append("No matching segment details.")
+	parts.extend([
+		"",
+		"##### present_recovery",
+		f"Row count = {sum(len(entries) for entries in matching_recovery_detail_entries_by_member.values())}",
+		"",
+	])
+	matching_recovery_detail_rows: list[list[str]] = []
+	for member_row in indicator_members:
+		component_id = member_row[0]
+		indicator_id = member_row[1]
+		member_key = (component_id, indicator_id)
+		member_rows = build_segment_detail_rows(
+			matching_recovery_detail_entries_by_member.get(member_key, []),
+			required_layer0_records=required_layer0_records,
+			bound_segment_id=bound_segment_id,
+		)
+		matching_recovery_detail_rows.extend([[component_id, indicator_id, *row] for row in member_rows])
+	if matching_recovery_detail_rows:
+		parts.append(
+			render_markdown_table(
+				["component_id", "indicator_id", "original_submission", *segment_column_labels],
+				matching_recovery_detail_rows,
+			)
+		)
+	else:
+		parts.append("No present_recovery segment details.")
 	blank_non_matching_rows: list[list[str]] = []
 	non_blank_non_matching_rows: list[list[str]] = []
 	for member_row in indicator_members:
@@ -3801,10 +4077,13 @@ def main() -> int:
 		)
 		status_counts: Counter[str] = Counter()
 		matching_segment_counts: Counter[str] = Counter()
+		matching_recovery_segment_counts: Counter[str] = Counter()
 		non_matching_segment_counts: Counter[str] = Counter()
 		matching_detail_entries: list[tuple[str, str]] = []
+		matching_recovery_detail_entries: list[tuple[str, str]] = []
 		non_matching_detail_entries: list[tuple[str, str]] = []
 		matching_detail_seen_entries: set[tuple[str, str]] = set()
+		matching_recovery_detail_seen_entries: set[tuple[str, str]] = set()
 		non_matching_detail_seen_entries: set[tuple[str, str]] = set()
 		matching_row_count = 0
 		non_matching_row_count = 0
@@ -3839,13 +4118,22 @@ def main() -> int:
 			if evidence_status == "not_present" and segment_bucket in BLANK_SEGMENT_BUCKETS:
 				not_present_blank_count += 1
 			if is_positive_scored_row(scored_row):
-				matching_segment_counts[segment_bucket] += 1
-				append_segment_detail_row(
-					matching_detail_entries,
-					matching_detail_seen_entries,
-					source_submission_entry,
-					segment_bucket,
-				)
+				if evidence_status.lower() == "present_recovery":
+					matching_recovery_segment_counts[segment_bucket] += 1
+					append_segment_detail_row(
+						matching_recovery_detail_entries,
+						matching_recovery_detail_seen_entries,
+						source_submission_entry,
+						segment_bucket,
+					)
+				else:
+					matching_segment_counts[segment_bucket] += 1
+					append_segment_detail_row(
+						matching_detail_entries,
+						matching_detail_seen_entries,
+						source_submission_entry,
+						segment_bucket,
+					)
 				matching_row_count += 1
 			else:
 				non_matching_segment_counts[segment_bucket] += 1
@@ -3883,8 +4171,10 @@ def main() -> int:
 				segment_source_csv_path=stitched_csv_path_by_component.get(component_id),
 				status_counts=status_counts,
 				matching_segment_counts=matching_segment_counts,
+				matching_recovery_segment_counts=matching_recovery_segment_counts,
 				non_matching_segment_counts=non_matching_segment_counts,
 				matching_detail_entries=matching_detail_entries,
+				matching_recovery_detail_entries=matching_recovery_detail_entries,
 				non_matching_detail_entries=non_matching_detail_entries,
 				matching_row_count=matching_row_count,
 				non_matching_row_count=non_matching_row_count,
@@ -3903,10 +4193,13 @@ def main() -> int:
 					"bound_segment_id": "",
 					"status_counts_by_member": {},
 					"matching_segment_counts_by_member": {},
+					"matching_recovery_segment_counts_by_member": {},
 					"non_matching_segment_counts_by_member": {},
 					"matching_detail_entries_by_member": {},
+					"matching_recovery_detail_entries_by_member": {},
 					"non_matching_detail_entries_by_member": {},
 					"matching_detail_seen_entries_by_member": {},
+					"matching_recovery_detail_seen_entries_by_member": {},
 					"non_matching_detail_seen_entries_by_member": {},
 					"not_present_blank_count_by_member": {},
 					"matching_row_count": 0,
@@ -3933,18 +4226,28 @@ def main() -> int:
 			member_key = (component_id, indicator_id)
 			group_report["status_counts_by_member"].setdefault(member_key, Counter()).update(status_counts)
 			group_report["matching_segment_counts_by_member"].setdefault(member_key, Counter()).update(matching_segment_counts)
+			group_report["matching_recovery_segment_counts_by_member"].setdefault(member_key, Counter()).update(matching_recovery_segment_counts)
 			group_report["non_matching_segment_counts_by_member"].setdefault(member_key, Counter()).update(non_matching_segment_counts)
 			group_report["not_present_blank_count_by_member"][member_key] = (
 				int(group_report["not_present_blank_count_by_member"].get(member_key, 0)) + not_present_blank_count
 			)
 			group_report["matching_detail_entries_by_member"].setdefault(member_key, [])
+			group_report["matching_recovery_detail_entries_by_member"].setdefault(member_key, [])
 			group_report["non_matching_detail_entries_by_member"].setdefault(member_key, [])
 			group_report["matching_detail_seen_entries_by_member"].setdefault(member_key, set())
+			group_report["matching_recovery_detail_seen_entries_by_member"].setdefault(member_key, set())
 			group_report["non_matching_detail_seen_entries_by_member"].setdefault(member_key, set())
 			for entry, segment_bucket in matching_detail_entries:
 				append_segment_detail_row(
 					group_report["matching_detail_entries_by_member"][member_key],
 					group_report["matching_detail_seen_entries_by_member"][member_key],
+					entry,
+					segment_bucket,
+				)
+			for entry, segment_bucket in matching_recovery_detail_entries:
+				append_segment_detail_row(
+					group_report["matching_recovery_detail_entries_by_member"][member_key],
+					group_report["matching_recovery_detail_seen_entries_by_member"][member_key],
 					entry,
 					segment_bucket,
 				)
@@ -3987,8 +4290,10 @@ def main() -> int:
 				bound_segment_id=str(group_report["bound_segment_id"]),
 				status_counts_by_member=group_report["status_counts_by_member"],
 				matching_segment_counts_by_member=group_report["matching_segment_counts_by_member"],
+				matching_recovery_segment_counts_by_member=group_report["matching_recovery_segment_counts_by_member"],
 				non_matching_segment_counts_by_member=group_report["non_matching_segment_counts_by_member"],
 				matching_detail_entries_by_member=group_report["matching_detail_entries_by_member"],
+				matching_recovery_detail_entries_by_member=group_report["matching_recovery_detail_entries_by_member"],
 				non_matching_detail_entries_by_member=group_report["non_matching_detail_entries_by_member"],
 				matching_row_count=int(group_report["matching_row_count"]),
 				non_matching_row_count=int(group_report["non_matching_row_count"]),
