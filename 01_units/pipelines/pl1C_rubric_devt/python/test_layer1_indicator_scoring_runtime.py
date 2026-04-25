@@ -500,6 +500,15 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 			"committee deliberation",
 		)
 
+	def test_normalize_text_strips_possessive_when_rule_requests_it(self) -> None:
+		self.assertEqual(
+			normalize_text(
+				"  The Committee's obligations and reviewers' notes  ",
+				"lowercase_trim_strip_leading_determiner_strip_possessive",
+			),
+			"committee obligations and reviewers notes",
+		)
+
 	def test_prefix_stripping_rule_that_logs_original_and_stripped_segment(self) -> None:
 		with self.assertLogs("layer1_indicator_scoring_runtime", level="DEBUG") as captured:
 			status, _ = apply_decision_rule("the rule that reviewers must score applications independently", PAYLOAD)
@@ -811,6 +820,25 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 			'}'
 		)
 		self.assertEqual(payload["normalisation_rule"], "lowercase_lemma_effect_terms")
+
+	def test_parse_scoring_payload_accepts_strip_leading_determiner_strip_possessive_rule(self) -> None:
+		payload = parse_scoring_payload(
+			'{'
+			'"scoring_mode":"deterministic",'
+			'"dependency_type":"segment",'
+			'"bound_segment_id":"04_WorkflowOrRole",'
+			'"normalisation_rule":"lowercase_trim_strip_leading_determiner_strip_possessive",'
+			'"match_policy":"exact_or_alias",'
+			'"decision_rule":"present_if_exact_match_or_alias_and_not_excluded",'
+			'"allowed_terms":["committee role"],'
+			'"allowed_aliases":{},'
+			'"excluded_terms":[]'
+			'}'
+		)
+		self.assertEqual(
+			payload["normalisation_rule"],
+			"lowercase_trim_strip_leading_determiner_strip_possessive",
+		)
 
 	def test_parse_scoring_payload_normalizes_legacy_canonical_distinct_rule_name(self) -> None:
 		payload = parse_scoring_payload(

@@ -14,6 +14,7 @@ The explicitly implemented `normalisation_rule` values are:
 - `lowercase_trim`: lowercases the input text, collapses repeated whitespace, and strips leading and trailing whitespace.
 - `lowercase_trim_strip_stage_suffix`: applies `lowercase_trim`, then removes a trailing `stage` suffix so labels like `documentation stage` normalize to `documentation`.
 - `lowercase_trim_strip_leading_determiner`: applies `lowercase_trim`, then removes a leading determiner so labels like `the committee` normalize to `committee`.
+- `lowercase_trim_strip_leading_determiner_strip_possessive`: applies `lowercase_trim`, removes a leading determiner, then strips possessive markers so labels like `the committee's role` normalize to `committee role`.
 - `lowercase_lemma_effect_terms`: applies `lowercase_trim`, then rewrites only configured effect-term inflections like `sequencing` -> `sequence` while preserving surrounding structural-feature text.
 
 
@@ -72,6 +73,7 @@ SUPPORTED_NORMALISATION_RULES = {
 	"lowercase_trim",
 	"lowercase_trim_strip_stage_suffix",
 	"lowercase_trim_strip_leading_determiner",
+	"lowercase_trim_strip_leading_determiner_strip_possessive",
 	"lowercase_lemma_effect_terms",
 }
 
@@ -133,6 +135,8 @@ OBJECT_PHRASE_SKIP_TOKENS = {
 
 LABEL_LINE_RE = re.compile(r"^\s*\[[^\]]+\]\s*$")
 LEADING_ARTICLE_RE = re.compile(r"^(?:the|a|an)\s+", re.IGNORECASE)
+POSSESSIVE_TOKEN_RE = re.compile(r"\b([a-z0-9]+)'s\b", re.IGNORECASE)
+TRAILING_APOSTROPHE_RE = re.compile(r"\b([a-z0-9]+)'(?=\W|$)", re.IGNORECASE)
 CONJUNCTION_SPLIT_RE = re.compile(r"\s+and\s+|\s*,\s*", re.IGNORECASE)
 TRAILING_STAGE_SUFFIX_RE = re.compile(r"\s+stage$", re.IGNORECASE)
 MATCH_PREFIX_RE = re.compile(
@@ -389,6 +393,7 @@ def normalize_text(value: object, rule: str) -> str:
 		"lowercase_trim",
 		"lowercase_trim_strip_stage_suffix",
 		"lowercase_trim_strip_leading_determiner",
+		"lowercase_trim_strip_leading_determiner_strip_possessive",
 		"lowercase_lemma_effect_terms",
 	}
 	normalized = text.replace("\r\n", "\n").replace("\r", "\n")
@@ -397,6 +402,7 @@ def normalize_text(value: object, rule: str) -> str:
 		"lowercase_trim",
 		"lowercase_trim_strip_stage_suffix",
 		"lowercase_trim_strip_leading_determiner",
+		"lowercase_trim_strip_leading_determiner_strip_possessive",
 		"lowercase_lemma_effect_terms",
 	}:
 		normalized = normalized.lower()
@@ -404,8 +410,14 @@ def normalize_text(value: object, rule: str) -> str:
 		normalized = normalize_whitespace(normalized).strip()
 	if rule == "lowercase_trim_strip_stage_suffix":
 		normalized = TRAILING_STAGE_SUFFIX_RE.sub("", normalized)
-	if rule == "lowercase_trim_strip_leading_determiner":
+	if rule in {
+		"lowercase_trim_strip_leading_determiner",
+		"lowercase_trim_strip_leading_determiner_strip_possessive",
+	}:
 		normalized = LEADING_ARTICLE_RE.sub("", normalized, count=1)
+	if rule == "lowercase_trim_strip_leading_determiner_strip_possessive":
+		normalized = POSSESSIVE_TOKEN_RE.sub(r"\1", normalized)
+		normalized = TRAILING_APOSTROPHE_RE.sub(r"\1", normalized)
 	if rule == "lowercase_lemma_effect_terms":
 		normalized = apply_effect_term_phrase_lemma_map(normalized)
 		normalized = apply_effect_term_lemma_map(normalized)
