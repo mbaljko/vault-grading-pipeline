@@ -27,6 +27,7 @@ The explicitly recognized `decision_rule` values are:
 - `present_if_no_excluded_terms_found`: returns `present` whenever the segment contains none of the configured excluded terms, regardless of allowed-term matching.
 - `present_if_any_allowed_term_found_and_not_only_excluded`: returns `present` when the configured policy finds an allowed term match; this rule does not independently veto on excluded-term presence.
 - `present_if_canonical_mappings_are_distinct`: returns `present` when the left and right slots resolve to different canonical values, with excluded terms still able to veto the result.
+- `present_if_any_allowed_or_alias_substring_matches`: returns `present` when any normalized allowed term or normalized alias source phrase appears as a substring within the normalized segment, and no excluded term matches the exact segment.
 
 Legacy compatibility note:
 - `present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b`
@@ -92,6 +93,7 @@ SUPPORTED_DECISION_RULES = {
 	"present_if_no_excluded_terms_found",
 	"present_if_any_allowed_term_found_and_not_only_excluded",
 	"present_if_canonical_mappings_are_distinct",
+	"present_if_any_allowed_or_alias_substring_matches",
 }
 
 SUPPORTED_BOUND_SEGMENT_RESOLUTION_POLICIES = {
@@ -1507,6 +1509,29 @@ def apply_decision_rule(
 	if decision_rule == "present_if_canonical_mappings_are_distinct":
 		candidate = policy_match
 		return finalize("present" if candidate and not has_excluded else "not_present", candidate_was_positive=candidate)
+	if decision_rule == "present_if_any_allowed_or_alias_substring_matches":
+		# Build combined list of phrases to match: allowed_terms + alias source phrases (keys)
+		allowed_terms = list(payload.get("allowed_terms", []))
+		allowed_aliases = dict(payload.get("allowed_aliases", {}))
+		
+		# Combine allowed_terms with alias keys (source phrases)
+		match_phrases = allowed_terms + list(allowed_aliases.keys())
+		
+		# Normalize all phrases and filter out empty ones
+		normalized_phrases = [
+			normalize_text(phrase, rule)
+			for phrase in match_phrases
+			if normalize_text(phrase, rule)
+		]
+		
+		# Check if any normalized phrase is a substring of the normalized segment
+		candidate = any(phrase in normalized_text for phrase in normalized_phrases)
+		
+		# Exact-segment veto: excluded terms must match the exact segment, not as substring
+		exact_segment_excluded = any(term == normalized_text for term in excluded_terms if term)
+		
+		evidence_status = "present" if candidate and not exact_segment_excluded else "not_present"
+		return finalize(evidence_status, candidate_was_positive=candidate)
 	raise ValueError(f"Unsupported Layer 1 decision_rule: {decision_rule}")
 
 
