@@ -212,6 +212,11 @@ ALLOW_COORDINATION_TEMPLATE_OVERRIDES = {
 	"B_claim_seg_03": True,
 	"B_claim_seg_04": True,
 	"B_claim_seg_05": True,
+	"AP2B_claim_seg_01": False,
+	"AP2B_claim_seg_02": True,
+	"AP2B_claim_seg_03": True,
+	"AP2B_claim_seg_04": True,
+	"AP2B_claim_seg_05": True,
 }
 
 ALLOW_COORDINATION_TEXT_FIELDS = (

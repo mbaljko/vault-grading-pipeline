@@ -105,6 +105,7 @@ POSITIVE_EVIDENCE_STATUS_VALUES = {
 	"supported",
 	"met",
 }
+MAX_NON_BLANK_DETAIL_ROWS_PER_TABLE = 100
 _WARNINGS_EMITTED: set[str] = set()
 BLANK_SEGMENT_BUCKETS: frozenset[str] = frozenset(
 	{"(blank segment text)", "(missing segment source row)"}
@@ -2272,10 +2273,12 @@ def render_indicator_segment_report(
 		bound_segment_id=bound_segment_id,
 	)
 	if non_blank_non_matching_rows:
-		parts.append(
-			render_markdown_table(
-				[*identifier_headers, "original_submission", *segment_column_labels],
-				prepend_identifier_columns(non_blank_non_matching_rows, identifier_values),
+		parts.extend(
+			render_chunked_markdown_tables(
+				headers=[*identifier_headers, "original_submission", *segment_column_labels],
+				rows=prepend_identifier_columns(non_blank_non_matching_rows, identifier_values),
+				max_rows_per_table=MAX_NON_BLANK_DETAIL_ROWS_PER_TABLE,
+				note_label="Non-Matching Segment Texts Detail (Non-Blank Segments)",
 			)
 		)
 	else:
@@ -2536,10 +2539,12 @@ def render_indicator_slot_group_segment_report(
 		"",
 	])
 	if non_blank_non_matching_rows:
-		parts.append(
-			render_markdown_table(
-				["component_id", "indicator_id", "original_submission", *segment_column_labels],
-				non_blank_non_matching_rows,
+		parts.extend(
+			render_chunked_markdown_tables(
+				headers=["component_id", "indicator_id", "original_submission", *segment_column_labels],
+				rows=non_blank_non_matching_rows,
+				max_rows_per_table=MAX_NON_BLANK_DETAIL_ROWS_PER_TABLE,
+				note_label="Non-Matching Segment Texts Detail (Non-Blank Segments)",
 			)
 		)
 	else:
@@ -2714,6 +2719,34 @@ def render_markdown_table(headers: list[str], rows: list[list[str]]) -> str:
 	separator_line = "| " + " | ".join("---" for _ in headers) + " |"
 	body_lines = ["| " + " | ".join(row) + " |" for row in rows]
 	return "\n".join([header_line, separator_line, *body_lines])
+
+
+def render_chunked_markdown_tables(
+	*,
+	headers: list[str],
+	rows: list[list[str]],
+	max_rows_per_table: int,
+	note_label: str,
+) -> list[str]:
+	if len(rows) <= max_rows_per_table:
+		return [render_markdown_table(headers, rows)]
+	total_chunks = (len(rows) + max_rows_per_table - 1) // max_rows_per_table
+	parts = [
+		f"Note: {note_label} has {len(rows)} rows, so it is split into {total_chunks} tables with up to {max_rows_per_table} rows each.",
+		"",
+	]
+	for chunk_index in range(total_chunks):
+		start_index = chunk_index * max_rows_per_table
+		end_index = start_index + max_rows_per_table
+		chunk_rows = rows[start_index:end_index]
+		parts.append(
+			f"##### Table part {chunk_index + 1} of {total_chunks} (rows {start_index + 1}-{start_index + len(chunk_rows)})"
+		)
+		parts.append("")
+		parts.append(render_markdown_table(headers, chunk_rows))
+		if chunk_index < total_chunks - 1:
+			parts.append("")
+	return parts
 
 
 def format_source_scored_csvs_label(scored_csv_paths: list[Path]) -> str:
