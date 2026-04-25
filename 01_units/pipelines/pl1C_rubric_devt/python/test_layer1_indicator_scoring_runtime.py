@@ -97,6 +97,33 @@ STAGE_PHRASE_PAYLOAD = {
 	"bound_segment_resolution_policy": "hard_stay",
 }
 
+B_CLAIM_CORE_05_PAYLOAD = {
+	"normalisation_rule": "lowercase_trim_strip_leading_determiner_strip_possessive",
+	"match_policy": "exact_or_alias",
+	"decision_rule": "present_if_exact_match_or_alias_and_not_excluded",
+	"allowed_terms": ["reviewer", "committee"],
+	"allowed_aliases": {},
+	"excluded_terms": [
+		"system",
+		"tool",
+		"model",
+		"algorithm",
+		"process",
+		"workflow",
+		"platform",
+		"stage",
+		"screening",
+		"assessment",
+		"scoring",
+		"deliberation",
+		"documentation",
+		"reporting",
+		"preparation",
+		"assignment",
+	],
+	"bound_segment_resolution_policy": "hard_stay",
+}
+
 BOUND_SEGMENT_POLICY_PAYLOAD = {
 	"normalisation_rule": "lowercase_trim_strip_stage_suffix",
 	"match_policy": "exact_or_alias",
@@ -661,6 +688,26 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 		self.assertIn("documentation", joined_logs)
 		self.assertIn("matched_excluded_terms=[]", joined_logs)
 		self.assertIn("final_status=present", joined_logs)
+
+	def test_b_claim_core_05_accepts_role_only_reviewer(self) -> None:
+		status, _ = apply_decision_rule("a reviewer", B_CLAIM_CORE_05_PAYLOAD)
+		self.assertEqual(status, "present")
+
+	def test_b_claim_core_05_accepts_role_only_committee(self) -> None:
+		status, _ = apply_decision_rule("the committee", B_CLAIM_CORE_05_PAYLOAD)
+		self.assertEqual(status, "present")
+
+	def test_b_claim_core_05_rejects_reviewer_preparation_due_to_excluded_veto(self) -> None:
+		status, _ = apply_decision_rule("reviewer preparation", B_CLAIM_CORE_05_PAYLOAD)
+		self.assertEqual(status, "not_present")
+
+	def test_b_claim_core_05_rejects_committee_deliberation_due_to_excluded_veto(self) -> None:
+		status, _ = apply_decision_rule("committee deliberation", B_CLAIM_CORE_05_PAYLOAD)
+		self.assertEqual(status, "not_present")
+
+	def test_b_claim_core_05_rejects_individual_reviewer_assessment_due_to_excluded_veto(self) -> None:
+		status, _ = apply_decision_rule("individual reviewer assessment", B_CLAIM_CORE_05_PAYLOAD)
+		self.assertEqual(status, "not_present")
 
 	def test_apply_decision_rule_raises_for_unsupported_decision_rule(self) -> None:
 		with self.assertRaisesRegex(ValueError, "Unsupported Layer 1 decision_rule: unsupported_rule"):
