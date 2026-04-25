@@ -106,6 +106,9 @@ POSITIVE_EVIDENCE_STATUS_VALUES = {
 	"met",
 }
 _WARNINGS_EMITTED: set[str] = set()
+BLANK_SEGMENT_BUCKETS: frozenset[str] = frozenset(
+	{"(blank segment text)", "(missing segment source row)"}
+)
 
 
 def emit_warning_once(message: str) -> None:
@@ -1887,7 +1890,7 @@ def map_segment_bucket_to_columns(
 		return [segment_bucket]
 	if len(column_specs) == 1:
 		return [segment_bucket]
-	if segment_bucket in {"(blank segment text)", "(missing segment source row)"}:
+	if segment_bucket in BLANK_SEGMENT_BUCKETS:
 		return [segment_bucket for _ in column_specs]
 	segment_pairs = parse_paired_segment_bucket(segment_bucket)
 	segment_values_by_label = {label: value for label, value in segment_pairs}
@@ -1914,7 +1917,7 @@ def highlight_segment_text_in_submission(source_entry: str, segment_text: str) -
 	normalized_segment = segment_text.replace("\r\n", "\n").replace("\r", "\n").strip()
 	if not normalized_segment:
 		return normalized_entry
-	if normalized_segment in {"(blank segment text)", "(missing segment source row)"}:
+	if normalized_segment in BLANK_SEGMENT_BUCKETS:
 		return normalized_entry
 	paired_segments = parse_paired_segment_bucket(normalized_segment)
 	if paired_segments:
@@ -1965,19 +1968,42 @@ def prepend_identifier_columns(rows: list[list[str]], identifier_values: list[st
 	return [[*identifier_values, *row] for row in rows]
 
 
-def build_status_count_rows(status_counts: Counter[str]) -> list[list[str]]:
+def build_status_count_rows(status_counts: Counter[str], not_present_blank_count: int = 0) -> list[list[str]]:
 	total_count = sum(status_counts.values())
-	rows = [
-		[
-			escape_markdown_table_cell(status or "(blank evidence_status)"),
-			str(count),
-			format_rate(count, total_count),
-		]
-		for status, count in sorted(status_counts.items(), key=lambda item: (-item[1], item[0].lower()))
-	]
+	not_present_total = status_counts.get("not_present", 0)
+	not_present_non_blank = not_present_total - not_present_blank_count
+	rows: list[list[str]] = []
+	for status, count in sorted(status_counts.items(), key=lambda item: (-item[1], item[0].lower())):
+		if status == "not_present" and not_present_blank_count > 0:
+			rows.append([
+				"not_present (non-blank)",
+				str(not_present_non_blank),
+				format_rate(not_present_non_blank, total_count),
+			])
+			rows.append([
+				"not_present (blank)",
+				str(not_present_blank_count),
+				format_rate(not_present_blank_count, total_count),
+			])
+		else:
+			rows.append([
+				escape_markdown_table_cell(status or "(blank evidence_status)"),
+				str(count),
+				format_rate(count, total_count),
+			])
 	if not rows:
 		return []
 	return [*rows, ["total", str(total_count), format_rate(total_count, total_count)]]
+
+
+def split_detail_entries_by_blank(
+	detail_entries: list[tuple[str, str]],
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+	blank: list[tuple[str, str]] = []
+	non_blank: list[tuple[str, str]] = []
+	for entry in detail_entries:
+		(blank if entry[1] in BLANK_SEGMENT_BUCKETS else non_blank).append(entry)
+	return blank, non_blank
 
 
 def build_segment_detail_rows(
@@ -2075,6 +2101,7 @@ def render_indicator_segment_report(
 	matching_row_count: int,
 	non_matching_row_count: int,
 	missing_input_row_count: int,
+	not_present_blank_count: int = 0,
 ) -> str:
 	identifier_headers = ["template_id", "indicator_id"]
 	identifier_values = [template_id or "(none)", indicator_id]
@@ -2121,7 +2148,7 @@ def render_indicator_segment_report(
 		"### Evidence Status Counts",
 		"",
 	]
-	status_rows = build_status_count_rows(status_counts)
+	status_rows = build_status_count_rows(status_counts, not_present_blank_count)
 	if status_rows:
 		parts.append(
 			render_markdown_table(
@@ -2209,25 +2236,47 @@ def render_indicator_segment_report(
 		)
 	else:
 		parts.append("No matching segment details.")
+	blank_non_matching_entries, non_blank_non_matching_entries = split_detail_entries_by_blank(
+		non_matching_detail_entries
+	)
 	parts.extend([
 		"",
-		"#### Non-Matching Segment Texts Detail",
+		"#### Non-Matching Segment Texts Detail (Blank Segments)",
 		"",
 	])
-	non_matching_detail_rows = build_segment_detail_rows(
-		non_matching_detail_entries,
+	blank_non_matching_rows = build_segment_detail_rows(
+		blank_non_matching_entries,
 		required_layer0_records=required_layer0_records,
 		bound_segment_id=bound_segment_id,
 	)
-	if non_matching_detail_rows:
+	if blank_non_matching_rows:
 		parts.append(
 			render_markdown_table(
 				[*identifier_headers, "original_submission", *segment_column_labels],
-				prepend_identifier_columns(non_matching_detail_rows, identifier_values),
+				prepend_identifier_columns(blank_non_matching_rows, identifier_values),
 			)
 		)
 	else:
-		parts.append("No non-matching segment details.")
+		parts.append("No non-matching segment details with blank segments.")
+	parts.extend([
+		"",
+		"#### Non-Matching Segment Texts Detail (Non-Blank Segments)",
+		"",
+	])
+	non_blank_non_matching_rows = build_segment_detail_rows(
+		non_blank_non_matching_entries,
+		required_layer0_records=required_layer0_records,
+		bound_segment_id=bound_segment_id,
+	)
+	if non_blank_non_matching_rows:
+		parts.append(
+			render_markdown_table(
+				[*identifier_headers, "original_submission", *segment_column_labels],
+				prepend_identifier_columns(non_blank_non_matching_rows, identifier_values),
+			)
+		)
+	else:
+		parts.append("No non-matching segment details with non-blank segments.")
 	parts.append("")
 	return "\n".join(parts)
 
@@ -2251,6 +2300,7 @@ def render_indicator_slot_group_segment_report(
 	matching_row_count: int,
 	non_matching_row_count: int,
 	missing_input_row_count: int,
+	not_present_blank_count: int = 0,
 ) -> str:
 	group_label = format_slot_group_label(local_slot)
 	identifier_headers = ["template_id", "indicator_id"]
@@ -2311,7 +2361,7 @@ def render_indicator_slot_group_segment_report(
 		"### Evidence Status Counts",
 		"",
 	]
-	status_rows = build_status_count_rows(status_counts)
+	status_rows = build_status_count_rows(status_counts, not_present_blank_count)
 	if status_rows:
 		parts.append(
 			render_markdown_table(
@@ -2399,25 +2449,47 @@ def render_indicator_slot_group_segment_report(
 		)
 	else:
 		parts.append("No matching segment details.")
+	blank_non_matching_entries, non_blank_non_matching_entries = split_detail_entries_by_blank(
+		non_matching_detail_entries
+	)
 	parts.extend([
 		"",
-		"#### Non-Matching Segment Texts Detail",
+		"#### Non-Matching Segment Texts Detail (Blank Segments)",
 		"",
 	])
-	non_matching_detail_rows = build_segment_detail_rows(
-		non_matching_detail_entries,
+	blank_non_matching_rows = build_segment_detail_rows(
+		blank_non_matching_entries,
 		required_layer0_records=required_layer0_records,
 		bound_segment_id=bound_segment_id,
 	)
-	if non_matching_detail_rows:
+	if blank_non_matching_rows:
 		parts.append(
 			render_markdown_table(
 				[*identifier_headers, "original_submission", *segment_column_labels],
-				prepend_identifier_columns(non_matching_detail_rows, identifier_values),
+				prepend_identifier_columns(blank_non_matching_rows, identifier_values),
 			)
 		)
 	else:
-		parts.append("No non-matching segment details.")
+		parts.append("No non-matching segment details with blank segments.")
+	parts.extend([
+		"",
+		"#### Non-Matching Segment Texts Detail (Non-Blank Segments)",
+		"",
+	])
+	non_blank_non_matching_rows = build_segment_detail_rows(
+		non_blank_non_matching_entries,
+		required_layer0_records=required_layer0_records,
+		bound_segment_id=bound_segment_id,
+	)
+	if non_blank_non_matching_rows:
+		parts.append(
+			render_markdown_table(
+				[*identifier_headers, "original_submission", *segment_column_labels],
+				prepend_identifier_columns(non_blank_non_matching_rows, identifier_values),
+			)
+		)
+	else:
+		parts.append("No non-matching segment details with non-blank segments.")
 	parts.append("")
 	return "\n".join(parts)
 
@@ -3648,6 +3720,7 @@ def main() -> int:
 		matching_row_count = 0
 		non_matching_row_count = 0
 		missing_input_row_count = 0
+		not_present_blank_count = 0
 		input_rows_index = segment_rows_by_component_submission.get(component_id, {})
 		source_rows_index = source_rows_by_component_submission.get(component_id, {})
 		for scored_row in scored_rows_by_component.get(component_id, []):
@@ -3674,6 +3747,8 @@ def main() -> int:
 					bound_segment_id,
 					(source_row.get("source_response_text") or "") if source_row is not None else "",
 				)
+			if evidence_status == "not_present" and segment_bucket in BLANK_SEGMENT_BUCKETS:
+				not_present_blank_count += 1
 			if is_positive_scored_row(scored_row):
 				matching_segment_counts[segment_bucket] += 1
 				append_segment_detail_row(
@@ -3725,6 +3800,7 @@ def main() -> int:
 				matching_row_count=matching_row_count,
 				non_matching_row_count=non_matching_row_count,
 				missing_input_row_count=missing_input_row_count,
+				not_present_blank_count=not_present_blank_count,
 			),
 			encoding="utf-8",
 		)
@@ -3746,6 +3822,7 @@ def main() -> int:
 					"matching_row_count": 0,
 					"non_matching_row_count": 0,
 					"missing_input_row_count": 0,
+					"not_present_blank_count": 0,
 				},
 			)
 			if template_id:
@@ -3765,6 +3842,7 @@ def main() -> int:
 				]
 			)
 			group_report["status_counts"].update(status_counts)
+			group_report["not_present_blank_count"] += not_present_blank_count
 			group_report["matching_segment_counts"].update(matching_segment_counts)
 			group_report["non_matching_segment_counts"].update(non_matching_segment_counts)
 			for entry, segment_bucket in matching_detail_entries:
@@ -3819,6 +3897,7 @@ def main() -> int:
 				matching_row_count=int(group_report["matching_row_count"]),
 				non_matching_row_count=int(group_report["non_matching_row_count"]),
 				missing_input_row_count=int(group_report["missing_input_row_count"]),
+				not_present_blank_count=int(group_report["not_present_blank_count"]),
 			),
 			encoding="utf-8",
 		)
