@@ -2536,7 +2536,9 @@ def main() -> int:
 						}
 						positive_observation_keys_by_template[base_key] = []
 						positive_presence_keys_by_template[base_key] = set()
-					base_summary_rows[base_key]["expanded_indicator_ids"].add(indicator_id)
+					# Only include indicators that scored at least one positive hit
+					if number_scored_positive > 0:
+						base_summary_rows[base_key]["expanded_indicator_ids"].add(indicator_id)
 					base_summary_rows[base_key]["number_scored"] = int(base_summary_rows[base_key]["number_scored"]) + number_scored
 					base_summary_rows[base_key]["number_scored_positive"] = int(base_summary_rows[base_key]["number_scored_positive"]) + number_scored_positive
 					component_counts = base_summary_rows[base_key]["per_component_counts"]
