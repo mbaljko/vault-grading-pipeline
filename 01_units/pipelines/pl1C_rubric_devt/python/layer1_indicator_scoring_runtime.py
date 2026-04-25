@@ -85,6 +85,7 @@ SUPPORTED_DECISION_RULES = {
 	"present_if_matches_stage_or_role_and_not_excluded",
 	"present_if_any_stage_phrase_matches_after_normalisation_and_not_excluded",
 	"present_if_minimum_group_matches_met_and_not_excluded",
+	"present_if_minimum_group_matches_met_or_fallback_and_not_excluded",
 	"present_if_no_excluded_terms_found",
 	"present_if_any_allowed_term_found_and_not_only_excluded",
 	"present_if_canonical_mappings_are_distinct",
@@ -105,6 +106,28 @@ SUPPORTED_MATCH_POLICIES = {
 	"co_occurrence_lemma",
 	"absence_check",
 	"canonical_inequality",
+}
+
+MATCH_POLICY_WINDOW_RE = re.compile(r"^co_occurrence_window_(\d+)$")
+RULE_BOOL_TRUE_VALUES = {"1", "true", "yes", "y", "on"}
+RULE_BOOL_FALSE_VALUES = {"0", "false", "no", "n", "off"}
+RULE_EXPR_TOKEN_RE = re.compile(r"\(|\)|AND|OR|NOT|[A-Za-z_][A-Za-z0-9_]*", re.IGNORECASE)
+OBJECT_PHRASE_SKIP_TOKENS = {
+	"the",
+	"a",
+	"an",
+	"to",
+	"of",
+	"for",
+	"in",
+	"on",
+	"with",
+	"and",
+	"or",
+	"that",
+	"this",
+	"these",
+	"those",
 }
 
 LABEL_LINE_RE = re.compile(r"^\s*\[[^\]]+\]\s*$")
@@ -224,6 +247,81 @@ def apply_effect_term_lemma_map(value: str) -> str:
 
 def normalize_decision_rule_name(decision_rule: str) -> str:
 	return DECISION_RULE_ALIASES.get(decision_rule, decision_rule)
+
+
+def parse_rule_bool(value: object, default: bool = False) -> bool:
+	if isinstance(value, bool):
+		return value
+	if value is None:
+		return default
+	normalized = str(value).strip().lower()
+	if normalized in RULE_BOOL_TRUE_VALUES:
+		return True
+	if normalized in RULE_BOOL_FALSE_VALUES:
+		return False
+	return default
+
+
+def parse_semicolon_rule_config(value: object) -> dict[str, object]:
+	if isinstance(value, Mapping):
+		config = {str(key).strip(): inner for key, inner in value.items() if str(key).strip()}
+		config["enabled"] = parse_rule_bool(config.get("enabled"), default=False)
+		return config
+	if not isinstance(value, str) or not value.strip():
+		return {"enabled": False}
+	config: dict[str, object] = {}
+	for part in value.split(";"):
+		chunk = part.strip()
+		if not chunk or ":" not in chunk:
+			continue
+		key, raw_value = chunk.split(":", 1)
+		normalized_key = key.strip()
+		normalized_value = raw_value.strip()
+		if not normalized_key:
+			continue
+		if normalized_key == "enabled":
+			config[normalized_key] = parse_rule_bool(normalized_value, default=False)
+		elif normalized_value.isdigit():
+			config[normalized_key] = int(normalized_value)
+		else:
+			config[normalized_key] = normalized_value
+	config.setdefault("enabled", False)
+	return config
+
+
+def parse_comma_delimited_tokens(value: object) -> list[str]:
+	if isinstance(value, str):
+		return [token for token in (part.strip() for part in value.split(",")) if token]
+	if isinstance(value, list):
+		return [str(token).strip() for token in value if str(token).strip()]
+	return []
+
+
+def normalize_payload_optional_fields(payload: Mapping[str, object]) -> dict[str, object]:
+	normalized = dict(payload)
+	normalized["derived_structural_feature_rule"] = parse_semicolon_rule_config(
+		normalized.get("derived_structural_feature_rule")
+	)
+	normalized["implicit_feature_recovery"] = parse_semicolon_rule_config(
+		normalized.get("implicit_feature_recovery")
+	)
+	normalized["fallback_rule"] = parse_semicolon_rule_config(normalized.get("fallback_rule"))
+	normalized["domain_artifact_tokens"] = parse_comma_delimited_tokens(normalized.get("domain_artifact_tokens"))
+	return normalized
+
+
+def parse_co_occurrence_window_size(match_policy: str) -> int | None:
+	match = MATCH_POLICY_WINDOW_RE.fullmatch(match_policy)
+	if match is None:
+		return None
+	window_size = int(match.group(1))
+	return window_size if window_size > 0 else None
+
+
+def is_supported_match_policy(match_policy: str) -> bool:
+	if match_policy in SUPPORTED_MATCH_POLICIES:
+		return True
+	return parse_co_occurrence_window_size(match_policy) is not None
 
 
 def validate_normalisation_rule_name(rule: str) -> str:
@@ -695,6 +793,15 @@ def canonical_inequality_match(
 	)
 	if left_canonical and right_canonical:
 		return left_canonical != right_canonical
+	if left_text and right_text:
+		return normalize_text(left_text, rule) != normalize_text(right_text, rule)
+	fallback_source_text = (
+		str(row.get("source_response_text", "") or "").strip()
+		or str(row.get("evidence_text", "") or "").strip()
+		or str(row.get("response_text", "") or "").strip()
+	)
+	if fallback_source_text:
+		return True
 	return False
 
 
@@ -787,6 +894,322 @@ def evaluate_co_occurrence_phrase_groups(
 	return (True, normalized_text, normalized_required_term_groups, matched_terms_by_group, minimum_match_count)
 
 
+def tokenize_rule_expression(expression: str) -> list[str]:
+	return [token.upper() for token in RULE_EXPR_TOKEN_RE.findall(expression or "")]
+
+
+def evaluate_rule_condition(expression: str, context: Mapping[str, bool]) -> bool:
+	tokens = tokenize_rule_expression(expression)
+	if not tokens:
+		return True
+	index = 0
+
+	def parse_expression() -> bool:
+		nonlocal index
+		value = parse_term()
+		while index < len(tokens) and tokens[index] == "OR":
+			index += 1
+			value = value or parse_term()
+		return value
+
+	def parse_term() -> bool:
+		nonlocal index
+		value = parse_factor()
+		while index < len(tokens) and tokens[index] == "AND":
+			index += 1
+			value = value and parse_factor()
+		return value
+
+	def parse_factor() -> bool:
+		nonlocal index
+		if index >= len(tokens):
+			return False
+		token = tokens[index]
+		if token == "NOT":
+			index += 1
+			return not parse_factor()
+		if token == "(":
+			index += 1
+			value = parse_expression()
+			if index < len(tokens) and tokens[index] == ")":
+				index += 1
+			return value
+		if token == ")":
+			index += 1
+			return False
+		index += 1
+		return bool(context.get(token.lower(), False))
+
+	result = parse_expression()
+	return result and index >= len(tokens)
+
+
+def normalize_required_term_groups(payload: Mapping[str, object], rule: str) -> dict[str, list[str]]:
+	required_term_groups = {
+		str(group_name): [str(term) for term in group_terms]
+		for group_name, group_terms in dict(payload.get("required_term_groups", {})).items()
+	}
+	normalized_required_term_groups: dict[str, list[str]] = {}
+	for group_name, group_terms in required_term_groups.items():
+		normalized_required_term_groups[group_name] = sorted(
+			{normalize_text(term, rule) for term in group_terms if normalize_text(term, rule)}
+		)
+	return normalized_required_term_groups
+
+
+def tokenize_normalized_text(text: str) -> list[str]:
+	return [token for token in normalize_whitespace(text).split(" ") if token]
+
+
+def find_phrase_token_spans(tokens: list[str], phrase_tokens: list[str]) -> list[tuple[int, int]]:
+	if not tokens or not phrase_tokens:
+		return []
+	spans: list[tuple[int, int]] = []
+	length = len(phrase_tokens)
+	for start in range(0, len(tokens) - length + 1):
+		if tokens[start : start + length] == phrase_tokens:
+			spans.append((start, start + length - 1))
+	return spans
+
+
+def has_windowed_group_alignment(group_spans: dict[str, list[tuple[int, int]]], window_size: int) -> bool:
+	groups = [group_name for group_name, spans in group_spans.items() if spans]
+	if not groups:
+		return False
+
+	def dfs(group_index: int, current_min: int, current_max: int) -> bool:
+		if group_index >= len(groups):
+			return (current_max - current_min) <= window_size
+		for start, end in group_spans[groups[group_index]]:
+			next_min = min(current_min, start)
+			next_max = max(current_max, end)
+			if (next_max - next_min) > window_size:
+				continue
+			if dfs(group_index + 1, next_min, next_max):
+				return True
+		return False
+
+	for start, end in group_spans[groups[0]]:
+		if dfs(1, start, end):
+			return True
+	return False
+
+
+def evaluate_co_occurrence_phrase_groups_with_window(
+	text: str,
+	payload: Mapping[str, object],
+	rule: str,
+	window_size: int,
+) -> tuple[bool, str, dict[str, list[str]], dict[str, list[str]], int, bool]:
+	base_status, normalized_text, normalized_required_term_groups, matched_terms_by_group, minimum_match_count = (
+		evaluate_co_occurrence_phrase_groups(text, payload, rule)
+	)
+	if not base_status:
+		return (
+			False,
+			normalized_text,
+			normalized_required_term_groups,
+			matched_terms_by_group,
+			minimum_match_count,
+			False,
+		)
+	tokens = tokenize_normalized_text(normalized_text)
+	group_spans: dict[str, list[tuple[int, int]]] = {}
+	for group_name, terms in matched_terms_by_group.items():
+		spans: list[tuple[int, int]] = []
+		for term in terms:
+			phrase_tokens = tokenize_normalized_text(term)
+			spans.extend(find_phrase_token_spans(tokens, phrase_tokens))
+		group_spans[group_name] = spans
+	window_match = has_windowed_group_alignment(group_spans, window_size)
+	return (
+		window_match,
+		normalized_text,
+		normalized_required_term_groups,
+		matched_terms_by_group,
+		minimum_match_count,
+		window_match,
+	)
+
+
+def resolve_domain_artifact_tokens(payload: Mapping[str, object], rule: str) -> list[str]:
+	tokens: list[str] = []
+	for token in parse_comma_delimited_tokens(payload.get("domain_artifact_tokens")):
+		normalized = normalize_text(token, rule)
+		if not normalized:
+			continue
+		if normalized not in tokens:
+			tokens.append(normalized)
+		inflectional = normalize_inflectional_text(normalized)
+		if inflectional and inflectional not in tokens:
+			tokens.append(inflectional)
+	return tokens
+
+
+def infer_effect_and_structural_groups(
+	normalized_required_term_groups: Mapping[str, list[str]],
+) -> tuple[list[str], list[str]]:
+	effect_groups: list[str] = []
+	structural_groups: list[str] = []
+	for group_name in normalized_required_term_groups:
+		normalized_name = group_name.lower()
+		if "effect" in normalized_name or "action" in normalized_name:
+			effect_groups.append(group_name)
+		if "structural" in normalized_name or "feature" in normalized_name or "object" in normalized_name:
+			structural_groups.append(group_name)
+	return effect_groups, structural_groups
+
+
+def extract_direct_object_phrases(
+	normalized_text: str,
+	effect_terms: list[str],
+) -> list[str]:
+	tokens = tokenize_normalized_text(normalized_text)
+	if not tokens or not effect_terms:
+		return []
+	phrases: list[str] = []
+	seen: set[str] = set()
+	for effect_term in effect_terms:
+		phrase_tokens = tokenize_normalized_text(effect_term)
+		for _, end in find_phrase_token_spans(tokens, phrase_tokens):
+			cursor = end + 1
+			while cursor < len(tokens) and tokens[cursor] in OBJECT_PHRASE_SKIP_TOKENS:
+				cursor += 1
+			if cursor >= len(tokens):
+				continue
+			for size in (1, 2):
+				phrase = " ".join(tokens[cursor : min(cursor + size, len(tokens))]).strip()
+				if phrase and phrase not in seen:
+					seen.add(phrase)
+					phrases.append(phrase)
+	return phrases
+
+
+def evaluate_group_match_with_augmentations(
+	text: str,
+	payload: Mapping[str, object],
+	rule: str,
+	match_policy: str,
+	allow_fallback: bool,
+) -> dict[str, object]:
+	normalized_payload = normalize_payload_optional_fields(payload)
+	window_size = parse_co_occurrence_window_size(match_policy)
+	if window_size is not None:
+		policy_match, normalized_text, normalized_required_term_groups, matched_terms_by_group, minimum_match_count, windowed_match = (
+			evaluate_co_occurrence_phrase_groups_with_window(text, normalized_payload, rule, window_size)
+		)
+	elif match_policy == "co_occurrence_lemma":
+		policy_match, normalized_text, normalized_required_term_groups, matched_terms_by_group, minimum_match_count = (
+			evaluate_co_occurrence_phrase_groups(text, normalized_payload, rule)
+		)
+		windowed_match = False
+	else:
+		policy_match = co_occurrence_match(text, normalized_payload, rule)
+		normalized_text = normalize_text(text, rule)
+		normalized_required_term_groups = normalize_required_term_groups(normalized_payload, rule)
+		minimum_match_count = int(normalized_payload.get("minimum_match_count_per_group", 0) or 0)
+		matched_terms_by_group = {
+			group_name: [term for term in terms if term and term in normalized_text]
+			for group_name, terms in normalized_required_term_groups.items()
+		}
+		windowed_match = False
+
+	effect_groups, structural_groups = infer_effect_and_structural_groups(normalized_required_term_groups)
+	effect_terms = [term for group_name in effect_groups for term in matched_terms_by_group.get(group_name, [])]
+	direct_object_phrases = extract_direct_object_phrases(normalized_text, effect_terms)
+	domain_artifact_tokens = resolve_domain_artifact_tokens(normalized_payload, rule)
+	domain_artifact_present = any(token and phrase_appears_in_text(normalized_text, token) for token in domain_artifact_tokens)
+	direct_object_present = bool(direct_object_phrases)
+	effect_form_present = bool(effect_terms)
+
+	missing_groups = [
+		group_name
+		for group_name, terms in matched_terms_by_group.items()
+		if len(terms) < max(minimum_match_count, 1)
+	]
+
+	derived_rule = dict(normalized_payload.get("derived_structural_feature_rule", {}))
+	implicit_rule = dict(normalized_payload.get("implicit_feature_recovery", {}))
+	derived_feature_recovered = False
+	implicit_feature_recovery_used = False
+	if missing_groups and (
+		parse_rule_bool(derived_rule.get("enabled"), default=False)
+		or parse_rule_bool(implicit_rule.get("enabled"), default=False)
+	):
+		context = {
+			"effect_form_present": effect_form_present,
+			"direct_object_present": direct_object_present,
+			"domain_artifact_present": domain_artifact_present,
+		}
+		rules_to_evaluate = [
+			("derived", derived_rule),
+			("implicit", implicit_rule),
+		]
+		for rule_label, recovery_rule in rules_to_evaluate:
+			if not parse_rule_bool(recovery_rule.get("enabled"), default=False):
+				continue
+			condition = str(recovery_rule.get("condition", "") or "").strip()
+			action = str(recovery_rule.get("action", "treat_object_as_structural_feature") or "").strip()
+			if action != "treat_object_as_structural_feature":
+				continue
+			if not evaluate_rule_condition(condition, context):
+				continue
+			target_missing_group = next((group for group in missing_groups if group in structural_groups), "")
+			if not target_missing_group and missing_groups:
+				target_missing_group = missing_groups[0]
+			if not target_missing_group:
+				continue
+			recovered_phrase = direct_object_phrases[0] if direct_object_phrases else "(recovered_object)"
+			matched_terms_by_group[target_missing_group] = [recovered_phrase]
+			missing_groups = [group for group in missing_groups if group != target_missing_group]
+			derived_feature_recovered = True
+			if rule_label == "implicit":
+				implicit_feature_recovery_used = True
+			break
+
+	fallback_rule = dict(normalized_payload.get("fallback_rule", {}))
+	fallback_rule_used = False
+	if allow_fallback and missing_groups and parse_rule_bool(fallback_rule.get("enabled"), default=False):
+		condition_context = {
+			"effect_form_present": effect_form_present,
+			"direct_object_present": direct_object_present,
+			"domain_artifact_present": domain_artifact_present,
+		}
+		condition = str(
+			fallback_rule.get(
+				"condition",
+				"effect_form_present AND (direct_object_present OR domain_artifact_present)",
+			)
+		)
+		if evaluate_rule_condition(condition, condition_context):
+			target_missing_group = next((group for group in missing_groups if group in structural_groups), "")
+			if not target_missing_group and missing_groups:
+				target_missing_group = missing_groups[0]
+			if target_missing_group:
+				recovered_phrase = direct_object_phrases[0] if direct_object_phrases else "(fallback_object)"
+				matched_terms_by_group[target_missing_group] = [recovered_phrase]
+				missing_groups = [group for group in missing_groups if group != target_missing_group]
+				fallback_rule_used = True
+
+	policy_or_fallback_match = policy_match and not missing_groups
+	if derived_feature_recovered and not missing_groups:
+		policy_or_fallback_match = True
+	if fallback_rule_used and not missing_groups:
+		policy_or_fallback_match = True
+	return {
+		"policy_match": policy_match,
+		"policy_or_fallback_match": policy_or_fallback_match,
+		"normalized_text": normalized_text,
+		"normalized_required_term_groups": normalized_required_term_groups,
+		"matched_terms_by_group": matched_terms_by_group,
+		"minimum_match_count": minimum_match_count,
+		"derived_feature_recovered": derived_feature_recovered,
+		"implicit_feature_recovery_used": implicit_feature_recovery_used,
+		"fallback_rule_used": fallback_rule_used,
+		"windowed_co_occurrence_match": windowed_match,
+	}
+
+
 def co_occurrence_lemma_match(text: str, payload: Mapping[str, object], rule: str) -> bool:
 	final_status, normalized_text, normalized_required_term_groups, matched_terms_by_group, minimum_match_count = (
 		evaluate_co_occurrence_phrase_groups(text, payload, rule)
@@ -829,6 +1252,15 @@ def evaluate_match_policy(
 		return co_occurrence_match(text, payload, rule)
 	if match_policy == "co_occurrence_lemma":
 		return co_occurrence_lemma_match(text, payload, rule)
+	window_size = parse_co_occurrence_window_size(match_policy)
+	if window_size is not None:
+		window_match, _, _, _, _, _ = evaluate_co_occurrence_phrase_groups_with_window(
+			text,
+			normalize_payload_optional_fields(payload),
+			rule,
+			window_size,
+		)
+		return window_match
 	if match_policy == "absence_check":
 		return True
 	if match_policy == "canonical_inequality":
@@ -845,33 +1277,68 @@ def apply_decision_rule(
 	row: Mapping[str, object] | None = None,
 	component_id: str = "",
 ) -> tuple[str, str]:
-	rule = str(payload.get("normalisation_rule", "") or "").strip()
+	normalized_payload = normalize_payload_optional_fields(payload)
+	rule = str(normalized_payload.get("normalisation_rule", "") or "").strip()
 	decision_rule = normalize_decision_rule_name(str(payload.get("decision_rule", "") or "").strip())
-	match_policy = str(payload.get("match_policy", "") or "").strip()
+	match_policy = str(normalized_payload.get("match_policy", "") or "").strip()
 	if decision_rule not in SUPPORTED_DECISION_RULES:
 		raise ValueError(f"Unsupported Layer 1 decision_rule: {decision_rule}")
-	excluded_terms = [normalize_text(term, rule) for term in payload.get("excluded_terms", []) if normalize_text(term, rule)]
+	excluded_terms = [
+		normalize_text(term, rule)
+		for term in normalized_payload.get("excluded_terms", [])
+		if normalize_text(term, rule)
+	]
 	normalized_text = normalize_text(text, rule)
 	has_excluded = any(term in normalized_text for term in excluded_terms)
-	policy_match = evaluate_match_policy(text, payload, row=row, component_id=component_id)
+	policy_match = evaluate_match_policy(text, normalized_payload, row=row, component_id=component_id)
+	diagnostic_flags: list[str] = []
+
+	def finalize(evidence_status: str, candidate_was_positive: bool = False) -> tuple[str, str]:
+		if has_excluded and candidate_was_positive:
+			diagnostic_flags.append("excluded_term_override")
+		unique_flags = [flag for index, flag in enumerate(diagnostic_flags) if flag and flag not in diagnostic_flags[:index]]
+		return (evidence_status, ",".join(unique_flags) if unique_flags else "none")
+
+	def evaluate_group_rule(allow_fallback: bool) -> tuple[bool, dict[str, object]]:
+		context = evaluate_group_match_with_augmentations(
+			text,
+			normalized_payload,
+			rule,
+			match_policy,
+			allow_fallback=allow_fallback,
+		)
+		if context.get("derived_feature_recovered"):
+			diagnostic_flags.append("derived_feature_recovered")
+		if context.get("implicit_feature_recovery_used"):
+			diagnostic_flags.append("implicit_feature_recovery_used")
+		if context.get("fallback_rule_used"):
+			diagnostic_flags.append("fallback_rule_used")
+		if context.get("windowed_co_occurrence_match"):
+			diagnostic_flags.append("windowed_co_occurrence_match")
+		return (bool(context.get("policy_or_fallback_match", False)), context)
+
 	if decision_rule == "present_if_any_allowed_term_found":
-		return ("present" if policy_match else "not_present", "none")
+		candidate = policy_match
+		return finalize("present" if candidate else "not_present", candidate_was_positive=candidate)
 	if decision_rule == "present_if_exact_match_or_alias_and_not_excluded":
 		if match_policy in {"exact_or_alias_article_insensitive", "exact_or_alias_article_insensitive_any_conjunct"}:
 			matches = resolve_matches_for_candidates(
 				expand_candidates_with_conjuncts(extract_candidate_units(text, rule), rule)
 				if match_policy == "exact_or_alias_article_insensitive_any_conjunct"
 				else extract_candidate_units(text, rule),
-				payload,
+				normalized_payload,
 				rule,
 				excluded_terms,
 			)
-			return ("present" if matches else "not_present", "none")
-		return ("present" if policy_match and not has_excluded else "not_present", "none")
+			candidate = bool(matches)
+			return finalize("present" if candidate else "not_present", candidate_was_positive=candidate)
+		candidate = policy_match
+		return finalize("present" if candidate and not has_excluded else "not_present", candidate_was_positive=candidate)
 	if decision_rule == "present_if_matches_stage_or_role_and_not_excluded":
-		return ("present" if policy_match and not has_excluded else "not_present", "none")
+		candidate = policy_match
+		return finalize("present" if candidate and not has_excluded else "not_present", candidate_was_positive=candidate)
 	if decision_rule == "present_if_any_stage_phrase_matches_after_normalisation_and_not_excluded":
-		matches = extract_stage_phrase_matches_after_normalisation(text, payload, rule, excluded_terms)
+		matches = extract_stage_phrase_matches_after_normalisation(text, normalized_payload, rule, excluded_terms)
 		matched_excluded_terms = find_matched_excluded_terms(text, excluded_terms, rule)
 		matched_canonical_terms = sorted({match.canonical for match in matches})
 		evidence_status = "present" if matches and not matched_excluded_terms else "not_present"
@@ -884,14 +1351,12 @@ def apply_decision_rule(
 			matched_canonical_terms,
 			matched_excluded_terms,
 		)
-		return (evidence_status, "none")
+		return finalize(evidence_status, candidate_was_positive=bool(matches))
 	if decision_rule == "present_if_minimum_group_matches_met_and_not_excluded":
-		if match_policy == "co_occurrence_lemma":
+		if match_policy == "co_occurrence_lemma" or parse_co_occurrence_window_size(match_policy) is not None:
+			candidate, context = evaluate_group_rule(allow_fallback=False)
 			matched_excluded_terms = find_matched_excluded_terms(text, excluded_terms, rule)
-			policy_match, normalized_co_occurrence_text, normalized_required_term_groups, matched_terms_by_group, minimum_match_count = (
-				evaluate_co_occurrence_phrase_groups(text, payload, rule)
-			)
-			evidence_status = "present" if policy_match and not matched_excluded_terms else "not_present"
+			evidence_status = "present" if candidate and not matched_excluded_terms else "not_present"
 			logger.debug(
 				"Decision rule %s match_policy=%s normalisation_rule=%s final_status=%s raw_segment=%r normalized_segment=%r required_term_groups=%s minimum_match_count_per_group=%s matched_terms_by_group=%s matched_excluded_terms=%s",
 				decision_rule,
@@ -899,20 +1364,41 @@ def apply_decision_rule(
 				rule,
 				evidence_status,
 				text,
-				normalized_co_occurrence_text,
-				normalized_required_term_groups,
-				minimum_match_count,
-				matched_terms_by_group,
+				context.get("normalized_text", normalized_text),
+				context.get("normalized_required_term_groups", {}),
+				context.get("minimum_match_count", 0),
+				context.get("matched_terms_by_group", {}),
 				matched_excluded_terms,
 			)
-			return (evidence_status, "none")
-		return ("present" if policy_match and not has_excluded else "not_present", "none")
+			return finalize(evidence_status, candidate_was_positive=candidate)
+		candidate = policy_match
+		return finalize("present" if candidate and not has_excluded else "not_present", candidate_was_positive=candidate)
+	if decision_rule == "present_if_minimum_group_matches_met_or_fallback_and_not_excluded":
+		candidate, context = evaluate_group_rule(allow_fallback=True)
+		matched_excluded_terms = find_matched_excluded_terms(text, excluded_terms, rule)
+		evidence_status = "present" if candidate and not matched_excluded_terms else "not_present"
+		logger.debug(
+			"Decision rule %s match_policy=%s normalisation_rule=%s final_status=%s raw_segment=%r normalized_segment=%r required_term_groups=%s minimum_match_count_per_group=%s matched_terms_by_group=%s matched_excluded_terms=%s",
+			decision_rule,
+			match_policy,
+			rule,
+			evidence_status,
+			text,
+			context.get("normalized_text", normalized_text),
+			context.get("normalized_required_term_groups", {}),
+			context.get("minimum_match_count", 0),
+			context.get("matched_terms_by_group", {}),
+			matched_excluded_terms,
+		)
+		return finalize(evidence_status, candidate_was_positive=candidate)
 	if decision_rule == "present_if_no_excluded_terms_found":
-		return ("present" if not has_excluded else "not_present", "none")
+		return finalize("present" if not has_excluded else "not_present", candidate_was_positive=not has_excluded)
 	if decision_rule == "present_if_any_allowed_term_found_and_not_only_excluded":
-		return ("present" if policy_match else "not_present", "none")
+		candidate = policy_match
+		return finalize("present" if candidate else "not_present", candidate_was_positive=candidate)
 	if decision_rule == "present_if_canonical_mappings_are_distinct":
-		return ("present" if policy_match and not has_excluded else "not_present", "none")
+		candidate = policy_match
+		return finalize("present" if candidate and not has_excluded else "not_present", candidate_was_positive=candidate)
 	raise ValueError(f"Unsupported Layer 1 decision_rule: {decision_rule}")
 
 

@@ -164,6 +164,67 @@ PUT_INTO_WORDS_PAYLOAD = {
 	},
 }
 
+WINDOWED_COOCCURRENCE_PAYLOAD = {
+	"normalisation_rule": "lowercase_trim",
+	"match_policy": "co_occurrence_window_5",
+	"decision_rule": "present_if_minimum_group_matches_met_and_not_excluded",
+	"required_term_groups": {
+		"effect_forms": ["allocate"],
+		"structural_features": ["applications"],
+	},
+	"minimum_match_count_per_group": 1,
+	"excluded_terms": [],
+	"bound_segment_resolution_policy": "hard_stay",
+}
+
+DERIVED_RECOVERY_PAYLOAD = {
+	"normalisation_rule": "lowercase_trim",
+	"match_policy": "co_occurrence_lemma",
+	"decision_rule": "present_if_minimum_group_matches_met_and_not_excluded",
+	"required_term_groups": {
+		"effect_forms": ["allocate", "distribute"],
+		"structural_features": ["applications"],
+	},
+	"minimum_match_count_per_group": 1,
+	"excluded_terms": [],
+	"derived_structural_feature_rule": "enabled: true; condition: effect_form_present AND direct_object_present; action: treat_object_as_structural_feature",
+	"domain_artifact_tokens": "application,applications",
+	"bound_segment_resolution_policy": "hard_stay",
+}
+
+FALLBACK_PAYLOAD_ENABLED = {
+	"normalisation_rule": "lowercase_trim",
+	"match_policy": "co_occurrence_lemma",
+	"decision_rule": "present_if_minimum_group_matches_met_or_fallback_and_not_excluded",
+	"required_term_groups": {
+		"effect_forms": ["allocate"],
+		"structural_features": ["applications"],
+	},
+	"minimum_match_count_per_group": 1,
+	"excluded_terms": [],
+	"fallback_rule": "enabled: true; condition: effect_form_present AND direct_object_present; action: satisfy_one_missing_group",
+	"bound_segment_resolution_policy": "hard_stay",
+}
+
+FALLBACK_PAYLOAD_DISABLED = {
+	**FALLBACK_PAYLOAD_ENABLED,
+	"fallback_rule": "enabled: false; condition: effect_form_present AND direct_object_present; action: satisfy_one_missing_group",
+}
+
+DOMAIN_ARTIFACT_PASSIVE_PAYLOAD = {
+	"normalisation_rule": "lowercase_trim",
+	"match_policy": "co_occurrence_lemma",
+	"decision_rule": "present_if_minimum_group_matches_met_and_not_excluded",
+	"required_term_groups": {
+		"effect_forms": ["allocate"],
+		"structural_features": ["applications"],
+	},
+	"minimum_match_count_per_group": 1,
+	"excluded_terms": [],
+	"domain_artifact_tokens": "rubric,checklist",
+	"bound_segment_resolution_policy": "hard_stay",
+}
+
 
 class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 	def test_normalize_text_lemmatizes_sequence_effect_term(self) -> None:
@@ -742,6 +803,102 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 			'}'
 		)
 		self.assertEqual(payload["decision_rule"], "present_if_canonical_mappings_are_distinct")
+
+	def test_existing_indicator_without_augmentation_fields_is_unchanged(self) -> None:
+		status, flags = apply_decision_rule(
+			"sequence reviewer preparation",
+			{
+				"normalisation_rule": "lowercase_trim",
+				"match_policy": "co_occurrence_lemma",
+				"decision_rule": "present_if_minimum_group_matches_met_and_not_excluded",
+				"required_term_groups": {
+					"effect_forms": ["sequence"],
+					"structural_features": ["reviewer preparation"],
+				},
+				"minimum_match_count_per_group": 1,
+				"excluded_terms": [],
+			},
+		)
+		self.assertEqual(status, "present")
+		self.assertEqual(flags, "none")
+
+	def test_co_occurrence_window_5_succeeds_within_window(self) -> None:
+		status, flags = apply_decision_rule(
+			"allocate now the applications",
+			WINDOWED_COOCCURRENCE_PAYLOAD,
+		)
+		self.assertEqual(status, "present")
+		self.assertIn("windowed_co_occurrence_match", flags)
+
+	def test_co_occurrence_window_5_fails_outside_window(self) -> None:
+		status, _ = apply_decision_rule(
+			"allocate one two three four five six applications",
+			WINDOWED_COOCCURRENCE_PAYLOAD,
+		)
+		self.assertEqual(status, "not_present")
+
+	def test_derived_feature_recovery_satisfies_missing_group(self) -> None:
+		status, flags = apply_decision_rule(
+			"allocate rubric quickly",
+			DERIVED_RECOVERY_PAYLOAD,
+		)
+		self.assertEqual(status, "present")
+		self.assertIn("derived_feature_recovered", flags)
+
+	def test_fallback_succeeds_only_when_enabled(self) -> None:
+		enabled_status, enabled_flags = apply_decision_rule(
+			"allocate rubric",
+			FALLBACK_PAYLOAD_ENABLED,
+		)
+		disabled_status, _ = apply_decision_rule(
+			"allocate rubric",
+			FALLBACK_PAYLOAD_DISABLED,
+		)
+		self.assertEqual(enabled_status, "present")
+		self.assertIn("fallback_rule_used", enabled_flags)
+		self.assertEqual(disabled_status, "not_present")
+
+	def test_excluded_terms_override_normal_derived_and_fallback(self) -> None:
+		status, flags = apply_decision_rule(
+			"allocate applications forbidden",
+			{
+				**FALLBACK_PAYLOAD_ENABLED,
+				"excluded_terms": ["forbidden"],
+			},
+		)
+		self.assertEqual(status, "not_present")
+		self.assertIn("excluded_term_override", flags)
+
+	def test_domain_artifact_tokens_not_globally_active_without_declared_rule_usage(self) -> None:
+		status, flags = apply_decision_rule(
+			"rubric checklist",
+			DOMAIN_ARTIFACT_PASSIVE_PAYLOAD,
+		)
+		self.assertEqual(status, "not_present")
+		self.assertEqual(flags, "none")
+
+	def test_malformed_optional_fields_fail_safely(self) -> None:
+		payload = parse_scoring_payload(
+			'{'
+			'"scoring_mode":"deterministic",'
+			'"dependency_type":"segment",'
+			'"bound_segment_id":"05_Effect",'
+			'"normalisation_rule":"lowercase_trim",'
+			'"match_policy":"co_occurrence_window_5",'
+			'"decision_rule":"present_if_minimum_group_matches_met_or_fallback_and_not_excluded",'
+			'"required_term_groups":{"effect_forms":["allocate"],"structural_features":["applications"]},'
+			'"minimum_match_count_per_group":1,'
+			'"excluded_terms":[],'
+			'"fallback_rule":"enabled maybe; condition missing delimiter",'
+			'"derived_structural_feature_rule":"this is malformed",'
+			'"implicit_feature_recovery":"enabled: nope",'
+			'"domain_artifact_tokens":"rubric,checklist"'
+			'}'
+		)
+		self.assertIn("fallback_rule", payload)
+		self.assertFalse(bool(payload["fallback_rule"].get("enabled", False)))
+		self.assertIn("derived_structural_feature_rule", payload)
+		self.assertFalse(bool(payload["derived_structural_feature_rule"].get("enabled", False)))
 
 
 if __name__ == "__main__":

@@ -12,7 +12,8 @@ from pathlib import Path
 from layer1_indicator_scoring_runtime import (
 	SUPPORTED_BOUND_SEGMENT_RESOLUTION_POLICIES,
 	SUPPORTED_DECISION_RULES,
-	SUPPORTED_MATCH_POLICIES,
+	is_supported_match_policy,
+	normalize_payload_optional_fields,
 	normalize_decision_rule_name,
 	validate_normalisation_rule_name,
 )
@@ -113,7 +114,7 @@ def filter_manifest_rows(rows: list[dict[str, str]], target_component_id: str) -
 def parse_scoring_payload(payload_json: str) -> dict[str, object]:
 	if not payload_json.strip():
 		raise ValueError("Layer 1 manifest row is missing indicator_scoring_payload_json.")
-	payload = json.loads(payload_json)
+	payload = normalize_payload_optional_fields(json.loads(payload_json))
 	for required_key in [
 		"scoring_mode",
 		"dependency_type",
@@ -128,7 +129,7 @@ def parse_scoring_payload(payload_json: str) -> dict[str, object]:
 		str(payload.get("normalisation_rule", "") or "").strip()
 	)
 	match_policy = str(payload.get("match_policy", "") or "").strip()
-	if match_policy not in SUPPORTED_MATCH_POLICIES:
+	if not is_supported_match_policy(match_policy):
 		raise ValueError(f"Unsupported Layer 1 match_policy: {match_policy}")
 	payload["match_policy"] = match_policy
 	decision_rule = normalize_decision_rule_name(str(payload.get("decision_rule", "") or "").strip())
