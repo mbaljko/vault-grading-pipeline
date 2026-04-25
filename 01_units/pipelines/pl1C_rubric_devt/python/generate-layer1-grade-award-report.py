@@ -228,10 +228,23 @@ def collect_row_identifier_set(rows: list[dict[str, str]]) -> set[str]:
     return identifiers
 
 
+def parse_truthy(value: str) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "y"}
+
+
+def derive_report_evidence_status(row: dict[str, str]) -> str:
+    effective_status = first_present_value(row, ["evidence_status_effective", "evidence_status"])
+    if not effective_status:
+        return ""
+    if parse_truthy(str(row.get("recovery_applied", ""))) and effective_status == "present":
+        return "present_recovery"
+    return effective_status
+
+
 def aggregate_evidence_counts(rows: list[dict[str, str]]) -> Counter[str]:
     counts: Counter[str] = Counter()
     for row in rows:
-        evidence_status = str(row.get("evidence_status", "")).strip()
+        evidence_status = derive_report_evidence_status(row)
         if evidence_status:
             counts[evidence_status] += 1
     return counts
@@ -241,7 +254,7 @@ def aggregate_wildcard_indicator_counts(rows: list[dict[str, str]]) -> dict[str,
     aggregate_counts: dict[str, Counter[str]] = defaultdict(Counter)
     for row in rows:
         indicator_id = str(row.get("indicator_id", "")).strip()
-        evidence_status = str(row.get("evidence_status", "")).strip()
+        evidence_status = derive_report_evidence_status(row)
         if not indicator_id or not evidence_status:
             continue
         aggregate_counts[wildcard_indicator_id(indicator_id)][evidence_status] += 1
@@ -256,7 +269,7 @@ def aggregate_component_indicator_counts(rows: list[dict[str, str]]) -> dict[str
     for row in rows:
         component_id = str(row.get("component_id", "")).strip()
         indicator_id = str(row.get("indicator_id", "")).strip()
-        evidence_status = str(row.get("evidence_status", "")).strip()
+        evidence_status = derive_report_evidence_status(row)
         if not component_id or not indicator_id or not evidence_status:
             continue
         aggregate_counts[component_id][indicator_id][evidence_status] += 1
@@ -271,7 +284,7 @@ def aggregate_component_indicator_counts(rows: list[dict[str, str]]) -> dict[str
 
 def build_histogram_rows(counts: Counter[str]) -> tuple[list[list[str]], str]:
     total = sum(counts.values())
-    preferred_bins = ["not_present", "present"]
+    preferred_bins = ["not_present", "present", "present_recovery"]
     ordered_bins = [item for item in preferred_bins if item in counts]
     ordered_bins.extend(item for item in sorted(counts) if item not in ordered_bins)
     resolution = compute_histogram_resolution(max((counts[item] for item in ordered_bins), default=0))
