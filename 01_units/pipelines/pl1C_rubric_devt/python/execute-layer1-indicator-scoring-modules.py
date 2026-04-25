@@ -24,10 +24,17 @@ import csv
 import importlib.util
 import re
 import sys
+from datetime import timezone, datetime
 from pathlib import Path
 from types import ModuleType
 
 from component_scored_texts import load_scored_rows, write_scored_rows
+from layer1_recovery_overlay import (
+	apply_recovery_overlay_to_l1_scores,
+	build_recovery_membership_index,
+	load_recovery_allowlist_csv,
+	parse_bool,
+)
 
 
 REQUIRED_INPUT_FIELDS = {"component_id"}
@@ -45,7 +52,84 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument("--output-format", type=str, default="csv")
 	parser.add_argument("--combined-output-file", type=Path, required=False)
 	parser.add_argument("--source-response-text-csv", type=Path, required=False)
+	parser.add_argument("--recovery-allowlist-csv", type=Path, required=False)
+	parser.add_argument("--recovery-now-utc", type=str, required=False)
 	return parser.parse_args()
+
+
+def utc_now_iso() -> str:
+	return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def build_recovery_registry_rows_from_allowlist(
+	allowlist_rows: list[dict[str, str]],
+	*,
+	recovery_source_ref: str,
+) -> list[dict[str, str]]:
+	registry_rows: list[dict[str, str]] = []
+	seen_keys: set[tuple[str, str]] = set()
+	for row in allowlist_rows:
+		if not parse_bool(row.get("active", ""), default=False):
+			continue
+		component_id = str(row.get("component_id", "") or "").strip()
+		parent_indicator_id = str(row.get("parent_indicator_id", "") or "").strip()
+		recovery_indicator_id = str(row.get("recovery_indicator_id", "") or "").strip()
+		if not component_id or not parent_indicator_id:
+			continue
+		key = (component_id, parent_indicator_id)
+		if key in seen_keys:
+			continue
+		seen_keys.add(key)
+		registry_rows.append(
+			{
+				"component_id": component_id,
+				"indicator_id": recovery_indicator_id or f"{parent_indicator_id}_RECOVERY",
+				"indicator_kind": "recovery",
+				"sibling_of_indicator_id": parent_indicator_id,
+				"recovery_mode": "manual_allowlist",
+				"recovery_precedence": "force_present",
+				"recovery_list_ref": recovery_source_ref,
+				"status": "active",
+			}
+		)
+	return registry_rows
+
+
+def apply_recovery_overlay_if_configured(
+	scored_rows: list[dict[str, str]],
+	*,
+	recovery_allowlist_csv: Path | None,
+	recovery_now_utc: str | None,
+) -> list[dict[str, str]]:
+	if recovery_allowlist_csv is None:
+		return scored_rows
+	allowlist_path = recovery_allowlist_csv.resolve()
+	if not allowlist_path.exists() or not allowlist_path.is_file():
+		print(
+			f"Notice: recovery overlay skipped: allowlist CSV not found: {allowlist_path}",
+			file=sys.stderr,
+		)
+		return scored_rows
+	try:
+		allowlist_rows = load_recovery_allowlist_csv(str(allowlist_path))
+	except (FileNotFoundError, ValueError) as exc:
+		print(f"Notice: recovery overlay skipped: {exc}", file=sys.stderr)
+		return scored_rows
+	if not allowlist_rows:
+		return scored_rows
+	membership_index = build_recovery_membership_index(allowlist_rows)
+	recovery_registry_rows = build_recovery_registry_rows_from_allowlist(
+		allowlist_rows,
+		recovery_source_ref=str(allowlist_path),
+	)
+	if not recovery_registry_rows:
+		return scored_rows
+	return apply_recovery_overlay_to_l1_scores(
+		scored_rows,
+		recovery_registry_rows=recovery_registry_rows,
+		membership_index=membership_index,
+		now_utc=(recovery_now_utc or utc_now_iso()),
+	)
 
 
 def load_module_from_path(module_path: Path, module_name: str) -> ModuleType:
@@ -341,6 +425,11 @@ def main() -> int:
 		for module in modules:
 			indicator_id = str(getattr(module, "INDICATOR_ID", "")).strip()
 			indicator_rows = [module.score_indicator_row(row) for row in component_rows]
+			indicator_rows = apply_recovery_overlay_if_configured(
+				indicator_rows,
+				recovery_allowlist_csv=args.recovery_allowlist_csv,
+				recovery_now_utc=args.recovery_now_utc,
+			)
 			output_path = resolve_output_path(output_dir, args.output_file_stem, args.output_format, indicator_id)
 			write_scored_rows(indicator_rows, output_path)
 			combined_rows.extend(indicator_rows)

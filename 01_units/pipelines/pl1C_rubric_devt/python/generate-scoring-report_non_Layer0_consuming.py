@@ -1600,6 +1600,9 @@ def load_scored_rows(input_path: Path) -> list[dict[str, str]]:
 					continue
 				normalized_key = key.strip().lstrip("\ufeff")
 				normalized_row[normalized_key] = (value or "").strip()
+			effective_status = (normalized_row.get("evidence_status_effective") or "").strip()
+			if effective_status:
+				normalized_row["evidence_status"] = effective_status
 			rows.append(normalized_row)
 	return rows
 
