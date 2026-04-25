@@ -1,7 +1,42 @@
 #!/usr/bin/env python3
-"""Populate a gradebook CSV from Layer 4 submission scores.
+"""Populate an LMS gradebook CSV with Layer 4 submission scores.
 
-Usage:
+This script copies scores from a Layer 4 wide-stitched output file into a
+gradebook CSV by resolving each gradebook row to a canonical submission_id.
+
+High-level flow:
+1. Load score source rows from --scored-input (.csv or .xlsx).
+2. Build identity indices from --canonical-population-input.
+3. Resolve each gradebook row to submission_id using multiple signals.
+4. Write a new gradebook CSV with populated grade (and optional feedback).
+
+Inputs:
+- --gradebook-input
+  Destination-style CSV to populate. Must contain Identifier, Full name,
+  Email address, and the configured grade column (default: Grade).
+- --canonical-population-input
+  Bridge table used for identity matching. Must contain submission_id,
+  GW.Identifier, GW.Full name, User, and Username.
+- --scored-input
+  Layer 4 wide-stitched score file (.csv or .xlsx) with submission_id and
+  submission_numeric_score. If present, Feedback comments is also propagated.
+
+Matching strategy (per gradebook row):
+- Identifier -> GW.Identifier
+- Full name -> GW.Full name and User (case/whitespace normalized)
+- Email local part -> Username
+
+Behavior and safeguards:
+- If multiple canonical submission_ids match one gradebook row, execution
+  fails with an ambiguity error.
+- If no canonical match is found, the row is left unchanged.
+- If a matched row has a score, the grade column is updated.
+- If Feedback comments exists in both source and destination schemas, it is
+  copied to the destination row.
+- Source submission_ids with scores that never map to any gradebook row are
+  emitted as ALERT lines on stderr after writing output.
+
+Example:
 	python populate_gradebook_from_layer4_scores.py \
 		--gradebook-input path/to/Grades-tmp.csv \
 		--canonical-population-input path/to/AP3_pipeline1A_canonical_population_table.csv \
