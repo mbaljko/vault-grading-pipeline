@@ -59,6 +59,7 @@ from __future__ import annotations
 
 import logging
 import re
+import ast
 from dataclasses import dataclass
 from typing import Mapping
 
@@ -295,6 +296,55 @@ def parse_comma_delimited_tokens(value: object) -> list[str]:
 	if isinstance(value, list):
 		return [str(token).strip() for token in value if str(token).strip()]
 	return []
+
+
+def parse_rule_sequence(value: object) -> list[str]:
+	if isinstance(value, (list, tuple, set)):
+		return [str(item).strip() for item in value if str(item).strip()]
+	if not isinstance(value, str) or not value.strip():
+		return []
+	raw_value = value.strip()
+	if raw_value.startswith("[") or raw_value.startswith("("):
+		try:
+			parsed = ast.literal_eval(raw_value)
+		except (ValueError, SyntaxError):
+			parsed = None
+		if isinstance(parsed, (list, tuple, set)):
+			return [str(item).strip() for item in parsed if str(item).strip()]
+	trimmed = raw_value.strip("[]()")
+	return [item for item in (part.strip().strip("\"'") for part in trimmed.split(",")) if item]
+
+
+def pattern_matches_normalized_text(pattern: str, normalized_text: str, rule: str) -> bool:
+	if not pattern:
+		return False
+	raw_pattern = str(pattern).strip()
+	if raw_pattern.startswith("re:"):
+		try:
+			return bool(re.search(raw_pattern[3:], normalized_text, flags=re.IGNORECASE))
+		except re.error:
+			return False
+	if len(raw_pattern) >= 2 and raw_pattern.startswith("/") and raw_pattern.endswith("/"):
+		try:
+			return bool(re.search(raw_pattern[1:-1], normalized_text, flags=re.IGNORECASE))
+		except re.error:
+			return False
+	normalized_pattern = normalize_text(raw_pattern, rule)
+	if not normalized_pattern:
+		return False
+	return normalized_pattern.lower() in normalized_text.lower()
+
+
+def has_matching_derived_pattern(patterns: list[str], normalized_text: str, rule: str) -> bool:
+	return any(pattern_matches_normalized_text(pattern, normalized_text, rule) for pattern in patterns)
+
+
+def has_matching_restricted_effect_form(restricted_effect_forms: list[str], normalized_text: str, rule: str) -> bool:
+	for effect_form in restricted_effect_forms:
+		normalized_effect_form = normalize_text(effect_form, rule)
+		if normalized_effect_form and phrase_appears_in_text(normalized_text, normalized_effect_form):
+			return True
+	return False
 
 
 def normalize_payload_optional_fields(payload: Mapping[str, object]) -> dict[str, object]:
@@ -1131,6 +1181,8 @@ def evaluate_group_match_with_augmentations(
 	derived_rule = dict(normalized_payload.get("derived_structural_feature_rule", {}))
 	implicit_rule = dict(normalized_payload.get("implicit_feature_recovery", {}))
 	derived_feature_recovered = False
+	derived_structural_feature_matched = False
+	derived_structural_feature_pattern_not_matched = False
 	implicit_feature_recovery_used = False
 	if missing_groups and (
 		parse_rule_bool(derived_rule.get("enabled"), default=False)
@@ -1154,6 +1206,13 @@ def evaluate_group_match_with_augmentations(
 				continue
 			if not evaluate_rule_condition(condition, context):
 				continue
+			if rule_label == "derived":
+				declared_patterns = parse_rule_sequence(recovery_rule.get("patterns"))
+				if declared_patterns and not has_matching_derived_pattern(declared_patterns, normalized_text, rule):
+					derived_structural_feature_pattern_not_matched = True
+					continue
+				if declared_patterns:
+					derived_structural_feature_matched = True
 			target_missing_group = next((group for group in missing_groups if group in structural_groups), "")
 			if not target_missing_group and missing_groups:
 				target_missing_group = missing_groups[0]
@@ -1169,6 +1228,10 @@ def evaluate_group_match_with_augmentations(
 
 	fallback_rule = dict(normalized_payload.get("fallback_rule", {}))
 	fallback_rule_used = False
+	fallback_restricted_effect_form_matched = False
+	fallback_restricted_effect_form_not_matched = False
+	present_via_fallback = False
+	fallback_unknown_action = False
 	if allow_fallback and missing_groups and parse_rule_bool(fallback_rule.get("enabled"), default=False):
 		condition_context = {
 			"effect_form_present": effect_form_present,
@@ -1182,14 +1245,28 @@ def evaluate_group_match_with_augmentations(
 			)
 		)
 		if evaluate_rule_condition(condition, condition_context):
-			target_missing_group = next((group for group in missing_groups if group in structural_groups), "")
-			if not target_missing_group and missing_groups:
-				target_missing_group = missing_groups[0]
-			if target_missing_group:
-				recovered_phrase = direct_object_phrases[0] if direct_object_phrases else "(fallback_object)"
-				matched_terms_by_group[target_missing_group] = [recovered_phrase]
-				missing_groups = [group for group in missing_groups if group != target_missing_group]
-				fallback_rule_used = True
+			restricted_effect_forms = parse_rule_sequence(fallback_rule.get("restricted_effect_forms"))
+			if restricted_effect_forms:
+				if has_matching_restricted_effect_form(restricted_effect_forms, normalized_text, rule):
+					fallback_restricted_effect_form_matched = True
+				else:
+					fallback_restricted_effect_form_not_matched = True
+					restricted_effect_forms = []
+			if not fallback_restricted_effect_form_not_matched:
+				fallback_action = str(fallback_rule.get("action", "") or "").strip()
+				if fallback_action and fallback_action not in {"accept_as_present_with_flag"}:
+					fallback_unknown_action = True
+				else:
+					target_missing_group = next((group for group in missing_groups if group in structural_groups), "")
+					if not target_missing_group and missing_groups:
+						target_missing_group = missing_groups[0]
+					if target_missing_group:
+						recovered_phrase = direct_object_phrases[0] if direct_object_phrases else "(fallback_object)"
+						matched_terms_by_group[target_missing_group] = [recovered_phrase]
+						missing_groups = [group for group in missing_groups if group != target_missing_group]
+						fallback_rule_used = True
+						if fallback_action == "accept_as_present_with_flag":
+							present_via_fallback = True
 
 	policy_or_fallback_match = policy_match and not missing_groups
 	if derived_feature_recovered and not missing_groups:
@@ -1204,8 +1281,14 @@ def evaluate_group_match_with_augmentations(
 		"matched_terms_by_group": matched_terms_by_group,
 		"minimum_match_count": minimum_match_count,
 		"derived_feature_recovered": derived_feature_recovered,
+		"derived_structural_feature_matched": derived_structural_feature_matched,
+		"derived_structural_feature_pattern_not_matched": derived_structural_feature_pattern_not_matched,
 		"implicit_feature_recovery_used": implicit_feature_recovery_used,
 		"fallback_rule_used": fallback_rule_used,
+		"fallback_restricted_effect_form_matched": fallback_restricted_effect_form_matched,
+		"fallback_restricted_effect_form_not_matched": fallback_restricted_effect_form_not_matched,
+		"present_via_fallback": present_via_fallback,
+		"fallback_unknown_action": fallback_unknown_action,
 		"windowed_co_occurrence_match": windowed_match,
 	}
 
@@ -1295,6 +1378,7 @@ def apply_decision_rule(
 
 	def finalize(evidence_status: str, candidate_was_positive: bool = False) -> tuple[str, str]:
 		if has_excluded and candidate_was_positive:
+			diagnostic_flags.append("excluded_term_veto")
 			diagnostic_flags.append("excluded_term_override")
 		unique_flags = [flag for index, flag in enumerate(diagnostic_flags) if flag and flag not in diagnostic_flags[:index]]
 		return (evidence_status, ",".join(unique_flags) if unique_flags else "none")
@@ -1309,10 +1393,22 @@ def apply_decision_rule(
 		)
 		if context.get("derived_feature_recovered"):
 			diagnostic_flags.append("derived_feature_recovered")
+		if context.get("derived_structural_feature_matched"):
+			diagnostic_flags.append("derived_structural_feature_matched")
+		if context.get("derived_structural_feature_pattern_not_matched"):
+			diagnostic_flags.append("derived_structural_feature_pattern_not_matched")
 		if context.get("implicit_feature_recovery_used"):
 			diagnostic_flags.append("implicit_feature_recovery_used")
 		if context.get("fallback_rule_used"):
 			diagnostic_flags.append("fallback_rule_used")
+		if context.get("fallback_restricted_effect_form_matched"):
+			diagnostic_flags.append("fallback_restricted_effect_form_matched")
+		if context.get("fallback_restricted_effect_form_not_matched"):
+			diagnostic_flags.append("fallback_restricted_effect_form_not_matched")
+		if context.get("present_via_fallback"):
+			diagnostic_flags.append("present_via_fallback")
+		if context.get("fallback_unknown_action"):
+			diagnostic_flags.append("fallback_unknown_action")
 		if context.get("windowed_co_occurrence_match"):
 			diagnostic_flags.append("windowed_co_occurrence_match")
 		return (bool(context.get("policy_or_fallback_match", False)), context)

@@ -202,13 +202,13 @@ FALLBACK_PAYLOAD_ENABLED = {
 	},
 	"minimum_match_count_per_group": 1,
 	"excluded_terms": [],
-	"fallback_rule": "enabled: true; condition: effect_form_present AND direct_object_present; action: satisfy_one_missing_group",
+	"fallback_rule": "enabled: true; condition: effect_form_present AND direct_object_present; action: accept_as_present_with_flag",
 	"bound_segment_resolution_policy": "hard_stay",
 }
 
 FALLBACK_PAYLOAD_DISABLED = {
 	**FALLBACK_PAYLOAD_ENABLED,
-	"fallback_rule": "enabled: false; condition: effect_form_present AND direct_object_present; action: satisfy_one_missing_group",
+	"fallback_rule": "enabled: false; condition: effect_form_present AND direct_object_present; action: accept_as_present_with_flag",
 }
 
 DOMAIN_ARTIFACT_PASSIVE_PAYLOAD = {
@@ -222,6 +222,34 @@ DOMAIN_ARTIFACT_PASSIVE_PAYLOAD = {
 	"minimum_match_count_per_group": 1,
 	"excluded_terms": [],
 	"domain_artifact_tokens": "rubric,checklist",
+	"bound_segment_resolution_policy": "hard_stay",
+}
+
+DERIVED_PATTERN_REQUIRED_PAYLOAD = {
+	"normalisation_rule": "lowercase_trim",
+	"match_policy": "co_occurrence_lemma",
+	"decision_rule": "present_if_minimum_group_matches_met_and_not_excluded",
+	"required_term_groups": {
+		"effect_forms": ["allocate"],
+		"structural_features": ["records"],
+	},
+	"minimum_match_count_per_group": 1,
+	"excluded_terms": [],
+	"derived_structural_feature_rule": "enabled: true; condition: effect_form_present AND direct_object_present; action: treat_object_as_structural_feature; patterns: application",
+	"bound_segment_resolution_policy": "hard_stay",
+}
+
+FALLBACK_RESTRICTED_EFFECT_PAYLOAD = {
+	"normalisation_rule": "lowercase_lemma_effect_terms",
+	"match_policy": "co_occurrence_window_5",
+	"decision_rule": "present_if_minimum_group_matches_met_or_fallback_and_not_excluded",
+	"required_term_groups": {
+		"effect_forms": ["allocate", "organize"],
+		"structural_features": ["records"],
+	},
+	"minimum_match_count_per_group": 1,
+	"excluded_terms": [],
+	"fallback_rule": "enabled: true; condition: effect_form_present AND direct_object_present; restricted_effect_forms: (allocate, assign); action: accept_as_present_with_flag",
 	"bound_segment_resolution_policy": "hard_stay",
 }
 
@@ -867,7 +895,112 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 			},
 		)
 		self.assertEqual(status, "not_present")
+		self.assertIn("excluded_term_veto", flags)
 		self.assertIn("excluded_term_override", flags)
+
+	def test_derived_pattern_required_and_matched(self) -> None:
+		status, flags = apply_decision_rule(
+			"allocate application quickly",
+			DERIVED_PATTERN_REQUIRED_PAYLOAD,
+		)
+		self.assertEqual(status, "present")
+		self.assertIn("derived_structural_feature_matched", flags)
+
+	def test_derived_pattern_required_but_not_matched(self) -> None:
+		status, flags = apply_decision_rule(
+			"allocate application quickly",
+			{
+				**DERIVED_PATTERN_REQUIRED_PAYLOAD,
+				"derived_structural_feature_rule": (
+					"enabled: true; condition: effect_form_present AND direct_object_present; "
+					"action: treat_object_as_structural_feature; patterns: committee"
+				),
+			},
+		)
+		self.assertEqual(status, "not_present")
+		self.assertIn("derived_structural_feature_pattern_not_matched", flags)
+
+	def test_fallback_restricted_effect_form_matched(self) -> None:
+		status, flags = apply_decision_rule(
+			"allocating applications",
+			FALLBACK_RESTRICTED_EFFECT_PAYLOAD,
+		)
+		self.assertEqual(status, "present")
+		self.assertIn("fallback_restricted_effect_form_matched", flags)
+		self.assertIn("present_via_fallback", flags)
+
+	def test_fallback_restricted_effect_form_not_matched(self) -> None:
+		status, flags = apply_decision_rule(
+			"organizing applications",
+			FALLBACK_RESTRICTED_EFFECT_PAYLOAD,
+		)
+		self.assertEqual(status, "not_present")
+		self.assertIn("fallback_restricted_effect_form_not_matched", flags)
+
+	def test_excluded_term_veto_overrides_fallback(self) -> None:
+		status, flags = apply_decision_rule(
+			"allocating applications harmful",
+			{
+				**FALLBACK_RESTRICTED_EFFECT_PAYLOAD,
+				"excluded_terms": ["harmful"],
+			},
+		)
+		self.assertEqual(status, "not_present")
+		self.assertIn("excluded_term_veto", flags)
+
+	def test_unknown_fallback_action_is_non_fatal_and_not_applied(self) -> None:
+		status, flags = apply_decision_rule(
+			"allocating applications",
+			{
+				**FALLBACK_RESTRICTED_EFFECT_PAYLOAD,
+				"fallback_rule": (
+					"enabled: true; condition: effect_form_present AND direct_object_present; "
+					"restricted_effect_forms: (allocate, assign); action: unknown_action"
+				),
+			},
+		)
+		self.assertEqual(status, "not_present")
+		self.assertIn("fallback_unknown_action", flags)
+
+	def test_focused_windowed_augmentation_row_enforces_patterns_and_restricted_fallback(self) -> None:
+		payload = {
+			"normalisation_rule": "lowercase_lemma_effect_terms",
+			"match_policy": "co_occurrence_window_5",
+			"decision_rule": "present_if_minimum_group_matches_met_or_fallback_and_not_excluded",
+			"required_term_groups": {
+				"effect_forms": ["allocate", "organize"],
+				"structural_features": ["records"],
+			},
+			"minimum_match_count_per_group": 1,
+			"excluded_terms": ["harmful"],
+			"derived_structural_feature_rule": (
+				"enabled: true; condition: effect_form_present AND direct_object_present; "
+				"action: treat_object_as_structural_feature; patterns: committee"
+			),
+			"implicit_feature_recovery": (
+				"enabled: true; condition: effect_form_present AND direct_object_present AND impossible_marker; "
+				"action: treat_object_as_structural_feature"
+			),
+			"domain_artifact_tokens": "application,file,reviewer",
+			"fallback_rule": (
+				"enabled: true; condition: effect_form_present AND direct_object_present; "
+				"restricted_effect_forms: (allocate, assign); action: accept_as_present_with_flag"
+			),
+		}
+
+		status_a, flags_a = apply_decision_rule("allocating applications", payload)
+		self.assertEqual(status_a, "present")
+		self.assertIn("derived_structural_feature_pattern_not_matched", flags_a)
+		self.assertIn("fallback_restricted_effect_form_matched", flags_a)
+		self.assertIn("present_via_fallback", flags_a)
+
+		status_b, flags_b = apply_decision_rule("organizing applications", payload)
+		self.assertEqual(status_b, "not_present")
+		self.assertIn("fallback_restricted_effect_form_not_matched", flags_b)
+
+		status_c, flags_c = apply_decision_rule("allocating applications harmful", payload)
+		self.assertEqual(status_c, "not_present")
+		self.assertIn("excluded_term_veto", flags_c)
 
 	def test_domain_artifact_tokens_not_globally_active_without_declared_rule_usage(self) -> None:
 		status, flags = apply_decision_rule(

@@ -41,9 +41,9 @@ For windowed group matching, use `match_policy=co_occurrence_window_N` where `N`
 | `left_segment_id`, `right_segment_id` | Strings | Used with `match_policy=canonical_inequality`; defaults are `DemandA` and `DemandB` when omitted. |
 | `left_allowed_terms`, `right_allowed_terms` | Lists of strings | Used with `canonical_inequality`. |
 | `left_allowed_aliases`, `right_allowed_aliases` | Mapping `alias -> canonical` | Used with `canonical_inequality`. |
-| `derived_structural_feature_rule` | Mapping or semicolon `key: value` rule string | Optional augmentation field; normalized to config with `enabled` default `false`. |
+| `derived_structural_feature_rule` | Mapping or semicolon `key: value` rule string | Optional augmentation field; normalized to config with `enabled` default `false`. If `patterns` is declared and `enabled=true`, derived recovery requires at least one pattern match on normalized segment text. |
 | `implicit_feature_recovery` | Mapping or semicolon `key: value` rule string | Optional augmentation field; normalized to config with `enabled` default `false`. |
-| `fallback_rule` | Mapping or semicolon `key: value` rule string | Optional augmentation field; normalized to config with `enabled` default `false`. |
+| `fallback_rule` | Mapping or semicolon `key: value` rule string | Optional augmentation field; normalized to config with `enabled` default `false`. Supports `restricted_effect_forms` and `action` enforcement. |
 | `domain_artifact_tokens` | Comma-delimited string or list of strings | Optional augmentation tokens; normalized to list. |
 
 ## Decision Rule Aliases
@@ -68,6 +68,34 @@ Supported parsing behavior:
 - Unknown keys are preserved but ignored unless consumed by runtime logic.
 - Malformed optional rule strings fail safe to `enabled=false`.
 
+Enforced augmentation sub-keys:
+
+- `derived_structural_feature_rule.patterns`
+	- Optional list-like value.
+	- When present with `enabled=true`, derived recovery succeeds only if at least one declared pattern matches normalized segment text.
+	- If omitted, default derived-recovery behavior is preserved.
+- `fallback_rule.restricted_effect_forms`
+	- Optional list-like value.
+	- When present, fallback requires at least one restricted effect form match.
+	- Runtime does not silently widen to full `effect_forms` when this key is declared.
+- `fallback_rule.action`
+	- Supported: `accept_as_present_with_flag`.
+	- If fallback succeeds with this action, scorer emits `present_via_fallback`.
+	- If fallback succeeds and action is omitted, default fallback behavior is preserved.
+	- Unknown actions do not crash; fallback is not applied and `fallback_unknown_action` is emitted.
+
+List-like value forms accepted for `patterns` and `restricted_effect_forms`:
+
+- JSON/Python-like list strings, for example `["allocate", "assign"]`.
+- Tuple-like strings, for example `(allocate, assign)`.
+- Native list values in payload JSON.
+
+Pattern matching behavior for `derived_structural_feature_rule.patterns`:
+
+- Case-insensitive matching against normalized segment text.
+- Simple substring patterns are supported by default.
+- Regex-style patterns are supported via `re:<pattern>` or `/pattern/` forms.
+
 Condition expressions support:
 
 - identifiers (for example `effect_form_present`, `direct_object_present`, `domain_artifact_present`)
@@ -83,9 +111,16 @@ Supported flag values:
 - `none`
 - `missing_input_text`
 - `derived_feature_recovered`
+- `derived_structural_feature_matched`
+- `derived_structural_feature_pattern_not_matched`
 - `implicit_feature_recovery_used`
 - `fallback_rule_used`
+- `fallback_restricted_effect_form_matched`
+- `fallback_restricted_effect_form_not_matched`
+- `present_via_fallback`
+- `fallback_unknown_action`
 - `windowed_co_occurrence_match`
+- `excluded_term_veto`
 - `excluded_term_override`
 
 Diagnostics are non-breaking metadata; they do not override decision-rule outcomes by themselves.
@@ -99,6 +134,8 @@ Diagnostics are non-breaking metadata; they do not override decision-rule outcom
 | `co_occurrence_window_N` validity | Supported only when `N > 0` |
 | Grouped matching minimum | `minimum_match_count_per_group` values below `1` behave as `1` at match time |
 | Domain artifact token input forms | Comma-delimited string or list |
+| Fallback unknown action handling | Non-fatal; fallback is not applied; emits `fallback_unknown_action` |
+| Excluded-term behavior | Excluded terms veto primary, derived, and fallback positive paths |
 
 ## Registry-Declared but Open-Ended Fields
 
@@ -108,6 +145,87 @@ These are required/consumed but not strictly enumerated in current validation:
 - `dependency_type`
 - `bound_segment_id` (string value itself is open-ended)
 - textual content of `allowed_terms`, `allowed_aliases`, `required_term_groups`, and related lexical lists.
+
+## Example Registry Row (B_claim_core_06 Style)
+
+This example shows a fully augmented Layer 1 row using windowed grouped matching, derived-pattern enforcement, restricted fallback effect forms, and fallback action semantics.
+
+```yaml
+template_id: B_claim_core_06
+local_slot: "06"
+sbo_short_description: structural effect expressed
+status: active
+
+scoring_mode: python
+dependency_type: slot_primary
+required_layer0_records: ["S05:ok"]
+bound_segment_id: 05_Effect
+bound_segment_resolution_policy: hard_stay
+
+normalisation_rule: lowercase_lemma_effect_terms
+match_policy: co_occurrence_window_5
+minimum_match_count_per_group: 1
+
+required_term_groups:
+	structural_features:
+		- applications
+		- files
+		- reviewers
+		- records
+		- written justifications
+	effect_forms:
+		- allocate
+		- assign
+		- distribute
+		- organize
+		- sequence
+		- structure
+
+excluded_terms:
+	- better
+	- worse
+	- fair
+	- beneficial
+	- harmful
+
+derived_structural_feature_rule:
+	enabled: true
+	condition: effect_form_present AND direct_object_present
+	action: treat_object_as_structural_feature
+	patterns:
+		- "<effect_form> + applications/files/reviewers/documents/scores"
+		- "NP containing review/application/score/file/document/committee"
+
+implicit_feature_recovery:
+	enabled: true
+	condition: effect_form_present AND direct_object_present
+	action: treat_object_as_structural_feature
+
+domain_artifact_tokens:
+	- application
+	- file
+	- reviewer
+	- review
+	- document
+	- score
+	- committee
+
+fallback_rule:
+	enabled: true
+	condition: effect_form_present AND direct_object_present
+	restricted_effect_forms: [allocate, assign, distribute, structure, organise, organize, sequence, constrain]
+	action: accept_as_present_with_flag
+
+decision_rule: present_if_minimum_group_matches_met_or_fallback_and_not_excluded
+```
+
+Runtime interpretation notes:
+
+- `co_occurrence_window_5` enforces grouped phrase co-occurrence within a 5-token window.
+- If `derived_structural_feature_rule.patterns` is present and `enabled=true`, derived recovery requires at least one pattern match.
+- `fallback_rule.restricted_effect_forms` must match for fallback to succeed when the key is declared.
+- `fallback_rule.action=accept_as_present_with_flag` allows fallback to score as `present` and emits `present_via_fallback`.
+- `excluded_terms` still veto primary, derived, and fallback positive paths.
 
 ## What This File Does Not Guarantee
 
