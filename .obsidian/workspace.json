@@ -291,12 +291,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1C_rubric_devt/python/layer0_registry_supported_values.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/docs/layer1_registry_augmentation.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "layer0_registry_supported_values"
+              "title": "layer1_registry_augmentation"
             }
           }
         ],
@@ -446,13 +446,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1C_rubric_devt/python/layer0_registry_supported_values.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/docs/layer1_registry_augmentation.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of layer0_registry_supported_values"
+              "title": "Outline of layer1_registry_augmentation"
             }
           },
           {
@@ -488,8 +488,11 @@
   },
   "active": "fe3cb8bfbc96d736",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/docs/layer0_registry_supported_values.md",
+    "01_units/pipelines/pl1C_rubric_devt/docs/layer1_registry_augmentation.md",
+    "01_units/pipelines/pl1C_rubric_devt/docs",
+    "01_units/pipelines/pl1C_rubric_devt/README.md",
     "01_units/pipelines/PPS2_assembly/python/import_pps1_csv_to_json_README.md",
-    "01_units/pipelines/pl1C_rubric_devt/python/layer0_registry_supported_values.md",
     "01_units/pipelines/pl1C_rubric_devt/python/generate-layer0-segmentation-report.py",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate_layer0-segmentation-report.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/execute-layer1-indicator-scoring-modules.cpython-313.pyc",
@@ -499,7 +502,6 @@
     "01_units/pipelines/pl1C_rubric_devt/python/generate-layer1-grade-award-report.py",
     "01_units/pipelines/pl1C_rubric_devt/python/generate-layer2-grade-award-report.py",
     "01_units/pipelines/pl1C_rubric_devt/python/generate-layer3-grade-award-report.py",
-    "01_units/pipelines/PPS2_assembly/python/identify_non_submissions.py",
     "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification v2.md",
     "01_units/pipelines/PPS2_assembly/python/pps1_slot_populator_README.md",
     "01_units/pipelines/PPS2_assembly/python/generate_pps2_booklets_README.md",
@@ -516,13 +518,11 @@
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - single indicator.md",
-    "01_units/pipelines/pl1C_rubric_devt/README.md",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1C_scaffold_stage13_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1B_scaffold_stage13_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_scaffold_stage13_Layer1_Indicator_Scoring_Prompt.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage12b_DeriveLayer1ScoringManifest.md",
     "05_docs/01_design/pl1B_rubric_devt/__NOTE - Stabilising indicators.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11+12merged_Layer1.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage03_Contrastive Pattern Discovery - conceptual -  signal prompt.md"
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage11+12merged_Layer1.md"
   ]
 }

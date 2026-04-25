@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pprint import pformat
 import re
 import sys
 from pathlib import Path
@@ -171,7 +172,7 @@ def build_module_source(row: dict[str, str], payload: dict[str, object]) -> str:
 		f'"""Deterministic Layer 1 scorer for {row["indicator_id"]} ({row["component_id"]}).\n\n'
 		f'{row.get("indicator_definition", "").strip()}\n"""'
 	)
-	payload_json = json.dumps(payload, ensure_ascii=True, indent=4, sort_keys=True)
+	payload_literal = pformat(payload, sort_dicts=True, width=100)
 	return "\n".join(
 		[
 			"#!/usr/bin/env python3",
@@ -191,7 +192,7 @@ def build_module_source(row: dict[str, str], payload: dict[str, object]) -> str:
 			f"ASSESSMENT_GUIDANCE = {row['assessment_guidance']!r}",
 			f"EVALUATION_NOTES = {row.get('evaluation_notes', '')!r}",
 			f"DECISION_PROCEDURE = {row.get('decision_procedure', '')!r}",
-			f"SCORING_PAYLOAD = {payload_json}",
+			f"SCORING_PAYLOAD = {payload_literal}",
 			"",
 			"def score_indicator_row(row: Mapping[str, object]) -> dict[str, str]:",
 			"\treturn score_indicator_from_row(",
