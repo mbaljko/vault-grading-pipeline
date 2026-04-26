@@ -5,12 +5,13 @@ from unittest.mock import patch
 from layer0_runtime.boundaries import find_anchor_occurrences
 from layer0_runtime.families import (
 	run_claim_text_passthrough_no_anchor,
+	run_finite_verb_after_prior_span_before_marker,
 	run_local_effect_phrase_after_marker,
 	run_right_np_after_anchor_before_marker,
 	run_span_after_marker_before_marker,
 )
 from layer0_runtime.loader import validate_spec
-from layer0_runtime.models import OperatorSpec
+from layer0_runtime.models import ExtractionResult, OperatorSpec
 
 
 def make_spec(*, operator_id: str, family: str, anchor_patterns: list[str], stop_markers: list[str], allow_coordination: bool) -> OperatorSpec:
@@ -289,6 +290,131 @@ class Layer0RuntimeCoordinationTests(unittest.TestCase):
 
 		self.assertEqual(result.extraction_status, "ok")
 		self.assertEqual(result.segment_text, "application data")
+
+	def _ok_prior_result(self, *, segment_id: str, segment_text: str) -> ExtractionResult:
+		return ExtractionResult(
+			submission_id="sub-001",
+			component_id="SectionB1Response",
+			operator_id="S02",
+			segment_id=segment_id,
+			segment_text=segment_text,
+			extraction_status="ok",
+			extraction_notes="",
+			confidence="high",
+			flags="none",
+		)
+
+	def _missing_prior_result(self, *, segment_id: str) -> ExtractionResult:
+		return ExtractionResult(
+			submission_id="sub-001",
+			component_id="SectionB1Response",
+			operator_id="S02",
+			segment_id=segment_id,
+			segment_text="",
+			extraction_status="missing",
+			extraction_notes="anchor not found",
+			confidence="high",
+			flags="needs_review",
+		)
+
+	def _make_finite_verb_spec(self) -> OperatorSpec:
+		return OperatorSpec(
+			assessment_id="AP1B",
+			component_id="SectionB1Response",
+			cid="SecB1",
+			template_id="AP1B_claim_seg_03b",
+			local_slot="03",
+			operator_id="S03b",
+			operator_identifier="O_AP1B_B1_C1_S03b",
+			operator_identifier_shortid="S03b",
+			operator_short_description="extract finite mediation action after tool span",
+			segment_id="03_MediationAction",
+			output_mode="span",
+			family="finite_verb_after_prior_span_before_marker",
+			anchor_patterns=["records", "record", "routes", "route", "filters", "filter", "constrains", "constrain"],
+			direction="right",
+			start_rule="immediate_post_prior_segment",
+			end_rule="first_stop_marker",
+			stop_markers=["within", "during", "at", "comma", "comma_new_clause", "subordinate_extension", "sentence_end"],
+			target_type="noun_phrase",
+			allow_coordination=True,
+			skip_later_candidates=False,
+			operator_definition="test definition",
+			operator_guidance="test guidance",
+			failure_mode_guidance="test failure guidance",
+			decision_procedure="test decision procedure",
+			missing_status="missing",
+			ambiguous_status="ambiguous",
+			malformed_status="malformed",
+			instance_status="active",
+			requires_prior_segment="02_ToolArtefactOutput",
+		)
+
+	def test_finite_verb_after_prior_span_extracts_records(self) -> None:
+		text = "In this system, an intake worker uses a form and records applicant information during initial intake."
+		spec = self._make_finite_verb_spec()
+		prior = {"02_ToolArtefactOutput": self._ok_prior_result(segment_id="02_ToolArtefactOutput", segment_text="a form")}
+
+		result = run_finite_verb_after_prior_span_before_marker(text, spec, prior)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "records applicant information")
+
+	def test_finite_verb_after_prior_span_extracts_routes(self) -> None:
+		text = "In this system, the supervisor uses the dashboard and routes applications within triage."
+		spec = self._make_finite_verb_spec()
+		prior = {"02_ToolArtefactOutput": self._ok_prior_result(segment_id="02_ToolArtefactOutput", segment_text="the dashboard")}
+
+		result = run_finite_verb_after_prior_span_before_marker(text, spec, prior)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "routes applications")
+
+	def test_finite_verb_after_prior_span_extracts_filter_after_comma(self) -> None:
+		text = "In this system, caseworkers use flags, filter applications during review."
+		spec = self._make_finite_verb_spec()
+		prior = {"02_ToolArtefactOutput": self._ok_prior_result(segment_id="02_ToolArtefactOutput", segment_text="flags")}
+
+		result = run_finite_verb_after_prior_span_before_marker(text, spec, prior)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "filter applications")
+
+	def test_finite_verb_after_prior_span_returns_missing_when_required_prior_segment_missing(self) -> None:
+		text = "In this system, an intake worker uses a form and records applicant information during initial intake."
+		spec = self._make_finite_verb_spec()
+
+		result = run_finite_verb_after_prior_span_before_marker(text, spec, prior_segments=None)
+
+		self.assertEqual(result.extraction_status, "missing")
+		self.assertEqual(result.extraction_notes, "required prior segment missing")
+
+	def test_finite_verb_after_prior_span_returns_missing_when_required_prior_segment_not_ok(self) -> None:
+		text = "In this system, an intake worker uses a form and records applicant information during initial intake."
+		spec = self._make_finite_verb_spec()
+		prior = {"02_ToolArtefactOutput": self._missing_prior_result(segment_id="02_ToolArtefactOutput")}
+
+		result = run_finite_verb_after_prior_span_before_marker(text, spec, prior)
+
+		self.assertEqual(result.extraction_status, "missing")
+		self.assertEqual(result.extraction_notes, "required prior segment missing")
+
+	@patch("layer0_runtime.families.parse_text")
+	def test_to_based_family_remains_unaffected_for_existing_behavior(self, mock_parse_text) -> None:
+		text = "In this system, the caseworker uses a routed application record to constrain what they can review first during review."
+		mock_parse_text.side_effect = self._fallback_doc
+		spec = make_spec(
+			operator_id="S103",
+			family="span_after_marker_before_marker",
+			anchor_patterns=["uses a routed application record"],
+			stop_markers=["during", "comma", "clause_boundary"],
+			allow_coordination=True,
+		)
+
+		result = run_span_after_marker_before_marker(text, spec)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "to constrain what they can review first")
 
 	def test_anchor_matching_does_not_fire_inside_throughput(self) -> None:
 		text = "Reporting obligations interact with throughput expectations through scoring rubric."

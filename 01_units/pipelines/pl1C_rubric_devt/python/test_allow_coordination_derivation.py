@@ -198,6 +198,45 @@ class AllowCoordinationDerivationTests(unittest.TestCase):
 			],
 		)
 
+	def test_compile_operator_spec_supports_finite_verb_after_prior_span_family(self) -> None:
+		row = {
+			"assessment_id": "AP1B",
+			"component_id": "SectionB1Response",
+			"cid": "SecB1",
+			"template_id": "AP1B_claim_seg_03b",
+			"local_slot": "03",
+			"operator_id": "S03b",
+			"operator_identifier": "O_AP1B_B1_C1_S03b",
+			"operator_identifier_shortid": "S03b",
+			"operator_short_description": "extract finite mediation action after tool span",
+			"operator_definition": "Extract the first finite mediation verb after the prior tool span.",
+			"operator_guidance": "Use declared finite mediation anchors.",
+			"failure_mode_guidance": "Missing if required prior segment is unavailable.",
+			"decision_procedure": "Start after prior segment and stop before workflow-stage markers.",
+			"output_mode": "span",
+			"segment_id": "03_MediationAction",
+			"template_group": "AP1B_claim_seg",
+			"rule_id": "RR1",
+			"component_block": "1",
+			"instance_status": "active",
+			"source_template_id": "AP1B_claim_seg_03b",
+			"source_rule_id": "RR1",
+			"runtime_family": "finite_verb_after_prior_span_before_marker",
+			"requires_prior_segment": "02_ToolArtefactOutput",
+			"anchor_patterns": "records, record, routes, route, filters, filter",
+			"stop_markers": "within, during, at, comma, comma_new_clause, subordinate_extension, sentence_end",
+			"candidate_selection_policy": "first_local_candidate",
+			"later_candidate_handling": "ignore_later_candidates",
+			"allow_coordination": "true",
+		}
+
+		spec = compile_operator_spec(row)
+
+		self.assertEqual(spec.family, "finite_verb_after_prior_span_before_marker")
+		self.assertEqual(spec.requires_prior_segment, "02_ToolArtefactOutput")
+		self.assertEqual(spec.anchor_patterns[0], "records")
+		self.assertEqual(spec.stop_markers[:3], ["within", "during", "at"])
+
 	def test_explicit_allow_coordination_override_beats_template_default(self) -> None:
 		row = {
 			"template_id": "B_claim_seg_02",

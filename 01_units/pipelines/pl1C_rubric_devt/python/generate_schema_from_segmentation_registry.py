@@ -344,6 +344,7 @@ class OperatorSpec:
 	anchor_selection_policy: str = "first_match"
 	candidate_selection_policy: str = "unspecified"
 	later_candidate_handling: str = "unspecified"
+	requires_prior_segment: str | None = None
 
 
 def parse_args() -> argparse.Namespace:
@@ -1537,6 +1538,7 @@ def expand_registry_instances(registry: dict[str, object]) -> dict[str, object]:
 				"anchor_selection_policy",
 				"candidate_selection_policy",
 				"later_candidate_handling",
+				"requires_prior_segment",
 				"stop_markers",
 				"target_type",
 				"allow_coordination",
