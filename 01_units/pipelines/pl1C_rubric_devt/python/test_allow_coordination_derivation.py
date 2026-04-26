@@ -83,6 +83,18 @@ class AllowCoordinationDerivationTests(unittest.TestCase):
 			["sentence_end", "comma"],
 		)
 
+	def test_explicit_new_stop_markers_are_accepted(self) -> None:
+		row = {
+			"template_id": "B_claim_seg_03",
+			"local_slot": "03",
+			"stop_markers": "to, which, that, who, where",
+		}
+
+		self.assertEqual(
+			derive_stop_markers(row, "span_after_marker_before_marker"),
+			["to", "which", "that", "who", "where"],
+		)
+
 	def test_no_anchor_passthrough_family_derives_empty_anchor_patterns(self) -> None:
 		row = {
 			"template_id": "B_claim_seg_00",

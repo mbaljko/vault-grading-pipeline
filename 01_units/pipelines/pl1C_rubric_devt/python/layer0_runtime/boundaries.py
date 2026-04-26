@@ -123,7 +123,7 @@ def find_first_stop_marker(text: str, start_index: int, stop_markers: list[str])
 			index = _find_sentence_start(text, start_index)
 			if index is not None:
 				candidates.append(index)
-		elif marker in {"through", "shaping", "by"}:
+		elif marker in {"through", "shaping", "by", "to", "which", "that", "who", "where"}:
 			index = _find_token_marker(text, start_index, marker)
 			if index is not None:
 				candidates.append(index)

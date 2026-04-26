@@ -34,7 +34,7 @@ If you do only those six things, you usually get predictable Layer 0 behavior.
 | expanded instances                        | `anchor_selection_policy`    | `first_match`, `first_after_precondition`                                                                                                                                                                                                    | `first_after_precondition` requires non-empty `anchor_precondition_patterns`. |
 | expanded instances                        | `candidate_selection_policy` | `unspecified`, `first_local_candidate`                                                                                                                                                                                                       | `first_local_candidate` enforces first local candidate behavior.              |
 | expanded instances                        | `later_candidate_handling`   | `unspecified`, `ignore_later_candidates`                                                                                                                                                                                                     | Used with first-candidate style procedures.                                   |
-| expanded instances                        | `stop_markers`               | `comma`, `sentence_start`, `conjunction_boundary`, `through`, `clause_boundary`, `shaping`, `by`, `comma_new_clause`, `subordinate_extension`, `sentence_end`                                                                                | Unknown markers are rejected.                                                 |
+| expanded instances                        | `stop_markers`               | `comma`, `sentence_start`, `conjunction_boundary`, `through`, `to`, `which`, `that`, `who`, `where`, `clause_boundary`, `shaping`, `by`, `comma_new_clause`, `subordinate_extension`, `sentence_end`                                           | Unknown markers are rejected.                                                 |
 | expanded instances                        | `allow_coordination`         | `true`, `false`, blank                                                                                                                                                                                                                       | Blank means derive from template override/text/family defaults.               |
 
 ### Field-by-Field Explanation
@@ -140,6 +140,11 @@ The runtime converts marker names into boundary checks.
 | stop_marker | Practical meaning |
 | --- | --- |
 | `through` | Stop before lexical token `through` |
+| `to` | Stop before lexical token `to` |
+| `which` | Stop before lexical token `which` |
+| `that` | Stop before lexical token `that` |
+| `who` | Stop before lexical token `who` |
+| `where` | Stop before lexical token `where` |
 | `shaping` | Stop before lexical token `shaping` |
 | `by` | Stop before lexical token `by` |
 | `comma` | Stop at the next comma |

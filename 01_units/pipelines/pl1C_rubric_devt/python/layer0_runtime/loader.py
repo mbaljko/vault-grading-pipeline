@@ -25,6 +25,24 @@ ANCHOR_OPTIONAL_FAMILIES = {
 	"claim_text_passthrough_no_anchor",
 }
 
+KNOWN_STOP_MARKERS = {
+	"comma",
+	"sentence_start",
+	"conjunction_boundary",
+	"through",
+	"to",
+	"which",
+	"that",
+	"who",
+	"where",
+	"clause_boundary",
+	"shaping",
+	"by",
+	"comma_new_clause",
+	"subordinate_extension",
+	"sentence_end",
+}
+
 
 def _spec_dict_from_object(raw_spec: Any) -> dict[str, Any]:
 	if isinstance(raw_spec, dict):
@@ -98,6 +116,12 @@ def validate_spec(spec: OperatorSpec) -> None:
 		"local_effect_phrase_after_marker",
 	} and not spec.stop_markers:
 		raise ValueError(f"OperatorSpec requires stop_markers: {spec.operator_id!r}")
+	unknown_stop_markers = sorted(marker for marker in spec.stop_markers if marker not in KNOWN_STOP_MARKERS)
+	if unknown_stop_markers:
+		raise ValueError(
+			f"Unsupported stop_markers for {spec.operator_id}: {unknown_stop_markers!r}. "
+			f"Supported markers: {sorted(KNOWN_STOP_MARKERS)!r}"
+		)
 	if spec.anchor_selection_policy not in {"first_match", "first_after_precondition"}:
 		raise ValueError(
 			f"Unsupported anchor_selection_policy for {spec.operator_id}: {spec.anchor_selection_policy!r}"

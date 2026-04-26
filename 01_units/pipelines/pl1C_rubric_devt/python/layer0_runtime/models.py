@@ -14,6 +14,25 @@ from dataclasses import field
 from typing import Any, Literal
 
 
+StopMarker = Literal[
+	"comma",
+	"sentence_start",
+	"conjunction_boundary",
+	"through",
+	"to",
+	"which",
+	"that",
+	"who",
+	"where",
+	"clause_boundary",
+	"shaping",
+	"by",
+	"comma_new_clause",
+	"subordinate_extension",
+	"sentence_end",
+]
+
+
 @dataclass(frozen=True)
 class OperatorSpec:
 	assessment_id: str
@@ -32,7 +51,7 @@ class OperatorSpec:
 	direction: str | None
 	start_rule: str | None
 	end_rule: str | None
-	stop_markers: list[str]
+	stop_markers: list[StopMarker]
 	target_type: str
 	allow_coordination: bool
 	skip_later_candidates: bool

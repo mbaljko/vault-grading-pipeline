@@ -188,6 +188,52 @@ class Layer0RuntimeCoordinationTests(unittest.TestCase):
 		self.assertEqual(result.extraction_status, "ok")
 		self.assertEqual(result.segment_text, "the structured scoring rubric interface")
 
+	@patch("layer0_runtime.families.parse_text")
+	def test_span_after_marker_stops_before_new_ap1b_markers(self, mock_parse_text) -> None:
+		mock_parse_text.side_effect = self._fallback_doc
+		cases = [
+			(
+				"uses the online portal to submit applications",
+				"to",
+				"the online portal",
+			),
+			(
+				"uses flagged case files which contain applicant details",
+				"which",
+				"flagged case files",
+			),
+			(
+				"uses the dashboard that displays routing status",
+				"that",
+				"the dashboard",
+			),
+			(
+				"uses reports where escalation is logged",
+				"where",
+				"reports",
+			),
+			(
+				"uses the case file who is assigned manually",
+				"who",
+				"the case file",
+			),
+		]
+
+		for text, stop_marker, expected in cases:
+			with self.subTest(stop_marker=stop_marker, text=text):
+				spec = make_spec(
+					operator_id="S103",
+					family="span_after_marker_before_marker",
+					anchor_patterns=["uses"],
+					stop_markers=[stop_marker],
+					allow_coordination=True,
+				)
+
+				result = run_span_after_marker_before_marker(text, spec)
+
+				self.assertEqual(result.extraction_status, "ok")
+				self.assertEqual(result.segment_text, expected)
+
 	def test_anchor_matching_does_not_fire_inside_throughput(self) -> None:
 		text = "Reporting obligations interact with throughput expectations through scoring rubric."
 
