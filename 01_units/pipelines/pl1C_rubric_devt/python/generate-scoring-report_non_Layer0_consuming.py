@@ -1988,46 +1988,53 @@ def prepend_identifier_columns(rows: list[list[str]], identifier_values: list[st
 	return [[*identifier_values, *row] for row in rows]
 
 
-def build_status_count_rows(status_counts: Counter[str], not_present_blank_count: int = 0) -> list[list[str]]:
-	total_count = sum(status_counts.values())
-	not_present_total = status_counts.get("not_present", 0)
-	not_present_non_blank = not_present_total - not_present_blank_count
+REQUIRED_LAYER0_GATE_FAILURE_FLAGS = {
+	"required_layer0_ok_missing",
+	"required_layer0_not_ok_failed",
+	"required_layer0_predicate_unsupported",
+}
+
+
+def has_required_layer0_gate_failure(row: Mapping[str, str]) -> bool:
+	raw_flags = str(row.get("flags", "") or "").strip()
+	if not raw_flags or raw_flags.lower() == "none":
+		return False
+	observed = {part.strip() for part in raw_flags.split(",") if part.strip()}
+	return bool(observed.intersection(REQUIRED_LAYER0_GATE_FAILURE_FLAGS))
+
+
+def build_status_count_rows(status_counts: Counter[str], layer0_cond_not_met_count: int = 0) -> list[list[str]]:
+	total_count = sum(status_counts.values()) + max(layer0_cond_not_met_count, 0)
 	rows: list[list[str]] = []
 	preferred_order = {"not_present": 0, "present": 1, "present_recovery": 2}
 	for status, count in sorted(
 		status_counts.items(),
 		key=lambda item: (preferred_order.get(item[0], 99), -item[1], item[0].lower()),
 	):
-		if status == "not_present" and not_present_blank_count > 0:
-			rows.append([
-				"not_present (non-blank)",
-				str(not_present_non_blank),
-				format_rate(not_present_non_blank, total_count),
-			])
-			rows.append([
-				"not_present (blank)",
-				str(not_present_blank_count),
-				format_rate(not_present_blank_count, total_count),
-			])
-		else:
-			rows.append([
-				escape_markdown_table_cell(status or "(blank evidence_status)"),
-				str(count),
-				format_rate(count, total_count),
-			])
+		rows.append([
+			escape_markdown_table_cell(status or "(blank evidence_status)"),
+			str(count),
+			format_rate(count, total_count),
+		])
+	if layer0_cond_not_met_count > 0:
+		rows.append([
+			"not_present (layer0_cond_not_met)",
+			str(layer0_cond_not_met_count),
+			format_rate(layer0_cond_not_met_count, total_count),
+		])
 	if not rows:
 		return []
 	return [*rows, ["total", str(total_count), format_rate(total_count, total_count)]]
 
 
-def build_status_rollup_rows(status_counts: Counter[str]) -> list[list[str]]:
-	total_count = sum(status_counts.values())
+def build_status_rollup_rows(status_counts: Counter[str], layer0_cond_not_met_count: int = 0) -> list[list[str]]:
+	total_count = sum(status_counts.values()) + max(layer0_cond_not_met_count, 0)
 	if total_count <= 0:
 		return []
 	present_count = sum(
 		count for status, count in status_counts.items() if status.strip().lower() in POSITIVE_EVIDENCE_STATUS_VALUES
 	)
-	not_present_count = total_count - present_count
+	not_present_count = (total_count - present_count)
 	return [
 		["present", str(present_count), format_rate(present_count, total_count)],
 		["not_present", str(not_present_count), format_rate(not_present_count, total_count)],
@@ -2173,6 +2180,7 @@ def render_indicator_segment_report(
 	non_matching_detail_entries: list[tuple[str, str]],
 	matching_row_count: int,
 	non_matching_row_count: int,
+	required_layer0_gate_excluded_row_count: int,
 	missing_input_row_count: int,
 	not_present_blank_count: int = 0,
 ) -> str:
@@ -2212,6 +2220,7 @@ def render_indicator_segment_report(
 				["layer0_stitched_csv", str(segment_source_csv_path) if segment_source_csv_path is not None else ""],
 				["matching_row_count", str(matching_row_count)],
 				["non_matching_row_count", str(non_matching_row_count)],
+				["required_layer0_gate_excluded_row_count", str(required_layer0_gate_excluded_row_count)],
 				["missing_segment_source_row_count", str(missing_input_row_count)],
 				["unique_matching_segment_texts", str(len(matching_segment_counts))],
 				["unique_non_matching_segment_texts", str(len(non_matching_segment_counts))],
@@ -2221,14 +2230,17 @@ def render_indicator_segment_report(
 		"### Evidence Status Counts",
 		"",
 	]
-	status_rows = build_status_count_rows(status_counts, not_present_blank_count)
+	status_rows = build_status_count_rows(status_counts, required_layer0_gate_excluded_row_count)
 	if status_rows:
 		parts.extend([
 			"#### Roll-Up (present vs not_present)",
 			"",
 			render_markdown_table(
 				[*identifier_headers, "evidence_status", "count", "%"],
-				prepend_identifier_columns(build_status_rollup_rows(status_counts), identifier_values),
+				prepend_identifier_columns(
+					build_status_rollup_rows(status_counts, required_layer0_gate_excluded_row_count),
+					identifier_values,
+				),
 			),
 			"",
 			"#### Disaggregated",
@@ -2464,8 +2476,10 @@ def render_indicator_slot_group_segment_report(
 	matching_detail_entries_by_member: dict[tuple[str, str], list[tuple[str, str]]],
 	matching_recovery_detail_entries_by_member: dict[tuple[str, str], list[tuple[str, str]]],
 	non_matching_detail_entries_by_member: dict[tuple[str, str], list[tuple[str, str]]],
+	required_layer0_gate_excluded_row_count_by_member: dict[tuple[str, str], int],
 	matching_row_count: int,
 	non_matching_row_count: int,
+	required_layer0_gate_excluded_row_count: int,
 	missing_input_row_count: int,
 	not_present_blank_count_by_member: dict[tuple[str, str], int],
 ) -> str:
@@ -2513,6 +2527,7 @@ def render_indicator_slot_group_segment_report(
 				["bound_segment_id", bound_segment_id or "(unbound)"],
 				["matching_row_count", str(matching_row_count)],
 				["non_matching_row_count", str(non_matching_row_count)],
+				["required_layer0_gate_excluded_row_count", str(required_layer0_gate_excluded_row_count)],
 				["missing_input_row_count", str(missing_input_row_count)],
 				["unique_matching_segment_texts", str(len(unique_matching_segment_texts))],
 				["unique_non_matching_segment_texts", str(len(unique_non_matching_segment_texts))],
@@ -2541,23 +2556,23 @@ def render_indicator_slot_group_segment_report(
 	# aggregate counts by indicator_id across all members for the slot-level roll-up
 	slot_rollup_counts: Counter[str] = Counter()
 	slot_disaggregated_counts: Counter[str] = Counter()
-	slot_blank_count = 0
+	slot_layer0_cond_not_met_count = 0
 	for member_row in indicator_members:
 		component_id = member_row[0]
 		indicator_id = member_row[1]
 		member_key = (component_id, indicator_id)
 		member_status_counts = status_counts_by_member.get(member_key, Counter())
-		member_blank_count = int(not_present_blank_count_by_member.get(member_key, 0))
+		member_layer0_cond_not_met_count = int(required_layer0_gate_excluded_row_count_by_member.get(member_key, 0))
 		slot_rollup_counts.update(member_status_counts)
 		slot_disaggregated_counts.update(member_status_counts)
-		slot_blank_count += member_blank_count
-		for row in build_status_rollup_rows(member_status_counts):
+		slot_layer0_cond_not_met_count += member_layer0_cond_not_met_count
+		for row in build_status_rollup_rows(member_status_counts, member_layer0_cond_not_met_count):
 			status_rollup_rows.append([component_id, indicator_id, *row])
-		for row in build_status_count_rows(member_status_counts, member_blank_count):
+		for row in build_status_count_rows(member_status_counts, member_layer0_cond_not_met_count):
 			status_rows.append([component_id, indicator_id, *row])
 	if status_rows:
-		slot_rollup_summary = build_status_rollup_rows(slot_rollup_counts)
-		slot_disaggregated_summary = build_status_count_rows(slot_disaggregated_counts, slot_blank_count)
+		slot_rollup_summary = build_status_rollup_rows(slot_rollup_counts, slot_layer0_cond_not_met_count)
+		slot_disaggregated_summary = build_status_count_rows(slot_disaggregated_counts, slot_layer0_cond_not_met_count)
 		parts.extend([
 			"#### Roll-Up (present vs not_present)",
 			"",
@@ -4081,12 +4096,16 @@ def main() -> int:
 		non_matching_detail_seen_entries: set[tuple[str, str]] = set()
 		matching_row_count = 0
 		non_matching_row_count = 0
+		required_layer0_gate_excluded_row_count = 0
 		missing_input_row_count = 0
 		not_present_blank_count = 0
 		input_rows_index = segment_rows_by_component_submission.get(component_id, {})
 		source_rows_index = source_rows_by_component_submission.get(component_id, {})
 		for scored_row in scored_rows_by_component.get(component_id, []):
 			if (scored_row.get("indicator_id") or "").strip() != indicator_id:
+				continue
+			if required_layer0_records and has_required_layer0_gate_failure(scored_row):
+				required_layer0_gate_excluded_row_count += 1
 				continue
 			evidence_status = (scored_row.get("evidence_status") or "").strip()
 			status_counts[evidence_status or "(blank evidence_status)"] += 1
@@ -4172,6 +4191,7 @@ def main() -> int:
 				non_matching_detail_entries=non_matching_detail_entries,
 				matching_row_count=matching_row_count,
 				non_matching_row_count=non_matching_row_count,
+				required_layer0_gate_excluded_row_count=required_layer0_gate_excluded_row_count,
 				missing_input_row_count=missing_input_row_count,
 				not_present_blank_count=not_present_blank_count,
 			),
@@ -4196,8 +4216,10 @@ def main() -> int:
 					"matching_recovery_detail_seen_entries_by_member": {},
 					"non_matching_detail_seen_entries_by_member": {},
 					"not_present_blank_count_by_member": {},
+					"required_layer0_gate_excluded_row_count_by_member": {},
 					"matching_row_count": 0,
 					"non_matching_row_count": 0,
+					"required_layer0_gate_excluded_row_count": 0,
 					"missing_input_row_count": 0,
 				},
 			)
@@ -4224,6 +4246,10 @@ def main() -> int:
 			group_report["non_matching_segment_counts_by_member"].setdefault(member_key, Counter()).update(non_matching_segment_counts)
 			group_report["not_present_blank_count_by_member"][member_key] = (
 				int(group_report["not_present_blank_count_by_member"].get(member_key, 0)) + not_present_blank_count
+			)
+			group_report["required_layer0_gate_excluded_row_count_by_member"][member_key] = (
+				int(group_report["required_layer0_gate_excluded_row_count_by_member"].get(member_key, 0))
+				+ required_layer0_gate_excluded_row_count
 			)
 			group_report["matching_detail_entries_by_member"].setdefault(member_key, [])
 			group_report["matching_recovery_detail_entries_by_member"].setdefault(member_key, [])
@@ -4254,6 +4280,7 @@ def main() -> int:
 				)
 			group_report["matching_row_count"] += matching_row_count
 			group_report["non_matching_row_count"] += non_matching_row_count
+			group_report["required_layer0_gate_excluded_row_count"] += required_layer0_gate_excluded_row_count
 			group_report["missing_input_row_count"] += missing_input_row_count
 	for local_slot, group_report in sorted(slot_group_reports.items(), key=lambda item: item[0]):
 		group_report_output_path = output_dir / derive_indicator_slot_group_report_filename(
@@ -4289,8 +4316,12 @@ def main() -> int:
 				matching_detail_entries_by_member=group_report["matching_detail_entries_by_member"],
 				matching_recovery_detail_entries_by_member=group_report["matching_recovery_detail_entries_by_member"],
 				non_matching_detail_entries_by_member=group_report["non_matching_detail_entries_by_member"],
+				required_layer0_gate_excluded_row_count_by_member=group_report[
+					"required_layer0_gate_excluded_row_count_by_member"
+				],
 				matching_row_count=int(group_report["matching_row_count"]),
 				non_matching_row_count=int(group_report["non_matching_row_count"]),
+				required_layer0_gate_excluded_row_count=int(group_report["required_layer0_gate_excluded_row_count"]),
 				missing_input_row_count=int(group_report["missing_input_row_count"]),
 				not_present_blank_count_by_member=group_report["not_present_blank_count_by_member"],
 			),
