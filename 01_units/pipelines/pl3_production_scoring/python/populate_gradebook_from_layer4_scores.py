@@ -18,8 +18,11 @@ Inputs:
   Bridge table used for identity matching. Must contain submission_id,
   GW.Identifier, GW.Full name, User, and Username.
 - --scored-input
-  Layer 4 wide-stitched score file (.csv or .xlsx) with submission_id and
-  submission_numeric_score. If present, Feedback comments is also propagated.
+  Layer 4 wide-stitched score file (.csv or .xlsx) with submission_id.
+- --column-grade-for-upload
+  Excel column letter (e.g. C) identifying the numeric score column in --scored-input.
+- --column-feedback-comment
+  Excel column letter (e.g. BS) identifying the feedback comment column in --scored-input.
 
 Matching strategy (per gradebook row):
 - Identifier -> GW.Identifier
@@ -56,7 +59,6 @@ from zipfile import ZipFile
 import xml.etree.ElementTree as ET
 
 
-SOURCE_FEEDBACK_COLUMN = "Feedback comments"
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,7 +81,17 @@ def parse_args() -> argparse.Namespace:
 		"--scored-input",
 		type=Path,
 		required=True,
-		help="Wide-stitched Layer 4 scoring file (.csv or .xlsx) containing submission_numeric_score.",
+		help="Wide-stitched Layer 4 scoring file (.csv or .xlsx) containing submission_id.",
+	)
+	parser.add_argument(
+		"--column-grade-for-upload",
+		required=True,
+		help="Excel column letter (e.g. C) for the numeric score column in --scored-input.",
+	)
+	parser.add_argument(
+		"--column-feedback-comment",
+		required=True,
+		help="Excel column letter (e.g. BS) for the feedback comment column in --scored-input.",
 	)
 	parser.add_argument(
 		"--output-file",
@@ -236,13 +248,25 @@ def _email_local_part(email_address: str) -> str:
 	return value.split("@", 1)[0].strip()
 
 
-def load_source_lookup(scored_input: Path) -> dict[str, dict[str, str]]:
+def load_source_lookup(
+	scored_input: Path,
+	grade_column_ref: str,
+	feedback_column_ref: str,
+) -> dict[str, dict[str, str]]:
 	source_lookup: dict[str, dict[str, str]] = {}
 	fieldnames, rows = iter_scored_rows(scored_input)
 	normalized_fields = _normalized_field_lookup(fieldnames)
 	submission_id_key = _require_column(normalized_fields, "submission_id", scored_input)
-	score_key = _require_column(normalized_fields, "submission_numeric_score", scored_input)
-	feedback_key = normalized_fields.get(SOURCE_FEEDBACK_COLUMN.lower())
+
+	grade_col_index = _cell_reference_to_index(grade_column_ref)
+	if grade_col_index >= len(fieldnames):
+		raise ValueError(
+			f"--column-grade-for-upload '{grade_column_ref}' (index {grade_col_index}) is out of range for {scored_input}"
+		)
+	score_key = fieldnames[grade_col_index]
+
+	feedback_col_index = _cell_reference_to_index(feedback_column_ref)
+	feedback_key = fieldnames[feedback_col_index] if feedback_col_index < len(fieldnames) else None
 
 	for row in rows:
 		submission_id = (row.get(submission_id_key) or "").strip()
@@ -367,8 +391,10 @@ def populate_gradebook(
 	scored_input: Path,
 	output_file: Path,
 	grade_column: str,
+	grade_column_ref: str,
+	feedback_column_ref: str,
 ) -> tuple[int, list[tuple[str, str]]]:
-	source_lookup = load_source_lookup(scored_input)
+	source_lookup = load_source_lookup(scored_input, grade_column_ref, feedback_column_ref)
 	canonical_indices = load_canonical_indices(canonical_input)
 	used_submission_ids: set[str] = set()
 
@@ -382,7 +408,7 @@ def populate_gradebook(
 		full_name_key = _require_column(normalized_fields, "Full name", gradebook_input)
 		email_key = _require_column(normalized_fields, "Email address", gradebook_input)
 		actual_grade_column = _require_column(normalized_fields, grade_column, gradebook_input)
-		feedback_column = normalized_fields.get(SOURCE_FEEDBACK_COLUMN.lower())
+		feedback_column = normalized_fields.get("feedback comments")
 
 		fieldnames = list(reader.fieldnames)
 		matched_rows = 0
@@ -445,6 +471,8 @@ def main() -> int:
 			scored_input=args.scored_input,
 			output_file=args.output_file,
 			grade_column=args.grade_column,
+			grade_column_ref=args.column_grade_for_upload,
+			feedback_column_ref=args.column_feedback_comment,
 		)
 	except ValueError as exc:
 		print(f"Error: {exc}", file=sys.stderr)
