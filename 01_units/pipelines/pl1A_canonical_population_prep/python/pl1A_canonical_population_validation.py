@@ -99,6 +99,14 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--mapping-output-path",
+        type=Path,
+        help=(
+            "Destination CSV for the submission-id map (join key). "
+            "If omitted, the file is written next to --output-path with the suffix '-submission-id-map'."
+        ),
+    )
+    parser.add_argument(
         "--component-id",
         action="append",
         default=[],
@@ -414,7 +422,10 @@ def build_identifier_mapping_rows(
         mapping_rows.append(
             {
                 "submission_id": submission_id,
-                "Identifier": identifier,
+                "GW.Identifier": identifier,
+                "GW.Full name": str(row.get("GW.Full name", "") or ""),
+                "User": str(row.get("User", "") or ""),
+                "Username": str(row.get("Username", "") or ""),
             }
         )
 
@@ -512,7 +523,7 @@ def write_output_rows(output_path: Path, rows: list[dict[str, str | int]]) -> No
 
 
 def write_mapping_rows(output_path: Path, rows: list[dict[str, str]]) -> None:
-    fieldnames = ["submission_id", "Identifier"]
+    fieldnames = ["submission_id", "GW.Identifier", "GW.Full name", "User", "Username"]
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -550,7 +561,7 @@ def main() -> int:
     input_path = args.input_path.resolve()
     gradework_sheet_input_path = args.gradework_sheet_input_path.resolve()
     output_path = args.output_path.resolve() if args.output_path else default_output_path(input_path)
-    mapping_output_path = default_mapping_output_path(output_path)
+    mapping_output_path = args.mapping_output_path.resolve() if args.mapping_output_path else default_mapping_output_path(output_path)
     mismatch_report_path = default_mismatch_report_path(output_path)
     requested_component_ids = normalize_requested_component_ids(args.component_id)
 
