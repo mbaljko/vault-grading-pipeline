@@ -179,6 +179,7 @@ def write_component_payload(
 	output_path: Path,
 	identifier_field: str,
 	segment_columns: list[str],
+	layer0_gate_columns: list[str],
 	rows: list[dict[str, str]],
 ) -> int:
 	fieldnames = [
@@ -188,6 +189,7 @@ def write_component_payload(
 		"evidence_segment_ids",
 		"evidence_segment_count",
 		*segment_columns,
+		*layer0_gate_columns,
 	]
 	output_path.parent.mkdir(parents=True, exist_ok=True)
 	with output_path.open("w", encoding="utf-8", newline="") as handle:
@@ -320,6 +322,11 @@ def main() -> int:
 		component_ids = parse_layer1_manifest_component_ids(manifest_text)
 		fieldnames, stitched_rows = load_csv_rows(resolve_input_csv_paths(args.layer0_input, args.layer0_input_glob))
 		segment_columns = [field for field in fieldnames if field.startswith("segment_text_")]
+		gate_columns = [
+			field
+			for field in fieldnames
+			if field.startswith("operator_id_") or field.startswith("extraction_status_")
+		]
 		if not segment_columns:
 			raise ValueError("Layer 0 stitched input does not contain any segment_text_<segment_id> columns.")
 
@@ -333,6 +340,14 @@ def main() -> int:
 			component_segment_columns = [
 				column
 				for column in segment_columns
+				if any(
+					row.get("component_id", "") == component_id and row.get(column, "")
+					for row in stitched_rows
+				)
+			]
+			component_gate_columns = [
+				column
+				for column in gate_columns
 				if any(
 					row.get("component_id", "") == component_id and row.get(column, "")
 					for row in stitched_rows
@@ -358,10 +373,17 @@ def main() -> int:
 						"evidence_segment_ids": "|".join(segment_id for segment_id, _ in segment_items),
 						"evidence_segment_count": str(len(segment_items)),
 						**{column: row.get(column, "") for column in component_segment_columns},
+						**{column: row.get(column, "") for column in component_gate_columns},
 					}
 				)
 			output_path = output_dir / args.output_file_template.format(component_id=component_id)
-			row_count = write_component_payload(output_path, identifier_field, component_segment_columns, component_rows)
+			row_count = write_component_payload(
+				output_path,
+				identifier_field,
+				component_segment_columns,
+				component_gate_columns,
+				component_rows,
+			)
 			print(f"Wrote {row_count} rows to {output_path}")
 
 		output_contract_path = args.output_contract_file.resolve()
