@@ -95,6 +95,18 @@ class AllowCoordinationDerivationTests(unittest.TestCase):
 			["to", "which", "that", "who", "where"],
 		)
 
+	def test_explicit_mediation_action_stop_markers_are_accepted(self) -> None:
+		row = {
+			"template_id": "AP1B_claim_seg_03",
+			"local_slot": "03",
+			"stop_markers": "within, during, at, comma, clause_boundary",
+		}
+
+		self.assertEqual(
+			derive_stop_markers(row, "span_after_marker_before_marker"),
+			["within", "during", "at", "comma", "clause_boundary"],
+		)
+
 	def test_no_anchor_passthrough_family_derives_empty_anchor_patterns(self) -> None:
 		row = {
 			"template_id": "B_claim_seg_00",

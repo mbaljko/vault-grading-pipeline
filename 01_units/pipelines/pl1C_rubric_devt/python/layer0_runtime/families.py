@@ -8,9 +8,11 @@ is likely incomplete.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from .boundaries import find_anchor_occurrences, find_first_stop_marker, find_left_boundary, trim_span
 from .diagnostics import disagreement_note
-from .models import FamilyExecution, OperatorSpec
+from .models import ExtractionResult, FamilyExecution, OperatorSpec
 from .nlp_utils import (
 	first_right_noun_chunk,
 	has_likely_np_continuation,
@@ -112,7 +114,31 @@ def _right_scan_stop_index(text: str, anchor_end: int, spec: OperatorSpec) -> in
 	return find_first_stop_marker(text, anchor_end, filtered_markers)
 
 
-def run_left_np_before_anchor(text: str, spec: OperatorSpec) -> FamilyExecution:
+def _find_prior_segment_end_index(
+	text: str,
+	required_segment_id: str,
+	prior_segments: Mapping[str, ExtractionResult] | None,
+) -> int | None:
+	if prior_segments is None:
+		return None
+	prior = prior_segments.get(required_segment_id)
+	if prior is None or prior.extraction_status != "ok":
+		return None
+	prior_text = trim_span(prior.segment_text)
+	if not prior_text:
+		return None
+	match = find_anchor_occurrences(text, [prior_text])
+	if not match:
+		return None
+	_, prior_end, _ = match[0]
+	return prior_end
+
+
+def run_left_np_before_anchor(
+	text: str,
+	spec: OperatorSpec,
+	prior_segments: Mapping[str, ExtractionResult] | None = None,
+) -> FamilyExecution:
 	anchor = _first_anchor(text, spec)
 	if anchor is None:
 		return _missing_result("anchor not found")
@@ -137,7 +163,11 @@ def run_left_np_before_anchor(text: str, spec: OperatorSpec) -> FamilyExecution:
 	return _ok_result(trimmed_context, confidence="medium", note="fallback pre-anchor span recovery", needs_review=True)
 
 
-def run_right_np_after_anchor_before_marker(text: str, spec: OperatorSpec) -> FamilyExecution:
+def run_right_np_after_anchor_before_marker(
+	text: str,
+	spec: OperatorSpec,
+	prior_segments: Mapping[str, ExtractionResult] | None = None,
+) -> FamilyExecution:
 	anchor = _first_anchor(text, spec)
 	if anchor is None:
 		return _missing_result("anchor not found")
@@ -186,7 +216,11 @@ def run_right_np_after_anchor_before_marker(text: str, spec: OperatorSpec) -> Fa
 	)
 
 
-def run_span_after_marker_before_marker(text: str, spec: OperatorSpec) -> FamilyExecution:
+def run_span_after_marker_before_marker(
+	text: str,
+	spec: OperatorSpec,
+	prior_segments: Mapping[str, ExtractionResult] | None = None,
+) -> FamilyExecution:
 	anchor = _first_anchor(text, spec)
 	if anchor is None:
 		return _missing_result("anchor not found")
@@ -222,7 +256,11 @@ def run_span_after_marker_before_marker(text: str, spec: OperatorSpec) -> Family
 	return _ok_result(segment_text)
 
 
-def run_local_effect_phrase_after_marker(text: str, spec: OperatorSpec) -> FamilyExecution:
+def run_local_effect_phrase_after_marker(
+	text: str,
+	spec: OperatorSpec,
+	prior_segments: Mapping[str, ExtractionResult] | None = None,
+) -> FamilyExecution:
 	anchor = _first_anchor(text, spec)
 	if anchor is None:
 		if spec.anchor_selection_policy == "first_after_precondition":
@@ -239,14 +277,51 @@ def run_local_effect_phrase_after_marker(text: str, spec: OperatorSpec) -> Famil
 	return _ok_result(segment_text, confidence="medium" if spec.allow_coordination else "high")
 
 
-def run_status_only_anchor_detector(text: str, spec: OperatorSpec) -> FamilyExecution:
+def run_finite_verb_after_prior_span_before_marker(
+	text: str,
+	spec: OperatorSpec,
+	prior_segments: Mapping[str, ExtractionResult] | None = None,
+) -> FamilyExecution:
+	required_segment_id = str(spec.requires_prior_segment or "").strip()
+	if not required_segment_id:
+		return _missing_result("required prior segment missing")
+	prior_end = _find_prior_segment_end_index(text, required_segment_id, prior_segments)
+	if prior_end is None:
+		return _missing_result("required prior segment missing")
+	anchor_occurrences = [
+		occurrence
+		for occurrence in find_anchor_occurrences(text, spec.anchor_patterns)
+		if occurrence[0] >= prior_end
+	]
+	if not anchor_occurrences:
+		return _missing_result("anchor not found")
+	anchor_start, anchor_end, _ = anchor_occurrences[0]
+	stop_index = find_first_stop_marker(text, anchor_end, spec.stop_markers)
+	span_end = stop_index if stop_index is not None else len(text)
+	segment_text = trim_span(text[anchor_start:span_end])
+	if not segment_text:
+		return _missing_result("anchor found but no recoverable post-anchor phrase")
+	if len(segment_text.split()) > 18:
+		return _ambiguous_result("finite-verb span boundary unclear")
+	return _ok_result(segment_text)
+
+
+def run_status_only_anchor_detector(
+	text: str,
+	spec: OperatorSpec,
+	prior_segments: Mapping[str, ExtractionResult] | None = None,
+) -> FamilyExecution:
 	anchor = _first_anchor(text, spec)
 	if anchor is None:
 		return _missing_result("anchor not found")
 	return _ok_result("")
 
 
-def run_claim_text_passthrough_if_anchor(text: str, spec: OperatorSpec) -> FamilyExecution:
+def run_claim_text_passthrough_if_anchor(
+	text: str,
+	spec: OperatorSpec,
+	prior_segments: Mapping[str, ExtractionResult] | None = None,
+) -> FamilyExecution:
 	anchor = _first_anchor(text, spec)
 	if anchor is None:
 		return _missing_result("anchor not found")
@@ -256,7 +331,11 @@ def run_claim_text_passthrough_if_anchor(text: str, spec: OperatorSpec) -> Famil
 	return _ok_result(segment_text)
 
 
-def run_claim_text_passthrough_no_anchor(text: str, spec: OperatorSpec) -> FamilyExecution:
+def run_claim_text_passthrough_no_anchor(
+	text: str,
+	spec: OperatorSpec,
+	prior_segments: Mapping[str, ExtractionResult] | None = None,
+) -> FamilyExecution:
 	segment_text = trim_span(text)
 	if not segment_text:
 		return _missing_result("claim text is empty")
@@ -267,6 +346,7 @@ FAMILY_EXECUTORS = {
 	"left_np_before_anchor": run_left_np_before_anchor,
 	"right_np_after_anchor_before_marker": run_right_np_after_anchor_before_marker,
 	"span_after_marker_before_marker": run_span_after_marker_before_marker,
+	"finite_verb_after_prior_span_before_marker": run_finite_verb_after_prior_span_before_marker,
 	"local_effect_phrase_after_marker": run_local_effect_phrase_after_marker,
 	"status_only_anchor_detector": run_status_only_anchor_detector,
 	"claim_text_passthrough_if_anchor": run_claim_text_passthrough_if_anchor,

@@ -34,7 +34,7 @@ If you do only those six things, you usually get predictable Layer 0 behavior.
 | expanded instances                        | `anchor_selection_policy`    | `first_match`, `first_after_precondition`                                                                                                                                                                                                    | `first_after_precondition` requires non-empty `anchor_precondition_patterns`. |
 | expanded instances                        | `candidate_selection_policy` | `unspecified`, `first_local_candidate`                                                                                                                                                                                                       | `first_local_candidate` enforces first local candidate behavior.              |
 | expanded instances                        | `later_candidate_handling`   | `unspecified`, `ignore_later_candidates`                                                                                                                                                                                                     | Used with first-candidate style procedures.                                   |
-| expanded instances                        | `stop_markers`               | `comma`, `sentence_start`, `conjunction_boundary`, `through`, `to`, `which`, `that`, `who`, `where`, `clause_boundary`, `shaping`, `by`, `comma_new_clause`, `subordinate_extension`, `sentence_end`                                           | Unknown markers are rejected.                                                 |
+| expanded instances                        | `stop_markers`               | `comma`, `sentence_start`, `conjunction_boundary`, `through`, `to`, `which`, `that`, `who`, `where`, `within`, `during`, `at`, `clause_boundary`, `shaping`, `by`, `comma_new_clause`, `subordinate_extension`, `sentence_end`               | Unknown markers are rejected.                                                 |
 | expanded instances                        | `allow_coordination`         | `true`, `false`, blank                                                                                                                                                                                                                       | Blank means derive from template override/text/family defaults.               |
 
 ### Field-by-Field Explanation
@@ -101,16 +101,16 @@ If you do only those six things, you usually get predictable Layer 0 behavior.
 
 ## Operational Defaults and Derived Values
 
-| Context | Value |
-| --- | --- |
-| Default `anchor_selection_policy` | `first_match` |
-| Default `candidate_selection_policy` | `unspecified` |
-| Default `later_candidate_handling` | `unspecified` |
-| Default target types by slot | `01-04 -> noun_phrase`, `05 -> local_effect_phrase`, `00 -> claim_text` |
-| Slot 02 default stop markers | `through`, `comma`, `clause_boundary` |
-| Slot 03 default stop markers | `shaping`, `comma`, `clause_boundary` |
-| Slot 04 default stop markers | `by`, `comma`, `clause_boundary` |
-| Slot 05 default stop markers | `comma_new_clause`, `subordinate_extension`, `sentence_end` |
+| Context                              | Value                                                                   |
+| ------------------------------------ | ----------------------------------------------------------------------- |
+| Default `anchor_selection_policy`    | `first_match`                                                           |
+| Default `candidate_selection_policy` | `unspecified`                                                           |
+| Default `later_candidate_handling`   | `unspecified`                                                           |
+| Default target types by slot         | `01-04 -> noun_phrase`, `05 -> local_effect_phrase`, `00 -> claim_text` |
+| Slot 02 default stop markers         | `through`, `comma`, `clause_boundary`                                   |
+| Slot 03 default stop markers         | `shaping`, `comma`, `clause_boundary`                                   |
+| Slot 04 default stop markers         | `by`, `comma`, `clause_boundary`                                        |
+| Slot 05 default stop markers         | `comma_new_clause`, `subordinate_extension`, `sentence_end`             |
 
 ### Slot-Derived Family Defaults
 
@@ -145,6 +145,9 @@ The runtime converts marker names into boundary checks.
 | `that` | Stop before lexical token `that` |
 | `who` | Stop before lexical token `who` |
 | `where` | Stop before lexical token `where` |
+| `within` | Stop before lexical token `within` |
+| `during` | Stop before lexical token `during` |
+| `at` | Stop before lexical token `at` |
 | `shaping` | Stop before lexical token `shaping` |
 | `by` | Stop before lexical token `by` |
 | `comma` | Stop at the next comma |

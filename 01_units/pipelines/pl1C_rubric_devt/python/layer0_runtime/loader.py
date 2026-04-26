@@ -14,6 +14,7 @@ KNOWN_FAMILIES = {
 	"left_np_before_anchor",
 	"right_np_after_anchor_before_marker",
 	"span_after_marker_before_marker",
+	"finite_verb_after_prior_span_before_marker",
 	"local_effect_phrase_after_marker",
 	"status_only_anchor_detector",
 	"claim_text_passthrough_if_anchor",
@@ -35,6 +36,9 @@ KNOWN_STOP_MARKERS = {
 	"that",
 	"who",
 	"where",
+	"within",
+	"during",
+	"at",
 	"clause_boundary",
 	"shaping",
 	"by",
@@ -113,9 +117,14 @@ def validate_spec(spec: OperatorSpec) -> None:
 	if spec.family in {
 		"right_np_after_anchor_before_marker",
 		"span_after_marker_before_marker",
+		"finite_verb_after_prior_span_before_marker",
 		"local_effect_phrase_after_marker",
 	} and not spec.stop_markers:
 		raise ValueError(f"OperatorSpec requires stop_markers: {spec.operator_id!r}")
+	if spec.family == "finite_verb_after_prior_span_before_marker" and not str(spec.requires_prior_segment or "").strip():
+		raise ValueError(
+			f"OperatorSpec requires requires_prior_segment for family 'finite_verb_after_prior_span_before_marker': {spec.operator_id!r}"
+		)
 	unknown_stop_markers = sorted(marker for marker in spec.stop_markers if marker not in KNOWN_STOP_MARKERS)
 	if unknown_stop_markers:
 		raise ValueError(

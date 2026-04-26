@@ -234,6 +234,62 @@ class Layer0RuntimeCoordinationTests(unittest.TestCase):
 				self.assertEqual(result.extraction_status, "ok")
 				self.assertEqual(result.segment_text, expected)
 
+	@patch("layer0_runtime.families.parse_text")
+	def test_span_after_marker_ap1b_mediation_action_within_during_at(self, mock_parse_text) -> None:
+		mock_parse_text.side_effect = self._fallback_doc
+		cases = [
+			(
+				"uses a form to record applicant information within initial intake",
+				"uses a form",
+				["within", "comma", "clause_boundary"],
+				"to record applicant information",
+			),
+			(
+				"uses a flag to filter applications during triage",
+				"uses a flag",
+				["during", "comma", "clause_boundary"],
+				"to filter applications",
+			),
+			(
+				"uses a dashboard to route cases at review",
+				"uses a dashboard",
+				["at", "comma", "clause_boundary"],
+				"to route cases",
+			),
+		]
+
+		for text, anchor, stop_markers, expected in cases:
+			with self.subTest(text=text):
+				spec = make_spec(
+					operator_id="S103",
+					family="span_after_marker_before_marker",
+					anchor_patterns=[anchor],
+					stop_markers=stop_markers,
+					allow_coordination=True,
+				)
+
+				result = run_span_after_marker_before_marker(text, spec)
+
+				self.assertEqual(result.extraction_status, "ok")
+				self.assertEqual(result.segment_text, expected)
+
+	@patch("layer0_runtime.families.parse_text")
+	def test_span_after_marker_at_marker_is_token_boundary_safe(self, mock_parse_text) -> None:
+		text = "uses application data to route cases during triage"
+		mock_parse_text.side_effect = self._fallback_doc
+		spec = make_spec(
+			operator_id="S103",
+			family="span_after_marker_before_marker",
+			anchor_patterns=["uses"],
+			stop_markers=["at", "to", "during"],
+			allow_coordination=True,
+		)
+
+		result = run_span_after_marker_before_marker(text, spec)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "application data")
+
 	def test_anchor_matching_does_not_fire_inside_throughput(self) -> None:
 		text = "Reporting obligations interact with throughput expectations through scoring rubric."
 

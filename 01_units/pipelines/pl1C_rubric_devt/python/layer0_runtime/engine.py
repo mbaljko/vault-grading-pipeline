@@ -26,12 +26,17 @@ def validate_runtime_row(row: Mapping[str, object]) -> None:
 		raise ValueError(f"Runtime row is missing response_text: {dict(row)!r}")
 
 
-def execute_operator(text: str, spec: OperatorSpec, submission_id: str) -> ExtractionResult:
+def execute_operator(
+	text: str,
+	spec: OperatorSpec,
+	submission_id: str,
+	prior_segments: dict[str, ExtractionResult] | None = None,
+) -> ExtractionResult:
 	validate_spec(spec)
 	if spec.family not in FAMILY_EXECUTORS:
 		raise ValueError(f"Unknown family encountered during execution: {spec.family!r}")
 	executor = FAMILY_EXECUTORS[spec.family]
-	family_execution = executor(text, spec)
+	family_execution = executor(text, spec, prior_segments)
 	return ExtractionResult(
 		submission_id=submission_id,
 		component_id=spec.component_id,
@@ -53,10 +58,14 @@ def execute_row(row: dict, specs_for_component: list[OperatorSpec]) -> list[Extr
 	if not specs_for_component:
 		raise ValueError(f"Unknown component with no matching specs: {component_id!r}")
 	results: list[ExtractionResult] = []
+	prior_segments: dict[str, ExtractionResult] = {}
 	for spec in specs_for_component:
 		if spec.component_id != component_id:
 			continue
-		results.append(execute_operator(response_text, spec, submission_id))
+		result = execute_operator(response_text, spec, submission_id, prior_segments)
+		results.append(result)
+		if result.segment_id:
+			prior_segments[result.segment_id] = result
 	return results
 
 

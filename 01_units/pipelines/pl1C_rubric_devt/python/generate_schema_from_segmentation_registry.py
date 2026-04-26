@@ -65,6 +65,7 @@ OPERATOR_OPTIONAL_EXECUTION_FIELDS = {
 	"anchor_selection_policy",
 	"candidate_selection_policy",
 	"later_candidate_handling",
+	"requires_prior_segment",
 	"stop_markers",
 	"target_type",
 	"allow_coordination",
@@ -130,6 +131,9 @@ KNOWN_STOP_MARKERS = {
 	"that",
 	"who",
 	"where",
+	"within",
+	"during",
+	"at",
 	"clause_boundary",
 	"shaping",
 	"by",
@@ -177,6 +181,13 @@ FAMILY_BEHAVIOR = {
 	"span_after_marker_before_marker": {
 		"direction": "right",
 		"start_rule": "immediate_post_anchor",
+		"end_rule": "first_stop_marker",
+		"allow_coordination": True,
+		"skip_later_candidates": False,
+	},
+	"finite_verb_after_prior_span_before_marker": {
+		"direction": "right",
+		"start_rule": "immediate_post_prior_segment",
 		"end_rule": "first_stop_marker",
 		"allow_coordination": True,
 		"skip_later_candidates": False,
@@ -1606,6 +1617,10 @@ def derive_anchor_patterns(row: dict[str, object], family: str) -> list[str]:
 	explicit_anchor_patterns = parse_runtime_list(row.get("anchor_patterns", ""), lowercase=True)
 	if explicit_anchor_patterns:
 		return apply_preprocessing_rule_anchor_aliases(explicit_anchor_patterns, row.get("preprocessing_rules", ""))
+	if family == "finite_verb_after_prior_span_before_marker":
+		raise ValueError(
+			f"Anchor patterns cannot be derived for family {family!r}; explicit anchor_patterns are required for template {row.get('template_id', '')!r}."
+		)
 	if family == "claim_text_passthrough_no_anchor":
 		return []
 	text = combined_instruction_text(row)
@@ -1725,6 +1740,11 @@ def compile_operator_spec(row: dict[str, object]) -> OperatorSpec:
 	else:
 		if output_mode != "span":
 			raise ValueError(f"Family {family!r} is incompatible with output_mode {output_mode!r}.")
+	requires_prior_segment = collapse_internal_whitespace(str(row.get("requires_prior_segment", "")))
+	if family == "finite_verb_after_prior_span_before_marker" and not requires_prior_segment:
+		raise ValueError(
+			f"Family {family!r} requires requires_prior_segment for {row.get('template_id', '')!r}."
+		)
 
 	return OperatorSpec(
 		assessment_id=str(row["assessment_id"]),
@@ -1759,6 +1779,7 @@ def compile_operator_spec(row: dict[str, object]) -> OperatorSpec:
 		anchor_selection_policy=anchor_selection_policy,
 		candidate_selection_policy=candidate_selection_policy,
 		later_candidate_handling=later_candidate_handling,
+		requires_prior_segment=requires_prior_segment or None,
 	)
 
 

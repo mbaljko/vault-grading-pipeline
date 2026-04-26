@@ -24,6 +24,9 @@ StopMarker = Literal[
 	"that",
 	"who",
 	"where",
+	"within",
+	"during",
+	"at",
 	"clause_boundary",
 	"shaping",
 	"by",
@@ -67,6 +70,7 @@ class OperatorSpec:
 	anchor_selection_policy: str = "first_match"
 	candidate_selection_policy: str = "unspecified"
 	later_candidate_handling: str = "unspecified"
+	requires_prior_segment: str | None = None
 
 
 @dataclass(frozen=True)
