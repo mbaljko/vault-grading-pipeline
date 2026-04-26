@@ -16,6 +16,7 @@ KNOWN_FAMILIES = {
 	"span_after_marker_before_marker",
 	"finite_verb_after_prior_span_before_marker",
 	"local_effect_phrase_after_marker",
+	"local_action_object_span_from_anchor",
 	"status_only_anchor_detector",
 	"claim_text_passthrough_if_anchor",
 	"claim_text_passthrough_no_anchor",
@@ -39,6 +40,7 @@ KNOWN_STOP_MARKERS = {
 	"within",
 	"during",
 	"at",
+	"before",
 	"clause_boundary",
 	"shaping",
 	"by",
@@ -119,6 +121,7 @@ def validate_spec(spec: OperatorSpec) -> None:
 		"span_after_marker_before_marker",
 		"finite_verb_after_prior_span_before_marker",
 		"local_effect_phrase_after_marker",
+			"local_action_object_span_from_anchor",
 	} and not spec.stop_markers:
 		raise ValueError(f"OperatorSpec requires stop_markers: {spec.operator_id!r}")
 	if spec.family == "finite_verb_after_prior_span_before_marker" and not str(spec.requires_prior_segment or "").strip():
@@ -139,7 +142,7 @@ def validate_spec(spec: OperatorSpec) -> None:
 		raise ValueError(
 			f"OperatorSpec requires anchor_precondition_patterns when anchor_selection_policy is 'first_after_precondition': {spec.operator_id!r}"
 		)
-	if spec.candidate_selection_policy not in {"unspecified", "first_local_candidate"}:
+	if spec.candidate_selection_policy not in {"unspecified", "first_local_candidate", "anchor_plus_first_local_candidate"}:
 		raise ValueError(
 			f"Unsupported candidate_selection_policy for {spec.operator_id}: {spec.candidate_selection_policy!r}"
 		)

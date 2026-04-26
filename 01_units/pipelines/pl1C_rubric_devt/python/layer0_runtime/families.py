@@ -277,6 +277,37 @@ def run_local_effect_phrase_after_marker(
 	return _ok_result(segment_text, confidence="medium" if spec.allow_coordination else "high")
 
 
+def run_local_action_object_span_from_anchor(
+	text: str,
+	spec: OperatorSpec,
+	prior_segments: Mapping[str, ExtractionResult] | None = None,
+) -> FamilyExecution:
+	anchor = _first_anchor(text, spec)
+	if anchor is None:
+		return _missing_result("no supported anchor verb found")
+	anchor_start, anchor_end, _ = anchor
+	stop_index = find_first_stop_marker(text, anchor_end, spec.stop_markers)
+	span_end = stop_index if stop_index is not None else len(text)
+	segment_text = trim_span(text[anchor_start:span_end])
+	if not segment_text:
+		return _missing_result("anchor found but no recoverable action-object span")
+	if len(segment_text.split()) < 2:
+		return _missing_result("anchor found but no recoverable phrase after anchor")
+	if any(marker in spec.stop_markers for marker in {"within", "during", "at", "before"}):
+		segment_tail = " ".join(segment_text.split()[1:])
+		for marker in ("within", "during", "at", "before"):
+			if marker in spec.stop_markers and f" {marker} " in f" {segment_tail.lower()} ":
+				return _boundary_misparse_result(
+					segment_text,
+					note=f"span includes stop-marker content ({marker}); boundary parse likely failed",
+					status="ambiguous",
+					confidence="low",
+				)
+	if len(segment_text.split()) > 18:
+		return _ambiguous_result("action-object span boundary unclear")
+	return _ok_result(segment_text, confidence="medium" if spec.allow_coordination else "high")
+
+
 def run_finite_verb_after_prior_span_before_marker(
 	text: str,
 	spec: OperatorSpec,
@@ -348,6 +379,7 @@ FAMILY_EXECUTORS = {
 	"span_after_marker_before_marker": run_span_after_marker_before_marker,
 	"finite_verb_after_prior_span_before_marker": run_finite_verb_after_prior_span_before_marker,
 	"local_effect_phrase_after_marker": run_local_effect_phrase_after_marker,
+	"local_action_object_span_from_anchor": run_local_action_object_span_from_anchor,
 	"status_only_anchor_detector": run_status_only_anchor_detector,
 	"claim_text_passthrough_if_anchor": run_claim_text_passthrough_if_anchor,
 	"claim_text_passthrough_no_anchor": run_claim_text_passthrough_no_anchor,

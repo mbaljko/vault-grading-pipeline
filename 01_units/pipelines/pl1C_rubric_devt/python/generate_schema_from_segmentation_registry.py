@@ -134,6 +134,7 @@ KNOWN_STOP_MARKERS = {
 	"within",
 	"during",
 	"at",
+	"before",
 	"clause_boundary",
 	"shaping",
 	"by",
@@ -196,6 +197,13 @@ FAMILY_BEHAVIOR = {
 		"direction": "right",
 		"start_rule": "immediate_post_anchor",
 		"end_rule": "local_effect_boundary",
+		"allow_coordination": True,
+		"skip_later_candidates": False,
+	},
+	"local_action_object_span_from_anchor": {
+		"direction": "right",
+		"start_rule": "anchor_start_inclusive",
+		"end_rule": "first_stop_marker",
 		"allow_coordination": True,
 		"skip_later_candidates": False,
 	},
@@ -467,7 +475,10 @@ def audit_decision_procedure_text(row: dict[str, object]) -> list[str]:
 		if "exclude later" in message and encoded_later_candidate_handling == "ignore_later_candidates":
 			continue
 		if "prefer first" in message:
-			if has_candidate_selection_directive and encoded_candidate_selection_policy == "first_local_candidate":
+			if has_candidate_selection_directive and encoded_candidate_selection_policy in {
+				"first_local_candidate",
+				"anchor_plus_first_local_candidate",
+			}:
 				continue
 			if has_anchor_precondition_selection_directive and has_encoded_anchor_precondition_selection:
 				continue
@@ -477,7 +488,10 @@ def audit_decision_procedure_text(row: dict[str, object]) -> list[str]:
 		warnings.append(f"{operator_label}: decision_procedure {message}.")
 	if has_numbered_steps and has_unencoded_directive_warning:
 		warnings.append(f"{operator_label}: decision_procedure {numbered_step_message}.")
-	if FIRST_CANDIDATE_DIRECTIVE_RE.search(decision_procedure) and encoded_candidate_selection_policy != "first_local_candidate":
+	if FIRST_CANDIDATE_DIRECTIVE_RE.search(decision_procedure) and encoded_candidate_selection_policy not in {
+		"first_local_candidate",
+		"anchor_plus_first_local_candidate",
+	}:
 		has_unencoded_directive_warning = True
 		warnings.append(
 			f"{operator_label}: decision_procedure contains a 'first candidate' directive that is not separately machine-encoded."
@@ -519,7 +533,10 @@ def validate_decision_procedure_encoding(row: dict[str, object]) -> None:
 			raise ValueError(
 				f"{operator_label}: decision_procedure requires non-empty anchor_precondition_patterns."
 			)
-	if FIRST_CANDIDATE_DIRECTIVE_RE.search(decision_procedure) and candidate_selection_policy != "first_local_candidate":
+	if FIRST_CANDIDATE_DIRECTIVE_RE.search(decision_procedure) and candidate_selection_policy not in {
+		"first_local_candidate",
+		"anchor_plus_first_local_candidate",
+	}:
 		raise ValueError(
 			f"{operator_label}: decision_procedure requires candidate_selection_policy='first_local_candidate'."
 		)
@@ -583,6 +600,7 @@ def default_allow_coordination_for_family(family: str) -> bool:
 		"right_np_after_anchor_before_marker": False,
 		"span_after_marker_before_marker": False,
 		"local_effect_phrase_after_marker": True,
+		"local_action_object_span_from_anchor": True,
 		"status_only_anchor_detector": False,
 		"claim_text_passthrough_no_anchor": False,
 	}
@@ -1726,7 +1744,7 @@ def compile_operator_spec(row: dict[str, object]) -> OperatorSpec:
 		raise ValueError(
 			f"anchor_selection_policy 'first_after_precondition' requires anchor_precondition_patterns for {row.get('template_id', '')!r}."
 		)
-	if candidate_selection_policy not in {"unspecified", "first_local_candidate"}:
+	if candidate_selection_policy not in {"unspecified", "first_local_candidate", "anchor_plus_first_local_candidate"}:
 		raise ValueError(
 			f"Unsupported candidate_selection_policy for {row.get('template_id', '')!r}: {candidate_selection_policy!r}"
 		)

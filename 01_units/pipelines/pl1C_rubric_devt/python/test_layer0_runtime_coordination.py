@@ -6,6 +6,7 @@ from layer0_runtime.boundaries import find_anchor_occurrences
 from layer0_runtime.families import (
 	run_claim_text_passthrough_no_anchor,
 	run_finite_verb_after_prior_span_before_marker,
+	run_local_action_object_span_from_anchor,
 	run_local_effect_phrase_after_marker,
 	run_right_np_after_anchor_before_marker,
 	run_span_after_marker_before_marker,
@@ -398,6 +399,65 @@ class Layer0RuntimeCoordinationTests(unittest.TestCase):
 
 		self.assertEqual(result.extraction_status, "missing")
 		self.assertEqual(result.extraction_notes, "required prior segment missing")
+
+	def test_local_action_object_span_starts_at_anchor(self) -> None:
+		text = "In this system, the intake worker uses a form to record applicant information within initial intake."
+		spec = make_spec(
+			operator_id="S05",
+			family="local_action_object_span_from_anchor",
+			anchor_patterns=["record", "records"],
+			stop_markers=["within", "during", "at", "sentence_end"],
+			allow_coordination=True,
+		)
+
+		result = run_local_action_object_span_from_anchor(text, spec)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "record applicant information")
+
+	def test_local_action_object_span_stops_before_during(self) -> None:
+		text = "In this system, caseworkers use flags to filter applications during review."
+		spec = make_spec(
+			operator_id="S05",
+			family="local_action_object_span_from_anchor",
+			anchor_patterns=["filter", "filters"],
+			stop_markers=["within", "during", "at", "sentence_end"],
+			allow_coordination=True,
+		)
+
+		result = run_local_action_object_span_from_anchor(text, spec)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "filter applications")
+
+	def test_local_action_object_span_accepts_generated_flags(self) -> None:
+		text = "In this system, automated checks generate flags based on prior data before review."
+		spec = make_spec(
+			operator_id="S05",
+			family="local_action_object_span_from_anchor",
+			anchor_patterns=["generate", "generates"],
+			stop_markers=["within", "during", "at", "before", "sentence_end"],
+			allow_coordination=True,
+		)
+
+		result = run_local_action_object_span_from_anchor(text, spec)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "generate flags based on prior data")
+
+	def test_local_action_object_span_requires_following_token(self) -> None:
+		text = "In this system, the applicant submits."
+		spec = make_spec(
+			operator_id="S05",
+			family="local_action_object_span_from_anchor",
+			anchor_patterns=["submit", "submits"],
+			stop_markers=["sentence_end"],
+			allow_coordination=True,
+		)
+
+		result = run_local_action_object_span_from_anchor(text, spec)
+
+		self.assertIn(result.extraction_status, {"missing", "ambiguous"})
 
 	@patch("layer0_runtime.families.parse_text")
 	def test_to_based_family_remains_unaffected_for_existing_behavior(self, mock_parse_text) -> None:

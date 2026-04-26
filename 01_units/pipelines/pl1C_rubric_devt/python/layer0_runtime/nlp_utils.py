@@ -328,7 +328,7 @@ def first_right_noun_chunk(
 	stop_on_infinitive: bool = False,
 	candidate_selection_policy: str = "unspecified",
 ) -> tuple[int, int, str] | None:
-	if candidate_selection_policy not in {"unspecified", "first_local_candidate"}:
+	if candidate_selection_policy not in {"unspecified", "first_local_candidate", "anchor_plus_first_local_candidate"}:
 		raise ValueError(f"Unsupported candidate_selection_policy: {candidate_selection_policy!r}")
 	chunks = noun_chunks_with_offsets(doc) if doc is not None else []
 	right_limit = stop_index if stop_index is not None else len(doc.text)

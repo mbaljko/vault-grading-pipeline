@@ -28,14 +28,14 @@ If you do only those six things, you usually get predictable Layer 0 behavior.
 | ----------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | `registry_metadata`                       | `layer`                      | `auto`, `layer0`                                                                                                                                                                                                                                                                           | Any other value is rejected.                                                  |
 | `operator_templates`                      | `output_mode`                | `span`, `status_only`                                                                                                                                                                                                                                                                      | `status_only` is only valid with `status_only_anchor_detector` family.        |
-| `operator_templates` / expanded instances | `runtime_family`             | `left_np_before_anchor`, `right_np_after_anchor_before_marker`, `span_after_marker_before_marker`, `finite_verb_after_prior_span_before_marker`, `local_effect_phrase_after_marker`, `status_only_anchor_detector`, `claim_text_passthrough_if_anchor`, `claim_text_passthrough_no_anchor` | If omitted, family is derived from `local_slot`/`output_mode`.                |
+| `operator_templates` / expanded instances | `runtime_family`             | `left_np_before_anchor`, `right_np_after_anchor_before_marker`, `span_after_marker_before_marker`, `finite_verb_after_prior_span_before_marker`, `local_effect_phrase_after_marker`, `local_action_object_span_from_anchor`, `status_only_anchor_detector`, `claim_text_passthrough_if_anchor`, `claim_text_passthrough_no_anchor` | If omitted, family is derived from `local_slot`/`output_mode`.                |
 | `operator_templates` / expanded instances | `local_slot`                 | Derived families supported for `00`, `01`, `02`, `03`, `04`, `05`                                                                                                                                                                                                                          | For other slots, set an explicit supported `runtime_family`.                  |
 | expanded instances                        | `instance_status`            | `active`                                                                                                                                                                                                                                                                                   | Inactive rows are not compiled/executed.                                      |
 | expanded instances                        | `anchor_selection_policy`    | `first_match`, `first_after_precondition`                                                                                                                                                                                                                                                  | `first_after_precondition` requires non-empty `anchor_precondition_patterns`. |
-| expanded instances                        | `candidate_selection_policy` | `unspecified`, `first_local_candidate`                                                                                                                                                                                                                                                     | `first_local_candidate` enforces first local candidate behavior.              |
+| expanded instances                        | `candidate_selection_policy` | `unspecified`, `first_local_candidate`, `anchor_plus_first_local_candidate`                                                                                                                                                                                                                | First-candidate style policies enforce first local candidate behavior.         |
 | expanded instances                        | `later_candidate_handling`   | `unspecified`, `ignore_later_candidates`                                                                                                                                                                                                                                                   | Used with first-candidate style procedures.                                   |
 | expanded instances                        | `requires_prior_segment`     | any non-empty segment id (for `finite_verb_after_prior_span_before_marker`)                                                                                                                                                                                                                | Required for `finite_verb_after_prior_span_before_marker`; ignored otherwise. |
-| expanded instances                        | `stop_markers`               | `comma`, `sentence_start`, `conjunction_boundary`, `through`, `to`, `which`, `that`, `who`, `where`, `within`, `during`, `at`, `clause_boundary`, `shaping`, `by`, `comma_new_clause`, `subordinate_extension`, `sentence_end`                                                             | Unknown markers are rejected.                                                 |
+| expanded instances                        | `stop_markers`               | `comma`, `sentence_start`, `conjunction_boundary`, `through`, `to`, `which`, `that`, `who`, `where`, `within`, `during`, `at`, `before`, `clause_boundary`, `shaping`, `by`, `comma_new_clause`, `subordinate_extension`, `sentence_end`                                                   | Unknown markers are rejected.                                                 |
 | expanded instances                        | `allow_coordination`         | `true`, `false`, blank                                                                                                                                                                                                                                                                     | Blank means derive from template override/text/family defaults.               |
 
 ### Field-by-Field Explanation
@@ -81,6 +81,7 @@ If you do only those six things, you usually get predictable Layer 0 behavior.
 - Values:
 	- `unspecified`: family default behavior.
 	- `first_local_candidate`: choose first local candidate and do not skip to later candidates.
+	- `anchor_plus_first_local_candidate`: choose first local candidate with anchor-inclusive extraction semantics in families that support it.
 
 #### `later_candidate_handling`
 - Purpose: Encodes what to do with later candidates after first candidate logic.
@@ -155,6 +156,7 @@ The runtime converts marker names into boundary checks.
 | `within` | Stop before lexical token `within` |
 | `during` | Stop before lexical token `during` |
 | `at` | Stop before lexical token `at` |
+| `before` | Stop before lexical token `before` |
 | `shaping` | Stop before lexical token `shaping` |
 | `by` | Stop before lexical token `by` |
 | `comma` | Stop at the next comma |
@@ -188,6 +190,14 @@ Input fragment: `documentation and record-keeping standards for audit`
 
 - `allow_coordination=true` -> coordinated phrase can be included.
 - `allow_coordination=false` -> extraction may stop at first local unit.
+
+### Example D: Anchor-Inclusive Action-Object Span
+
+- `runtime_family=local_action_object_span_from_anchor`
+- `anchor_patterns=record, records`
+- `stop_markers=within, during, at, sentence_end`
+
+Behavior: extraction starts at the matched action anchor and includes the verb, for example `record applicant information`.
 
 ## What This File Does Not Guarantee
 
