@@ -29,12 +29,12 @@ For windowed group matching, use `match_policy=co_occurrence_window_N` where `N`
 | `dependency_type` | Required, open-ended string | Required by parser; no strict value enumeration in current code. |
 | `bound_segment_id` | Required, open-ended string | Required by parser; used for segment-field resolution. |
 | `normalisation_rule` | `""`, `lowercase`, `lowercase_trim`, `lowercase_trim_strip_stage_suffix`, `lowercase_trim_strip_leading_determiner`, `lowercase_lemma_effect_terms` | Any other value is rejected. |
-| `match_policy` | `substring_any`, `exact_or_alias`, `exact_or_alias_article_insensitive`, `exact_or_alias_article_insensitive_any_conjunct`, `exact_or_alias_or_role`, `co_occurrence`, `co_occurrence_lemma`, `absence_check`, `canonical_inequality`, `co_occurrence_window_N` | `co_occurrence_window_N` is supported when `N` is a positive integer. |
+| `match_policy` | `substring_any`, `exact_or_alias`, `exact_or_alias_article_insensitive`, `exact_or_alias_article_insensitive_any_conjunct`, `exact_or_alias_or_role`, `co_occurrence`, `co_occurrence_lemma`, `non_empty`, `absence_check`, `canonical_inequality`, `co_occurrence_window_N` | `co_occurrence_window_N` is supported when `N` is a positive integer. `non_empty` returns a positive match when the resolved segment text contains non-whitespace content. |
 | `decision_rule` | `present_if_any_allowed_term_found`, `present_if_exact_match_or_alias_and_not_excluded`, `present_if_matches_stage_or_role_and_not_excluded`, `present_if_any_stage_phrase_matches_after_normalisation_and_not_excluded`, `present_if_minimum_group_matches_met_and_not_excluded`, `present_if_minimum_group_matches_met_or_fallback_and_not_excluded`, `present_if_no_excluded_terms_found`, `present_if_any_allowed_term_found_and_not_only_excluded`, `present_if_canonical_mappings_are_distinct` | Decision-rule aliases are normalized (see alias table below). |
 | `bound_segment_resolution_policy` | `hard_stay`, `fallback_to_evidence_text` | Defaults to `hard_stay` when omitted/blank. |
 | `required_term_groups` | Mapping of `group_name -> list[str]` | Used by co-occurrence policies. |
 | `minimum_match_count_per_group` | Integer (`>= 0` accepted; effective minimum is 1 during matching) | Used with grouped-term matching. |
-| `allowed_terms` | List of strings | Used by exact/substring/stage matching families. |
+| `allowed_terms` | List of strings | Used by exact/substring/stage matching families. Not required for `match_policy=non_empty`. |
 | `allowed_aliases` | Mapping `alias -> canonical` | Alias keys and canonical values are normalized under selected normalisation rule. |
 | `allowed_roles` | List of strings | Used with `match_policy=exact_or_alias_or_role`. |
 | `excluded_terms` | List of strings | Evaluated after normalization; may veto positive matches by decision-rule semantics. |
@@ -124,6 +124,21 @@ Supported flag values:
 - `excluded_term_override`
 
 Diagnostics are non-breaking metadata; they do not override decision-rule outcomes by themselves.
+
+## Non-Empty Pass-Through Pattern
+
+Use this when you want a pure segment-presence signal with no lexical filtering.
+
+```yaml
+match_policy: non_empty
+decision_rule: present_if_any_allowed_term_found
+```
+
+Behavior notes:
+
+- If resolved segment text is non-empty after trimming whitespace, output is `present`.
+- If resolved segment text is empty/whitespace, output is `not_present` and emits `missing_input_text`.
+- `allowed_terms` is not required and is ignored/removed by module-generation validation for this policy.
 
 ## Operational Defaults and Derived Behavior
 

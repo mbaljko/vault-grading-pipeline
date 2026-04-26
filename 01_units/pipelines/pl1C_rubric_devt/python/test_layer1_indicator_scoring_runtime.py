@@ -737,6 +737,32 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 				},
 			)
 
+	def test_non_empty_match_policy_present_for_non_blank_segment(self) -> None:
+		status, flags = apply_decision_rule(
+			"caseworker",
+			{
+				"normalisation_rule": "lowercase_trim",
+				"match_policy": "non_empty",
+				"decision_rule": "present_if_any_allowed_term_found",
+				"excluded_terms": [],
+			},
+		)
+		self.assertEqual(status, "present")
+		self.assertEqual(flags, "none")
+
+	def test_non_empty_match_policy_empty_segment_sets_missing_input_text_flag(self) -> None:
+		status, flags = apply_decision_rule(
+			"   ",
+			{
+				"normalisation_rule": "lowercase_trim",
+				"match_policy": "non_empty",
+				"decision_rule": "present_if_any_allowed_term_found",
+				"excluded_terms": [],
+			},
+		)
+		self.assertEqual(status, "not_present")
+		self.assertIn("missing_input_text", flags)
+
 	def test_score_indicator_from_row_hard_stays_on_blank_bound_segment_by_default(self) -> None:
 		result = score_indicator_from_row(
 			{
@@ -867,6 +893,21 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 			'}'
 		)
 		self.assertEqual(payload["normalisation_rule"], "lowercase_lemma_effect_terms")
+
+	def test_parse_scoring_payload_non_empty_drops_allowed_terms(self) -> None:
+		payload = parse_scoring_payload(
+			'{'
+			'"scoring_mode":"deterministic",'
+			'"dependency_type":"segment",'
+			'"bound_segment_id":"01_Actor",'
+			'"normalisation_rule":"lowercase_trim",'
+			'"match_policy":"non_empty",'
+			'"decision_rule":"present_if_any_allowed_term_found",'
+			'"allowed_terms":["caseworker"],'
+			'"excluded_terms":[]'
+			'}'
+		)
+		self.assertNotIn("allowed_terms", payload)
 
 	def test_parse_scoring_payload_accepts_strip_leading_determiner_strip_possessive_rule(self) -> None:
 		payload = parse_scoring_payload(

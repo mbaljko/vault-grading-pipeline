@@ -133,6 +133,8 @@ def parse_scoring_payload(payload_json: str) -> dict[str, object]:
 	if not is_supported_match_policy(match_policy):
 		raise ValueError(f"Unsupported Layer 1 match_policy: {match_policy}")
 	payload["match_policy"] = match_policy
+	if match_policy == "non_empty":
+		payload.pop("allowed_terms", None)
 	decision_rule = normalize_decision_rule_name(str(payload.get("decision_rule", "") or "").strip())
 	if decision_rule not in SUPPORTED_DECISION_RULES:
 		raise ValueError(f"Unsupported Layer 1 decision_rule: {decision_rule}")

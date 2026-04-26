@@ -41,6 +41,7 @@ The explicitly recognized `match_policy` values are:
 - `exact_or_alias_or_role`: evaluates the exact-or-alias matcher over the union of `allowed_terms` and `allowed_roles`.
 - `co_occurrence`: normalizes the segment and requires each configured term group in `required_term_groups` to meet `minimum_match_count_per_group`.
 - `co_occurrence_lemma`: normalizes both the segment and each registered group term using the configured `normalisation_rule`, then requires full phrase matches per group using boundary-safe phrase matching.
+- `non_empty`: treats any non-empty, non-whitespace resolved segment text as a policy match.
 - `absence_check`: reports a policy match unconditionally and leaves the final decision to the decision rule's excluded-term logic.
 - `canonical_inequality`: resolves left and right bound slots to canonical values and reports a match when those canonical mappings are distinct under the configured payload.
 
@@ -109,6 +110,7 @@ SUPPORTED_MATCH_POLICIES = {
 	"exact_or_alias_or_role",
 	"co_occurrence",
 	"co_occurrence_lemma",
+	"non_empty",
 	"absence_check",
 	"canonical_inequality",
 }
@@ -1349,6 +1351,8 @@ def evaluate_match_policy(
 		return co_occurrence_match(text, payload, rule)
 	if match_policy == "co_occurrence_lemma":
 		return co_occurrence_lemma_match(text, payload, rule)
+	if match_policy == "non_empty":
+		return bool(str(text or "").strip())
 	window_size = parse_co_occurrence_window_size(match_policy)
 	if window_size is not None:
 		window_match, _, _, _, _, _ = evaluate_co_occurrence_phrase_groups_with_window(
@@ -1426,6 +1430,12 @@ def apply_decision_rule(
 		if context.get("windowed_co_occurrence_match"):
 			diagnostic_flags.append("windowed_co_occurrence_match")
 		return (bool(context.get("policy_or_fallback_match", False)), context)
+
+	if match_policy == "non_empty":
+		if str(text or "").strip():
+			return finalize("present", candidate_was_positive=True)
+		diagnostic_flags.append("missing_input_text")
+		return finalize("not_present", candidate_was_positive=False)
 
 	if decision_rule == "present_if_any_allowed_term_found":
 		candidate = policy_match
