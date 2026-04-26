@@ -63,6 +63,7 @@ from __future__ import annotations
 import logging
 import re
 import ast
+import os
 from dataclasses import dataclass
 from typing import Mapping
 
@@ -136,6 +137,24 @@ OBJECT_PHRASE_SKIP_TOKENS = {
 	"these",
 	"those",
 }
+
+
+def should_emit_required_term_group_debug() -> bool:
+	return str(os.getenv("L1_DEBUG_REQUIRED_TERM_GROUPS", "") or "").strip().lower() in {
+		"1",
+		"true",
+		"yes",
+		"on",
+	}
+
+
+def emit_required_term_group_debug(required_term_groups: Mapping[str, list[str]]) -> None:
+	if not should_emit_required_term_group_debug():
+		return
+	for group_name, group_terms in required_term_groups.items():
+		count = len(group_terms)
+		print(f"group={group_name}, count={count}")
+		logger.debug("group=%s, count=%s", group_name, count)
 
 LABEL_LINE_RE = re.compile(r"^\s*\[[^\]]+\]\s*$")
 LEADING_ARTICLE_RE = re.compile(r"^(?:the|a|an)\s+", re.IGNORECASE)
@@ -1042,6 +1061,7 @@ def evaluate_co_occurrence_phrase_groups(
 		str(group_name): [str(term) for term in group_terms]
 		for group_name, group_terms in dict(payload.get("required_term_groups", {})).items()
 	}
+	emit_required_term_group_debug(required_term_groups)
 	matched_terms_by_group: dict[str, list[str]] = {}
 	normalized_required_term_groups: dict[str, list[str]] = {}
 	if not required_term_groups:
