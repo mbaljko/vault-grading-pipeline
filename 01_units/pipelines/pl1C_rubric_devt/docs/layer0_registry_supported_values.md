@@ -35,7 +35,7 @@ If you do only those six things, you usually get predictable Layer 0 behavior.
 | expanded instances                        | `candidate_selection_policy` | `unspecified`, `first_local_candidate`, `anchor_plus_first_local_candidate`                                                                                                                                                                                                                | First-candidate style policies enforce first local candidate behavior.         |
 | expanded instances                        | `later_candidate_handling`   | `unspecified`, `ignore_later_candidates`                                                                                                                                                                                                                                                   | Used with first-candidate style procedures.                                   |
 | expanded instances                        | `requires_prior_segment`     | any non-empty segment id (for `finite_verb_after_prior_span_before_marker`)                                                                                                                                                                                                                | Required for `finite_verb_after_prior_span_before_marker`; ignored otherwise. |
-| expanded instances                        | `stop_markers`               | `comma`, `sentence_start`, `conjunction_boundary`, `through`, `to`, `which`, `that`, `who`, `where`, `within`, `during`, `at`, `before`, `clause_boundary`, `shaping`, `by`, `comma_new_clause`, `subordinate_extension`, `sentence_end`                                                   | Unknown markers are rejected.                                                 |
+| expanded instances                        | `stop_markers`               | `comma`, `sentence_start`, `conjunction_boundary`, `through`, `to`, `which`, `that`, `who`, `where`, `within`, `during`, `at`, `for`, `before`, `clause_boundary`, `shaping`, `by`, `comma_new_clause`, `subordinate_extension`, `sentence_end`                                            | Unknown markers are rejected.                                                 |
 | expanded instances                        | `allow_coordination`         | `true`, `false`, blank                                                                                                                                                                                                                                                                     | Blank means derive from template override/text/family defaults.               |
 
 ### Field-by-Field Explanation
@@ -156,6 +156,7 @@ The runtime converts marker names into boundary checks.
 | `within` | Stop before lexical token `within` |
 | `during` | Stop before lexical token `during` |
 | `at` | Stop before lexical token `at` |
+| `for` | Stop before lexical token `for` |
 | `before` | Stop before lexical token `before` |
 | `shaping` | Stop before lexical token `shaping` |
 | `by` | Stop before lexical token `by` |

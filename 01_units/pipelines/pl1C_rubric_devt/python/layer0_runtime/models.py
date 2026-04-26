@@ -27,6 +27,7 @@ StopMarker = Literal[
 	"within",
 	"during",
 	"at",
+	"for",
 	"before",
 	"clause_boundary",
 	"shaping",

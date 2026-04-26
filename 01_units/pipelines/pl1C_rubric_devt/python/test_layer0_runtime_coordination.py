@@ -292,6 +292,40 @@ class Layer0RuntimeCoordinationTests(unittest.TestCase):
 		self.assertEqual(result.extraction_status, "ok")
 		self.assertEqual(result.segment_text, "application data")
 
+	@patch("layer0_runtime.families.parse_text")
+	def test_stop_marker_for_stops_before_purpose_phrase(self, mock_parse_text) -> None:
+		text = "In this system, the applicant uses an online portal for application submission."
+		mock_parse_text.side_effect = self._fallback_doc
+		spec = make_spec(
+			operator_id="S102",
+			family="right_np_after_anchor_before_marker",
+			anchor_patterns=["uses"],
+			stop_markers=["for", "sentence_end"],
+			allow_coordination=True,
+		)
+
+		result = run_right_np_after_anchor_before_marker(text, spec)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "an online portal")
+
+	@patch("layer0_runtime.families.parse_text")
+	def test_stop_marker_for_is_token_boundary_safe(self, mock_parse_text) -> None:
+		text = "In this system, the applicant uses an information portal."
+		mock_parse_text.side_effect = self._fallback_doc
+		spec = make_spec(
+			operator_id="S102",
+			family="right_np_after_anchor_before_marker",
+			anchor_patterns=["uses"],
+			stop_markers=["for", "sentence_end"],
+			allow_coordination=True,
+		)
+
+		result = run_right_np_after_anchor_before_marker(text, spec)
+
+		self.assertEqual(result.extraction_status, "ok")
+		self.assertEqual(result.segment_text, "an information portal")
+
 	def _ok_prior_result(self, *, segment_id: str, segment_text: str) -> ExtractionResult:
 		return ExtractionResult(
 			submission_id="sub-001",

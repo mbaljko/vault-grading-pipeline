@@ -134,6 +134,7 @@ KNOWN_STOP_MARKERS = {
 	"within",
 	"during",
 	"at",
+	"for",
 	"before",
 	"clause_boundary",
 	"shaping",

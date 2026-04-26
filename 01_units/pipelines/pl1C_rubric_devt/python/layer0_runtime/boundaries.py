@@ -135,6 +135,7 @@ def find_first_stop_marker(text: str, start_index: int, stop_markers: list[str])
 			"within",
 			"during",
 			"at",
+			"for",
 			"before",
 		}:
 			index = _find_token_marker(text, start_index, marker)
