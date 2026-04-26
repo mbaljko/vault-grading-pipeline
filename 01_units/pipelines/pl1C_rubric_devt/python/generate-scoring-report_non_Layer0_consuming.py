@@ -2186,6 +2186,9 @@ def render_indicator_segment_report(
 ) -> str:
 	identifier_headers = ["template_id", "indicator_id"]
 	identifier_values = [template_id or "(none)", indicator_id]
+	total_matching_layer0_condition_count = matching_row_count + non_matching_row_count
+	total_not_matching_layer0_condition_count = required_layer0_gate_excluded_row_count
+	total_record_count = total_matching_layer0_condition_count + total_not_matching_layer0_condition_count
 	parts = [
 		"---",
 		f'generated_at_utc: "{datetime.now(timezone.utc).isoformat(timespec="seconds")}"',
@@ -2214,13 +2217,16 @@ def render_indicator_segment_report(
 				["sbo_identifier", sbo_identifier],
 				["sbo_short_description", sbo_short_description],
 				["bound_segment_id", bound_segment_id or "(unbound)"],
-				["required_layer0_records", required_layer0_records or "(none)"],
 				["segment_field", segment_field or "evidence_text"],
 				["scored_csv", str(scored_csv_path) if scored_csv_path is not None else ""],
 				["layer0_stitched_csv", str(segment_source_csv_path) if segment_source_csv_path is not None else ""],
+				["required_layer0_records", required_layer0_records or "(none)"],
+				["total_record_count", str(total_record_count)],
+				["total_matching_layer0_condition_count", str(total_matching_layer0_condition_count)],
+				["total_not_matching_layer0_condition_count", str(total_not_matching_layer0_condition_count)],
+				["row_count", str(total_matching_layer0_condition_count)],
 				["matching_row_count", str(matching_row_count)],
 				["non_matching_row_count", str(non_matching_row_count)],
-				["required_layer0_gate_excluded_row_count", str(required_layer0_gate_excluded_row_count)],
 				["missing_segment_source_row_count", str(missing_input_row_count)],
 				["unique_matching_segment_texts", str(len(matching_segment_counts))],
 				["unique_non_matching_segment_texts", str(len(non_matching_segment_counts))],
@@ -2411,49 +2417,27 @@ def render_indicator_segment_report(
 		)
 	else:
 		parts.append("No present_recovery segment details.")
-	blank_non_matching_entries, non_blank_non_matching_entries = split_detail_entries_by_blank(
-		non_matching_detail_entries
-	)
-	parts.extend([
-		"",
-		"#### Non-Matching Segment Texts Detail (Blank Segments)",
-		"",
-	])
-	blank_non_matching_rows = build_segment_detail_rows(
-		blank_non_matching_entries,
+	non_matching_detail_rows = build_segment_detail_rows(
+		non_matching_detail_entries,
 		required_layer0_records=required_layer0_records,
 		bound_segment_id=bound_segment_id,
 	)
-	if blank_non_matching_rows:
-		parts.append(
-			render_markdown_table(
-				[*identifier_headers, "original_submission", *segment_column_labels],
-				prepend_identifier_columns(blank_non_matching_rows, identifier_values),
-			)
-		)
-	else:
-		parts.append("No non-matching segment details with blank segments.")
 	parts.extend([
 		"",
-		"#### Non-Matching Segment Texts Detail (Non-Blank Segments)",
+		"#### Non-Matching Segment Texts Detail",
 		"",
 	])
-	non_blank_non_matching_rows = build_segment_detail_rows(
-		non_blank_non_matching_entries,
-		required_layer0_records=required_layer0_records,
-		bound_segment_id=bound_segment_id,
-	)
-	if non_blank_non_matching_rows:
+	if non_matching_detail_rows:
 		parts.extend(
 			render_chunked_markdown_tables(
 				headers=[*identifier_headers, "original_submission", *segment_column_labels],
-				rows=prepend_identifier_columns(non_blank_non_matching_rows, identifier_values),
+				rows=prepend_identifier_columns(non_matching_detail_rows, identifier_values),
 				max_rows_per_table=MAX_NON_BLANK_DETAIL_ROWS_PER_TABLE,
-				note_label="Non-Matching Segment Texts Detail (Non-Blank Segments)",
+				note_label="Non-Matching Segment Texts Detail",
 			)
 		)
 	else:
-		parts.append("No non-matching segment details with non-blank segments.")
+		parts.append("No non-matching segment details.")
 	parts.append("")
 	return "\n".join(parts)
 
@@ -2486,6 +2470,21 @@ def render_indicator_slot_group_segment_report(
 	group_label = format_slot_group_label(local_slot)
 	template_label = ", ".join(template_ids) if template_ids else "(none)"
 	indicator_label = ", ".join(row[1] for row in indicator_members) if indicator_members else "(none)"
+	total_matching_layer0_condition_count = matching_row_count + non_matching_row_count
+	total_not_matching_layer0_condition_count = required_layer0_gate_excluded_row_count
+	total_record_count = total_matching_layer0_condition_count + total_not_matching_layer0_condition_count
+	sbo_short_description_label = ", ".join(
+		sorted(
+			{
+				description
+				for description in (str(row[5]).strip() for row in indicator_members)
+				if description
+			},
+			key=str.casefold,
+		)
+	)
+	if not sbo_short_description_label:
+		sbo_short_description_label = "(none)"
 	unique_matching_segment_texts = {
 		segment_text
 		for segment_counts in matching_segment_counts_by_member.values()
@@ -2521,13 +2520,17 @@ def render_indicator_slot_group_segment_report(
 				["group_label", group_label],
 				["local_slot", local_slot],
 				["template_ids", ", ".join(template_ids)],
+				["sbo_short_description", sbo_short_description_label],
 				["indicator_ids", ", ".join(row[1] for row in indicator_members)],
 				["component_ids", ", ".join(row[0] for row in indicator_members)],
 				["required_layer0_records", required_layer0_records or "(none)"],
-				["bound_segment_id", bound_segment_id or "(unbound)"],
+				["total_record_count", str(total_record_count)],
+				["total_matching_layer0_condition_count", str(total_matching_layer0_condition_count)],
+				["total_not_matching_layer0_condition_count", str(total_not_matching_layer0_condition_count)],
+				["row_count", str(total_matching_layer0_condition_count)],
 				["matching_row_count", str(matching_row_count)],
 				["non_matching_row_count", str(non_matching_row_count)],
-				["required_layer0_gate_excluded_row_count", str(required_layer0_gate_excluded_row_count)],
+				["bound_segment_id", bound_segment_id or "(unbound)"],
 				["missing_input_row_count", str(missing_input_row_count)],
 				["unique_matching_segment_texts", str(len(unique_matching_segment_texts))],
 				["unique_non_matching_segment_texts", str(len(unique_non_matching_segment_texts))],
@@ -2784,56 +2787,34 @@ def render_indicator_slot_group_segment_report(
 		)
 	else:
 		parts.append("No present_recovery segment details.")
-	blank_non_matching_rows: list[list[str]] = []
-	non_blank_non_matching_rows: list[list[str]] = []
+	non_matching_detail_rows: list[list[str]] = []
 	for member_row in indicator_members:
 		component_id = member_row[0]
 		indicator_id = member_row[1]
 		member_key = (component_id, indicator_id)
 		member_non_matching_entries = non_matching_detail_entries_by_member.get(member_key, [])
-		member_blank_entries, member_non_blank_entries = split_detail_entries_by_blank(member_non_matching_entries)
-		member_blank_rows = build_segment_detail_rows(
-			member_blank_entries,
+		member_rows = build_segment_detail_rows(
+			member_non_matching_entries,
 			required_layer0_records=required_layer0_records,
 			bound_segment_id=bound_segment_id,
 		)
-		member_non_blank_rows = build_segment_detail_rows(
-			member_non_blank_entries,
-			required_layer0_records=required_layer0_records,
-			bound_segment_id=bound_segment_id,
-		)
-		blank_non_matching_rows.extend([[component_id, indicator_id, *row] for row in member_blank_rows])
-		non_blank_non_matching_rows.extend([[component_id, indicator_id, *row] for row in member_non_blank_rows])
+		non_matching_detail_rows.extend([[component_id, indicator_id, *row] for row in member_rows])
 	parts.extend([
 		"",
-		"#### Non-Matching Segment Texts Detail (Blank Segments)",
+		"#### Non-Matching Segment Texts Detail",
 		"",
 	])
-	if blank_non_matching_rows:
-		parts.append(
-			render_markdown_table(
-				["component_id", "indicator_id", "original_submission", *segment_column_labels],
-				blank_non_matching_rows,
-			)
-		)
-	else:
-		parts.append("No non-matching segment details with blank segments.")
-	parts.extend([
-		"",
-		"#### Non-Matching Segment Texts Detail (Non-Blank Segments)",
-		"",
-	])
-	if non_blank_non_matching_rows:
+	if non_matching_detail_rows:
 		parts.extend(
 			render_chunked_markdown_tables(
 				headers=["component_id", "indicator_id", "original_submission", *segment_column_labels],
-				rows=non_blank_non_matching_rows,
+				rows=non_matching_detail_rows,
 				max_rows_per_table=MAX_NON_BLANK_DETAIL_ROWS_PER_TABLE,
-				note_label="Non-Matching Segment Texts Detail (Non-Blank Segments)",
+				note_label="Non-Matching Segment Texts Detail",
 			)
 		)
 	else:
-		parts.append("No non-matching segment details with non-blank segments.")
+		parts.append("No non-matching segment details.")
 	parts.append("")
 	return "\n".join(parts)
 
