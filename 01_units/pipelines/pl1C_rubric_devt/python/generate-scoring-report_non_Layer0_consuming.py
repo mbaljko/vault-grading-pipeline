@@ -2028,7 +2028,9 @@ def build_status_count_rows(status_counts: Counter[str], layer0_cond_not_met_cou
 
 
 def build_status_rollup_rows(status_counts: Counter[str], layer0_cond_not_met_count: int = 0) -> list[list[str]]:
-	total_count = sum(status_counts.values()) + max(layer0_cond_not_met_count, 0)
+	# Roll-up percentages are computed over gate-eligible scored rows only.
+	# layer0_cond_not_met_count is intentionally excluded from this denominator.
+	total_count = sum(status_counts.values())
 	if total_count <= 0:
 		return []
 	present_count = sum(
