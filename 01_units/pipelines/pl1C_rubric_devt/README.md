@@ -40,4 +40,4 @@ Instead:
 
 ## Additional Docs
 
-- Layer 1 deterministic registry augmentation reference: [docs/layer1_registry_augmentation.md](docs/layer1_registry_augmentation.md)
+- Layer 1 deterministic registry augmentation reference: [docs/layer1_registry_augmentation.md](layer1_registry_supported_values.md)
