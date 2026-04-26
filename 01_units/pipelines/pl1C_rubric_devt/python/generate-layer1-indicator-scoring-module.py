@@ -16,6 +16,7 @@ from layer1_indicator_scoring_runtime import (
 	is_supported_match_policy,
 	normalize_payload_optional_fields,
 	normalize_decision_rule_name,
+	parse_required_layer0_records,
 	validate_normalisation_rule_name,
 )
 
@@ -147,6 +148,17 @@ def parse_scoring_payload(payload_json: str) -> dict[str, object]:
 			f"Unsupported Layer 1 bound_segment_resolution_policy: {bound_segment_resolution_policy}"
 		)
 	payload["bound_segment_resolution_policy"] = bound_segment_resolution_policy
+	required_layer0_requirements = parse_required_layer0_records(payload.get("required_layer0_records", ""))
+	for _operator_id, predicate in required_layer0_requirements:
+		if predicate not in {"ok", "not_ok"}:
+			raise ValueError(
+				"Unsupported required_layer0_records predicate: "
+				f"{predicate}. Supported predicates are: ok, not_ok"
+			)
+	if required_layer0_requirements:
+		payload["required_layer0_records"] = "; ".join(
+			f"{operator_id}:{predicate}" for operator_id, predicate in required_layer0_requirements
+		)
 	return payload
 
 

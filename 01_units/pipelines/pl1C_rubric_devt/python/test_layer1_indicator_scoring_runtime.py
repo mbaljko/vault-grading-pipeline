@@ -2,7 +2,13 @@ import importlib.util
 from pathlib import Path
 import unittest
 
-from layer1_indicator_scoring_runtime import apply_decision_rule, normalize_text, score_indicator_from_row
+from layer1_indicator_scoring_runtime import (
+	apply_decision_rule,
+	check_required_layer0_records,
+	normalize_text,
+	parse_required_layer0_records,
+	score_indicator_from_row,
+)
 
 
 _GENERATOR_PATH = Path(__file__).with_name("generate-layer1-indicator-scoring-module.py")
@@ -763,6 +769,85 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 		self.assertEqual(status, "not_present")
 		self.assertIn("missing_input_text", flags)
 
+	def test_required_layer0_records_conjunction_ok_and_not_ok_passes_when_recovery_needed(self) -> None:
+		requirements = parse_required_layer0_records("S00:ok; S03:not_ok")
+		passed, flags = check_required_layer0_records(
+			requirements,
+			{
+				"S00": [{"extraction_status": "ok"}],
+				"S03": [{"extraction_status": "missing"}],
+			},
+		)
+		self.assertTrue(passed)
+		self.assertEqual(flags, [])
+
+	def test_required_layer0_records_not_ok_passes_when_record_absent(self) -> None:
+		requirements = parse_required_layer0_records("S00:ok; S03:not_ok")
+		passed, flags = check_required_layer0_records(
+			requirements,
+			{
+				"S00": [{"extraction_status": "ok"}],
+			},
+		)
+		self.assertTrue(passed)
+		self.assertEqual(flags, [])
+
+	def test_required_layer0_records_not_ok_fails_when_operator_ok(self) -> None:
+		requirements = parse_required_layer0_records("S00:ok; S03:not_ok")
+		passed, flags = check_required_layer0_records(
+			requirements,
+			{
+				"S00": [{"extraction_status": "ok"}],
+				"S03": [{"extraction_status": "ok"}],
+			},
+		)
+		self.assertFalse(passed)
+		self.assertIn("required_layer0_not_ok_failed", flags)
+
+	def test_required_layer0_records_conjunction_fails_when_required_ok_missing(self) -> None:
+		requirements = parse_required_layer0_records("S00:ok; S03:not_ok")
+		passed, flags = check_required_layer0_records(
+			requirements,
+			{
+				"S03": [{"extraction_status": "missing"}],
+			},
+		)
+		self.assertFalse(passed)
+		self.assertIn("required_layer0_ok_missing", flags)
+
+	def test_required_layer0_records_unsupported_predicate_fails_clearly(self) -> None:
+		requirements = parse_required_layer0_records("S03:foo")
+		passed, flags = check_required_layer0_records(requirements, {"S03": [{"extraction_status": "missing"}]})
+		self.assertFalse(passed)
+		self.assertIn("required_layer0_predicate_unsupported", flags)
+
+	def test_score_indicator_from_row_applies_required_layer0_records_gate_before_scoring(self) -> None:
+		result = score_indicator_from_row(
+			{
+				"participant_id": "8156972",
+				"component_id": "SectionB1Response",
+				"segment_text_SectionB1Response__00_Claim": "contains allowed token",
+				"operator_id_SectionB1Response__03_MediationAction": "S03",
+				"extraction_status_SectionB1Response__03_MediationAction": "ok",
+				"operator_id_SectionB1Response__00_Claim": "S00",
+				"extraction_status_SectionB1Response__00_Claim": "ok",
+			},
+			component_id="SectionB1Response",
+			indicator_id="I99",
+			payload={
+				"required_layer0_records": "S00:ok; S03:not_ok",
+				"normalisation_rule": "lowercase_trim",
+				"match_policy": "substring_any",
+				"decision_rule": "present_if_any_allowed_term_found",
+				"allowed_terms": ["allowed token"],
+				"excluded_terms": [],
+				"bound_segment_id": "00_Claim",
+				"bound_segment_resolution_policy": "hard_stay",
+			},
+		)
+		self.assertEqual(result["evidence_status"], "not_present")
+		self.assertIn("required_layer0_not_ok_failed", result["flags"])
+
 	def test_score_indicator_from_row_hard_stays_on_blank_bound_segment_by_default(self) -> None:
 		result = score_indicator_from_row(
 			{
@@ -908,6 +993,70 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 			'}'
 		)
 		self.assertNotIn("allowed_terms", payload)
+
+	def test_parse_scoring_payload_accepts_required_layer0_records_ok_and_not_ok_predicates(self) -> None:
+		payload = parse_scoring_payload(
+			'{'
+			'"scoring_mode":"deterministic",'
+			'"dependency_type":"segment",'
+			'"bound_segment_id":"01_Actor",'
+			'"required_layer0_records":"S00:ok; S03:not_ok",'
+			'"normalisation_rule":"lowercase_trim",'
+			'"match_policy":"substring_any",'
+			'"decision_rule":"present_if_any_allowed_term_found",'
+			'"allowed_terms":["caseworker"],'
+			'"excluded_terms":[]'
+			'}'
+		)
+		self.assertEqual(payload["required_layer0_records"], "S00:ok; S03:not_ok")
+
+	def test_parse_scoring_payload_accepts_required_layer0_records_comma_delimited_predicates(self) -> None:
+		payload = parse_scoring_payload(
+			'{'
+			'"scoring_mode":"deterministic",'
+			'"dependency_type":"segment",'
+			'"bound_segment_id":"01_Actor",'
+			'"required_layer0_records":"S00:ok, S03:not_ok",'
+			'"normalisation_rule":"lowercase_trim",'
+			'"match_policy":"substring_any",'
+			'"decision_rule":"present_if_any_allowed_term_found",'
+			'"allowed_terms":["caseworker"],'
+			'"excluded_terms":[]'
+			'}'
+		)
+		self.assertEqual(payload["required_layer0_records"], "S00:ok; S03:not_ok")
+
+	def test_parse_scoring_payload_accepts_required_layer0_records_list_literal_string(self) -> None:
+		payload = parse_scoring_payload(
+			'{'
+			'"scoring_mode":"deterministic",'
+			'"dependency_type":"segment",'
+			'"bound_segment_id":"01_Actor",'
+			'"required_layer0_records":"[\\"S00:ok\\", \\"S03:not_ok\\"]",'
+			'"normalisation_rule":"lowercase_trim",'
+			'"match_policy":"substring_any",'
+			'"decision_rule":"present_if_any_allowed_term_found",'
+			'"allowed_terms":["caseworker"],'
+			'"excluded_terms":[]'
+			'}'
+		)
+		self.assertEqual(payload["required_layer0_records"], "S00:ok; S03:not_ok")
+
+	def test_parse_scoring_payload_rejects_unsupported_required_layer0_records_predicate(self) -> None:
+		with self.assertRaisesRegex(ValueError, "Unsupported required_layer0_records predicate"):
+			parse_scoring_payload(
+				'{'
+				'"scoring_mode":"deterministic",'
+				'"dependency_type":"segment",'
+				'"bound_segment_id":"01_Actor",'
+				'"required_layer0_records":"S03:foo",'
+				'"normalisation_rule":"lowercase_trim",'
+				'"match_policy":"substring_any",'
+				'"decision_rule":"present_if_any_allowed_term_found",'
+				'"allowed_terms":["caseworker"],'
+				'"excluded_terms":[]'
+				'}'
+			)
 
 	def test_parse_scoring_payload_accepts_strip_leading_determiner_strip_possessive_rule(self) -> None:
 		payload = parse_scoring_payload(

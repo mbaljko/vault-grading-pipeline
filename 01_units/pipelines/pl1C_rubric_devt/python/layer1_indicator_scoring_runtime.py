@@ -306,6 +306,108 @@ def parse_comma_delimited_tokens(value: object) -> list[str]:
 	return []
 
 
+def parse_required_layer0_records(value: object) -> list[tuple[str, str]]:
+	if value is None:
+		return []
+	items: list[str] = []
+	if isinstance(value, str):
+		raw_value = str(value).strip()
+		if raw_value.startswith("[") or raw_value.startswith("("):
+			try:
+				parsed = ast.literal_eval(raw_value)
+			except (ValueError, SyntaxError):
+				parsed = None
+			if isinstance(parsed, (list, tuple, set)):
+				items = [str(item) for item in parsed]
+			else:
+				items = [raw_value]
+		else:
+			items = [raw_value]
+	elif isinstance(value, (list, tuple, set)):
+		items = [str(item) for item in value]
+	else:
+		items = [str(value)]
+	requirements: list[tuple[str, str]] = []
+	for item in items:
+		normalized_item = str(item or "").replace(";", ",")
+		for raw_part in normalized_item.split(","):
+			part = raw_part.strip()
+			if not part:
+				continue
+			if ":" not in part:
+				operator_id = part.strip()
+				predicate = "ok"
+			else:
+				operator_id, predicate = part.split(":", 1)
+				operator_id = operator_id.strip()
+				predicate = predicate.strip().lower()
+			if not operator_id:
+				continue
+			requirements.append((operator_id, predicate or "ok"))
+	return requirements
+
+
+def collect_layer0_records_by_operator(
+	row: Mapping[str, object],
+	component_id: str,
+) -> dict[str, list[dict[str, str]]]:
+	indexed: dict[str, list[dict[str, str]]] = {}
+
+	def add_record(operator_id: str, extraction_status: str) -> None:
+		normalized_operator = str(operator_id or "").strip()
+		normalized_status = str(extraction_status or "").strip()
+		if not normalized_operator or not normalized_status:
+			return
+		indexed.setdefault(normalized_operator, []).append({"extraction_status": normalized_status})
+
+	# Long-form row support: explicit operator_id + extraction_status columns.
+	add_record(str(row.get("operator_id", "") or ""), str(row.get("extraction_status", "") or ""))
+
+	component_prefix = f"{component_id}__" if component_id else ""
+	for key, raw_value in row.items():
+		if not str(key).startswith("extraction_status_"):
+			continue
+		extraction_status = str(raw_value or "").strip()
+		if not extraction_status:
+			continue
+		suffix = str(key)[len("extraction_status_") :]
+		if not suffix:
+			continue
+		if component_prefix and suffix.startswith(component_prefix):
+			suffix = suffix[len(component_prefix) :]
+		linked_operator_key = f"operator_id_{str(key)[len('extraction_status_') :]}"
+		linked_operator = str(row.get(linked_operator_key, "") or "").strip()
+		if linked_operator:
+			add_record(linked_operator, extraction_status)
+		# Fallback indexing by suffix supports operator-keyed extraction_status fields.
+		add_record(suffix, extraction_status)
+
+	return indexed
+
+
+def check_required_layer0_records(
+	requirements: list[tuple[str, str]],
+	layer0_records_by_operator: Mapping[str, list[Mapping[str, object]]],
+) -> tuple[bool, list[str]]:
+	flags: list[str] = []
+	for operator_id, predicate in requirements:
+		records = layer0_records_by_operator.get(operator_id, [])
+		statuses = [str(record.get("extraction_status", "") or "").strip() for record in records]
+		if predicate == "ok":
+			if not any(status == "ok" for status in statuses):
+				flags.append("required_layer0_ok_missing")
+				return (False, flags)
+			continue
+		if predicate == "not_ok":
+			if any(status == "ok" for status in statuses):
+				flags.append("required_layer0_not_ok_failed")
+				return (False, flags)
+			continue
+		flags.append("required_layer0_predicate_unsupported")
+		return (False, flags)
+	return (True, flags)
+
+
 def parse_rule_sequence(value: object) -> list[str]:
 	if isinstance(value, (list, tuple, set)):
 		return [str(item).strip() for item in value if str(item).strip()]
@@ -1554,6 +1656,23 @@ def score_indicator_from_row(
 	default_evaluation_notes: str = "",
 ) -> dict[str, str]:
 	resolved_component_id = resolve_component_id(row, component_id)
+	required_layer0_requirements = parse_required_layer0_records(payload.get("required_layer0_records", ""))
+	if required_layer0_requirements:
+		layer0_records_by_operator = collect_layer0_records_by_operator(row, resolved_component_id)
+		required_layer0_passed, required_layer0_flags = check_required_layer0_records(
+			required_layer0_requirements,
+			layer0_records_by_operator,
+		)
+		if not required_layer0_passed:
+			return {
+				"submission_id": resolve_submission_id(row),
+				"component_id": resolved_component_id,
+				"indicator_id": indicator_id,
+				"evidence_status": "not_present",
+				"evaluation_notes": default_evaluation_notes,
+				"confidence": "high",
+				"flags": ",".join(required_layer0_flags) if required_layer0_flags else "none",
+			}
 	match_policy = str(payload.get("match_policy", "") or "").strip()
 	if match_policy == "canonical_inequality":
 		left_segment_id = str(payload.get("left_segment_id", "DemandA") or "DemandA").strip()
@@ -1611,5 +1730,7 @@ def score_indicator_from_row(
 __all__ = [
 	"DECISION_RULE_ALIASES",
 	"SUPPORTED_DECISION_RULES",
+	"check_required_layer0_records",
+	"parse_required_layer0_records",
 	"score_indicator_from_row",
 ]
