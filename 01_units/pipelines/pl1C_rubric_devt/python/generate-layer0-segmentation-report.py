@@ -65,6 +65,11 @@ def sanitize_filename_fragment(value: str) -> str:
 	return text or "segment"
 
 
+def resolve_assignment_prefix_from_output(main_output_md_path: Path) -> str:
+	assignment_id = main_output_md_path.name.split("_", 1)[0].strip()
+	return assignment_id or "ASSIGNMENT"
+
+
 def split_common_path_prefix(*paths: str) -> tuple[str, list[str]]:
 	normalized_paths = [str(path).strip() for path in paths if str(path).strip()]
 	if not normalized_paths:
@@ -83,7 +88,7 @@ def split_common_path_prefix(*paths: str) -> tuple[str, list[str]]:
 
 def parse_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(
-		description="Compare AP2B Layer 0 runtime and stitched outputs between the current release and a baseline release."
+		description="Compare Layer 0 runtime and stitched outputs between the current release and a baseline release."
 	)
 	parser.add_argument(
 		"--layer0-config-key",
@@ -573,6 +578,7 @@ def build_current_segment_match_details(
 
 def build_segment_match_detail_report(
 	*,
+	assignment_id: str,
 	segment_id: str,
 	detail: dict[str, Any],
 	current_release: dict[str, str],
@@ -582,7 +588,7 @@ def build_segment_match_detail_report(
 	match_rows = detail.get("matches", [])
 	non_match_rows = detail.get("non_matches", [])
 	lines = [
-		f"# AP2B Layer 0 Segment Detail: {segment_id}",
+		f"# {assignment_id} Layer 0 Segment Detail: {segment_id}",
 		"",
 		"## Metadata",
 		"",
@@ -667,7 +673,7 @@ def build_segment_match_detail_output_paths(
 	current_release: dict[str, str],
 	segment_match_details: dict[str, dict[str, Any]],
 ) -> dict[str, Path]:
-	assignment_id = main_output_md_path.name.split("_", 1)[0].strip() or "AP2B"
+	assignment_id = resolve_assignment_prefix_from_output(main_output_md_path)
 	iteration_label = current_release.get("iteration", "").strip()
 	base_stem = f"{assignment_id}_Layer0_iter{iteration_label}" if iteration_label else f"{assignment_id}_Layer0"
 	return {
@@ -695,6 +701,7 @@ def build_runtime_extracted_segments_by_id(runtime_diff: dict[str, Any]) -> dict
 
 
 def build_segment_appendix_markdown_report(payload: dict[str, Any], *, main_report_path: Path) -> str:
+	assignment_id = str(payload.get("assignment_id", "")).strip() or "ASSIGNMENT"
 	current_release = payload["current_release"]
 	runtime_diff = payload["runtime_diff"]
 	segment_match_details = payload.get("current_segment_match_details", {})
@@ -702,7 +709,7 @@ def build_segment_appendix_markdown_report(payload: dict[str, Any], *, main_repo
 	all_segment_ids = sorted(set(runtime_extracted_segments_by_id) | set(segment_match_details))
 
 	lines = [
-		"# AP2B Layer 0 Segment Appendix: Current Extracted Segments By Segment Type",
+		f"# {assignment_id} Layer 0 Segment Appendix: Current Extracted Segments By Segment Type",
 		"",
 		f"- Parent report: `{main_report_path}`",
 		f"- Iteration: {format_markdown_table_cell(current_release.get('iteration', ''))}",
@@ -742,6 +749,7 @@ def build_segment_appendix_markdown_report(payload: dict[str, Any], *, main_repo
 
 
 def build_markdown_report(payload: dict[str, Any]) -> str:
+	assignment_id = str(payload.get("assignment_id", "")).strip() or "ASSIGNMENT"
 	current_release = payload["current_release"]
 	baseline_release = payload["baseline_release"]
 	runtime_diff = payload["runtime_diff"]
@@ -750,7 +758,7 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
 	staleness = payload.get("staleness", {})
 	segment_match_details = payload.get("current_segment_match_details", {})
 	lines = [
-		"# AP2B Layer 0 Iter-To-Iter Diff Report",
+		f"# {assignment_id} Layer 0 Iter-To-Iter Diff Report",
 		"",
 		"## What This Report Does",
 		"",
@@ -1177,6 +1185,7 @@ def main() -> int:
 		output_md_arg=args.output_md,
 		output_json_arg=args.output_json,
 	)
+	assignment_id = resolve_assignment_prefix_from_output(output_md_path)
 	segment_match_details = build_current_segment_match_details(
 		current_runtime_files=runtime_diff.get("current_files", []),
 		current_stitched_files=stitched_diff.get("current_files", []),
@@ -1195,6 +1204,7 @@ def main() -> int:
 		"stitched_diff": stitched_diff,
 		"operator_spec_diff": operator_spec_diff,
 		"staleness": staleness,
+		"assignment_id": assignment_id,
 		"current_segment_match_details": segment_match_details,
 		"segment_detail_reports": {
 			segment_id: str(path)
@@ -1214,6 +1224,7 @@ def main() -> int:
 		segment_output_path = segment_detail_output_paths[segment_id]
 		segment_output_path.write_text(
 			build_segment_match_detail_report(
+				assignment_id=assignment_id,
 				segment_id=segment_id,
 				detail=detail,
 				current_release=current_release,
