@@ -291,12 +291,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1C_rubric_devt/docs/layer0_registry_supported_values.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/docs/layer1_registry_supported_values.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "layer0_registry_supported_values"
+              "title": "layer1_registry_supported_values"
             }
           }
         ],
@@ -446,13 +446,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1C_rubric_devt/docs/layer0_registry_supported_values.md",
+                "file": "01_units/pipelines/pl1C_rubric_devt/docs/layer1_registry_supported_values.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of layer0_registry_supported_values"
+              "title": "Outline of layer1_registry_supported_values"
             }
           },
           {
@@ -488,10 +488,10 @@
   },
   "active": "fe3cb8bfbc96d736",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/docs/layer0_registry_supported_values.md",
     "01_units/pipelines/pl3_production_scoring/python/temp_reconciliation_AP1B.py",
     "01_units/pipelines/pl1C_rubric_devt/docs/layer1_registry_supported_values.md",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/build-layer1-input-from-layer0.cpython-313.pyc",
-    "01_units/pipelines/pl1C_rubric_devt/docs/layer0_registry_supported_values.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP1B.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2B.md",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate-layer1-grade-award-report.cpython-313.pyc",
@@ -506,7 +506,6 @@
     "01_units/pipelines/PPS2_assembly/python/import_pps1_csv_to_json_README.md",
     "01_units/pipelines/pl1C_rubric_devt/python/generate-layer0-segmentation-report.py",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate_layer0-segmentation-report.cpython-313.pyc",
-    "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/execute-layer1-indicator-scoring-modules.cpython-313.pyc",
     "05_docs/01_design/pl1B_rubric_devt/__NOTE - Layer 1 SBO Human Verification v2.md",
     "01_units/pipelines/PPS2_assembly/python/pps1_slot_populator_README.md",
     "01_units/pipelines/PPS2_assembly/python/generate_pps2_booklets_README.md",
