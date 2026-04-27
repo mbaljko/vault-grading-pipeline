@@ -20,7 +20,7 @@ from types import ModuleType
 from component_scored_texts import load_scored_rows, write_scored_rows
 
 
-LAYER1_REQUIRED_FIELDS = {"submission_id", "indicator_id", "evidence_status"}
+LAYER1_REQUIRED_FIELDS = {"submission_id", "indicator_id"}
 CONFIDENCE_ORDER = {
 	"low": 0,
 	"medium": 1,
@@ -73,7 +73,8 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument("--output-file", type=Path, required=True)
 	parser.add_argument("--submission-id-field", type=str, default="submission_id")
 	parser.add_argument("--indicator-id-field", type=str, default="indicator_id")
-	parser.add_argument("--value-field", type=str, default="evidence_status")
+	# Recovery-aware default: use effective status when present.
+	parser.add_argument("--value-field", type=str, default="evidence_status_effective")
 	return parser.parse_args()
 
 
@@ -189,12 +190,23 @@ def build_indicator_value_map(
 	indicator_id_field: str,
 	value_field: str,
 ) -> dict[str, str]:
+	def resolve_value(row: dict[str, str]) -> str:
+		preferred = str(row.get(value_field) or "").strip().lower()
+		if preferred:
+			return preferred
+		# Fallback chain keeps execution resilient for older CSV variants.
+		for fallback_field in ("evidence_status_effective", "evidence_status", "evidence_status_primary"):
+			fallback_value = str(row.get(fallback_field) or "").strip().lower()
+			if fallback_value:
+				return fallback_value
+		return ""
+
 	indicator_values: dict[str, str] = {}
 	for row in rows:
 		indicator_id = (row.get(indicator_id_field) or "").strip()
 		if not indicator_id:
 			continue
-		normalized_value = str(row.get(value_field) or "").strip().lower()
+		normalized_value = resolve_value(row)
 		if indicator_id in indicator_values and indicator_values[indicator_id] != normalized_value:
 			raise ValueError(
 				f"Conflicting Layer 1 scores detected for submission_id={submission_id} indicator_id={indicator_id}"
