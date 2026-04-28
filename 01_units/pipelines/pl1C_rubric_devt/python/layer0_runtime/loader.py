@@ -20,6 +20,7 @@ KNOWN_FAMILIES = {
 	"status_only_anchor_detector",
 	"claim_text_passthrough_if_anchor",
 	"claim_text_passthrough_no_anchor",
+	"claim_text_passthrough_if_no_anchor",
 }
 
 ANCHOR_OPTIONAL_FAMILIES = {

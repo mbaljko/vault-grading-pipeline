@@ -229,6 +229,13 @@ FAMILY_BEHAVIOR = {
 		"allow_coordination": False,
 		"skip_later_candidates": False,
 	},
+	"claim_text_passthrough_if_no_anchor": {
+		"direction": "none",
+		"start_rule": "full_text_if_no_anchor_match",
+		"end_rule": "full_text",
+		"allow_coordination": False,
+		"skip_later_candidates": False,
+	},
 }
 
 ALLOW_COORDINATION_TEMPLATE_OVERRIDES = {

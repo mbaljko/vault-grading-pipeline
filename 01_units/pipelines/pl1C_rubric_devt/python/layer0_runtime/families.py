@@ -373,6 +373,29 @@ def run_claim_text_passthrough_no_anchor(
 	return _ok_result(segment_text)
 
 
+def run_claim_text_passthrough_if_no_anchor(
+	text: str,
+	spec: OperatorSpec,
+	prior_segments: Mapping[str, ExtractionResult] | None = None,
+) -> FamilyExecution:
+	"""Return full trimmed text as span only when no anchor patterns are found.
+	
+	Inverse of claim_text_passthrough_if_anchor:
+	- Returns missing if any anchor pattern matches
+	- Returns ok with full trimmed text if no anchors match and text is non-empty
+	- Returns missing if text is empty or whitespace
+	- Returns malformed if text cannot be parsed as recoverable
+	"""
+	segment_text = trim_span(text)
+	if not segment_text:
+		return _missing_result("claim text is empty")
+	# Check if any anchor patterns match
+	anchor = _first_anchor(text, spec)
+	if anchor is not None:
+		return _missing_result("anchor pattern found")
+	return _ok_result(segment_text)
+
+
 FAMILY_EXECUTORS = {
 	"left_np_before_anchor": run_left_np_before_anchor,
 	"right_np_after_anchor_before_marker": run_right_np_after_anchor_before_marker,
@@ -383,4 +406,5 @@ FAMILY_EXECUTORS = {
 	"status_only_anchor_detector": run_status_only_anchor_detector,
 	"claim_text_passthrough_if_anchor": run_claim_text_passthrough_if_anchor,
 	"claim_text_passthrough_no_anchor": run_claim_text_passthrough_no_anchor,
+	"claim_text_passthrough_if_no_anchor": run_claim_text_passthrough_if_no_anchor,
 }
