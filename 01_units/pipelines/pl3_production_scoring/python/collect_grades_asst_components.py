@@ -8,6 +8,7 @@ from openpyxl import Workbook
 
 
 ASST_ROOT = Path("/Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPP")
+TOKEN = ASST_ROOT.name
 OUTPUT_XLSX = ASST_ROOT / "PPP_component_grade_feedback_merged.xlsx"
 
 IDENTITY_COLUMNS = ["Identifier", "Full name", "Email address"]
@@ -141,6 +142,48 @@ def write_xlsx(
     workbook.save(output_path)
 
 
+def write_template_csv(
+    output_path: Path,
+    iteration: str,
+    ordered_identity_keys: list[tuple[str, str, str]],
+    source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str]],
+) -> None:
+    """Write a template CSV with standard gradebook submission columns."""
+    header = [
+        "Identifier",
+        "Full name",
+        "Email address",
+        "Status",
+        "Grade",
+        "Maximum Grade",
+        "Grade can be changed",
+        "Last modified (submission)",
+        "Online text",
+        "Last modified (grade)",
+        "Feedback comments",
+    ]
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=header)
+        writer.writeheader()
+        for key in ordered_identity_keys:
+            row_out = {
+                "Identifier": key[0],
+                "Full name": key[1],
+                "Email address": key[2],
+                "Status": "",
+                "Grade": "",
+                "Maximum Grade": "",
+                "Grade can be changed": "",
+                "Last modified (submission)": "",
+                "Online text": "",
+                "Last modified (grade)": "",
+                "Feedback comments": "",
+            }
+            writer.writerow(row_out)
+
+
 def main() -> None:
     assignment_dirs = sorted(
         [path for path in ASST_ROOT.iterdir() if path.is_dir()],
@@ -149,10 +192,20 @@ def main() -> None:
 
     discovered: list[tuple[str, Path]] = []
     skipped_missing_csv: list[tuple[str, Path]] = []
+    first_config: dict[str, object] | None = None
+    first_iteration = ""
+    
     for assignment_dir in assignment_dirs:
         config = load_pipeline_paths_config(assignment_dir)
         if config is None:
             continue
+        if first_config is None:
+            first_config = config
+            layer4_prod = config.get("layer4_prod", {})
+            if isinstance(layer4_prod, dict):
+                release = layer4_prod.get("release", {})
+                if isinstance(release, dict):
+                    first_iteration = str(release.get("iteration", "")).strip()
         csv_path = resolve_output_csv_from_config(assignment_dir, config)
         if not csv_path.exists() or not csv_path.is_file():
             skipped_missing_csv.append((assignment_dir.name, csv_path))
@@ -197,8 +250,15 @@ def main() -> None:
         source_data.append((source_name, rows_by_id, feedback_column))
 
     write_xlsx(OUTPUT_XLSX, ordered_identity_keys, source_data)
+    
+    # Write template CSV with standard gradebook submission columns
+    template_filename = f"{TOKEN}_Grades_iter{first_iteration}.csv"
+    template_path = ASST_ROOT / template_filename
+    write_template_csv(template_path, first_iteration, ordered_identity_keys, source_data)
 
     print(f"ASST_ROOT: {ASST_ROOT}")
+    print(f"Token: {TOKEN}")
+    print(f"Iteration: {first_iteration}")
     print(f"Input sources found: {len(source_data)}")
     for source_name, csv_path in discovered:
         print(f"- {source_name}: {csv_path}")
@@ -208,6 +268,7 @@ def main() -> None:
             print(f"- {source_name}: {csv_path}")
     print(f"Rows merged: {len(ordered_identity_keys)}")
     print(f"Output XLSX: {OUTPUT_XLSX}")
+    print(f"Template CSV: {template_path}")
 
 
 if __name__ == "__main__":
