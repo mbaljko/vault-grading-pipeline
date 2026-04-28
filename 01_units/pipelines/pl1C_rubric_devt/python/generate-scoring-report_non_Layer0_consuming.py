@@ -1453,15 +1453,27 @@ def build_base_row_reverse_lookup(registry_path: Path) -> dict[tuple[str, str], 
 	def expand_component_ids_from_layer0_pattern(pattern: str) -> list[str]:
 		matches = COMPONENT_ID_RANGE_RE.findall(pattern)
 		component_ids: list[str] = []
+		seen: set[str] = set()
 		for block_prefix, range_token in matches:
 			if range_token.startswith("{") and range_token.endswith("}") and ".." in range_token:
 				start_text, end_text = range_token[1:-1].split("..", 1)
 				start = int(start_text)
 				end = int(end_text)
 				for block_number in range(start, end + 1):
-					component_ids.append(f"Section{block_prefix}{block_number}Response")
+					component_id = f"Section{block_prefix}{block_number}Response"
+					if component_id not in seen:
+						seen.add(component_id)
+						component_ids.append(component_id)
 			else:
-				component_ids.append(f"Section{block_prefix}{int(range_token)}Response")
+				component_id = f"Section{block_prefix}{int(range_token)}Response"
+				if component_id not in seen:
+					seen.add(component_id)
+					component_ids.append(component_id)
+		# Also support explicit component ids with no numeric block (e.g., SectionEResponse)
+		for component_id in re.findall(r"Section[A-Za-z0-9]+Response", pattern):
+			if component_id not in seen:
+				seen.add(component_id)
+				component_ids.append(component_id)
 		return component_ids
 
 	def derive_legacy_layer1_indicator_id(component_id: str, local_slot: str) -> str:
@@ -1472,6 +1484,12 @@ def build_base_row_reverse_lookup(registry_path: Path) -> dict[tuple[str, str], 
 		if slot_match is None:
 			return local_slot
 		return f"I{match.group(1)}{slot_match.group(1)}"
+
+	def derive_ie_indicator_id(local_slot: str) -> str:
+		slot_match = re.fullmatch(r"0?(\d+)", local_slot)
+		if slot_match is None:
+			return local_slot
+		return f"IE{slot_match.group(1)}"
 
 	if {"indicator_id", "component_id"}.issubset(reuse_headers):
 		for reuse_row in reuse_rows:
@@ -1556,12 +1574,18 @@ def build_base_row_reverse_lookup(registry_path: Path) -> dict[tuple[str, str], 
 			matching_base_rows = [
 				row for row in base_rows if row.get("template_id", "").strip().startswith(f"{template_group}_")
 			]
+			if not matching_base_rows:
+				# Some registries vary template_group label prefixes while preserving local_slot sequencing.
+				matching_base_rows = [row for row in base_rows if row.get("local_slot", "").strip()]
 			for component_id in expand_component_ids_from_layer0_pattern(layer0_pattern):
 				for base_row in matching_base_rows:
 					local_slot = base_row.get("local_slot", "").strip()
 					if not local_slot:
 						continue
 					register_mapping(component_id, local_slot, base_row, reuse_row)
+					ie_indicator_id = derive_ie_indicator_id(local_slot)
+					if ie_indicator_id != local_slot:
+						register_mapping(component_id, ie_indicator_id, base_row, reuse_row)
 					legacy_indicator_id = derive_legacy_layer1_indicator_id(component_id, local_slot)
 					if legacy_indicator_id != local_slot:
 						register_mapping(component_id, legacy_indicator_id, base_row, reuse_row)
@@ -3876,12 +3900,29 @@ def main() -> int:
 				components = {header_cells[idx]: padded[idx] for idx in range(len(header_cells))}
 				indicator_id = (components.get("indicator_id") or "").strip() or "<missing>"
 				payload = parse_json_object((components.get("indicator_scoring_payload_json") or "").strip())
+				raw_required_layer0_records = payload.get("required_layer0_records", "")
+				if isinstance(raw_required_layer0_records, list):
+					required_layer0_records = "; ".join(
+						str(item).strip() for item in raw_required_layer0_records if str(item).strip()
+					)
+				else:
+					required_layer0_records = str(raw_required_layer0_records or "").strip()
+				if not required_layer0_records:
+					indicator_definition_text = str(components.get("indicator_definition") or "")
+					required_match = re.search(
+						r"Required Layer 0 records:\s*([^\.\n]+)",
+						indicator_definition_text,
+						flags=re.IGNORECASE,
+					)
+					if required_match is not None:
+						required_layer0_records = required_match.group(1).strip()
 				indicator_segment_specs[(matching_component_id, indicator_id)] = {
 					"component_id": matching_component_id,
 					"indicator_id": indicator_id,
 					"sbo_identifier": (components.get("sbo_identifier") or "").strip(),
 					"sbo_short_description": (components.get("sbo_short_description") or "").strip(),
 					"bound_segment_id": str(payload.get("bound_segment_id") or "").strip(),
+					"required_layer0_records": required_layer0_records,
 				}
 				matching_scored_rows = find_matching_scored_rows(
 					components,
@@ -4062,7 +4103,10 @@ def main() -> int:
 		base_row_info = base_row_reverse_lookup.get((component_id, indicator_id), {})
 		local_slot = (base_row_info.get("local_slot") or "").strip()
 		template_id = (base_row_info.get("template_id") or "").strip()
-		required_layer0_records = (base_row_info.get("required_layer0_records") or "").strip()
+		required_layer0_records = (
+			(base_row_info.get("required_layer0_records") or "").strip()
+			or str(indicator_spec.get("required_layer0_records") or "").strip()
+		)
 		bound_segment_id = indicator_spec.get("bound_segment_id", "")
 		segment_field = " + ".join(
 			field_name for field_name, _ in derive_segment_field_names(component_id, required_layer0_records, bound_segment_id)

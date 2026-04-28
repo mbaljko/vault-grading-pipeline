@@ -86,6 +86,7 @@ DECISION_RULE_ALIASES = {
 }
 
 SUPPORTED_DECISION_RULES = {
+	"present_if_segment_ok",
 	"present_if_any_allowed_term_found",
 	"present_if_exact_match_or_alias_and_not_excluded",
 	"present_if_matches_stage_or_role_and_not_excluded",
@@ -99,11 +100,13 @@ SUPPORTED_DECISION_RULES = {
 }
 
 SUPPORTED_BOUND_SEGMENT_RESOLUTION_POLICIES = {
+	"strict",
 	"hard_stay",
 	"fallback_to_evidence_text",
 }
 
 SUPPORTED_MATCH_POLICIES = {
+	"passthrough_presence",
 	"substring_any",
 	"exact_or_alias",
 	"exact_or_alias_article_insensitive",
@@ -504,6 +507,9 @@ def is_supported_match_policy(match_policy: str) -> bool:
 
 
 def validate_normalisation_rule_name(rule: str) -> str:
+	rule = str(rule or "").strip()
+	if rule == "none":
+		return ""
 	if rule not in SUPPORTED_NORMALISATION_RULES:
 		raise ValueError(f"Unsupported Layer 1 normalisation_rule: {rule}")
 	return rule
@@ -749,6 +755,8 @@ def normalize_bound_segment_resolution_policy(payload: Mapping[str, object]) -> 
 	policy = str(payload.get("bound_segment_resolution_policy", "") or "").strip()
 	if not policy:
 		return "hard_stay"
+	if policy == "strict":
+		return "hard_stay"
 	if policy not in SUPPORTED_BOUND_SEGMENT_RESOLUTION_POLICIES:
 		raise ValueError(f"Unsupported Layer 1 bound_segment_resolution_policy: {policy}")
 	return policy
@@ -760,6 +768,8 @@ def resolve_indicator_text(row: Mapping[str, object], component_id: str, payload
 	if bound_segment_id:
 		segment_field = f"segment_text_{component_id}__{bound_segment_id}"
 		segment_value = str(row.get(segment_field, "") or "").strip()
+		if not segment_value:
+			segment_value = str(row.get(f"segment_text_{bound_segment_id}", "") or "").strip()
 		if segment_value:
 			return segment_value
 		if bound_segment_resolution_policy == "hard_stay":
@@ -773,7 +783,10 @@ def resolve_indicator_text(row: Mapping[str, object], component_id: str, payload
 
 def resolve_segment_text_by_id(row: Mapping[str, object], component_id: str, segment_id: str) -> str:
 	segment_field = f"segment_text_{component_id}__{segment_id}"
-	return str(row.get(segment_field, "") or "").strip()
+	segment_value = str(row.get(segment_field, "") or "").strip()
+	if segment_value:
+		return segment_value
+	return str(row.get(f"segment_text_{segment_id}", "") or "").strip()
 
 
 def contains_any_substring(text: str, terms: list[str], rule: str) -> bool:
@@ -1475,6 +1488,8 @@ def evaluate_match_policy(
 		return co_occurrence_lemma_match(text, payload, rule)
 	if match_policy == "non_empty":
 		return bool(str(text or "").strip())
+	if match_policy == "passthrough_presence":
+		return bool(str(text or "").strip())
 	window_size = parse_co_occurrence_window_size(match_policy)
 	if window_size is not None:
 		window_match, _, _, _, _, _ = evaluate_co_occurrence_phrase_groups_with_window(
@@ -1554,6 +1569,12 @@ def apply_decision_rule(
 		return (bool(context.get("policy_or_fallback_match", False)), context)
 
 	if match_policy == "non_empty":
+		if str(text or "").strip():
+			return finalize("present", candidate_was_positive=True)
+		diagnostic_flags.append("missing_input_text")
+		return finalize("not_present", candidate_was_positive=False)
+
+	if decision_rule == "present_if_segment_ok":
 		if str(text or "").strip():
 			return finalize("present", candidate_was_positive=True)
 		diagnostic_flags.append("missing_input_text")
