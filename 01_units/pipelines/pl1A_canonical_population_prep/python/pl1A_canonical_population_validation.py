@@ -537,6 +537,40 @@ def write_text_output(output_path: Path, content: str) -> None:
     output_path.write_text(content, encoding="utf-8")
 
 
+def assert_no_duplicate_submission_component_rows(
+    canonical_rows: list[dict[str, str | int]],
+    *,
+    output_path: Path,
+) -> None:
+    """Fail fast if canonical output contains duplicate (submission_id, component_id) rows."""
+    pair_counts: Counter[tuple[str, str]] = Counter()
+    for row in canonical_rows:
+        submission_id = str(row.get("submission_id", "") or "").strip()
+        component_id = str(row.get("component_id", "") or "").strip()
+        pair_counts[(submission_id, component_id)] += 1
+
+    duplicates = [
+        (submission_id, component_id, count)
+        for (submission_id, component_id), count in pair_counts.items()
+        if count > 1
+    ]
+    if not duplicates:
+        return
+
+    duplicates.sort(key=lambda item: (-item[2], item[0], item[1]))
+    sample_lines = [
+        f"submission_id={submission_id}, component_id={component_id}, count={count}"
+        for submission_id, component_id, count in duplicates[:10]
+    ]
+    details = "\n".join(sample_lines)
+    raise ValueError(
+        "Duplicate canonical output rows detected for key (submission_id, component_id). "
+        f"Output path: {output_path}. Duplicate key count: {len(duplicates)}. "
+        "Sample duplicates:\n"
+        f"{details}"
+    )
+
+
 def print_summary(
     validation_rows: list[dict[str, str | int | None]],
     canonical_rows: list[dict[str, str | int]],
@@ -574,6 +608,7 @@ def main() -> int:
         validation_rows,
         requested_component_ids=requested_component_ids,
     )
+    assert_no_duplicate_submission_component_rows(canonical_rows, output_path=output_path)
     mapping_rows = build_identifier_mapping_rows(validation_rows)
     mismatch_report = build_mismatch_report(validation_rows, gw_rows)
     write_output_rows(output_path, canonical_rows)
