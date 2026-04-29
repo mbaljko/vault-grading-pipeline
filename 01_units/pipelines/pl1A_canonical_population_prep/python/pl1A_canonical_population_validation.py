@@ -305,6 +305,20 @@ def build_validation_map(
     return mapping
 
 
+def build_submission_id_to_user_map(
+    validation_rows: list[dict[str, str | int | None]],
+) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for row in validation_rows:
+        if row.get("__join_status") != "matched_unique":
+            continue
+        submission_id = str(row.get("submission_id", "") or "")
+        user = str(row.get("User", "") or "")
+        if submission_id and user and submission_id not in mapping:
+            mapping[submission_id] = user
+    return mapping
+
+
 def infer_response_columns(raw_rows: list[dict[str, str]]) -> list[str]:
     if not raw_rows:
         return []
@@ -352,6 +366,7 @@ def build_canonical_population_rows(
     requested_component_ids: list[str] | None = None,
 ) -> list[dict[str, str | int]]:
     validation_map = build_validation_map(validation_rows)
+    submission_id_to_user = build_submission_id_to_user_map(validation_rows)
     response_columns = infer_response_columns(raw_rows)
     if requested_component_ids:
         missing_component_ids = [
@@ -378,6 +393,7 @@ def build_canonical_population_rows(
             canonical_rows.append(
                 {
                     "submission_id": submission_id,
+                    "User": submission_id_to_user.get(submission_id, user),
                     "component_id": component_id,
                     "response_presence": response_presence,
                     "response_text": wrap_response_text(response_payload, submission_id),
@@ -510,6 +526,7 @@ def build_mismatch_report(
 def write_output_rows(output_path: Path, rows: list[dict[str, str | int]]) -> None:
     fieldnames = [
         "submission_id",
+        "User",
         "component_id",
         "response_presence",
         "response_text",
@@ -544,10 +561,14 @@ def assert_no_duplicate_submission_component_rows(
 ) -> None:
     """Fail fast if canonical output contains duplicate (submission_id, component_id) rows."""
     pair_counts: Counter[tuple[str, str]] = Counter()
+    pair_users: dict[tuple[str, str], set[str]] = defaultdict(set)
     for row in canonical_rows:
         submission_id = str(row.get("submission_id", "") or "").strip()
         component_id = str(row.get("component_id", "") or "").strip()
+        user = str(row.get("User", "") or "").strip()
         pair_counts[(submission_id, component_id)] += 1
+        if user:
+            pair_users[(submission_id, component_id)].add(user)
 
     duplicates = [
         (submission_id, component_id, count)
@@ -558,10 +579,13 @@ def assert_no_duplicate_submission_component_rows(
         return
 
     duplicates.sort(key=lambda item: (-item[2], item[0], item[1]))
-    sample_lines = [
-        f"submission_id={submission_id}, component_id={component_id}, count={count}"
-        for submission_id, component_id, count in duplicates[:10]
-    ]
+    sample_lines = []
+    for submission_id, component_id, count in duplicates[:10]:
+        users = sorted(pair_users.get((submission_id, component_id), set()))
+        user_display = " | ".join(users) if users else "<missing>"
+        sample_lines.append(
+            f"submission_id={submission_id}, User={user_display}, component_id={component_id}, count={count}"
+        )
     details = "\n".join(sample_lines)
     raise ValueError(
         "Duplicate canonical output rows detected for key (submission_id, component_id). "
