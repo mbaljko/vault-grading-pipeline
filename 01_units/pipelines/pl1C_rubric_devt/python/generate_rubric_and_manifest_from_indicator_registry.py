@@ -1367,6 +1367,22 @@ def derive_layer2_scoring_payloads_from_reuse_tables(
                 },
             )
             if len(bound_indicator_ids) != len(input_indicator_tokens):
+                print(
+                    f"\n=== Layer 2 Indicator Binding Mismatch ===\n"
+                    f"dimension_template_id: {dimension_template_id}\n"
+                    f"component_id: {component_id}\n"
+                    f"\nIndicator Binding Rule (from reuse rule table):\n"
+                    f"  rule: {indicator_binding_rule}\n"
+                    f"  resolved bound_indicator_ids: {bound_indicator_ids}\n"
+                    f"  count: {len(bound_indicator_ids)}\n"
+                    f"\nValue-Derivation Table (from base table):\n"
+                    f"  input_indicator_tokens: {input_indicator_tokens}\n"
+                    f"  count: {len(input_indicator_tokens)}\n"
+                    f"\nDerivation Rules (rows with scale values):\n"
+                    f"  rules: {derivation_rules}\n"
+                    f"  count: {len(derivation_rules)}\n",
+                    flush=True,
+                )
                 raise ValueError(
                     "Layer 2 indicator binding rule did not resolve to the same number of indicators as the "
                     f"value-derivation table for {dimension_template_id} and {component_id}."
