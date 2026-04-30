@@ -106,9 +106,18 @@ def filter_manifest_rows(rows: list[dict[str, str]], target_component_id: str) -
 	return filtered_rows
 
 
-def parse_scoring_payload(payload_json: str) -> dict[str, object]:
+def parse_scoring_payload(
+	payload_json: str,
+	*,
+	manifest_path: Path,
+	component_id: str,
+	sbo_identifier: str,
+) -> dict[str, object]:
 	if not payload_json.strip():
-		raise ValueError("Layer 3 manifest row is missing component_scoring_payload_json.")
+		raise ValueError(
+			"Layer 3 manifest row is missing component_scoring_payload_json. "
+			f"Checked manifest={manifest_path}, component_id={component_id!r}, sbo_identifier={sbo_identifier!r}."
+		)
 	payload = json.loads(payload_json)
 	for required_key in ["component_id", "input_dimension_tokens", "bound_dimension_ids", "derivation_rules"]:
 		if required_key not in payload:
@@ -244,13 +253,19 @@ def build_module_source(row: dict[str, str], payload: dict[str, object]) -> str:
 def main() -> int:
 	args = parse_args()
 	try:
-		manifest_text = read_text_file(args.manifest_file.resolve())
+		manifest_path = args.manifest_file.resolve()
+		manifest_text = read_text_file(manifest_path)
 		manifest_rows = parse_manifest_rows(manifest_text)
 		filtered_rows = filter_manifest_rows(manifest_rows, args.target_component_id)
 		if len(filtered_rows) != 1:
 			raise ValueError("Layer 3 module generation expects exactly one manifest row per component.")
 		row = filtered_rows[0]
-		payload = parse_scoring_payload(row["component_scoring_payload_json"])
+		payload = parse_scoring_payload(
+			row["component_scoring_payload_json"],
+			manifest_path=manifest_path,
+			component_id=str(row.get("component_id", "") or "").strip(),
+			sbo_identifier=str(row.get("sbo_identifier", "") or "").strip(),
+		)
 		output_dir = args.output_dir.resolve()
 		output_dir.mkdir(parents=True, exist_ok=True)
 		output_path = resolve_output_path(output_dir, args.output_file_stem, args.output_format)
