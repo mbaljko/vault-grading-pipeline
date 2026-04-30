@@ -137,6 +137,41 @@ def apply_recovery_overlay_if_configured(
 		now_utc=(recovery_now_utc or utc_now_iso()),
 	)
 
+def count_recoveries_per_file(
+	scored_rows: list[dict[str, str]],
+	recovery_allowlist_csvs: list[Path] | None,
+) -> None:
+	if not recovery_allowlist_csvs:
+		return
+	for recovery_file_path in recovery_allowlist_csvs:
+		allowlist_path = recovery_file_path.resolve()
+		if not allowlist_path.exists() or not allowlist_path.is_file():
+			continue
+		try:
+			loaded_rows = load_recovery_allowlist_csv(str(allowlist_path))
+		except (FileNotFoundError, ValueError):
+			continue
+		active_submissions = {
+			str(row.get("submission_id", "") or "").strip()
+			for row in loaded_rows
+			if parse_bool(row.get("active", ""), default=False)
+			and str(row.get("submission_id", "") or "").strip()
+		}
+		if not active_submissions:
+			print(f"recovery_file={allowlist_path.name}: recovery_submission_count=0", flush=True)
+			continue
+		matched_submissions = {
+			str(row.get("submission_id", "") or "").strip()
+			for row in scored_rows
+			if (
+				str(row.get("submission_id", "") or "").strip() in active_submissions
+				and str(row.get("flags", "") or "").strip() == "recovery_list_match"
+			)
+		}
+		print(
+			f"recovery_file={allowlist_path.name}: recovery_submission_count={len(matched_submissions)}",
+			flush=True,
+		)
 
 def load_module_from_path(module_path: Path, module_name: str) -> ModuleType:
 	spec = importlib.util.spec_from_file_location(module_name, module_path)
@@ -436,6 +471,7 @@ def main() -> int:
 				recovery_allowlist_csvs=args.recovery_allowlist_csv,
 				recovery_now_utc=args.recovery_now_utc,
 			)
+			count_recoveries_per_file(indicator_rows, args.recovery_allowlist_csv)
 			output_path = resolve_output_path(output_dir, args.output_file_stem, args.output_format, indicator_id)
 			write_scored_rows(indicator_rows, output_path)
 			combined_rows.extend(indicator_rows)
