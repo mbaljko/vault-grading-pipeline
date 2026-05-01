@@ -39,6 +39,25 @@ EXCLUDED_PASSTHROUGH_FIELDS = {
 WIDE_EXCLUDED_FIELDS = EXCLUDED_PASSTHROUGH_FIELDS | {"source_dimension_values_json"}
 WIDE_TRAILING_FIELDS = ["flags_any_dimension", "min_confidence_dimension"]
 WIDE_METADATA_EXCLUDED_FIELDS = {"component_performance_scale", "bound_dimension_ids"}
+KNOWN_DIMENSION_SCALE_ORDERS = [
+	{
+		"little_to_no_demonstration": 0,
+		"partial_demonstration": 1,
+		"demonstrated": 2,
+	},
+	{
+		"little_to_no_demonstration": 0,
+		"partially_demonstrated": 1,
+		"demonstrated": 2,
+	},
+	{
+		"not_demonstrated": 0,
+		"below_expectations": 1,
+		"approaching_expectations": 2,
+		"meets_expectations": 3,
+		"exceeds_expectations": 4,
+	},
+]
 
 
 def parse_args() -> argparse.Namespace:
@@ -104,6 +123,21 @@ def build_response_text_lookup(response_text_csv: Path) -> dict[str, str]:
 	return lookup
 
 
+def normalize_scale_values(scale_values: list[str]) -> list[str]:
+	if not scale_values:
+		return []
+	unique_values: list[str] = []
+	seen: set[str] = set()
+	for value in scale_values:
+		if value and value not in seen:
+			seen.add(value)
+			unique_values.append(value)
+	for known_order in KNOWN_DIMENSION_SCALE_ORDERS:
+		if all(value in known_order for value in unique_values):
+			return sorted(unique_values, key=lambda value: known_order[value])
+	return unique_values
+
+
 def build_dimension_scale_lookup(rows: Iterable[Mapping[str, str]], dimension_id_field: str) -> dict[str, dict[str, int]]:
 	lookup: dict[str, dict[str, int]] = {}
 	for row in rows:
@@ -112,6 +146,7 @@ def build_dimension_scale_lookup(rows: Iterable[Mapping[str, str]], dimension_id
 			continue
 		raw_scale = str(row.get("dimension_evidence_scale", "")).strip()
 		scale_values = [part.strip() for part in raw_scale.split(",") if part.strip()]
+		scale_values = normalize_scale_values(scale_values)
 		lookup[dimension_id] = {value: index for index, value in enumerate(scale_values)}
 	return lookup
 

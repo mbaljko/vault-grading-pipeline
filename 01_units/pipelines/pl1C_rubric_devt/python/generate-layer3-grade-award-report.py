@@ -263,7 +263,7 @@ def build_layer3_dimension_rows(aggregate_counts: dict[str, Counter[str]]) -> li
 
     ordered_bins = [
         ("0-little_to_no_demonstration", "little_to_no_demonstration"),
-        ("1-partially_demonstrated", "partially_demonstrated"),
+        ("1-partial_demonstration", "partial_demonstration"),
         ("2-demonstrated", "demonstrated"),
     ]
     table_rows: list[list[str]] = []
@@ -303,7 +303,7 @@ def build_layer3_dimension_histogram_rows(
 
     ordered_bins = [
         ("0-little_to_no_demonstration", "little_to_no_demonstration"),
-        ("1-partially_demonstrated", "partially_demonstrated"),
+        ("1-partial_demonstration", "partial_demonstration"),
         ("2-demonstrated", "demonstrated"),
     ]
     max_count = max(
@@ -341,7 +341,7 @@ def build_single_layer3_dimension_histogram_rows(
 
     ordered_bins = [
         ("0-little_to_no_demonstration", "little_to_no_demonstration"),
-        ("1-partially_demonstrated", "partially_demonstrated"),
+        ("1-partial_demonstration", "partial_demonstration"),
         ("2-demonstrated", "demonstrated"),
     ]
     counts = aggregate_counts[dimension_id]
