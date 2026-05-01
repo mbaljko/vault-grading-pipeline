@@ -6,14 +6,17 @@ columns at the end:
   - "."               — spacer / separator column
   - "Feedback comments" — pre-populated with a per-row summary string of the
                           form:
-                          "Overall result for {prefix}: {grade} ( {score} / {max_score}). {n} dimension(s)."
+                          "Overall result for {section}: {grade} ({score} / {max_score}). {n} dimension(s)."
+                          "{newline}  {dimension_1}: {value_1}"
+                          "{newline}  {dimension_2}: {value_2}"
                           where:
-                            {prefix}    — stem of the *_response_text column (e.g. E21Response)
+                            {section}   — display label derived from the *_response_text column stem
                             {grade}     — submission_score value with underscores replaced by spaces
                             {score}     — submission_numeric_score for this row
                             {max_score} — maximum submission_numeric_score across all rows
-                                          (pattern: D followed by digits only, no underscore suffix)
-                                          "dimension" vs "dimensions" used appropriately
+                            {n}         — count of dimension columns (pattern: D followed by digits only,
+                                          no underscore suffix)
+                            {newline}   — actual line-feed character (ASCII 10 / CHAR(10))
 
 Inputs:
   --source-file   Path to the source *-wide-stitched.csv file.
@@ -29,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import re
 import sys
 from pathlib import Path
 
@@ -63,30 +67,42 @@ def _response_text_prefix(header: list[str]) -> str:
     return ""
 
 
-def _dimension_columns(header: list[str]) -> list[str]:
-    """Return column names that are bare dimension identifiers (e.g. D01, D02).
+def _section_label(prefix: str) -> str:
+    """Return a human-readable section label from the response-text prefix."""
+    if not prefix:
+        return ""
+    if prefix.endswith("Response"):
+        prefix = prefix[: -len("Response")]
+    return f"Section {prefix}"
 
-    Matches headers of the form D followed by one or more digits, with no
-    underscore suffix (to exclude indicator columns such as D01_IE211).
-    """
-    import re
-    pattern = re.compile(r'^D\d+$')
+
+def _dimension_columns(header: list[str]) -> list[str]:
+    """Return column names that are bare dimension identifiers (e.g. D01, D02)."""
+    pattern = re.compile(r"^D\d+$")
     return [col for col in header if pattern.match(col)]
 
 
+def _normalize_dimension_value(value: str) -> str:
+    """Strip leading ordinal prefixes such as '1-' from dimension labels."""
+    return re.sub(r"^\d+-", "", value)
+
+
 def _build_feedback(
-    prefix: str,
+    section_label: str,
     grade: str,
     score_str: str,
     max_score_str: str,
     dim_count: int,
+    dim_values: list[tuple[str, str]],
 ) -> str:
     grade_label = grade.replace("_", " ")
     dim_word = "dimension" if dim_count == 1 else "dimensions"
-    return (
-        f"Overall result for {prefix}: {grade_label} ( {score_str} / {max_score_str}). "
-        f"{dim_count} {dim_word}."
-    )
+    lines = [
+        f"Overall result for {section_label}: {grade_label} ({score_str} / {max_score_str}). {dim_count} {dim_word}."
+    ]
+    for dim_name, dim_value in dim_values:
+        lines.append(f"  {dim_name}: {dim_value}")
+    return "\n".join(lines)
 
 
 def main() -> None:
@@ -96,7 +112,6 @@ def main() -> None:
         print(f"Error: source file not found: {args.source_file}", file=sys.stderr)
         sys.exit(1)
 
-    # --- first pass: collect all rows and compute max numeric score ---
     with args.source_file.open(newline="", encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
         if reader.fieldnames is None:
@@ -135,17 +150,16 @@ def main() -> None:
         max_score_str = ""
     else:
         max_val = max(numeric_values)
-        # Preserve one decimal place if the value is a whole number, else use
-        # the natural float representation stripped of trailing zeros.
         if max_val == int(max_val):
             max_score_str = f"{max_val:.2f}"
         else:
             max_score_str = f"{max_val:g}"
 
     prefix = _response_text_prefix(header)
-    dim_count = len(_dimension_columns(header))
+    section_label = _section_label(prefix)
+    dimension_columns = _dimension_columns(header)
+    dim_count = len(dimension_columns)
 
-    # --- second pass: write output ---
     args.output_file.parent.mkdir(parents=True, exist_ok=True)
 
     with args.output_file.open("w", newline="", encoding="utf-8") as dst_fh:
@@ -155,9 +169,20 @@ def main() -> None:
         for row in rows:
             score_raw = (row.get("submission_numeric_score") or "").strip()
             grade_raw = (row.get("submission_score") or "").strip()
+            dim_values = [
+                (dim_name, _normalize_dimension_value((row.get(dim_name) or "").strip()))
+                for dim_name in dimension_columns
+            ]
 
-            if score_raw and grade_raw and prefix and max_score_str:
-                feedback = _build_feedback(prefix, grade_raw, score_raw, max_score_str, dim_count)
+            if score_raw and grade_raw and section_label and max_score_str:
+                feedback = _build_feedback(
+                    section_label,
+                    grade_raw,
+                    score_raw,
+                    max_score_str,
+                    dim_count,
+                    dim_values,
+                )
             else:
                 feedback = ""
 
