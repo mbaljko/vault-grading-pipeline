@@ -40,7 +40,7 @@ Behavior and safeguards:
   emitted as ALERT lines on stderr after writing output.
 
 Example:
-	python populate_gradebook_from_layer4_scores.py \
+	python populate_gradebook_from_inputs.py \
 		--gradebook-input path/to/Grades-tmp.csv \
 		--canonical-population-input path/to/AP3_pipeline1A_canonical_population_table.csv \
 		--scored-input path/to/RUN_AP3B_submission_Layer4_submission_scoring_output_v01-wide-stitched.xlsx \
