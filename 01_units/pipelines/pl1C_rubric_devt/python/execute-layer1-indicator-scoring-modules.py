@@ -253,6 +253,8 @@ def filter_component_rows(rows: list[dict[str, str]], target_component_id: str) 
 def resolve_submission_id_from_row(row: dict[str, str]) -> str:
 	for field_name in ["submission_id", "participant_id"]:
 		value = str(row.get(field_name, "") or "").strip()
+		if not value:
+			value = str(row.get(f"\ufeff{field_name}", "") or "").strip()
 		if value:
 			return value
 	return ""

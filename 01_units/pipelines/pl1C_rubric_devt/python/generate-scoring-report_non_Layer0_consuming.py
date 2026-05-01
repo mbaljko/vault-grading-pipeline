@@ -1662,6 +1662,8 @@ def parse_json_object(value: str) -> dict[str, object]:
 def resolve_submission_id_from_row(row: dict[str, str]) -> str:
 	for field_name in ["submission_id", "participant_id"]:
 		value = (row.get(field_name) or "").strip()
+		if not value:
+			value = (row.get(f"\ufeff{field_name}") or "").strip()
 		if value:
 			return value
 	return ""
@@ -1708,6 +1710,8 @@ def derive_layer0_stitched_csv_path_from_scored_csv(scored_csv_path: Path) -> Pa
 		if not stitched_dir.exists() or not stitched_dir.is_dir():
 			continue
 		matches = sorted(stitched_dir.glob(f"RUN_{assignment_id}_Layer0_operator_engine_v*_output-wide-stitched.csv"))
+		if not matches:
+			matches = sorted(stitched_dir.glob(f"RUN_{assignment_id}_*_Layer0_operator_engine_v*_output-wide-stitched.csv"))
 		if matches:
 			if directory_index > 0:
 				emit_warning_once(
