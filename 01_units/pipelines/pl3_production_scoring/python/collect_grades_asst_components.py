@@ -11,6 +11,10 @@ from openpyxl import Workbook
 IDENTITY_COLUMNS = ["Identifier", "Full name", "Email address"]
 GRADE_COLUMN = "Grade"
 FEEDBACK_COLUMN_CANDIDATES = ["Feedback comments", "Feedback"]
+SEPARATOR_COLUMN = "."
+WEIGHTED_SCORE_COLUMN = "submission_numeric_score"
+WEIGHTED_DENOMINATOR_COLUMN = "submission_numeric_score_denominator"
+AGGREGATED_FEEDBACK_COLUMN = "Feedback comments"
 
 
 def parse_args() -> argparse.Namespace:
@@ -125,27 +129,144 @@ def validate_and_index_identity_rows(
     return index
 
 
+def aggregate_feedback_for_identity(
+    key: tuple[str, str, str],
+    source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str]],
+) -> str:
+    values: list[str] = []
+    for _source_name, rows_by_id, feedback_column in source_data:
+        text = (rows_by_id[key].get(feedback_column, "") or "").strip()
+        if text:
+            values.append(text)
+    return "\n\n".join(values)
+
+
+def load_component_weights(weights_path: Path) -> dict[str, str]:
+    """Load component weights from JSON.
+
+    Supported shapes:
+    - {"PPS1E1": 0.2, "PPS1E21": 0.1}
+    - {"weights": {"PPS1E1": 0.2, ...}}
+    Keys may include or omit the "Weight_" prefix.
+    """
+    if not weights_path.is_file():
+        return {}
+
+    raw_text = weights_path.read_text(encoding="utf-8").strip()
+    if not raw_text:
+        return {}
+
+    try:
+        payload = json.loads(raw_text)
+    except json.JSONDecodeError:
+        return {}
+
+    if not isinstance(payload, dict):
+        return {}
+
+    candidate = payload.get("weights")
+    if isinstance(candidate, dict):
+        source = candidate
+    else:
+        source = payload
+
+    result: dict[str, str] = {}
+    for key, value in source.items():
+        if not isinstance(key, str):
+            continue
+        normalized_key = key.removeprefix("Weight_")
+        if isinstance(value, dict):
+            nested_weight = value.get("weight")
+            if nested_weight is None:
+                continue
+            result[normalized_key] = str(nested_weight)
+        else:
+            result[normalized_key] = str(value)
+    return result
+
+
+def _parse_float(value: str) -> float | None:
+    text = (value or "").strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def weighted_sum_and_denominator(
+    grade_values: list[str],
+    weight_values: list[str],
+) -> tuple[str, str]:
+    total = 0.0
+    denominator = 0.0
+    terms = 0
+    for grade_raw, weight_raw in zip(grade_values, weight_values):
+        grade = _parse_float(grade_raw)
+        weight = _parse_float(weight_raw)
+        if grade is None or weight is None:
+            continue
+        total += grade * weight
+        denominator += weight
+        terms += 1
+
+    if terms == 0:
+        return "", ""
+    return f"{total:.2f}", f"{denominator:.2f}"
+
+
 def write_xlsx(
     output_path: Path,
     ordered_identity_keys: list[tuple[str, str, str]],
     source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str]],
+    component_weights: dict[str, str],
 ) -> None:
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "component_grades"
 
     header = list(IDENTITY_COLUMNS)
+    duplicated_grade_headers: list[str] = []
+    duplicated_weight_headers: list[str] = []
     for source_name, _rows_by_id, _feedback_column in source_data:
         header.append(f"Grade_{source_name}")
         header.append(f"Feedback_{source_name}")
+        duplicated_weight_headers.append(f"Weight_{source_name}")
+        duplicated_grade_headers.append(f"Grade_{source_name}")
+    header.append(SEPARATOR_COLUMN)
+    for weight_header, grade_header in zip(duplicated_weight_headers, duplicated_grade_headers):
+        header.append(weight_header)
+        header.append(grade_header)
+    header.append(SEPARATOR_COLUMN)
+    header.append(WEIGHTED_SCORE_COLUMN)
+    header.append(WEIGHTED_DENOMINATOR_COLUMN)
+    header.append(AGGREGATED_FEEDBACK_COLUMN)
     sheet.append(header)
 
     for key in ordered_identity_keys:
         row_out = list(key)
+        duplicated_grade_values: list[str] = []
+        duplicated_weight_values: list[str] = []
         for _source_name, rows_by_id, feedback_column in source_data:
             source_row = rows_by_id[key]
-            row_out.append((source_row.get(GRADE_COLUMN, "") or "").strip())
+            grade_value = (source_row.get(GRADE_COLUMN, "") or "").strip()
+            row_out.append(grade_value)
             row_out.append((source_row.get(feedback_column, "") or "").strip())
+            duplicated_grade_values.append(grade_value)
+            duplicated_weight_values.append(component_weights.get(_source_name, ""))
+        row_out.append("")
+        for weight_value, grade_value in zip(duplicated_weight_values, duplicated_grade_values):
+            row_out.append(weight_value)
+            row_out.append(grade_value)
+        row_out.append("")
+        weighted_score, weighted_denominator = weighted_sum_and_denominator(
+            duplicated_grade_values,
+            duplicated_weight_values,
+        )
+        row_out.append(weighted_score)
+        row_out.append(weighted_denominator)
+        row_out.append(aggregate_feedback_for_identity(key, source_data))
         sheet.append(row_out)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -203,6 +324,8 @@ def main() -> int:
     token = assignment_root.name
     grades_release_dir = assignment_root / "04_grades_release"
     output_xlsx = grades_release_dir / f"{token}_component_grade_feedback_merged.xlsx"
+    weights_path = grades_release_dir / f"{token}_weights.json"
+    component_weights = load_component_weights(weights_path)
 
     assignment_dirs = sorted(
         [path for path in assignment_root.iterdir() if path.is_dir()],
@@ -268,7 +391,7 @@ def main() -> int:
 
         source_data.append((source_name, rows_by_id, feedback_column))
 
-    write_xlsx(output_xlsx, ordered_identity_keys, source_data)
+    write_xlsx(output_xlsx, ordered_identity_keys, source_data, component_weights)
     
     # Write template CSV with standard gradebook submission columns
     template_filename = f"{token}_Grades_iter{first_iteration}.csv"
