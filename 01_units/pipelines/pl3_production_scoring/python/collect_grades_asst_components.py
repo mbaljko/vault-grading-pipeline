@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 from pathlib import Path
@@ -7,13 +8,22 @@ from pathlib import Path
 from openpyxl import Workbook
 
 
-ASST_ROOT = Path("/Users/mb/Documents/Vaults/vault-eecs3000w26/Internal/06_grading/PPP")
-TOKEN = ASST_ROOT.name
-OUTPUT_XLSX = ASST_ROOT / "PPP_component_grade_feedback_merged.xlsx"
-
 IDENTITY_COLUMNS = ["Identifier", "Full name", "Email address"]
 GRADE_COLUMN = "Grade"
 FEEDBACK_COLUMN_CANDIDATES = ["Feedback comments", "Feedback"]
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Merge component-level gradebook outputs for one assignment umbrella directory."
+    )
+    parser.add_argument(
+        "--assignment-root",
+        type=Path,
+        required=True,
+        help="Assignment umbrella directory, such as ./PPP or ./PPS1-umbrella.",
+    )
+    return parser.parse_args()
 
 
 def load_pipeline_paths_config(assignment_dir: Path) -> dict[str, object] | None:
@@ -184,9 +194,18 @@ def write_template_csv(
             writer.writerow(row_out)
 
 
-def main() -> None:
+def main() -> int:
+    args = parse_args()
+    assignment_root = args.assignment_root.resolve()
+    if not assignment_root.is_dir():
+        raise FileNotFoundError(f"Assignment root not found: {assignment_root}")
+
+    token = assignment_root.name
+    grades_release_dir = assignment_root / "04_grades_release"
+    output_xlsx = grades_release_dir / f"{token}_component_grade_feedback_merged.xlsx"
+
     assignment_dirs = sorted(
-        [path for path in ASST_ROOT.iterdir() if path.is_dir()],
+        [path for path in assignment_root.iterdir() if path.is_dir()],
         key=lambda path: path.name,
     )
 
@@ -213,7 +232,7 @@ def main() -> None:
         discovered.append((assignment_dir.name, csv_path))
 
     if not discovered:
-        raise ValueError(f"No assignment subdirectories with pipeline_paths.json found under {ASST_ROOT}")
+        raise ValueError(f"No assignment subdirectories with pipeline_paths.json found under {assignment_root}")
 
     source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str]] = []
     baseline_keys: set[tuple[str, str, str]] | None = None
@@ -249,15 +268,16 @@ def main() -> None:
 
         source_data.append((source_name, rows_by_id, feedback_column))
 
-    write_xlsx(OUTPUT_XLSX, ordered_identity_keys, source_data)
+    write_xlsx(output_xlsx, ordered_identity_keys, source_data)
     
     # Write template CSV with standard gradebook submission columns
-    template_filename = f"{TOKEN}_Grades_iter{first_iteration}.csv"
-    template_path = ASST_ROOT / template_filename
+    template_filename = f"{token}_Grades_iter{first_iteration}.csv"
+    template_path = grades_release_dir / template_filename
     write_template_csv(template_path, first_iteration, ordered_identity_keys, source_data)
 
-    print(f"ASST_ROOT: {ASST_ROOT}")
-    print(f"Token: {TOKEN}")
+    print(f"ASST_ROOT: {assignment_root}")
+    print(f"Grades release dir: {grades_release_dir}")
+    print(f"Token: {token}")
     print(f"Iteration: {first_iteration}")
     print(f"Input sources found: {len(source_data)}")
     for source_name, csv_path in discovered:
@@ -267,9 +287,10 @@ def main() -> None:
         for source_name, csv_path in skipped_missing_csv:
             print(f"- {source_name}: {csv_path}")
     print(f"Rows merged: {len(ordered_identity_keys)}")
-    print(f"Output XLSX: {OUTPUT_XLSX}")
+    print(f"Output XLSX: {output_xlsx}")
     print(f"Template CSV: {template_path}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
