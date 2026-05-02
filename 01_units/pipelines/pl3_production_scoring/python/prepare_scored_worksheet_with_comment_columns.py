@@ -29,6 +29,10 @@ import sys
 from pathlib import Path
 
 
+SUBMISSION_SCORE_COLUMN = "submission_numeric_score"
+SUBMISSION_MAX_SCORE_COLUMN = "submission_max_numeric_score"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -106,6 +110,14 @@ def _format_numeric(value: float) -> str:
     if value == int(value):
         return f"{value:.2f}"
     return f"{value:g}"
+
+
+def _row_max_score_str(row: dict[str, str]) -> str:
+    raw_value = (row.get(SUBMISSION_MAX_SCORE_COLUMN) or "").strip()
+    parsed_value = _parse_float_or_none(raw_value)
+    if parsed_value is None:
+        return ""
+    return _format_numeric(parsed_value)
 
 
 def _response_text_prefix(header: list[str], match_regex: str) -> str:
@@ -351,8 +363,24 @@ def main() -> None:
     args.output_file.parent.mkdir(parents=True, exist_ok=True)
 
     fieldnames = list(header)
+    score_present_in_output = (
+        SUBMISSION_SCORE_COLUMN in fieldnames
+        or score_output_column == SUBMISSION_SCORE_COLUMN
+    )
+    insert_submission_max_score = (
+        score_present_in_output and SUBMISSION_MAX_SCORE_COLUMN not in fieldnames
+    )
+    if insert_submission_max_score and SUBMISSION_SCORE_COLUMN in fieldnames:
+        score_idx = fieldnames.index(SUBMISSION_SCORE_COLUMN)
+        fieldnames.insert(score_idx + 1, SUBMISSION_MAX_SCORE_COLUMN)
     if score_output_column and score_output_column not in fieldnames:
         fieldnames.append(score_output_column)
+    if insert_submission_max_score and SUBMISSION_MAX_SCORE_COLUMN not in fieldnames:
+        if SUBMISSION_SCORE_COLUMN in fieldnames:
+            score_idx = fieldnames.index(SUBMISSION_SCORE_COLUMN)
+            fieldnames.insert(score_idx + 1, SUBMISSION_MAX_SCORE_COLUMN)
+        else:
+            fieldnames.append(SUBMISSION_MAX_SCORE_COLUMN)
     if separator_output_column not in fieldnames:
         fieldnames.append(separator_output_column)
     if feedback_output_column not in fieldnames:
@@ -389,13 +417,14 @@ def main() -> None:
                     feedback_separator,
                 )
             elif score_raw and grade_raw and section_label and max_score_str:
+                denominator_score = _row_max_score_str(row) or max_score_str
                 feedback = _build_feedback(
                     summary_template,
                     dimension_template,
                     section_label,
                     grade_raw,
                     score_raw,
-                    max_score_str,
+                    denominator_score,
                     dim_count,
                     dim_values,
                 )
@@ -405,6 +434,11 @@ def main() -> None:
             writer.writerow(
                 {
                     **row,
+                    **(
+                        {SUBMISSION_MAX_SCORE_COLUMN: max_score_str}
+                        if insert_submission_max_score
+                        else {}
+                    ),
                     **({score_output_column: score_raw} if score_output_column else {}),
                     separator_output_column: "",
                     feedback_output_column: feedback,

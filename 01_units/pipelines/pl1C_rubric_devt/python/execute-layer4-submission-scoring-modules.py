@@ -23,7 +23,12 @@ WIDE_METADATA_EXCLUDED_FIELDS = {
 	"sbo_identifier",
 	"sbo_short_description",
 }
-WIDE_BASE_FIELDS = ["submission_id", "submission_score", "submission_numeric_score"]
+WIDE_BASE_FIELDS = [
+	"submission_id",
+	"submission_score",
+	"submission_numeric_score",
+	"submission_max_numeric_score",
+]
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,6 +84,23 @@ def load_submission_modules(module_dir: Path) -> dict[str, ModuleType]:
 
 def format_numeric(value: float) -> str:
 	return f"{value:.2f}"
+
+
+def resolve_submission_max_numeric_score(module: ModuleType) -> str:
+	cutpoints = getattr(module, "NUMERIC_CUTPOINTS", [])
+	max_values: list[float] = []
+	if isinstance(cutpoints, list):
+		for cutpoint in cutpoints:
+			if not isinstance(cutpoint, dict):
+				continue
+			raw_max = cutpoint.get("numeric_maximum")
+			try:
+				max_values.append(float(raw_max))
+			except (TypeError, ValueError):
+				continue
+	if max_values:
+		return format_numeric(max(max_values))
+	return ""
 
 
 def build_component_score_map(row: dict[str, str], bound_component_ids: list[str]) -> dict[str, str]:
@@ -149,6 +171,7 @@ def load_layer3_wide_blocks(layer3_submission_payload_csv: Path) -> list[dict[st
 def score_submission_row(
 	module: ModuleType,
 	row: dict[str, str],
+	submission_max_numeric_score: str,
 	submission_id_field: str,
 	flags_field: str,
 	confidence_field: str,
@@ -169,6 +192,7 @@ def score_submission_row(
 	output_row["source_component_scores_json"] = json.dumps(component_scores, ensure_ascii=True, sort_keys=True)
 	output_row["source_component_numeric_values_json"] = json.dumps(source_component_numeric_values, ensure_ascii=True, sort_keys=True)
 	output_row["submission_numeric_score"] = format_numeric(float(result["submission_numeric_score"]))
+	output_row["submission_max_numeric_score"] = submission_max_numeric_score
 	output_row["submission_score"] = str(result["submission_score"])
 	output_row["flags_any_component"] = str(row.get(flags_field, "")).strip()
 	output_row["min_confidence_component"] = str(row.get(confidence_field, "")).strip()
@@ -253,10 +277,12 @@ def main() -> int:
 		module = modules.get(args.target_assessment_id)
 		if module is None:
 			raise ValueError(f"No Layer 4 module found for assessment_id={args.target_assessment_id}")
+		submission_max_numeric_score = resolve_submission_max_numeric_score(module)
 		output_rows = [
 			score_submission_row(
 				module,
 				row,
+				submission_max_numeric_score,
 				submission_id_field=args.submission_id_field,
 				flags_field=args.flags_field,
 				confidence_field=args.confidence_field,

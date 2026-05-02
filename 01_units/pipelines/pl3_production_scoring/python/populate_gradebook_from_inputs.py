@@ -241,6 +241,7 @@ def load_source_lookup(scored_input: Path) -> dict[str, dict[str, str]]:
 	normalized_fields = _normalized_field_lookup(fieldnames)
 	submission_id_key = _require_column(normalized_fields, "submission_id", scored_input)
 	score_key = _require_column(normalized_fields, "submission_numeric_score", scored_input)
+	max_score_key = normalized_fields.get("submission_max_numeric_score")
 	feedback_key = normalized_fields.get("feedback comments")
 
 	for row in rows:
@@ -248,11 +249,16 @@ def load_source_lookup(scored_input: Path) -> dict[str, dict[str, str]]:
 		if not submission_id:
 			continue
 		score_value = (row.get(score_key) or "").strip()
+		max_score_value = (row.get(max_score_key) or "").strip() if max_score_key else ""
 		feedback_value = (row.get(feedback_key) or "") if feedback_key else ""
 		existing_value = source_lookup.get(submission_id)
 		if existing_value is not None and existing_value.get("score", "") != score_value:
 			raise ValueError(
 				f"Conflicting submission_numeric_score values for submission_id {submission_id} in {scored_input}"
+			)
+		if existing_value is not None and existing_value.get("max_score", "") != max_score_value:
+			raise ValueError(
+				f"Conflicting submission_max_numeric_score values for submission_id {submission_id} in {scored_input}"
 			)
 		if existing_value is not None and existing_value.get("feedback_comments", "") != feedback_value:
 			raise ValueError(
@@ -260,6 +266,7 @@ def load_source_lookup(scored_input: Path) -> dict[str, dict[str, str]]:
 			)
 		source_lookup[submission_id] = {
 			"score": score_value,
+			"max_score": max_score_value,
 			"feedback_comments": feedback_value,
 		}
 
@@ -381,6 +388,7 @@ def populate_gradebook(
 		full_name_key = _require_column(normalized_fields, "Full name", gradebook_input)
 		email_key = _require_column(normalized_fields, "Email address", gradebook_input)
 		actual_grade_column = _require_column(normalized_fields, grade_column, gradebook_input)
+		maximum_grade_column = normalized_fields.get("maximum grade")
 		feedback_column = normalized_fields.get("feedback comments")
 
 		fieldnames = list(reader.fieldnames)
@@ -407,9 +415,12 @@ def populate_gradebook(
 				used_submission_ids.add(submission_id)
 				source_values = source_lookup.get(submission_id, {})
 				score_value = source_values.get("score", "")
+				max_score_value = source_values.get("max_score", "")
 				if score_value:
 					matched_rows += 1
 					row[actual_grade_column] = score_value
+				if maximum_grade_column and max_score_value:
+					row[maximum_grade_column] = max_score_value
 				if feedback_column:
 					row[feedback_column] = source_values.get("feedback_comments", "")
 

@@ -13,6 +13,7 @@ GRADE_COLUMN = "Grade"
 FEEDBACK_COLUMN_CANDIDATES = ["Feedback comments", "Feedback"]
 SEPARATOR_COLUMN = "."
 WEIGHTED_SCORE_COLUMN = "submission_numeric_score"
+MAX_SCORE_COLUMN = "submission_max_numeric_score"
 WEIGHTED_DENOMINATOR_COLUMN = "submission_numeric_score_denominator"
 AGGREGATED_FEEDBACK_COLUMN = "Feedback comments"
 
@@ -240,6 +241,7 @@ def write_xlsx(
         header.append(grade_header)
     header.append(SEPARATOR_COLUMN)
     header.append(WEIGHTED_SCORE_COLUMN)
+    header.append(MAX_SCORE_COLUMN)
     header.append(WEIGHTED_DENOMINATOR_COLUMN)
     header.append(AGGREGATED_FEEDBACK_COLUMN)
     sheet.append(header)
@@ -265,6 +267,7 @@ def write_xlsx(
             duplicated_weight_values,
         )
         row_out.append(weighted_score)
+        row_out.append(weighted_denominator)
         row_out.append(weighted_denominator)
         row_out.append(aggregate_feedback_for_identity(key, source_data))
         sheet.append(row_out)
