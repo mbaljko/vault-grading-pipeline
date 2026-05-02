@@ -283,6 +283,12 @@ def write_xlsx(
     ][len(source_data):]
     weighted_score_column_index = header.index(WEIGHTED_SCORE_COLUMN)
     weighted_max_column_index = header.index(MAX_SCORE_COLUMN)
+    feedback_column_indexes = [
+        index
+        for index, column_name in enumerate(header)
+        if isinstance(column_name, str) and column_name.startswith("Feedback_")
+    ]
+    aggregated_feedback_column_index = header.index(AGGREGATED_FEEDBACK_COLUMN)
 
     for key in ordered_identity_keys:
         row_out = list(key)
@@ -321,7 +327,7 @@ def write_xlsx(
         row_out.append("")
         row_out.append("")
         row_out.append("")
-        row_out.append(aggregate_feedback_for_identity(key, source_data))
+        row_out.append("")
         sheet.append(row_out)
 
         sheet_row = sheet.max_row
@@ -337,6 +343,27 @@ def write_xlsx(
                 for column_index in weighted_max_column_indexes
             )
             sheet.cell(row=sheet_row, column=weighted_max_column_index + 1).value = f"=SUM({weighted_max_refs})"
+        if feedback_column_indexes:
+            feedback_refs = [
+                f"{get_column_letter(column_index + 1)}{sheet_row}"
+                for column_index in feedback_column_indexes
+            ]
+            # Build a compatibility-safe concatenation formula that avoids TEXTJOIN,
+            # which some Excel builds rewrite as @TEXTJOIN and then fail with #NAME?.
+            formula_terms: list[str] = []
+            for idx, ref in enumerate(feedback_refs):
+                if idx == 0:
+                    formula_terms.append(f'IF({ref}<>"",{ref},"")')
+                    continue
+                previous_refs = feedback_refs[:idx]
+                previous_non_empty = "OR(" + ",".join(f'{prev}<>""' for prev in previous_refs) + ")"
+                formula_terms.append(
+                    f'IF({ref}<>"",IF({previous_non_empty},CHAR(10)&CHAR(10),"")&{ref},"")'
+                )
+            formula_expr = "&".join(formula_terms)
+            sheet.cell(row=sheet_row, column=aggregated_feedback_column_index + 1).value = (
+                f"={formula_expr}"
+            )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(output_path)
@@ -347,8 +374,9 @@ def write_template_csv(
     iteration: str,
     ordered_identity_keys: list[tuple[str, str, str]],
     source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str, str]],
+    component_weights: dict[str, str],
 ) -> None:
-    """Write a template CSV with standard gradebook submission columns."""
+    """Write a gradebook CSV with stage02-like populated summary columns."""
     header = [
         "Identifier",
         "Full name",
@@ -368,18 +396,39 @@ def write_template_csv(
         writer = csv.DictWriter(handle, fieldnames=header)
         writer.writeheader()
         for key in ordered_identity_keys:
+            total_grade = 0.0
+            total_max_grade = 0.0
+            grade_terms = 0
+            max_grade_terms = 0
+            for source_name, rows_by_id, _feedback_column, max_grade_column in source_data:
+                source_row = rows_by_id[key]
+                weight_value = component_weights.get(source_name, "")
+
+                scaled_grade = scale_value_by_weight((source_row.get(GRADE_COLUMN, "") or "").strip(), weight_value)
+                if scaled_grade is not None:
+                    total_grade += scaled_grade
+                    grade_terms += 1
+
+                scaled_max_grade = scale_value_by_weight(
+                    (source_row.get(max_grade_column, "") or "").strip(),
+                    weight_value,
+                )
+                if scaled_max_grade is not None:
+                    total_max_grade += scaled_max_grade
+                    max_grade_terms += 1
+
             row_out = {
                 "Identifier": key[0],
                 "Full name": key[1],
                 "Email address": key[2],
                 "Status": "",
-                "Grade": "",
-                "Maximum Grade": "",
+                "Grade": f"{total_grade:.2f}" if grade_terms > 0 else "",
+                "Maximum Grade": f"{total_max_grade:.2f}" if max_grade_terms > 0 else "",
                 "Grade can be changed": "",
                 "Last modified (submission)": "",
                 "Online text": "",
                 "Last modified (grade)": "",
-                "Feedback comments": "",
+                "Feedback comments": aggregate_feedback_for_identity(key, source_data),
             }
             writer.writerow(row_out)
 
@@ -465,7 +514,7 @@ def main() -> int:
     # Write template CSV with standard gradebook submission columns
     template_filename = f"{token}_Grades_iter{first_iteration}.csv"
     template_path = grades_release_dir / template_filename
-    write_template_csv(template_path, first_iteration, ordered_identity_keys, source_data)
+    write_template_csv(template_path, first_iteration, ordered_identity_keys, source_data, component_weights)
 
     print(f"ASST_ROOT: {assignment_root}")
     print(f"Grades release dir: {grades_release_dir}")
