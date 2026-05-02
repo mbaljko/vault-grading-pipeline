@@ -6,15 +6,16 @@ import json
 from pathlib import Path
 
 from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 
 
 IDENTITY_COLUMNS = ["Identifier", "Full name", "Email address"]
 GRADE_COLUMN = "Grade"
+MAX_GRADE_COLUMN = "Maximum Grade"
 FEEDBACK_COLUMN_CANDIDATES = ["Feedback comments", "Feedback"]
 SEPARATOR_COLUMN = "."
 WEIGHTED_SCORE_COLUMN = "submission_numeric_score"
 MAX_SCORE_COLUMN = "submission_max_numeric_score"
-WEIGHTED_DENOMINATOR_COLUMN = "submission_numeric_score_denominator"
 AGGREGATED_FEEDBACK_COLUMN = "Feedback comments"
 
 
@@ -89,7 +90,7 @@ def resolve_output_csv_from_config(assignment_dir: Path, config: dict[str, objec
     return csv_path
 
 
-def read_grade_rows(csv_path: Path) -> tuple[list[str], list[dict[str, str]], str]:
+def read_grade_rows(csv_path: Path) -> tuple[list[str], list[dict[str, str]], str, str]:
     if not csv_path.exists() or not csv_path.is_file():
         raise FileNotFoundError(f"Expected gradebook CSV not found: {csv_path}")
 
@@ -104,13 +105,16 @@ def read_grade_rows(csv_path: Path) -> tuple[list[str], list[dict[str, str]], st
         if column not in headers:
             raise ValueError(f"Missing required column '{column}' in {csv_path}")
 
+    if MAX_GRADE_COLUMN not in headers:
+        raise ValueError(f"Missing required column '{MAX_GRADE_COLUMN}' in {csv_path}")
+
     feedback_column = next((name for name in FEEDBACK_COLUMN_CANDIDATES if name in headers), "")
     if not feedback_column:
         raise ValueError(
             f"Missing feedback column in {csv_path}. Expected one of: {FEEDBACK_COLUMN_CANDIDATES}"
         )
 
-    return headers, rows, feedback_column
+    return headers, rows, feedback_column, MAX_GRADE_COLUMN
 
 
 def identity_key(row: dict[str, str]) -> tuple[str, str, str]:
@@ -132,10 +136,10 @@ def validate_and_index_identity_rows(
 
 def aggregate_feedback_for_identity(
     key: tuple[str, str, str],
-    source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str]],
+    source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str, str]],
 ) -> str:
     values: list[str] = []
-    for _source_name, rows_by_id, feedback_column in source_data:
+    for _source_name, rows_by_id, feedback_column, _max_grade_column in source_data:
         text = (rows_by_id[key].get(feedback_column, "") or "").strip()
         if text:
             values.append(text)
@@ -217,10 +221,20 @@ def weighted_sum_and_denominator(
     return f"{total:.2f}", f"{denominator:.2f}"
 
 
+def scale_value_by_weight(value_raw: str, weight_raw: str) -> float | None:
+    value = _parse_float(value_raw)
+    if value is None:
+        return None
+    weight = _parse_float(weight_raw)
+    if weight is None:
+        return value
+    return value * weight
+
+
 def write_xlsx(
     output_path: Path,
     ordered_identity_keys: list[tuple[str, str, str]],
-    source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str]],
+    source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str, str]],
     component_weights: dict[str, str],
 ) -> None:
     workbook = Workbook()
@@ -229,48 +243,100 @@ def write_xlsx(
 
     header = list(IDENTITY_COLUMNS)
     duplicated_grade_headers: list[str] = []
+    duplicated_max_headers: list[str] = []
     duplicated_weight_headers: list[str] = []
-    for source_name, _rows_by_id, _feedback_column in source_data:
+    for index, (source_name, _rows_by_id, _feedback_column, _max_grade_column) in enumerate(source_data):
+        if index > 0:
+            header.append(SEPARATOR_COLUMN)
         header.append(f"Grade_{source_name}")
+        header.append(f"Max_{source_name}")
         header.append(f"Feedback_{source_name}")
         duplicated_weight_headers.append(f"Weight_{source_name}")
         duplicated_grade_headers.append(f"Grade_{source_name}")
+        duplicated_max_headers.append(f"Max_{source_name}")
     header.append(SEPARATOR_COLUMN)
-    for weight_header, grade_header in zip(duplicated_weight_headers, duplicated_grade_headers):
+    for index, (weight_header, grade_header, max_header) in enumerate(zip(
+        duplicated_weight_headers,
+        duplicated_grade_headers,
+        duplicated_max_headers,
+    )):
+        if index > 0:
+            header.append(SEPARATOR_COLUMN)
         header.append(weight_header)
         header.append(grade_header)
+        header.append(max_header)
     header.append(SEPARATOR_COLUMN)
     header.append(WEIGHTED_SCORE_COLUMN)
     header.append(MAX_SCORE_COLUMN)
-    header.append(WEIGHTED_DENOMINATOR_COLUMN)
     header.append(AGGREGATED_FEEDBACK_COLUMN)
     sheet.append(header)
+
+    weighted_grade_column_indexes = [
+        index
+        for index, column_name in enumerate(header)
+        if isinstance(column_name, str) and column_name.startswith("Grade_")
+    ][len(source_data):]
+    weighted_max_column_indexes = [
+        index
+        for index, column_name in enumerate(header)
+        if isinstance(column_name, str) and column_name.startswith("Max_")
+    ][len(source_data):]
+    weighted_score_column_index = header.index(WEIGHTED_SCORE_COLUMN)
+    weighted_max_column_index = header.index(MAX_SCORE_COLUMN)
 
     for key in ordered_identity_keys:
         row_out = list(key)
         duplicated_grade_values: list[str] = []
+        duplicated_max_values: list[str] = []
         duplicated_weight_values: list[str] = []
-        for _source_name, rows_by_id, feedback_column in source_data:
+        for index, (_source_name, rows_by_id, feedback_column, max_grade_column) in enumerate(source_data):
+            if index > 0:
+                row_out.append("")
             source_row = rows_by_id[key]
-            grade_value = (source_row.get(GRADE_COLUMN, "") or "").strip()
-            row_out.append(grade_value)
+            grade_value_raw = (source_row.get(GRADE_COLUMN, "") or "").strip()
+            max_grade_value_raw = (source_row.get(max_grade_column, "") or "").strip()
+            weight_value = component_weights.get(_source_name, "")
+            scaled_grade_value = scale_value_by_weight(grade_value_raw, weight_value)
+            scaled_max_grade_value = scale_value_by_weight(max_grade_value_raw, weight_value)
+            row_out.append(scaled_grade_value if scaled_grade_value is not None else "")
+            row_out.append(scaled_max_grade_value if scaled_max_grade_value is not None else "")
             row_out.append((source_row.get(feedback_column, "") or "").strip())
-            duplicated_grade_values.append(grade_value)
-            duplicated_weight_values.append(component_weights.get(_source_name, ""))
+            duplicated_grade_values.append(grade_value_raw)
+            duplicated_max_values.append(max_grade_value_raw)
+            duplicated_weight_values.append(weight_value)
         row_out.append("")
-        for weight_value, grade_value in zip(duplicated_weight_values, duplicated_grade_values):
-            row_out.append(weight_value)
-            row_out.append(grade_value)
-        row_out.append("")
-        weighted_score, weighted_denominator = weighted_sum_and_denominator(
-            duplicated_grade_values,
+        for index, (weight_value, grade_value, max_grade_value) in enumerate(zip(
             duplicated_weight_values,
-        )
-        row_out.append(weighted_score)
-        row_out.append(weighted_denominator)
-        row_out.append(weighted_denominator)
+            duplicated_grade_values,
+            duplicated_max_values,
+        )):
+            if index > 0:
+                row_out.append("")
+            parsed_weight = _parse_float(weight_value)
+            row_out.append(parsed_weight if parsed_weight is not None else weight_value)
+            scaled_grade_value = scale_value_by_weight(grade_value, weight_value)
+            scaled_max_grade_value = scale_value_by_weight(max_grade_value, weight_value)
+            row_out.append(scaled_grade_value if scaled_grade_value is not None else "")
+            row_out.append(scaled_max_grade_value if scaled_max_grade_value is not None else "")
+        row_out.append("")
+        row_out.append("")
+        row_out.append("")
         row_out.append(aggregate_feedback_for_identity(key, source_data))
         sheet.append(row_out)
+
+        sheet_row = sheet.max_row
+        if weighted_grade_column_indexes:
+            weighted_grade_refs = ",".join(
+                f"{get_column_letter(column_index + 1)}{sheet_row}"
+                for column_index in weighted_grade_column_indexes
+            )
+            sheet.cell(row=sheet_row, column=weighted_score_column_index + 1).value = f"=SUM({weighted_grade_refs})"
+        if weighted_max_column_indexes:
+            weighted_max_refs = ",".join(
+                f"{get_column_letter(column_index + 1)}{sheet_row}"
+                for column_index in weighted_max_column_indexes
+            )
+            sheet.cell(row=sheet_row, column=weighted_max_column_index + 1).value = f"=SUM({weighted_max_refs})"
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(output_path)
@@ -280,7 +346,7 @@ def write_template_csv(
     output_path: Path,
     iteration: str,
     ordered_identity_keys: list[tuple[str, str, str]],
-    source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str]],
+    source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str, str]],
 ) -> None:
     """Write a template CSV with standard gradebook submission columns."""
     header = [
@@ -360,12 +426,12 @@ def main() -> int:
     if not discovered:
         raise ValueError(f"No assignment subdirectories with pipeline_paths.json found under {assignment_root}")
 
-    source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str]] = []
+    source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str, str]] = []
     baseline_keys: set[tuple[str, str, str]] | None = None
     ordered_identity_keys: list[tuple[str, str, str]] = []
 
     for source_name, csv_path in discovered:
-        _headers, rows, feedback_column = read_grade_rows(csv_path)
+        _headers, rows, feedback_column, max_grade_column = read_grade_rows(csv_path)
         rows_by_id = validate_and_index_identity_rows(source_name, rows)
         current_keys = set(rows_by_id.keys())
 
@@ -392,7 +458,7 @@ def main() -> int:
                 ):
                     raise ValueError(f"Identity values mismatch for key {key} in source {source_name}")
 
-        source_data.append((source_name, rows_by_id, feedback_column))
+        source_data.append((source_name, rows_by_id, feedback_column, max_grade_column))
 
     write_xlsx(output_xlsx, ordered_identity_keys, source_data, component_weights)
     

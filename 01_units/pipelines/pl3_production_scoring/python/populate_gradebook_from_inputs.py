@@ -235,6 +235,36 @@ def _email_local_part(email_address: str) -> str:
 	return value.split("@", 1)[0].strip()
 
 
+def _parse_float(value: str) -> float | None:
+	text = (value or "").strip()
+	if not text:
+		return None
+	try:
+		return float(text)
+	except ValueError:
+		return None
+
+
+def resolve_uniform_max_grade(source_lookup: dict[str, dict[str, str]]) -> str:
+	"""Resolve one canonical maximum grade value to write on every destination row."""
+	numeric_values: list[float] = []
+	for values in source_lookup.values():
+		parsed = _parse_float(values.get("max_score", ""))
+		if parsed is not None:
+			numeric_values.append(parsed)
+	if numeric_values:
+		return f"{max(numeric_values):.2f}"
+
+	raw_values = {
+		(values.get("max_score", "") or "").strip()
+		for values in source_lookup.values()
+		if (values.get("max_score", "") or "").strip()
+	}
+	if len(raw_values) == 1:
+		return next(iter(raw_values))
+	return ""
+
+
 def load_source_lookup(scored_input: Path) -> dict[str, dict[str, str]]:
 	source_lookup: dict[str, dict[str, str]] = {}
 	fieldnames, rows = iter_scored_rows(scored_input)
@@ -375,6 +405,7 @@ def populate_gradebook(
 	grade_column: str,
 ) -> tuple[int, list[tuple[str, str]]]:
 	source_lookup = load_source_lookup(scored_input)
+	uniform_max_grade = resolve_uniform_max_grade(source_lookup)
 	canonical_indices = load_canonical_indices(canonical_input)
 	used_submission_ids: set[str] = set()
 
@@ -400,6 +431,8 @@ def populate_gradebook(
 			writer.writeheader()
 
 			for row in reader:
+				if maximum_grade_column and uniform_max_grade:
+					row[maximum_grade_column] = uniform_max_grade
 				submission_id = resolve_submission_id(
 					grade_row=row,
 					gradebook_input=gradebook_input,
@@ -415,12 +448,9 @@ def populate_gradebook(
 				used_submission_ids.add(submission_id)
 				source_values = source_lookup.get(submission_id, {})
 				score_value = source_values.get("score", "")
-				max_score_value = source_values.get("max_score", "")
 				if score_value:
 					matched_rows += 1
 					row[actual_grade_column] = score_value
-				if maximum_grade_column and max_score_value:
-					row[maximum_grade_column] = max_score_value
 				if feedback_column:
 					row[feedback_column] = source_values.get("feedback_comments", "")
 
