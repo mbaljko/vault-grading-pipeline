@@ -1,0 +1,14 @@
+{
+  "name": "aggregate-over-components",
+  "score_columns": {
+    "match_regex": "^Grade_",
+    "aggregate": "sum"
+  },
+  "score_output_column": "submission_numeric_score",
+  "separator_output_column": ".",
+  "feedback_columns": {
+    "match_regex": "^Feedback_",
+    "separator": "\n\n"
+  },
+  "feedback_output_column": "Feedback comments"
+}

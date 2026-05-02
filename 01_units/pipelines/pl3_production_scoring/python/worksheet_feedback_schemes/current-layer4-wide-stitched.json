@@ -1,0 +1,25 @@
+{
+  "name": "current-layer4-wide-stitched",
+  "score_column": "submission_numeric_score",
+  "grade_label_column": "submission_score",
+  "separator_output_column": ".",
+  "feedback_output_column": "Feedback comments",
+  "response_text": {
+    "match_regex": "^(.*)_response_text$",
+    "section_prefix": "Section ",
+    "strip_suffix": "Response"
+  },
+  "dimension_columns": {
+    "match_regex": "^D\\d+$"
+  },
+  "dimension_value_normalization": {
+    "strip_leading_regex": "^\\d+-"
+  },
+  "max_score": {
+    "aggregate": "max"
+  },
+  "feedback_format": {
+    "summary_template": "Overall result for {section_label}: {grade} ({score} / {max_score}). {dimension_count} {dimension_word}.",
+    "dimension_template": "  {dimension}: {value}"
+  }
+}
