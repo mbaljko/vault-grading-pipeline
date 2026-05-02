@@ -3,9 +3,13 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
+import re
+import statistics
 from pathlib import Path
 
 from openpyxl import Workbook
+from openpyxl.chart import BarChart, Reference
 from openpyxl.utils import get_column_letter
 
 
@@ -137,10 +141,12 @@ def validate_and_index_identity_rows(
 def aggregate_feedback_for_identity(
     key: tuple[str, str, str],
     source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str, str]],
+    component_weights: dict[str, str],
 ) -> str:
     values: list[str] = []
-    for _source_name, rows_by_id, feedback_column, _max_grade_column in source_data:
-        text = (rows_by_id[key].get(feedback_column, "") or "").strip()
+    for source_name, rows_by_id, feedback_column, _max_grade_column in source_data:
+        raw_text = (rows_by_id[key].get(feedback_column, "") or "").strip()
+        text = scale_feedback_score_pairs(raw_text, component_weights.get(source_name, ""))
         if text:
             values.append(text)
     return "\n\n".join(values)
@@ -231,6 +237,162 @@ def scale_value_by_weight(value_raw: str, weight_raw: str) -> float | None:
     return value * weight
 
 
+def _format_number(value: float) -> str:
+    text = f"{value:.2f}".rstrip("0").rstrip(".")
+    return text if text else "0"
+
+
+def scale_feedback_score_pairs(feedback_text: str, weight_raw: str) -> str:
+    """Scale '(x / y)' score pairs inside feedback text by component weight."""
+    text = (feedback_text or "").strip()
+    if not text:
+        return ""
+
+    weight = _parse_float(weight_raw)
+    if weight is None:
+        return text
+
+    paren_pair_pattern = re.compile(r"\(\s*(-?\d+(?:\.\d+)?)\s*/\s*(-?\d+(?:\.\d+)?)\s*\)")
+    bare_pair_pattern = re.compile(
+        r"(?<!\()\b(-?\d+(?:\.\d+)?)(\s*/\s*)(-?\d+(?:\.\d+)?)\b(?!\))"
+    )
+
+    def _replace_paren_pair(match: re.Match[str]) -> str:
+        numerator = float(match.group(1)) * weight
+        denominator = float(match.group(2)) * weight
+        return f"({_format_number(numerator)} / {_format_number(denominator)})"
+
+    def _replace_bare_pair(match: re.Match[str]) -> str:
+        numerator = float(match.group(1)) * weight
+        separator = match.group(2)
+        denominator = float(match.group(3)) * weight
+        return f"{_format_number(numerator)}{separator}{_format_number(denominator)}"
+    scaled = paren_pair_pattern.sub(_replace_paren_pair, text)
+    scaled = bare_pair_pattern.sub(_replace_bare_pair, scaled)
+    return scaled
+
+
+def _compute_weighted_total(values: list[str], weights: list[str]) -> float | None:
+    total = 0.0
+    terms = 0
+    for value_raw, weight_raw in zip(values, weights):
+        weighted_value = scale_value_by_weight(value_raw, weight_raw)
+        if weighted_value is None:
+            continue
+        total += weighted_value
+        terms += 1
+    if terms == 0:
+        return None
+    return total
+
+
+def _quartiles(values: list[float]) -> tuple[float, float]:
+    if not values:
+        return 0.0, 0.0
+    if len(values) == 1:
+        return values[0], values[0]
+    q1, _, q3 = statistics.quantiles(values, n=4, method="inclusive")
+    return q1, q3
+
+
+def _append_metric_rows(sheet, start_row: int, title: str, values: list[float]) -> int:
+    sheet.cell(row=start_row, column=1).value = title
+    start_row += 1
+    headers = ["metric", "value"]
+    for idx, header in enumerate(headers, start=1):
+        sheet.cell(row=start_row, column=idx).value = header
+    start_row += 1
+
+    if not values:
+        rows = [
+            ("count", 0),
+            ("mean", ""),
+            ("median", ""),
+            ("stdev", ""),
+            ("min", ""),
+            ("q1", ""),
+            ("q3", ""),
+            ("max", ""),
+        ]
+    else:
+        sorted_values = sorted(values)
+        q1, q3 = _quartiles(sorted_values)
+        rows = [
+            ("count", len(sorted_values)),
+            ("mean", round(statistics.mean(sorted_values), 4)),
+            ("median", round(statistics.median(sorted_values), 4)),
+            ("stdev", round(statistics.stdev(sorted_values), 4) if len(sorted_values) > 1 else 0.0),
+            ("min", round(sorted_values[0], 4)),
+            ("q1", round(q1, 4)),
+            ("q3", round(q3, 4)),
+            ("max", round(sorted_values[-1], 4)),
+        ]
+
+    for metric, value in rows:
+        sheet.cell(row=start_row, column=1).value = metric
+        sheet.cell(row=start_row, column=2).value = value
+        start_row += 1
+
+    return start_row + 1
+
+
+def _add_histogram_section(sheet, start_row: int, title: str, values: list[float]) -> int:
+    sheet.cell(row=start_row, column=1).value = title
+    start_row += 1
+    sheet.cell(row=start_row, column=1).value = "bin"
+    sheet.cell(row=start_row, column=2).value = "count"
+    start_row += 1
+
+    if not values:
+        sheet.cell(row=start_row, column=1).value = "(no data)"
+        sheet.cell(row=start_row, column=2).value = 0
+        return start_row + 1
+
+    sorted_values = sorted(values)
+    min_value = sorted_values[0]
+    max_value = sorted_values[-1]
+
+    bin_count = 10
+    if math.isclose(min_value, max_value):
+        bin_edges = [min_value, max_value + 1.0]
+    else:
+        width = (max_value - min_value) / bin_count
+        bin_edges = [min_value + (i * width) for i in range(bin_count)]
+        bin_edges.append(max_value)
+
+    frequencies = [0] * (len(bin_edges) - 1)
+    for value in sorted_values:
+        for idx in range(len(bin_edges) - 1):
+            upper_inclusive = idx == len(bin_edges) - 2
+            lower = bin_edges[idx]
+            upper = bin_edges[idx + 1]
+            if (value >= lower) and (value <= upper if upper_inclusive else value < upper):
+                frequencies[idx] += 1
+                break
+
+    first_data_row = start_row
+    for idx, freq in enumerate(frequencies):
+        lower = bin_edges[idx]
+        upper = bin_edges[idx + 1]
+        sheet.cell(row=start_row, column=1).value = f"{lower:.2f} - {upper:.2f}"
+        sheet.cell(row=start_row, column=2).value = freq
+        start_row += 1
+
+    chart = BarChart()
+    chart.title = "Histogram of submission_numeric_score"
+    chart.y_axis.title = "count"
+    chart.x_axis.title = "bin"
+    data_ref = Reference(sheet, min_col=2, min_row=first_data_row - 1, max_row=start_row - 1)
+    cats_ref = Reference(sheet, min_col=1, min_row=first_data_row, max_row=start_row - 1)
+    chart.add_data(data_ref, titles_from_data=True)
+    chart.set_categories(cats_ref)
+    chart.height = 7
+    chart.width = 12
+    sheet.add_chart(chart, f"D{first_data_row}")
+
+    return start_row + 1
+
+
 def write_xlsx(
     output_path: Path,
     ordered_identity_keys: list[tuple[str, str, str]],
@@ -240,6 +402,8 @@ def write_xlsx(
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "component_grades"
+    summary_scores: list[float] = []
+    summary_max_scores: list[float] = []
 
     header = list(IDENTITY_COLUMNS)
     duplicated_grade_headers: list[str] = []
@@ -304,9 +468,13 @@ def write_xlsx(
             weight_value = component_weights.get(_source_name, "")
             scaled_grade_value = scale_value_by_weight(grade_value_raw, weight_value)
             scaled_max_grade_value = scale_value_by_weight(max_grade_value_raw, weight_value)
+            scaled_feedback_text = scale_feedback_score_pairs(
+                (source_row.get(feedback_column, "") or "").strip(),
+                weight_value,
+            )
             row_out.append(scaled_grade_value if scaled_grade_value is not None else "")
             row_out.append(scaled_max_grade_value if scaled_max_grade_value is not None else "")
-            row_out.append((source_row.get(feedback_column, "") or "").strip())
+            row_out.append(scaled_feedback_text)
             duplicated_grade_values.append(grade_value_raw)
             duplicated_max_values.append(max_grade_value_raw)
             duplicated_weight_values.append(weight_value)
@@ -330,13 +498,22 @@ def write_xlsx(
         row_out.append("")
         sheet.append(row_out)
 
+        weighted_total_score = _compute_weighted_total(duplicated_grade_values, duplicated_weight_values)
+        weighted_total_max = _compute_weighted_total(duplicated_max_values, duplicated_weight_values)
+        if weighted_total_score is not None:
+            summary_scores.append(weighted_total_score)
+        if weighted_total_max is not None:
+            summary_max_scores.append(weighted_total_max)
+
         sheet_row = sheet.max_row
         if weighted_grade_column_indexes:
             weighted_grade_refs = ",".join(
                 f"{get_column_letter(column_index + 1)}{sheet_row}"
                 for column_index in weighted_grade_column_indexes
             )
-            sheet.cell(row=sheet_row, column=weighted_score_column_index + 1).value = f"=SUM({weighted_grade_refs})"
+            sheet.cell(row=sheet_row, column=weighted_score_column_index + 1).value = (
+                f"=IF(COUNTA({weighted_grade_refs})=0,\"\",SUM({weighted_grade_refs}))"
+            )
         if weighted_max_column_indexes:
             weighted_max_refs = ",".join(
                 f"{get_column_letter(column_index + 1)}{sheet_row}"
@@ -364,6 +541,27 @@ def write_xlsx(
             sheet.cell(row=sheet_row, column=aggregated_feedback_column_index + 1).value = (
                 f"={formula_expr}"
             )
+
+    summary_sheet = workbook.create_sheet(title="summary_stats")
+    next_row = 1
+    next_row = _append_metric_rows(
+        summary_sheet,
+        next_row,
+        "submission_numeric_score descriptive statistics",
+        summary_scores,
+    )
+    next_row = _append_metric_rows(
+        summary_sheet,
+        next_row,
+        "submission_max_numeric_score descriptive statistics",
+        summary_max_scores,
+    )
+    _add_histogram_section(
+        summary_sheet,
+        next_row,
+        "Histogram bins for submission_numeric_score",
+        summary_scores,
+    )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(output_path)
@@ -428,7 +626,7 @@ def write_template_csv(
                 "Last modified (submission)": "",
                 "Online text": "",
                 "Last modified (grade)": "",
-                "Feedback comments": aggregate_feedback_for_identity(key, source_data),
+                "Feedback comments": aggregate_feedback_for_identity(key, source_data, component_weights),
             }
             writer.writerow(row_out)
 
