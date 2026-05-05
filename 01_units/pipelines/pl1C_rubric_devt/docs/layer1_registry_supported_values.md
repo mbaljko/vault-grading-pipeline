@@ -56,6 +56,43 @@ The parser/runtime normalize these legacy names:
 | `present_if_canonical_mapping_of_demand_a_not_equal_canonical_mapping_of_demand_b` | `present_if_canonical_mappings_are_distinct` |
 | `present_if_any_stage_token_matches_after_normalisation_and_not_excluded` | `present_if_any_stage_phrase_matches_after_normalisation_and_not_excluded` |
 
+## Match Policy Reference
+
+This section explains each supported `match_policy` value as implemented by the Layer 1 runtime.
+
+| `match_policy`                                    | Behavior summary                                                                                                                    |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `passthrough_presence`                            | Policy-level pass-through mode used for simple presence gating in runtime flows. Treated as a supported deterministic policy value. |
+| `substring_any`                                   | Normalizes resolved segment text and returns a match when any normalized allowed term appears as a substring.                       |
+| `exact_or_alias`                                  | Splits normalized segment text into candidate units and matches exact normalized allowed terms or alias mappings.                   |
+| `exact_or_alias_article_insensitive`              | Same exact/alias family matching as above, while tolerating leading-article differences such as `the committee` vs `committee`.     |
+| `exact_or_alias_article_insensitive_any_conjunct` | Extends article-insensitive exact matching by evaluating conjunct-level candidates extracted from coordinated phrases.              |
+| `exact_or_alias_or_role`                          | Runs exact/alias matching over the union of `allowed_terms` and `allowed_roles`.                                                    |
+| `co_occurrence`                                   | Uses `required_term_groups` and `minimum_match_count_per_group`; each group must meet the threshold for a positive policy match. Defaults when omitted: `required_term_groups={}` and `minimum_match_count_per_group=0` (effective threshold is still `max(value,1)`). If `required_term_groups` is missing/empty, this policy returns `False` (`not_present`). |
+| `co_occurrence_lemma`                             | Grouped co-occurrence matching with normalization/lemma-style processing before phrase matching.                                    |
+| `co_occurrence_window_N`                          | Windowed grouped co-occurrence variant; `N` must be a positive integer and constrains grouped-term proximity by a token window.     |
+| `non_empty`                                       | Positive policy match when resolved segment text contains non-whitespace content. `allowed_terms` are not required for this policy. |
+| `absence_check`                                   | Reports policy match unconditionally and delegates final presence/not-presence outcome to decision-rule excluded-term logic.        |
+| `canonical_inequality`                            | Resolves left/right slots to canonical forms and returns a policy match when canonical mappings are distinct.                       |
+
+## Decision Rule Reference
+
+This section explains each supported `decision_rule` value as implemented by the Layer 1 runtime.
+
+| `decision_rule` | Behavior summary |
+| --- | --- |
+| `present_if_segment_ok` | Marks present when the bound segment context is valid/available for scoring under the selected policy path. |
+| `present_if_any_allowed_term_found` | Marks present when policy matching finds an allowed-term hit; does not add excluded-term veto semantics by itself. |
+| `present_if_exact_match_or_alias_and_not_excluded` | Marks present when exact/alias-style policy matching succeeds and excluded terms are not found. |
+| `present_if_matches_stage_or_role_and_not_excluded` | Marks present when stage/role-oriented matching succeeds and excluded terms are not found. |
+| `present_if_any_stage_phrase_matches_after_normalisation_and_not_excluded` | Marks present only when normalized segment text contains a full registered stage phrase (or approved alias phrase) and no excluded term is found. |
+| `present_if_minimum_group_matches_met_and_not_excluded` | Marks present when grouped co-occurrence thresholds are met and excluded terms are not found. |
+| `present_if_minimum_group_matches_met_or_fallback_and_not_excluded` | Marks present when grouped co-occurrence thresholds are met, or approved fallback logic succeeds, and excluded terms are not found. |
+| `present_if_no_excluded_terms_found` | Marks present whenever excluded terms are absent, regardless of allowed-term matching. |
+| `present_if_any_allowed_term_found_and_not_only_excluded` | Marks present when allowed-term matching succeeds; this rule does not independently veto on excluded-term presence. |
+| `present_if_canonical_mappings_are_distinct` | Marks present when canonical left/right mappings are distinct; excluded-term checks may still veto. |
+| `present_if_any_allowed_or_alias_substring_matches` | Marks present when any normalized allowed term or normalized alias source phrase appears as a substring and excluded terms are not found. |
+
 ## Optional Rule-String Syntax
 
 Optional augmentation rule objects can be encoded as semicolon-delimited key-value strings, for example:
@@ -175,6 +212,7 @@ Behavior notes:
 | Default `bound_segment_resolution_policy` | `hard_stay` |
 | Default optional-rule enablement | `enabled=false` when missing/malformed |
 | `co_occurrence_window_N` validity | Supported only when `N > 0` |
+| `co_occurrence` default `required_term_groups` | `{}` (empty mapping); empty/missing groups cause policy match to return `False` |
 | Grouped matching minimum | `minimum_match_count_per_group` values below `1` behave as `1` at match time |
 | Domain artifact token input forms | Comma-delimited string or list |
 | Fallback unknown action handling | Non-fatal; fallback is not applied; emits `fallback_unknown_action` |
