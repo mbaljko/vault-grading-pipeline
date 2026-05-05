@@ -28,6 +28,7 @@ WIDE_BASE_FIELDS = [
 	"submission_score",
 	"submission_numeric_score",
 	"submission_max_numeric_score",
+	"L3_comment",
 ]
 
 

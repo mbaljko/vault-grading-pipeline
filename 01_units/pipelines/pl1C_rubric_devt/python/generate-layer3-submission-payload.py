@@ -28,6 +28,7 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument("--component-id-field", type=str, default="component_id")
 	parser.add_argument("--sbo-identifier-field", type=str, default="sbo_identifier")
 	parser.add_argument("--score-field", type=str, default="component_score")
+	parser.add_argument("--comment-field", type=str, default="L3_Comment")
 	parser.add_argument("--flags-field", type=str, default="flags_any_dimension")
 	parser.add_argument("--confidence-field", type=str, default="min_confidence_dimension")
 	return parser.parse_args()
@@ -54,6 +55,13 @@ def aggregate_flags(values: list[str]) -> str:
 	return " | ".join(dict.fromkeys(non_empty_values))
 
 
+def aggregate_comments(values: list[str]) -> str:
+	non_empty_values = [value.strip() for value in values if value.strip()]
+	if not non_empty_values:
+		return ""
+	return " | ".join(dict.fromkeys(non_empty_values))
+
+
 def aggregate_min_confidence(values: list[str]) -> str:
 	normalized_values = [normalize_confidence(value) for value in values if normalize_confidence(value)]
 	if not normalized_values:
@@ -67,11 +75,13 @@ def build_output_rows(
 	component_id_field: str,
 	sbo_identifier_field: str,
 	score_field: str,
+	comment_field: str,
 	flags_field: str,
 	confidence_field: str,
 ) -> list[dict[str, str]]:
 	rows_by_submission: dict[str, dict[str, str]] = {}
 	flags_by_submission: dict[str, list[str]] = defaultdict(list)
+	comments_by_submission: dict[str, list[str]] = defaultdict(list)
 	confidence_by_submission: dict[str, list[str]] = defaultdict(list)
 	component_order: list[tuple[str, str]] = []
 	seen_components: set[tuple[str, str]] = set()
@@ -91,7 +101,12 @@ def build_output_rows(
 			output_row[f"component_score__{component_id}"] = str(row.get(score_field, "")).strip()
 			if sbo_identifier:
 				output_row[f"component_score__{sbo_identifier}"] = str(row.get(score_field, "")).strip()
+			comment_value = str(row.get(comment_field, "")).strip()
+			output_row[f"L3_comment__{component_id}"] = comment_value
+			if sbo_identifier:
+				output_row[f"L3_comment__{sbo_identifier}"] = comment_value
 			flags_by_submission[submission_id].append(str(row.get(flags_field, "")))
+			comments_by_submission[submission_id].append(comment_value)
 			confidence_by_submission[submission_id].append(str(row.get(confidence_field, "")))
 
 	for submission_id in sort_submission_ids(set(rows_by_submission.keys())):
@@ -100,7 +115,11 @@ def build_output_rows(
 			output_row.setdefault(f"component_score__{component_id}", "")
 			if sbo_identifier:
 				output_row.setdefault(f"component_score__{sbo_identifier}", "")
+			output_row.setdefault(f"L3_comment__{component_id}", "")
+			if sbo_identifier:
+				output_row.setdefault(f"L3_comment__{sbo_identifier}", "")
 			output_row["flags_any_component"] = aggregate_flags(flags_by_submission[submission_id])
+			output_row["L3_comment"] = aggregate_comments(comments_by_submission[submission_id])
 			output_row["min_confidence_component"] = aggregate_min_confidence(confidence_by_submission[submission_id])
 
 	return [rows_by_submission[submission_id] for submission_id in sort_submission_ids(set(rows_by_submission.keys()))]
@@ -114,6 +133,7 @@ def main() -> int:
 		component_id_field=args.component_id_field,
 		sbo_identifier_field=args.sbo_identifier_field,
 		score_field=args.score_field,
+		comment_field=args.comment_field,
 		flags_field=args.flags_field,
 		confidence_field=args.confidence_field,
 	)
