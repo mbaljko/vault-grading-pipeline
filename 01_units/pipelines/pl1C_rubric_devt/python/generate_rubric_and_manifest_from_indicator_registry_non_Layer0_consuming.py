@@ -1387,7 +1387,8 @@ def parse_layer3_scoring_payloads(registry_path: Path) -> dict[str, dict[str, st
     if len(rule_headers) < 2:
         return {}
 
-    token_headers = rule_headers[1:]
+    comment_header = next((header for header in rule_headers[1:] if header.strip().lower() == "l3_comment"), "")
+    token_headers = [header for header in rule_headers[1:] if header != comment_header]
     binding_headers = [str(header).strip() for header in bindings_table.get("headers", [])]
     if len(binding_headers) < 2:
         return {}
@@ -1420,6 +1421,7 @@ def parse_layer3_scoring_payloads(registry_path: Path) -> dict[str, dict[str, st
                 token: str(row.get(token, "")).strip()
                 for token in token_headers
             },
+            "l3_comment": str(row.get(comment_header, "")).strip() if comment_header else "",
         }
         for row in rule_table.get("rows", [])
         if str(row.get(rule_headers[0], "")).strip()

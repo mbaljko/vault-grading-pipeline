@@ -160,6 +160,7 @@ def build_module_source(row: dict[str, str], payload: dict[str, object]) -> str:
 			{
 				"resultant_scale_value": str(rule.get("resultant_scale_value", "")).strip(),
 				"conditions": conditions,
+				"l3_comment": str(rule.get("l3_comment", "")).strip(),
 			}
 		)
 
@@ -216,6 +217,12 @@ def build_module_source(row: dict[str, str], payload: dict[str, object]) -> str:
 			"\t\t\treturn str(rule['resultant_scale_value'])",
 			"\traise ValueError(f'No derivation rule matched for {COMPONENT_ID}.')",
 			"",
+			"def score_component_with_comment(dimension_values: Mapping[str, str], dimension_scale_lookup: Mapping[str, Mapping[str, int]] | None = None) -> tuple[str, str]:",
+			"\tfor rule in DERIVATION_RULES:",
+			"\t\tif rule_matches(dimension_values, rule, dimension_scale_lookup=dimension_scale_lookup):",
+			"\t\t\treturn str(rule['resultant_scale_value']), str(rule.get('l3_comment', ''))",
+			"\traise ValueError(f'No derivation rule matched for {COMPONENT_ID}.')",
+			"",
 			"def build_dimension_value_map(rows: Iterable[Mapping[str, object]], dimension_id_field: str = 'dimension_id', value_field: str = 'evidence_status') -> dict[str, str]:",
 			"\tdimension_values: dict[str, str] = {}",
 			"\tfor row in rows:",
@@ -243,6 +250,7 @@ def build_module_source(row: dict[str, str], payload: dict[str, object]) -> str:
 			"\t'condition_is_met',",
 			"\t'rule_matches',",
 			"\t'score_component',",
+			"\t'score_component_with_comment',",
 			"\t'score_component_rows',",
 			"]",
 			"",

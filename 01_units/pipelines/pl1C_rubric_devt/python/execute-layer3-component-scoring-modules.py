@@ -359,7 +359,15 @@ def score_submission_rows(
 		dimension_id: dimension_scale_lookup.get(dimension_id, {})
 		for dimension_id in bound_dimension_ids
 	}
-	component_score = str(module.score_component(source_dimension_values, dimension_scale_lookup=scale_lookup_for_component))
+	if hasattr(module, "score_component_with_comment"):
+		component_score, l3_comment = module.score_component_with_comment(
+			source_dimension_values,
+			dimension_scale_lookup=scale_lookup_for_component,
+		)
+		component_score = str(component_score)
+	else:
+		component_score = str(module.score_component(source_dimension_values, dimension_scale_lookup=scale_lookup_for_component))
+		l3_comment = ""
 	output_row = build_passthrough_row(submission_rows)
 	output_row["component_id"] = str(getattr(module, "COMPONENT_ID", "")).strip()
 	output_row["sbo_identifier"] = str(getattr(module, "SBO_IDENTIFIER", "")).strip()
@@ -368,6 +376,7 @@ def score_submission_rows(
 	output_row["bound_dimension_ids"] = ", ".join(bound_dimension_ids)
 	output_row["source_dimension_values_json"] = json.dumps(source_dimension_values, ensure_ascii=True, sort_keys=True)
 	output_row["component_score"] = component_score
+	output_row["L3_Comment"] = str(l3_comment or "").strip()
 	output_row["flags_any_dimension"] = derive_flags_any_dimension(submission_rows, flags_field=flags_field)
 	output_row["min_confidence_dimension"] = derive_min_confidence_dimension(submission_rows, confidence_field=confidence_field)
 	return output_row
