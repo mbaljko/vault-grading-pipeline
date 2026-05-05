@@ -1299,5 +1299,98 @@ class Layer1IndicatorScoringRuntimeTests(unittest.TestCase):
 		self.assertFalse(bool(payload["derived_structural_feature_rule"].get("enabled", False)))
 
 
-if __name__ == "__main__":
-	unittest.main()
+class NormalizeTextStripPunctuationTests(unittest.TestCase):
+	"""Tests for the lowercase_trim_strip_punctuation normalisation rule."""
+
+	RULE = "lowercase_trim_strip_punctuation"
+
+	# ------------------------------------------------------------------ helpers
+
+	def _n(self, text: str) -> str:
+		return normalize_text(text, self.RULE)
+
+	# ------------------------------------------------------------------ hyphen
+
+	def test_hyphen_replaced_with_space(self) -> None:
+		self.assertEqual(self._n("Development type - reinforcement"), "development type reinforcement")
+
+	def test_hyphenated_compound_split_into_words(self) -> None:
+		self.assertEqual(self._n("shift-change"), "shift change")
+
+	def test_multiple_hyphens_collapsed(self) -> None:
+		self.assertEqual(self._n("a--b"), "a b")
+
+	# ------------------------------------------------------------------ colon
+
+	def test_colon_replaced_with_space(self) -> None:
+		self.assertEqual(self._n("tension: unresolved"), "tension unresolved")
+
+	def test_colon_no_surrounding_spaces(self) -> None:
+		self.assertEqual(self._n("label:value"), "label value")
+
+	# ------------------------------------------------------------------ slash
+
+	def test_slash_replaced_with_space(self) -> None:
+		self.assertEqual(self._n("shift/change"), "shift change")
+
+	def test_multiple_slashes_collapsed(self) -> None:
+		self.assertEqual(self._n("a//b"), "a b")
+
+	# ------------------------------------------------------------------ repeated punctuation
+
+	def test_repeated_mixed_punctuation_collapsed(self) -> None:
+		self.assertEqual(self._n("introduced,--but"), "introduced but")
+
+	def test_trailing_comma_stripped(self) -> None:
+		self.assertEqual(self._n("introduced, but"), "introduced but")
+
+	def test_leading_punctuation_stripped(self) -> None:
+		self.assertEqual(self._n("- reinforcement"), "reinforcement")
+
+	# ------------------------------------------------------------------ quoted phrases
+
+	def test_double_quotes_replaced(self) -> None:
+		self.assertEqual(self._n('"good effort"'), "good effort")
+
+	def test_single_quote_non_contraction_stripped(self) -> None:
+		# a standalone apostrophe/quote not inside a word should be removed
+		self.assertEqual(self._n("'quoted'"), "quoted")
+
+	# ------------------------------------------------------------------ contractions
+
+	def test_contraction_apostrophe_preserved(self) -> None:
+		self.assertEqual(self._n("didn't"), "didn't")
+
+	def test_contraction_apostrophe_preserved_cant(self) -> None:
+		self.assertEqual(self._n("can't"), "can't")
+
+	def test_contraction_inside_sentence(self) -> None:
+		self.assertEqual(self._n("I didn't consider: the shift"), "i didn't consider the shift")
+
+	# ------------------------------------------------------------------ lowercase + trim baseline
+
+	def test_lowercases_text(self) -> None:
+		self.assertEqual(self._n("UPPERCASE"), "uppercase")
+
+	def test_trims_whitespace(self) -> None:
+		self.assertEqual(self._n("  hello  "), "hello")
+
+	def test_collapses_internal_whitespace(self) -> None:
+		self.assertEqual(self._n("too   many   spaces"), "too many spaces")
+
+	def test_empty_string_returns_empty(self) -> None:
+		self.assertEqual(self._n(""), "")
+
+	def test_whitespace_only_returns_empty(self) -> None:
+		self.assertEqual(self._n("   "), "")
+
+	# ------------------------------------------------------------------ preserves alphanumerics
+
+	def test_alphanumerics_preserved(self) -> None:
+		self.assertEqual(self._n("B.1"), "b 1")
+
+	def test_mixed_punctuation_sentence(self) -> None:
+		# "reinforcement; not shift/change" -> "reinforcement not shift change"
+		self.assertEqual(self._n("reinforcement; not shift/change"), "reinforcement not shift change")
+
+

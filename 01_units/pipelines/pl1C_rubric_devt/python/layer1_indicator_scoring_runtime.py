@@ -16,6 +16,7 @@ The explicitly implemented `normalisation_rule` values are:
 - `lowercase_trim_strip_leading_determiner`: applies `lowercase_trim`, then removes a leading determiner so labels like `the committee` normalize to `committee`.
 - `lowercase_trim_strip_leading_determiner_strip_possessive`: applies `lowercase_trim`, removes a leading determiner, then strips possessive markers so labels like `the committee's role` normalize to `committee role`.
 - `lowercase_lemma_effect_terms`: applies `lowercase_trim`, then rewrites only configured effect-term inflections like `sequencing` -> `sequence` while preserving surrounding structural-feature text.
+- `lowercase_trim_strip_punctuation`: applies `lowercase_trim`, then replaces punctuation characters with spaces (preserving apostrophes inside contractions), and collapses repeated whitespace so strings like `development type - reinforcement` normalize to `development type reinforcement`.
 
 
 The explicitly recognized `decision_rule` values are:
@@ -78,6 +79,7 @@ SUPPORTED_NORMALISATION_RULES = {
 	"lowercase_trim_strip_leading_determiner",
 	"lowercase_trim_strip_leading_determiner_strip_possessive",
 	"lowercase_lemma_effect_terms",
+	"lowercase_trim_strip_punctuation",
 }
 
 DECISION_RULE_ALIASES = {
@@ -515,6 +517,13 @@ def validate_normalisation_rule_name(rule: str) -> str:
 	return rule
 
 
+# Matches a punctuation character that is NOT an apostrophe already inside a contraction.
+# Contractions keep their apostrophe when word characters appear on BOTH sides (e.g. didn't, can't).
+# An apostrophe that lacks a word character on at least one side (leading/trailing quote, sentence-
+# final apostrophe) is treated as punctuation and replaced with a space.
+_PUNCTUATION_NOT_CONTRACTION_RE = re.compile(r"(?<!\w)'|'(?!\w)|[^\w\s']", re.UNICODE)
+
+
 def normalize_text(value: object, rule: str) -> str:
 	rule = validate_normalisation_rule_name(str(rule or "").strip())
 	text = str(value or "")
@@ -526,6 +535,7 @@ def normalize_text(value: object, rule: str) -> str:
 		"lowercase_trim_strip_leading_determiner",
 		"lowercase_trim_strip_leading_determiner_strip_possessive",
 		"lowercase_lemma_effect_terms",
+		"lowercase_trim_strip_punctuation",
 	}
 	normalized = text.replace("\r\n", "\n").replace("\r", "\n")
 	if rule in {
@@ -535,6 +545,7 @@ def normalize_text(value: object, rule: str) -> str:
 		"lowercase_trim_strip_leading_determiner",
 		"lowercase_trim_strip_leading_determiner_strip_possessive",
 		"lowercase_lemma_effect_terms",
+		"lowercase_trim_strip_punctuation",
 	}:
 		normalized = normalized.lower()
 	if rule in trim_rules:
@@ -552,6 +563,8 @@ def normalize_text(value: object, rule: str) -> str:
 	if rule == "lowercase_lemma_effect_terms":
 		normalized = apply_effect_term_phrase_lemma_map(normalized)
 		normalized = apply_effect_term_lemma_map(normalized)
+	if rule == "lowercase_trim_strip_punctuation":
+		normalized = _PUNCTUATION_NOT_CONTRACTION_RE.sub(" ", normalized)
 	return normalize_whitespace(normalized).strip() if rule in trim_rules else normalized.strip()
 
 
