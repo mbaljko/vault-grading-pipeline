@@ -245,6 +245,16 @@ def _parse_float(value: str) -> float | None:
 		return None
 
 
+def _append_feedback_comment(base_feedback: str, l3_comment: str) -> str:
+	base = (base_feedback or "").strip()
+	l3 = (l3_comment or "").strip()
+	if not base:
+		return l3
+	if not l3:
+		return base
+	return f"{base}\n{l3}"
+
+
 def resolve_uniform_max_grade(source_lookup: dict[str, dict[str, str]]) -> str:
 	"""Resolve one canonical maximum grade value to write on every destination row."""
 	numeric_values: list[float] = []
@@ -273,6 +283,7 @@ def load_source_lookup(scored_input: Path) -> dict[str, dict[str, str]]:
 	score_key = _require_column(normalized_fields, "submission_numeric_score", scored_input)
 	max_score_key = normalized_fields.get("submission_max_numeric_score")
 	feedback_key = normalized_fields.get("feedback comments")
+	l3_comment_key = normalized_fields.get("l3_comment") or normalized_fields.get("l3_comment")
 
 	for row in rows:
 		submission_id = (row.get(submission_id_key) or "").strip()
@@ -281,6 +292,7 @@ def load_source_lookup(scored_input: Path) -> dict[str, dict[str, str]]:
 		score_value = (row.get(score_key) or "").strip()
 		max_score_value = (row.get(max_score_key) or "").strip() if max_score_key else ""
 		feedback_value = (row.get(feedback_key) or "") if feedback_key else ""
+		l3_comment_value = (row.get(l3_comment_key) or "") if l3_comment_key else ""
 		existing_value = source_lookup.get(submission_id)
 		if existing_value is not None and existing_value.get("score", "") != score_value:
 			raise ValueError(
@@ -294,10 +306,15 @@ def load_source_lookup(scored_input: Path) -> dict[str, dict[str, str]]:
 			raise ValueError(
 				f"Conflicting Feedback comments values for submission_id {submission_id} in {scored_input}"
 			)
+		if existing_value is not None and existing_value.get("l3_comment", "") != l3_comment_value:
+			raise ValueError(
+				f"Conflicting L3_comment values for submission_id {submission_id} in {scored_input}"
+			)
 		source_lookup[submission_id] = {
 			"score": score_value,
 			"max_score": max_score_value,
 			"feedback_comments": feedback_value,
+			"l3_comment": l3_comment_value,
 		}
 
 	return source_lookup
@@ -452,7 +469,10 @@ def populate_gradebook(
 					matched_rows += 1
 					row[actual_grade_column] = score_value
 				if feedback_column:
-					row[feedback_column] = source_values.get("feedback_comments", "")
+					row[feedback_column] = _append_feedback_comment(
+						source_values.get("feedback_comments", ""),
+						source_values.get("l3_comment", ""),
+					)
 
 				writer.writerow({field: row.get(field, "") for field in fieldnames})
 

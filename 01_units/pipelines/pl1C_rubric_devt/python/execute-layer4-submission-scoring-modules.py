@@ -112,6 +112,32 @@ def build_component_score_map(row: dict[str, str], bound_component_ids: list[str
 	return component_scores
 
 
+def aggregate_comments(values: list[str]) -> str:
+	non_empty_values = [value.strip() for value in values if value.strip()]
+	if not non_empty_values:
+		return ""
+	return " | ".join(dict.fromkeys(non_empty_values))
+
+
+def build_l3_comment_lookup(layer3_submission_payload_csv: Path) -> dict[str, dict[str, str]]:
+	component_output_dir = layer3_submission_payload_csv.parent
+	lookup: dict[str, dict[str, str]] = {}
+	for component_csv in sorted(component_output_dir.glob("*_Layer3_component_scoring_*_output.csv")):
+		for row in load_scored_rows(component_csv):
+			submission_id = str(row.get("submission_id", "")).strip()
+			component_id = str(row.get("component_id", "")).strip()
+			sbo_identifier = str(row.get("sbo_identifier", "")).strip()
+			comment_value = str(row.get("L3_Comment", "")).strip()
+			if not submission_id or not comment_value:
+				continue
+			submission_entry = lookup.setdefault(submission_id, {})
+			if component_id:
+				submission_entry.setdefault(f"L3_comment__{component_id}", comment_value)
+			if sbo_identifier:
+				submission_entry.setdefault(f"L3_comment__{sbo_identifier}", comment_value)
+	return lookup
+
+
 def build_response_text_lookup(response_text_csv: Path) -> tuple[list[str], dict[str, dict[str, str]]]:
 	component_order: list[str] = []
 	seen_component_ids: set[str] = set()
@@ -176,6 +202,7 @@ def score_submission_row(
 	submission_id_field: str,
 	flags_field: str,
 	confidence_field: str,
+	l3_comment_lookup: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, str]:
 	bound_component_ids = [str(component_id) for component_id in getattr(module, "BOUND_COMPONENT_IDS", [])]
 	component_scores = build_component_score_map(row, bound_component_ids)
@@ -197,6 +224,19 @@ def score_submission_row(
 	output_row["submission_score"] = str(result["submission_score"])
 	output_row["flags_any_component"] = str(row.get(flags_field, "")).strip()
 	output_row["min_confidence_component"] = str(row.get(confidence_field, "")).strip()
+	submission_id = str(row.get(submission_id_field, "")).strip()
+	lookup_entry = (l3_comment_lookup or {}).get(submission_id, {})
+	for key, value in lookup_entry.items():
+		output_row.setdefault(key, value)
+	if not str(output_row.get("L3_comment", "")).strip():
+		aggregated = aggregate_comments([
+			str(output_row.get(f"L3_comment__{component_id}", "")).strip()
+			for component_id in bound_component_ids
+		])
+		if not aggregated:
+			aggregated = aggregate_comments(list(lookup_entry.values()))
+		if aggregated:
+			output_row["L3_comment"] = aggregated
 	return output_row
 
 
@@ -279,6 +319,7 @@ def main() -> int:
 		if module is None:
 			raise ValueError(f"No Layer 4 module found for assessment_id={args.target_assessment_id}")
 		submission_max_numeric_score = resolve_submission_max_numeric_score(module)
+		l3_comment_lookup = build_l3_comment_lookup(args.layer3_submission_payload_csv.resolve())
 		output_rows = [
 			score_submission_row(
 				module,
@@ -287,6 +328,7 @@ def main() -> int:
 				submission_id_field=args.submission_id_field,
 				flags_field=args.flags_field,
 				confidence_field=args.confidence_field,
+				l3_comment_lookup=l3_comment_lookup,
 			)
 			for row in rows
 		]

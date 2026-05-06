@@ -29,6 +29,7 @@ if _L4_EXECUTOR_SPEC is None or _L4_EXECUTOR_SPEC.loader is None:
 _L4_EXECUTOR_MODULE = importlib.util.module_from_spec(_L4_EXECUTOR_SPEC)
 _L4_EXECUTOR_SPEC.loader.exec_module(_L4_EXECUTOR_MODULE)
 score_submission_row = _L4_EXECUTOR_MODULE.score_submission_row
+build_l3_comment_lookup = _L4_EXECUTOR_MODULE.build_l3_comment_lookup
 
 
 class Layer3SubmissionPayloadL3CommentTests(unittest.TestCase):
@@ -142,6 +143,81 @@ class Layer4ExecutionL3CommentPropagationTests(unittest.TestCase):
         self.assertEqual(output_row["L3_comment__B1Response"], "Clear developmental interpretation.")
         self.assertEqual(output_row["L3_comment__C1Response"], "Analytical grounding partially present.")
         self.assertEqual(output_row["submission_score"], "meets_expectations")
+
+    def test_layer4_output_row_can_backfill_l3_comment_from_component_outputs(self) -> None:
+        class DummyLayer4Module:
+            SBO_IDENTIFIER = "S_AP2B"
+            SBO_SHORT_DESCRIPTION = "submission aggregate"
+            SUBMISSION_PERFORMANCE_SCALE = ["not_demonstrated", "meets_expectations"]
+            BOUND_COMPONENT_IDS = ["B1Response", "C1Response"]
+
+            @staticmethod
+            def score_submission(component_scores: dict[str, str]) -> dict[str, object]:
+                self_scores = {
+                    "B1Response": 2.0,
+                    "C1Response": 1.0,
+                }
+                return {
+                    "submission_numeric_score": 3.0,
+                    "submission_score": "meets_expectations",
+                    "source_component_numeric_values": self_scores,
+                }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            payload_path = Path(temp_dir) / "RUN_PPS1D23_Layer3_submission_payload_v01.csv"
+            payload_path.write_text(
+                "submission_id,component_score__B1Response,component_score__C1Response\n"
+                "1001,meets_expectations,approaching_expectations\n",
+                encoding="utf-8",
+            )
+            component_output_path = Path(temp_dir) / "RUN_PPS1D23_D23Response_Layer3_component_scoring_v01_output.csv"
+            with component_output_path.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=["submission_id", "component_id", "sbo_identifier", "L3_Comment"],
+                )
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "submission_id": "1001",
+                        "component_id": "B1Response",
+                        "sbo_identifier": "C_AP2B_SecB1",
+                        "L3_Comment": "Clear developmental interpretation.",
+                    }
+                )
+                writer.writerow(
+                    {
+                        "submission_id": "1001",
+                        "component_id": "C1Response",
+                        "sbo_identifier": "C_AP2B_SecC1",
+                        "L3_Comment": "Analytical grounding partially present.",
+                    }
+                )
+
+            lookup = build_l3_comment_lookup(payload_path)
+            input_row = {
+                "submission_id": "1001",
+                "component_score__B1Response": "meets_expectations",
+                "component_score__C1Response": "approaching_expectations",
+                "flags_any_component": "none",
+                "min_confidence_component": "medium",
+            }
+            output_row = score_submission_row(
+                DummyLayer4Module,
+                input_row,
+                submission_max_numeric_score="4.00",
+                submission_id_field="submission_id",
+                flags_field="flags_any_component",
+                confidence_field="min_confidence_component",
+                l3_comment_lookup=lookup,
+            )
+
+        self.assertEqual(
+            output_row["L3_comment"],
+            "Clear developmental interpretation. | Analytical grounding partially present.",
+        )
+        self.assertEqual(output_row["L3_comment__B1Response"], "Clear developmental interpretation.")
+        self.assertEqual(output_row["L3_comment__C1Response"], "Analytical grounding partially present.")
 
 
 if __name__ == "__main__":
