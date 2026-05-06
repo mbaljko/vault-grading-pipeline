@@ -283,7 +283,7 @@ def load_source_lookup(scored_input: Path) -> dict[str, dict[str, str]]:
 	score_key = _require_column(normalized_fields, "submission_numeric_score", scored_input)
 	max_score_key = normalized_fields.get("submission_max_numeric_score")
 	feedback_key = normalized_fields.get("feedback comments")
-	l3_comment_key = normalized_fields.get("l3_comment") or normalized_fields.get("l3_comment")
+	l3_comment_key = normalized_fields.get("l3_comment") or normalized_fields.get("l3 comment")
 
 	for row in rows:
 		submission_id = (row.get(submission_id_key) or "").strip()
