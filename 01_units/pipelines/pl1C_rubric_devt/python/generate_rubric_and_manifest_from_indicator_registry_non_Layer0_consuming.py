@@ -1430,7 +1430,7 @@ def parse_layer3_scoring_payloads(registry_path: Path) -> dict[str, dict[str, st
         {
             "resultant_scale_value": str(row.get(rule_headers[0], "")).strip(),
             "conditions": {
-                token: str(row.get(token, "")).strip()
+                strip_markdown_formatting(token): str(row.get(token, "")).strip()
                 for token in token_headers
             },
             "l3_comment": str(row.get(comment_header, "")).strip() if comment_header else "",

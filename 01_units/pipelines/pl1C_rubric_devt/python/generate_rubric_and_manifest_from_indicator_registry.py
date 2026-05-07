@@ -1475,7 +1475,7 @@ def parse_layer3_scoring_payloads(registry_path: Path) -> dict[str, dict[str, st
         {
             "resultant_scale_value": str(row.get(rule_headers[0], "")).strip(),
             "conditions": {
-                token: str(row.get(token, "")).strip()
+                strip_markdown_formatting(token): str(row.get(token, "")).strip()
                 for token in token_headers
             },
             "l3_comment": str(row.get(comment_header, "")).strip() if comment_header else "",
@@ -1496,7 +1496,7 @@ def parse_layer3_scoring_payloads(registry_path: Path) -> dict[str, dict[str, st
         bound_dimension_ids = [str(row.get(binding_header, "")).strip().strip("`") for binding_header in aligned_binding_headers]
         payload = {
             "component_id": component_id,
-            "input_dimension_tokens": token_headers,
+            "input_dimension_tokens": [strip_markdown_formatting(token) for token in token_headers],
             "bound_dimension_ids": bound_dimension_ids,
             "derivation_rules": derivation_rules,
         }
