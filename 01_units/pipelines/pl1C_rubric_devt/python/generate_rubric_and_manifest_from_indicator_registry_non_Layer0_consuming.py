@@ -1377,6 +1377,16 @@ def parse_layer2_scoring_payloads(registry_path: Path) -> dict[tuple[str, str], 
 
 
 def parse_layer3_scoring_payloads(registry_path: Path) -> dict[str, dict[str, str]]:
+    def strip_markdown_formatting(text: str) -> str:
+        """Remove markdown formatting (**bold**, __bold__, *italic*, _italic_, `code`) from text."""
+        result = text.strip()
+        # Remove markdown bold and italic formatting
+        result = re.sub(r'(?:\*\*|__)(.*?)(?:\*\*|__)', r'\1', result)
+        result = re.sub(r'(?:\*|_)([^*_]+)(?:\*|_)', r'\1', result)
+        # Remove backticks
+        result = result.replace("`", "")
+        return result
+    
     tables = collect_markdown_tables(registry_path)
     rule_table = find_table_by_heading(tables, "component scoring rule")
     if rule_table is None:
@@ -1389,14 +1399,14 @@ def parse_layer3_scoring_payloads(registry_path: Path) -> dict[str, dict[str, st
     if len(rule_headers) < 2:
         return {}
 
-    comment_header = next((header for header in rule_headers[1:] if header.strip().lower() == "l3_comment"), "")
+    comment_header = next((header for header in rule_headers[1:] if strip_markdown_formatting(header).lower() == "l3_comment"), "")
     token_headers = [header for header in rule_headers[1:] if header != comment_header]
     binding_headers = [str(header).strip() for header in bindings_table.get("headers", [])]
     if len(binding_headers) < 2:
         return {}
 
     def normalize_binding_token(token: str) -> str:
-        normalized = token.strip().lower()
+        normalized = strip_markdown_formatting(token).lower()
         if not normalized:
             return ""
         return normalized.split("(", 1)[0].strip()
