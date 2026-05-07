@@ -749,7 +749,7 @@ def collect_component_patterns_from_reuse_rows(reuse_rows: list[dict[str, str]])
 def derive_component_block(component_id: str) -> str:
     match = re.search(r"Section([A-Za-z]+)(\d+)Response", component_id)
     if match is not None:
-        return match.group(2)
+        return f"{match.group(1)}{match.group(2)}"
     compact = component_id.strip().replace("Section", "").replace("Response", "")
     return compact or component_id.strip()
 
@@ -1424,6 +1424,8 @@ def parse_layer2_scoring_payloads(registry_path: Path) -> dict[tuple[str, str], 
 def parse_layer3_scoring_payloads(registry_path: Path) -> dict[str, dict[str, str]]:
     tables = collect_markdown_tables(registry_path)
     rule_table = find_table_by_heading(tables, "component scoring rule")
+    if rule_table is None:
+        rule_table = find_table_by_heading(tables, "layer 3 value derivation")
     bindings_table = find_table_by_heading(tables, "dimension bindings")
     if rule_table is None or bindings_table is None:
         return {}
