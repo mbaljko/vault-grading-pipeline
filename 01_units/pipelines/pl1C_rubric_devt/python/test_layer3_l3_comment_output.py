@@ -50,6 +50,36 @@ class Layer3CommentParsingTests(unittest.TestCase):
         self.assertNotIn("L3_Comment", payload["derivation_rules"][0]["conditions"])
         self.assertEqual(payload["derivation_rules"][0]["l3_comment"], "Core evidence is present.")
 
+    def test_parse_layer3_payload_accepts_layer3_value_derivation_heading(self) -> None:
+        registry_text = """
+## Example_Layer3
+
+#### Component scoring rule
+
+### Layer 3 Value Derivation
+
+| resultant scale value | D01 | L3_Comment |
+| --- | --- | --- |
+| meets_expectations | demonstrated | Core evidence is present. |
+
+#### dimension bindings
+
+| component_id | D01 |
+| --- | --- |
+| D23Response | D01 |
+""".strip()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            registry_path = Path(temp_dir) / "registry.md"
+            registry_path.write_text(registry_text, encoding="utf-8")
+            payloads = parse_layer3_scoring_payloads(registry_path)
+
+        self.assertIn("D23Response", payloads)
+        payload = json.loads(payloads["D23Response"]["component_scoring_payload_json"])
+        self.assertEqual(payload["input_dimension_tokens"], ["d01"])
+        self.assertEqual(payload["bound_dimension_ids"], ["D01"])
+        self.assertEqual(payload["derivation_rules"][0]["l3_comment"], "Core evidence is present.")
+
 
 class Layer3CommentOutputTests(unittest.TestCase):
     def test_score_submission_rows_includes_l3_comment(self) -> None:
