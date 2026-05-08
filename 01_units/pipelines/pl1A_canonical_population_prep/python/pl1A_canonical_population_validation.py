@@ -16,6 +16,9 @@ Inputs
     and ``Identifier``. The script normalizes student names, matches LMS rows to
     grading worksheet rows by normalized name, and derives ``submission_id`` from
     trailing digits in ``Identifier``.
+    Identifier is the platform's internally generated anonymous participant identifier 
+    for that specific activity context or grading workflo
+
 
 Outputs
 -------
