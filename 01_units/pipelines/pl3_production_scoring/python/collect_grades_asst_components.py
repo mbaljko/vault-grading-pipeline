@@ -480,16 +480,6 @@ def write_xlsx(
     header.append(AGGREGATED_FEEDBACK_COLUMN)
     sheet.append(header)
 
-    weighted_grade_column_indexes = [
-        index
-        for index, column_name in enumerate(header)
-        if isinstance(column_name, str) and column_name.startswith("Weighted_Grade_")
-    ]
-    weighted_max_column_indexes = [
-        index
-        for index, column_name in enumerate(header)
-        if isinstance(column_name, str) and column_name.startswith("Weighted_Max_")
-    ]
     weighted_score_column_index = header.index(WEIGHTED_SCORE_COLUMN)
     weighted_max_column_index = header.index(MAX_SCORE_COLUMN)
     feedback_column_indexes = [
@@ -548,20 +538,12 @@ def write_xlsx(
             summary_max_scores.append(weighted_total_max)
 
         sheet_row = sheet.max_row
-        if weighted_grade_column_indexes:
-            weighted_grade_refs = ",".join(
-                f"{get_column_letter(column_index + 1)}{sheet_row}"
-                for column_index in weighted_grade_column_indexes
-            )
-            sheet.cell(row=sheet_row, column=weighted_score_column_index + 1).value = (
-                f"=IF(COUNTA({weighted_grade_refs})=0,\"\",SUM({weighted_grade_refs}))"
-            )
-        if weighted_max_column_indexes:
-            weighted_max_refs = ",".join(
-                f"{get_column_letter(column_index + 1)}{sheet_row}"
-                for column_index in weighted_max_column_indexes
-            )
-            sheet.cell(row=sheet_row, column=weighted_max_column_index + 1).value = f"=SUM({weighted_max_refs})"
+        sheet.cell(row=sheet_row, column=weighted_score_column_index + 1).value = (
+            weighted_total_score if weighted_total_score is not None else ""
+        )
+        sheet.cell(row=sheet_row, column=weighted_max_column_index + 1).value = (
+            weighted_total_max if weighted_total_max is not None else ""
+        )
         if feedback_column_indexes:
             feedback_refs = [
                 f"{get_column_letter(column_index + 1)}{sheet_row}"
