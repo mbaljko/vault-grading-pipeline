@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-"""Build canonical-population and reconciliation outputs from two CSV inputs.
+"""Build canonical-population and reconciliation outputs from LMS, grade-sheet,
+and SSID roster CSV inputs.
 
 Inputs
 ------
@@ -16,8 +17,16 @@ Inputs
     and ``Identifier``. The script normalizes student names, matches LMS rows to
     grading worksheet rows by normalized name, and derives ``submission_id`` from
     trailing digits in ``Identifier``.
-    Identifier is the platform's internally generated anonymous participant identifier 
-    for that specific activity context or grading workflo
+    ``Identifier`` is the platform's internally generated anonymous participant
+    identifier for the specific activity context or grading workflow.
+
+3. ``SSID_base.csv``
+    The script also reads a sibling file named ``SSID_base.csv`` from the same
+    directory as ``--gradework-sheet-input-path``. This file must include
+    ``First name``, ``Last name``, ``ID number``, and ``Email address``. It is
+    matched by normalized student name and used to extend the join-key mapping
+    CSV plus SSID discrepancy reporting. The filename is intentionally hardcoded
+    and is not exposed as a command-line argument.
 
 
 Outputs
@@ -32,14 +41,21 @@ Outputs
 2. Submission-id mapping CSV
     Written next to the canonical-population CSV with the suffix
     ``-submission-id-map.csv``. This contains unique ``submission_id`` to
-    ``Identifier`` pairs so downstream scoring outputs keyed by ``submission_id``
-    can be mapped back into the grade sheet.
+    grade-sheet and SSID fields so downstream scoring outputs keyed by
+    ``submission_id`` can be mapped back into the grade sheet and SSID roster.
+    The mapping is effectively three-way across:
+    ``submission_id`` <-> ``GW.Identifier`` <-> ``SSID.ID number``.
 
 3. Markdown mismatch report
     Written next to the canonical-population CSV with the suffix
     ``-mismatch-report.md``. This short report lists LMS rows that do not map to a
-    grading worksheet Identifier and grading worksheet Identifiers that do not map
-    back to the LMS population.
+    grading worksheet Identifier, grading worksheet Identifiers that do not map
+    back to the LMS population, and discrepancies against ``SSID_base.csv``.
+    The SSID section includes:
+    - LMS rows without an SSID mapping
+    - LMS rows with ambiguous SSID matches
+    - SSID rows without an LMS mapping
+    - grade-sheet versus SSID email mismatches
 
 This script ports the validation and cleaning logic from the Power Query pipeline
 into Python so the same matching and canonicalization can run in the command-line
@@ -71,6 +87,7 @@ from lms_text_cleaning import (
 
 LEADING_ALLOWED_RE = re.compile(r"[a-z0-9]")
 TRAILING_DIGITS_RE = re.compile(r"(\d+)$")
+SSID_BASENAME = "SSID_base.csv"
 
 
 def parse_args() -> argparse.Namespace:
@@ -143,6 +160,10 @@ def load_csv_rows(input_path: Path) -> list[dict[str, str]]:
     return rows
 
 
+def derive_ssid_input_path(gradework_sheet_input_path: Path) -> Path:
+    return gradework_sheet_input_path.parent / SSID_BASENAME
+
+
 def collapse_spaces(value: str | None) -> str | None:
     if value is None:
         return None
@@ -179,7 +200,9 @@ def norm_name_key(value: Any) -> str | None:
     text = collapse_spaces(text.strip())
     if text is None:
         return None
-    text = strip_leading_junk(text.lower())
+    text = re.sub(r"[^a-z0-9]+", " ", text.lower())
+    text = collapse_spaces(text.strip())
+    text = strip_leading_junk(text)
     if text is None:
         return None
     return text or None
@@ -194,9 +217,31 @@ def build_gw_index(rows: list[dict[str, str]]) -> dict[str, list[dict[str, str]]
     return keyed_rows
 
 
+def build_ssid_display_name(row: dict[str, str] | None) -> str:
+    if not row:
+        return ""
+    first_name = str(row.get("First name", "") or "").strip()
+    last_name = str(row.get("Last name", "") or "").strip()
+    if last_name in {"", "."}:
+        return first_name
+    if first_name and last_name:
+        return f"{first_name} {last_name}"
+    return first_name or last_name
+
+
+def build_ssid_index(rows: list[dict[str, str]]) -> dict[str, list[dict[str, str]]]:
+    keyed_rows: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for row in rows:
+        key = norm_name_key(build_ssid_display_name(row))
+        if key is not None:
+            keyed_rows[key].append(row)
+    return keyed_rows
+
+
 def build_output_rows(
     raw_rows: list[dict[str, str]],
     gw_index: dict[str, list[dict[str, str]]],
+    ssid_index: dict[str, list[dict[str, str]]],
 ) -> list[dict[str, str | int | None]]:
     output_rows: list[dict[str, str | int | None]] = []
 
@@ -208,7 +253,15 @@ def build_output_rows(
         resolved_row: dict[str, str] | None = gw_matches[0] if len(gw_matches) == 1 else None
         gw_identifier = resolved_row.get("Identifier", "") if resolved_row else ""
         gw_full_name = resolved_row.get("Full name", "") if resolved_row else ""
+        gw_email = resolved_row.get("Email address", "") if resolved_row else ""
         submission_id = extract_trailing_digits(gw_identifier)
+
+        ssid_matches = ssid_index.get(key_name or "", []) if key_name is not None else []
+        ssid_name_count = len(ssid_matches) or None
+        resolved_ssid_row: dict[str, str] | None = ssid_matches[0] if len(ssid_matches) == 1 else None
+        ssid_full_name = build_ssid_display_name(resolved_ssid_row)
+        ssid_id_number = resolved_ssid_row.get("ID number", "") if resolved_ssid_row else ""
+        ssid_email = resolved_ssid_row.get("Email address", "") if resolved_ssid_row else ""
 
         if gw_name_count is None:
             join_status = "no_match"
@@ -217,6 +270,13 @@ def build_output_rows(
         else:
             join_status = "excluded_ambiguous"
 
+        if ssid_name_count is None:
+            ssid_join_status = "no_match"
+        elif ssid_name_count == 1:
+            ssid_join_status = "matched_unique"
+        else:
+            ssid_join_status = "excluded_ambiguous"
+
         output_rows.append(
             {
                 "User": row.get("User", ""),
@@ -224,9 +284,15 @@ def build_output_rows(
                 "__key_name": key_name,
                 "GW.Full name": gw_full_name,
                 "GW.Identifier": gw_identifier,
+                "GW.Email address": gw_email,
                 "submission_id": submission_id,
                 "__join_status": join_status,
                 "__gw_name_count": gw_name_count,
+                "SSID.Full name": ssid_full_name,
+                "SSID.ID number": ssid_id_number,
+                "SSID.Email address": ssid_email,
+                "__ssid_join_status": ssid_join_status,
+                "__ssid_name_count": ssid_name_count,
             }
         )
 
@@ -443,6 +509,10 @@ def build_identifier_mapping_rows(
                 "submission_id": submission_id,
                 "GW.Identifier": identifier,
                 "GW.Full name": str(row.get("GW.Full name", "") or ""),
+                "GW.Email address": str(row.get("GW.Email address", "") or ""),
+                "SSID.Full name": str(row.get("SSID.Full name", "") or ""),
+                "SSID.ID number": str(row.get("SSID.ID number", "") or ""),
+                "SSID.Email address": str(row.get("SSID.Email address", "") or ""),
                 "User": str(row.get("User", "") or ""),
                 "Username": str(row.get("Username", "") or ""),
             }
@@ -454,6 +524,7 @@ def build_identifier_mapping_rows(
 def build_mismatch_report(
     validation_rows: list[dict[str, str | int | None]],
     gw_rows: list[dict[str, str]],
+    ssid_rows: list[dict[str, str]],
 ) -> str:
     matched_identifiers = {
         str(row.get("GW.Identifier", "") or "")
@@ -488,6 +559,50 @@ def build_mismatch_report(
     raw_rows_without_identifier = sorted(set(raw_rows_without_identifier))
     unmatched_grade_identifiers = sorted(set(unmatched_grade_identifiers))
 
+    lms_rows_without_ssid_mapping: list[str] = []
+    ambiguous_ssid_matches: list[str] = []
+    matched_ssid_keys: set[tuple[str, str, str]] = set()
+    ssid_email_mismatches: list[str] = []
+
+    for row in validation_rows:
+        user = str(row.get("User", "") or "")
+        username = str(row.get("Username", "") or "")
+        display_name = f"{user} ({username})" if user and username else user or username or "<missing>"
+        ssid_join_status = str(row.get("__ssid_join_status", "") or "")
+        ssid_full_name = str(row.get("SSID.Full name", "") or "")
+        ssid_id_number = str(row.get("SSID.ID number", "") or "")
+        ssid_email = str(row.get("SSID.Email address", "") or "")
+        if ssid_join_status == "no_match":
+            lms_rows_without_ssid_mapping.append(display_name)
+        elif ssid_join_status == "excluded_ambiguous":
+            ambiguous_ssid_matches.append(display_name)
+        elif ssid_join_status == "matched_unique":
+            matched_ssid_keys.add((ssid_full_name, ssid_id_number, ssid_email))
+
+        gw_email = str(row.get("GW.Email address", "") or "")
+        if ssid_join_status == "matched_unique" and gw_email and ssid_email:
+            if gw_email.strip().lower() != ssid_email.strip().lower():
+                submission_id = str(row.get("submission_id", "") or "")
+                ssid_email_mismatches.append(
+                    f"{display_name}: submission_id={submission_id or '<missing>'}, grade_sheet={gw_email}, ssid={ssid_email}"
+                )
+
+    unmatched_ssid_rows: list[str] = []
+    for row in ssid_rows:
+        ssid_full_name = build_ssid_display_name(row)
+        ssid_id_number = str(row.get("ID number", "") or "")
+        ssid_email = str(row.get("Email address", "") or "")
+        if (ssid_full_name, ssid_id_number, ssid_email) in matched_ssid_keys:
+            continue
+        unmatched_ssid_rows.append(
+            f"{ssid_full_name or '<missing>'} | ID number={ssid_id_number or '<missing>'} | Email={ssid_email or '<missing>'}"
+        )
+
+    lms_rows_without_ssid_mapping = sorted(set(lms_rows_without_ssid_mapping))
+    ambiguous_ssid_matches = sorted(set(ambiguous_ssid_matches))
+    unmatched_ssid_rows = sorted(set(unmatched_ssid_rows))
+    ssid_email_mismatches = sorted(set(ssid_email_mismatches))
+
     lines = [
         "# Mismatch Report",
         "",
@@ -495,6 +610,10 @@ def build_mismatch_report(
         "",
         f"- LMS rows without a grade Identifier mapping: {len(raw_rows_without_identifier)}",
         f"- Grade Identifiers without an LMS mapping: {len(unmatched_grade_identifiers)}",
+        f"- LMS rows without an SSID mapping: {len(lms_rows_without_ssid_mapping)}",
+        f"- SSID rows without an LMS mapping: {len(unmatched_ssid_rows)}",
+        f"- LMS rows with ambiguous SSID matches: {len(ambiguous_ssid_matches)}",
+        f"- Grade sheet and SSID email mismatches: {len(ssid_email_mismatches)}",
         "",
         "## LMS Rows Without Grade Identifier Mapping",
         "",
@@ -522,6 +641,62 @@ def build_mismatch_report(
     else:
         lines.append("- None")
 
+    lines.extend(
+        [
+            "",
+            "## SSID Discrepancies",
+            "",
+            "The rows below summarize mismatches between LMS / grade-sheet records and SSID_base.csv.",
+            "",
+            "### LMS Rows Without SSID Mapping",
+            "",
+        ]
+    )
+
+    if lms_rows_without_ssid_mapping:
+        lines.extend(f"- {value}" for value in lms_rows_without_ssid_mapping)
+    else:
+        lines.append("- None")
+
+    lines.extend(
+        [
+            "",
+            "### LMS Rows With Ambiguous SSID Matches",
+            "",
+        ]
+    )
+
+    if ambiguous_ssid_matches:
+        lines.extend(f"- {value}" for value in ambiguous_ssid_matches)
+    else:
+        lines.append("- None")
+
+    lines.extend(
+        [
+            "",
+            "### SSID Rows Without LMS Mapping",
+            "",
+        ]
+    )
+
+    if unmatched_ssid_rows:
+        lines.extend(f"- {value}" for value in unmatched_ssid_rows)
+    else:
+        lines.append("- None")
+
+    lines.extend(
+        [
+            "",
+            "### Grade Sheet and SSID Email Mismatches",
+            "",
+        ]
+    )
+
+    if ssid_email_mismatches:
+        lines.extend(f"- {value}" for value in ssid_email_mismatches)
+    else:
+        lines.append("- None")
+
     lines.append("")
     return "\n".join(lines)
 
@@ -543,7 +718,17 @@ def write_output_rows(output_path: Path, rows: list[dict[str, str | int]]) -> No
 
 
 def write_mapping_rows(output_path: Path, rows: list[dict[str, str]]) -> None:
-    fieldnames = ["submission_id", "GW.Identifier", "GW.Full name", "User", "Username"]
+    fieldnames = [
+        "submission_id",
+        "GW.Identifier",
+        "GW.Full name",
+        "GW.Email address",
+        "SSID.Full name",
+        "SSID.ID number",
+        "SSID.Email address",
+        "User",
+        "Username",
+    ]
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -621,6 +806,7 @@ def main() -> int:
     args = parse_args()
     input_path = args.input_path.resolve()
     gradework_sheet_input_path = args.gradework_sheet_input_path.resolve()
+    ssid_input_path = derive_ssid_input_path(gradework_sheet_input_path)
     output_path = args.output_path.resolve() if args.output_path else default_output_path(input_path)
     mapping_output_path = args.mapping_output_path.resolve() if args.mapping_output_path else default_mapping_output_path(output_path)
     mismatch_report_path = default_mismatch_report_path(output_path)
@@ -628,8 +814,10 @@ def main() -> int:
 
     raw_rows = load_csv_rows(input_path)
     gw_rows = load_csv_rows(gradework_sheet_input_path)
+    ssid_rows = load_csv_rows(ssid_input_path)
     gw_index = build_gw_index(gw_rows)
-    validation_rows = build_output_rows(raw_rows, gw_index)
+    ssid_index = build_ssid_index(ssid_rows)
+    validation_rows = build_output_rows(raw_rows, gw_index, ssid_index)
     canonical_rows = build_canonical_population_rows(
         raw_rows,
         validation_rows,
@@ -637,13 +825,14 @@ def main() -> int:
     )
     assert_no_duplicate_submission_component_rows(canonical_rows, output_path=output_path)
     mapping_rows = build_identifier_mapping_rows(validation_rows)
-    mismatch_report = build_mismatch_report(validation_rows, gw_rows)
+    mismatch_report = build_mismatch_report(validation_rows, gw_rows, ssid_rows)
     write_output_rows(output_path, canonical_rows)
     write_mapping_rows(mapping_output_path, mapping_rows)
     write_text_output(mismatch_report_path, mismatch_report)
 
     print(f"[canonical_population] path={input_path}")
     print(f"[gradework_sheet] path={gradework_sheet_input_path}")
+    print(f"[ssid_input] path={ssid_input_path}")
     print(f"[output] path={output_path}")
     print(f"[mapping_output] path={mapping_output_path}")
     print(f"[mismatch_report] path={mismatch_report_path}")
