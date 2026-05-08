@@ -289,7 +289,7 @@ def _format_number(value: float) -> str:
 
 
 def scale_feedback_score_pairs(feedback_text: str, weight_raw: str) -> str:
-    """Scale '(x / y)' score pairs inside feedback text by component weight."""
+    """Scale '(x / y)', 'x/y', and '(x)' numeric scores inside feedback text by component weight."""
     text = (feedback_text or "").strip()
     if not text:
         return ""
@@ -302,6 +302,7 @@ def scale_feedback_score_pairs(feedback_text: str, weight_raw: str) -> str:
     bare_pair_pattern = re.compile(
         r"(?<!\()\b(-?\d+(?:\.\d+)?)(\s*/\s*)(-?\d+(?:\.\d+)?)\b(?!\))"
     )
+    paren_value_pattern = re.compile(r"\(\s*(-?\d+(?:\.\d+)?)\s*\)")
 
     def _replace_paren_pair(match: re.Match[str]) -> str:
         numerator = float(match.group(1)) * weight
@@ -313,8 +314,14 @@ def scale_feedback_score_pairs(feedback_text: str, weight_raw: str) -> str:
         separator = match.group(2)
         denominator = float(match.group(3)) * weight
         return f"{_format_number(numerator)}{separator}{_format_number(denominator)}"
+
+    def _replace_paren_value(match: re.Match[str]) -> str:
+        value = float(match.group(1)) * weight
+        return f"({_format_number(value)})"
+
     scaled = paren_pair_pattern.sub(_replace_paren_pair, text)
     scaled = bare_pair_pattern.sub(_replace_bare_pair, scaled)
+    scaled = paren_value_pattern.sub(_replace_paren_value, scaled)
     return scaled
 
 
@@ -533,6 +540,7 @@ def write_xlsx(
     weighted_grade_headers: list[str] = []
     weighted_max_headers: list[str] = []
     weighted_weight_headers: list[str] = []
+    scaled_feedback_headers: list[str] = []
     for index, (source_name, _rows_by_id, _feedback_column, _max_grade_column) in enumerate(source_data):
         if index > 0:
             header.append(SEPARATOR_COLUMN)
@@ -540,17 +548,20 @@ def write_xlsx(
         header.append(f"Raw_Max_{source_name}")
         header.append(f"Feedback_{source_name}")
         weighted_weight_headers.append(f"Weight_{source_name}")
+        scaled_feedback_headers.append(f"Feedback_Scaled_{source_name}")
         weighted_grade_headers.append(f"Weighted_Grade_{source_name}")
         weighted_max_headers.append(f"Weighted_Max_{source_name}")
     header.append(SEPARATOR_COLUMN)
-    for index, (weight_header, grade_header, max_header) in enumerate(zip(
+    for index, (weight_header, scaled_feedback_header, grade_header, max_header) in enumerate(zip(
         weighted_weight_headers,
+        scaled_feedback_headers,
         weighted_grade_headers,
         weighted_max_headers,
     )):
         if index > 0:
             header.append(SEPARATOR_COLUMN)
         header.append(weight_header)
+        header.append(scaled_feedback_header)
         header.append(grade_header)
         header.append(max_header)
     header.append(SEPARATOR_COLUMN)
@@ -586,10 +597,10 @@ def write_xlsx(
         for index, column_name in enumerate(header)
         if isinstance(column_name, str) and column_name.startswith("Weighted_Max_")
     ]
-    feedback_column_indexes = [
+    scaled_feedback_column_indexes = [
         index
         for index, column_name in enumerate(header)
-        if isinstance(column_name, str) and column_name.startswith("Feedback_")
+        if isinstance(column_name, str) and column_name.startswith("Feedback_Scaled_")
     ]
     aggregated_feedback_column_index = header.index(AGGREGATED_FEEDBACK_COLUMN)
 
@@ -598,6 +609,7 @@ def write_xlsx(
         raw_grade_values: list[str] = []
         raw_max_values: list[str] = []
         weight_values: list[str] = []
+        scaled_feedback_values: list[str] = []
         for index, (_source_name, rows_by_id, feedback_column, max_grade_column) in enumerate(source_data):
             if index > 0:
                 row_out.append("")
@@ -611,20 +623,23 @@ def write_xlsx(
             parsed_max_grade = _parse_float(max_grade_value_raw)
             row_out.append(parsed_grade if parsed_grade is not None else grade_value_raw)
             row_out.append(parsed_max_grade if parsed_max_grade is not None else max_grade_value_raw)
-            row_out.append(feedback_text_scaled)
+            row_out.append(feedback_text_raw)
             raw_grade_values.append(grade_value_raw)
             raw_max_values.append(max_grade_value_raw)
             weight_values.append(weight_value)
+            scaled_feedback_values.append(feedback_text_scaled)
         row_out.append("")
-        for index, (weight_value, grade_value, max_grade_value) in enumerate(zip(
+        for index, (weight_value, grade_value, max_grade_value, scaled_feedback_value) in enumerate(zip(
             weight_values,
             raw_grade_values,
             raw_max_values,
+            scaled_feedback_values,
         )):
             if index > 0:
                 row_out.append("")
             parsed_weight = _parse_float(weight_value)
             row_out.append(parsed_weight if parsed_weight is not None else weight_value)
+            row_out.append(scaled_feedback_value)
             row_out.append("")
             row_out.append("")
         row_out.append("")
@@ -695,10 +710,10 @@ def write_xlsx(
         sheet.cell(row=sheet_row, column=weighted_max_column_index + 1).value = (
             f"=IF(COUNTA({weighted_max_refs})=0,\"\",SUM({weighted_max_refs}))"
         )
-        if feedback_column_indexes:
+        if scaled_feedback_column_indexes:
             feedback_refs = [
                 f"{get_column_letter(column_index + 1)}{sheet_row}"
-                for column_index in feedback_column_indexes
+                for column_index in scaled_feedback_column_indexes
             ]
             # Build a compatibility-safe concatenation formula that avoids TEXTJOIN,
             # which some Excel builds rewrite as @TEXTJOIN and then fail with #NAME?.
