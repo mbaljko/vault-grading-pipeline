@@ -393,10 +393,13 @@ def _metric_row_values(values: list[float]) -> dict[str, float | int | str]:
             "q1": "",
             "q3": "",
             "max": "",
+            "pct_gte_80": "",
         }
 
     sorted_values = sorted(values)
     q1, q3 = _quartiles(sorted_values)
+    count_gte_80 = sum(1 for v in sorted_values if v >= 80.0)
+    pct_gte_80 = (count_gte_80 / len(sorted_values)) * 100.0 if sorted_values else 0.0
     return {
         "count": len(sorted_values),
         "mean": round(statistics.mean(sorted_values), 4),
@@ -406,6 +409,7 @@ def _metric_row_values(values: list[float]) -> dict[str, float | int | str]:
         "q1": round(q1, 4),
         "q3": round(q3, 4),
         "max": round(sorted_values[-1], 4),
+        "pct_gte_80": round(pct_gte_80, 2),
     }
 
 
@@ -725,9 +729,11 @@ def write_xlsx(
     for col_index, (series_name, _values) in enumerate(summary_series_values, start=2):
         summary_sheet.cell(row=1, column=col_index).value = series_name
 
-    metrics_order = ["count", "mean", "median", "stdev", "min", "q1", "q3", "max"]
+    metrics_order = ["count", "mean", "median", "stdev", "min", "q1", "q3", "max", "pct_gte_80"]
     for row_index, metric_name in enumerate(metrics_order, start=2):
-        summary_sheet.cell(row=row_index, column=1).value = metric_name
+        # Map metric names to friendly display labels
+        display_name = "% A/A+ (≥80)" if metric_name == "pct_gte_80" else metric_name
+        summary_sheet.cell(row=row_index, column=1).value = display_name
         for col_index, (_series_name, values) in enumerate(summary_series_values, start=2):
             metric_values = _metric_row_values(values)
             summary_sheet.cell(row=row_index, column=col_index).value = metric_values[metric_name]
@@ -770,9 +776,71 @@ def write_xlsx(
     category_formula = f"'{histogram_data_sheet.title}'!$A${first_data_row}:$A${last_data_row}"
     for series in histogram_chart.series:
         series.cat = AxDataSource(strRef=StrRef(f=category_formula))
+        # Use a single color for all histogram bars
+        series.graphicalProperties.solidFill = "4472C4"  # Standard blue
 
     histogram_chart_sheet = workbook.create_chartsheet(title="histogram")
     histogram_chart_sheet.add_chart(histogram_chart)
+
+    # Create a second histogram chart showing all components with different colors
+    component_color_palette = [
+        "4472C4",  # Blue
+        "ED7D31",  # Orange
+        "A5A5A5",  # Gray
+        "FFC000",  # Gold
+        "5B9BD5",  # Light Blue
+        "70AD47",  # Green
+        "FF6B6B",  # Red
+        "6F42C1",  # Purple
+        "20C997",  # Teal
+        "FFC107",  # Amber
+        "17A2B8",  # Cyan
+        "E83E8C",  # Pink
+        "6C757D",  # Dark Gray
+        "28A745",  # Dark Green
+        "DC3545",  # Dark Red
+    ]
+
+    component_histogram_chart = BarChart()
+    component_histogram_chart.type = "col"
+    component_histogram_chart.title = "Histogram by Assignment Component"
+    component_histogram_chart.y_axis.title = "count"
+    component_histogram_chart.x_axis.title = "Normalized grade bucket (0-100)"
+    component_histogram_chart.x_axis.delete = False
+    component_histogram_chart.y_axis.delete = False
+    component_histogram_chart.x_axis.tickLblPos = "low"
+    component_histogram_chart.legend.position = "r"  # Right legend
+    component_histogram_chart.visible_cells_only = False
+
+    # Add each component series with its own color (skip the first submission score series)
+    for series_index, (series_name, _values) in enumerate(histogram_series_values[1:], start=2):
+        series_data_ref = Reference(
+            histogram_data_sheet,
+            min_col=series_index,
+            min_row=first_data_row - 1,
+            max_row=last_data_row,
+        )
+        component_histogram_chart.add_data(series_data_ref, titles_from_data=True)
+        
+        # Get the most recently added series and set its color
+        color_index = (series_index - 2) % len(component_color_palette)
+        series_obj = component_histogram_chart.series[-1]
+        series_obj.graphicalProperties.solidFill = component_color_palette[color_index]
+
+    # Set categories for the component histogram
+    cats_ref = Reference(
+        histogram_data_sheet,
+        min_col=1,
+        min_row=first_data_row,
+        max_row=last_data_row,
+    )
+    component_histogram_chart.set_categories(cats_ref)
+    category_formula = f"'{histogram_data_sheet.title}'!$A${first_data_row}:$A${last_data_row}"
+    for series in component_histogram_chart.series:
+        series.cat = AxDataSource(strRef=StrRef(f=category_formula))
+
+    component_histogram_chart_sheet = workbook.create_chartsheet(title="histogram_by_component")
+    component_histogram_chart_sheet.add_chart(component_histogram_chart)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(output_path)
