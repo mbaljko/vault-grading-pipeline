@@ -50,6 +50,7 @@ from pathlib import Path
 
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, Reference
+from openpyxl.chart.data_source import AxDataSource, StrRef
 from openpyxl.utils import get_column_letter
 
 
@@ -424,6 +425,7 @@ def _add_histogram_section(sheet, start_row: int, title: str, values: list[float
         start_row += 1
 
     chart = BarChart()
+    chart.type = "col"
     chart.title = "Histogram of submission_numeric_score"
     chart.y_axis.title = "count"
     chart.x_axis.title = "bin"
@@ -438,14 +440,20 @@ def _add_histogram_section(sheet, start_row: int, title: str, values: list[float
     return start_row + 1
 
 
-def _add_normalized_histogram_section(sheet, start_row: int, title: str, values: list[float]) -> int:
+def _add_normalized_histogram_section(
+    sheet,
+    start_row: int,
+    title: str,
+    values: list[float],
+) -> tuple[int, int, int]:
     sheet.cell(row=start_row, column=1).value = title
     start_row += 1
     sheet.cell(row=start_row, column=1).value = "bin"
     sheet.cell(row=start_row, column=2).value = "count"
     start_row += 1
 
-    bucket_labels = ["0-50"] + [f"{lower}-{lower + 5}" for lower in range(50, 100, 5)]
+    bucket_bounds = [(0, 50)] + [(lower, lower + 5) for lower in range(50, 100, 5)]
+    bucket_labels = [f"{lower}-{upper}" for lower, upper in bucket_bounds]
     frequencies = [0] * len(bucket_labels)
 
     if values:
@@ -461,23 +469,15 @@ def _add_normalized_histogram_section(sheet, start_row: int, title: str, values:
 
     first_data_row = start_row
     for label, freq in zip(bucket_labels, frequencies):
-        sheet.cell(row=start_row, column=1).value = label
+        label_cell = sheet.cell(row=start_row, column=1)
+        # Keep bucket labels as text so Excel category axis uses explicit string bins.
+        label_cell.value = str(label)
+        label_cell.number_format = "@"
         sheet.cell(row=start_row, column=2).value = freq
         start_row += 1
 
-    chart = BarChart()
-    chart.title = "Histogram of normalized submission grade (0-100)"
-    chart.y_axis.title = "count"
-    chart.x_axis.title = "normalized bucket"
-    data_ref = Reference(sheet, min_col=2, min_row=first_data_row - 1, max_row=start_row - 1)
-    cats_ref = Reference(sheet, min_col=1, min_row=first_data_row, max_row=start_row - 1)
-    chart.add_data(data_ref, titles_from_data=True)
-    chart.set_categories(cats_ref)
-    chart.height = 7
-    chart.width = 12
-    sheet.add_chart(chart, f"D{first_data_row}")
-
-    return start_row + 1
+    last_data_row = start_row - 1
+    return start_row + 1, first_data_row, last_data_row
 
 
 def write_xlsx(
@@ -681,13 +681,44 @@ def write_xlsx(
         "submission_max_numeric_score descriptive statistics",
         summary_max_scores,
     )
-    histogram_sheet = workbook.create_sheet(title="histogram")
-    _add_normalized_histogram_section(
-        histogram_sheet,
+    histogram_data_sheet = workbook.create_sheet(title="histogram_data")
+    _next_row, first_data_row, last_data_row = _add_normalized_histogram_section(
+        histogram_data_sheet,
         1,
         "Histogram bins for normalized submission grade (0-100)",
         normalized_summary_scores,
     )
+    histogram_data_sheet.sheet_state = "visible"
+
+    histogram_chart = BarChart()
+    histogram_chart.type = "col"
+    histogram_chart.title = "Histogram of normalized submission grade (0-100)"
+    histogram_chart.y_axis.title = "count"
+    histogram_chart.x_axis.title = "Normalized grade bucket (0-100)"
+    histogram_chart.x_axis.tickLblPos = "low"
+    histogram_chart.legend = None
+    # Ensure category labels still render when source data lives on a hidden sheet.
+    histogram_chart.visible_cells_only = False
+    data_ref = Reference(
+        histogram_data_sheet,
+        min_col=2,
+        min_row=first_data_row - 1,
+        max_row=last_data_row,
+    )
+    cats_ref = Reference(
+        histogram_data_sheet,
+        min_col=1,
+        min_row=first_data_row,
+        max_row=last_data_row,
+    )
+    histogram_chart.add_data(data_ref, titles_from_data=True)
+    histogram_chart.set_categories(cats_ref)
+    category_formula = f"'{histogram_data_sheet.title}'!$A${first_data_row}:$A${last_data_row}"
+    for series in histogram_chart.series:
+        series.cat = AxDataSource(strRef=StrRef(f=category_formula))
+
+    histogram_chart_sheet = workbook.create_chartsheet(title="histogram")
+    histogram_chart_sheet.add_chart(histogram_chart)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(output_path)
