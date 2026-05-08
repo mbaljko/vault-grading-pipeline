@@ -33,8 +33,20 @@ Behavior and safeguards:
 - If a matched row has a score, the grade column is updated.
 - If Feedback comments exists in both source and destination schemas, it is
   copied to the destination row.
+- In the ``_SSID`` sibling file, gradebook rows with no resolved submission_id
+	(no canonical match) are copied unchanged, including their original
+	``Identifier`` value.
+- In the ``_SSID`` sibling file, matched rows that do not have an
+	``SSID.ID number`` in the canonical table also keep their original
+	``Identifier`` value.
 - Source submission_ids with scores that never map to any gradebook row are
   emitted as ALERT lines on stderr after writing output.
+
+Additionally, this script writes a sibling output CSV whose filename adds the
+suffix ``_SSID`` before the extension. In that sibling file, ``Identifier`` is
+replaced with ``SSID.ID number`` values (from --canonical-population-input).
+Rows from the grade upload file that do not have a corresponding SSID are
+excluded from the ``_SSID`` file and documented in a sibling Markdown report.
 
 Example:
 	python populate_gradebook_from_inputs.py \
@@ -325,13 +337,14 @@ def _add_index_value(index: dict[str, set[str]], key: str, submission_id: str) -
 		index[key].add(submission_id)
 
 
-def load_canonical_indices(canonical_input: Path) -> dict[str, dict[str, set[str]]]:
+def load_canonical_indices(canonical_input: Path) -> tuple[dict[str, dict[str, set[str]]], dict[str, str]]:
 	indices = {
 		"gw_identifier": defaultdict(set),
 		"gw_full_name": defaultdict(set),
 		"user": defaultdict(set),
 		"username": defaultdict(set),
 	}
+	ssid_by_submission_id: dict[str, str] = {}
 
 	with canonical_input.open("r", encoding="utf-8-sig", newline="") as handle:
 		reader = csv.DictReader(handle)
@@ -341,11 +354,17 @@ def load_canonical_indices(canonical_input: Path) -> dict[str, dict[str, set[str
 		gw_full_name_key = _require_column(normalized_fields, "GW.Full name", canonical_input)
 		user_key = _require_column(normalized_fields, "User", canonical_input)
 		username_key = _require_column(normalized_fields, "Username", canonical_input)
+		ssid_id_key = normalized_fields.get("ssid.id number")
 
 		for row in reader:
 			submission_id = (row.get(submission_id_key) or "").strip()
 			if not submission_id:
 				continue
+
+			if ssid_id_key:
+				ssid_id = (row.get(ssid_id_key) or "").strip()
+				if ssid_id and submission_id not in ssid_by_submission_id:
+					ssid_by_submission_id[submission_id] = ssid_id
 
 			_add_index_value(
 				indices["gw_identifier"],
@@ -368,7 +387,66 @@ def load_canonical_indices(canonical_input: Path) -> dict[str, dict[str, set[str
 				submission_id,
 			)
 
-	return indices
+	return indices, ssid_by_submission_id
+
+
+def sibling_ssid_output_path(output_file: Path) -> Path:
+	return output_file.with_name(f"{output_file.stem}_SSID{output_file.suffix}")
+
+
+def sibling_ssid_omissions_report_path(output_file: Path) -> Path:
+	return output_file.with_name(f"{output_file.stem}_SSID_omissions.md")
+
+
+def build_ssid_omissions_report(
+	*,
+	gradebook_input: Path,
+	ssid_output_file: Path,
+	omitted_rows: list[dict[str, str]],
+) -> str:
+	def _md_cell(value: str) -> str:
+		text = (value or "").replace("|", "\\|")
+		text = text.replace("\r\n", "\n").replace("\r", "\n")
+		text = text.replace("\n", "<br>")
+		return text
+
+	lines = [
+		"# SSID Omission Report",
+		"",
+		f"- Gradebook input: {gradebook_input}",
+		f"- SSID output: {ssid_output_file}",
+		f"- Omitted rows: {len(omitted_rows)}",
+		"",
+		"## Omitted Rows",
+		"",
+	]
+
+	if not omitted_rows:
+		lines.append("- None")
+		lines.append("")
+		return "\n".join(lines)
+
+	lines.extend(
+		[
+			"| # | reason | Identifier | Full name | Email | submission_id | Grade | Feedback comments |",
+			"|---:|---|---|---|---|---|---|---|",
+		]
+	)
+
+	for index, row in enumerate(omitted_rows, start=1):
+		reason = _md_cell(row.get("reason", "unknown") or "unknown")
+		identifier = _md_cell(row.get("identifier", "") or "<blank>")
+		full_name = _md_cell(row.get("full_name", "") or "<blank>")
+		email = _md_cell(row.get("email", "") or "<blank>")
+		submission_id = _md_cell(row.get("submission_id", "") or "<none>")
+		grade = _md_cell(row.get("grade", "") or "<blank>")
+		feedback = _md_cell(row.get("feedback_comments", "") or "<blank>")
+		lines.append(
+			f"| {index} | {reason} | {identifier} | {full_name} | {email} | {submission_id} | {grade} | {feedback} |"
+		)
+
+	lines.append("")
+	return "\n".join(lines)
 
 
 def resolve_submission_id(
@@ -420,11 +498,13 @@ def populate_gradebook(
 	scored_input: Path,
 	output_file: Path,
 	grade_column: str,
-) -> tuple[int, list[tuple[str, str]]]:
+) -> tuple[int, list[tuple[str, str]], Path, Path, int]:
 	source_lookup = load_source_lookup(scored_input)
 	uniform_max_grade = resolve_uniform_max_grade(source_lookup)
-	canonical_indices = load_canonical_indices(canonical_input)
+	canonical_indices, ssid_by_submission_id = load_canonical_indices(canonical_input)
 	used_submission_ids: set[str] = set()
+	ssid_output_file = sibling_ssid_output_path(output_file)
+	ssid_omissions_report_file = sibling_ssid_omissions_report_path(output_file)
 
 	with gradebook_input.open("r", encoding="utf-8-sig", newline="") as handle:
 		reader = csv.DictReader(handle)
@@ -441,6 +521,8 @@ def populate_gradebook(
 
 		fieldnames = list(reader.fieldnames)
 		matched_rows = 0
+		ssid_rows_to_write: list[dict[str, str]] = []
+		ssid_omitted_rows: list[dict[str, str]] = []
 
 		output_file.parent.mkdir(parents=True, exist_ok=True)
 		with output_file.open("w", encoding="utf-8", newline="") as output_handle:
@@ -459,7 +541,19 @@ def populate_gradebook(
 					email_key=email_key,
 				)
 				if not submission_id:
-					writer.writerow({field: row.get(field, "") for field in fieldnames})
+					output_row = {field: row.get(field, "") for field in fieldnames}
+					writer.writerow(output_row)
+					ssid_omitted_rows.append(
+						{
+							"reason": "no_canonical_match",
+							"identifier": output_row.get(identifier_key, ""),
+							"full_name": output_row.get(full_name_key, ""),
+							"email": output_row.get(email_key, ""),
+							"submission_id": "",
+							"grade": output_row.get(actual_grade_column, ""),
+							"feedback_comments": output_row.get(feedback_column, "") if feedback_column else "",
+						}
+					)
 					continue
 
 				used_submission_ids.add(submission_id)
@@ -474,7 +568,38 @@ def populate_gradebook(
 						source_values.get("l3_comment", ""),
 					)
 
-				writer.writerow({field: row.get(field, "") for field in fieldnames})
+				output_row = {field: row.get(field, "") for field in fieldnames}
+				writer.writerow(output_row)
+				ssid_identifier = ssid_by_submission_id.get(submission_id, "")
+				if ssid_identifier:
+					ssid_row = dict(output_row)
+					ssid_row[identifier_key] = ssid_identifier
+					ssid_rows_to_write.append(ssid_row)
+				else:
+					ssid_omitted_rows.append(
+						{
+							"reason": "missing_ssid_for_submission",
+							"identifier": output_row.get(identifier_key, ""),
+							"full_name": output_row.get(full_name_key, ""),
+							"email": output_row.get(email_key, ""),
+							"submission_id": submission_id,
+							"grade": output_row.get(actual_grade_column, ""),
+							"feedback_comments": output_row.get(feedback_column, "") if feedback_column else "",
+						}
+					)
+
+	with ssid_output_file.open("w", encoding="utf-8", newline="") as ssid_handle:
+		ssid_writer = csv.DictWriter(ssid_handle, fieldnames=fieldnames)
+		ssid_writer.writeheader()
+		for row in ssid_rows_to_write:
+			ssid_writer.writerow(row)
+
+	ssid_omissions_report = build_ssid_omissions_report(
+		gradebook_input=gradebook_input,
+		ssid_output_file=ssid_output_file,
+		omitted_rows=ssid_omitted_rows,
+	)
+	ssid_omissions_report_file.write_text(ssid_omissions_report, encoding="utf-8")
 
 	alert_rows = sorted(
 		[
@@ -484,7 +609,7 @@ def populate_gradebook(
 		],
 		key=lambda item: item[0],
 	)
-	return matched_rows, alert_rows
+	return matched_rows, alert_rows, ssid_output_file, ssid_omissions_report_file, len(ssid_omitted_rows)
 
 
 def main() -> int:
@@ -499,7 +624,7 @@ def main() -> int:
 			return 1
 
 	try:
-		matched_rows, alert_rows = populate_gradebook(
+		matched_rows, alert_rows, ssid_output_file, ssid_omissions_report_file, ssid_omitted_count = populate_gradebook(
 			gradebook_input=args.gradebook_input,
 			canonical_input=args.canonical_population_input,
 			scored_input=args.scored_input,
@@ -511,6 +636,8 @@ def main() -> int:
 		return 1
 
 	print(f"Wrote {args.output_file} ({matched_rows} grades populated)")
+	print(f"Wrote {ssid_output_file} (rows with SSID only; Identifier replaced with SSID.ID number)")
+	print(f"Wrote {ssid_omissions_report_file} ({ssid_omitted_count} rows omitted from SSID output)")
 	for submission_id, score_value in alert_rows:
 		print(
 			f"ALERT: source grade with submission_id {submission_id} and submission_numeric_score {score_value} did not match any destination row",
