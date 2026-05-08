@@ -852,21 +852,30 @@ def write_template_csv(
     ordered_identity_keys: list[tuple[str, str, str]],
     source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str, str]],
     component_weights: dict[str, str],
+    is_ssid: bool = False,
 ) -> None:
-    """Write a gradebook CSV with stage02-like populated summary columns."""
+    """Write a gradebook CSV with stage02-like populated summary columns.
+    
+    If is_ssid=True, relabels Identifier to SSID and adds grade_normalized column.
+    """
+    identifier_column = "SSID" if is_ssid else "Identifier"
     header = [
-        "Identifier",
+        identifier_column,
         "Full name",
         "Email address",
         "Status",
         "Grade",
         "Maximum Grade",
+    ]
+    if is_ssid:
+        header.append("grade_normalized")
+    header.extend([
         "Grade can be changed",
         "Last modified (submission)",
         "Online text",
         "Last modified (grade)",
         "Feedback comments",
-    ]
+    ])
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8", newline="") as handle:
@@ -894,19 +903,35 @@ def write_template_csv(
                     total_max_grade += scaled_max_grade
                     max_grade_terms += 1
 
+            grade_str = f"{total_grade:.2f}" if grade_terms > 0 else ""
+            max_grade_str = f"{total_max_grade:.2f}" if max_grade_terms > 0 else ""
+            
+            # Calculate normalized grade
+            grade_normalized = ""
+            if is_ssid and grade_str and max_grade_str:
+                try:
+                    grade_val = float(grade_str)
+                    max_val = float(max_grade_str)
+                    if max_val > 0:
+                        grade_normalized = f"{(grade_val / max_val):.4f}"
+                except (ValueError, ZeroDivisionError):
+                    grade_normalized = ""
+
             row_out = {
-                "Identifier": key[0],
+                identifier_column: key[0],
                 "Full name": key[1],
                 "Email address": key[2],
                 "Status": "",
-                "Grade": f"{total_grade:.2f}" if grade_terms > 0 else "",
-                "Maximum Grade": f"{total_max_grade:.2f}" if max_grade_terms > 0 else "",
+                "Grade": grade_str,
+                "Maximum Grade": max_grade_str,
                 "Grade can be changed": "",
                 "Last modified (submission)": "",
                 "Online text": "",
                 "Last modified (grade)": "",
                 "Feedback comments": aggregate_feedback_for_identity(key, source_data, component_weights),
             }
+            if is_ssid:
+                row_out["grade_normalized"] = grade_normalized
             writer.writerow(row_out)
 
 
@@ -1042,6 +1067,7 @@ def main() -> int:
             ssid_ordered_identity_keys,
             ssid_source_data,
             component_weights,
+            is_ssid=True,
         )
 
     print(f"ASST_ROOT: {assignment_root}")
