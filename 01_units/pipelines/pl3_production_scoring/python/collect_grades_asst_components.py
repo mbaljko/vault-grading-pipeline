@@ -631,48 +631,12 @@ def write_template_csv(
             writer.writerow(row_out)
 
 
-def main() -> int:
-    args = parse_args()
-    assignment_root = args.assignment_root.resolve()
-    if not assignment_root.is_dir():
-        raise FileNotFoundError(f"Assignment root not found: {assignment_root}")
-
-    token = assignment_root.name
-    grades_release_dir = assignment_root / "04_grades_release"
-    output_xlsx = grades_release_dir / f"{token}_component_grade_feedback_merged.xlsx"
-    weights_path = grades_release_dir / f"{token}_weights.json"
-    component_weights = load_component_weights(weights_path)
-
-    assignment_dirs = sorted(
-        [path for path in assignment_root.iterdir() if path.is_dir()],
-        key=lambda path: path.name,
-    )
-
-    discovered: list[tuple[str, Path]] = []
-    skipped_missing_csv: list[tuple[str, Path]] = []
-    first_config: dict[str, object] | None = None
-    first_iteration = ""
-    
-    for assignment_dir in assignment_dirs:
-        config = load_pipeline_paths_config(assignment_dir)
-        if config is None:
-            continue
-        if first_config is None:
-            first_config = config
-            layer4_prod = config.get("layer4_prod", {})
-            if isinstance(layer4_prod, dict):
-                release = layer4_prod.get("release", {})
-                if isinstance(release, dict):
-                    first_iteration = str(release.get("iteration", "")).strip()
-        csv_path = resolve_output_csv_from_config(assignment_dir, config)
-        if not csv_path.exists() or not csv_path.is_file():
-            skipped_missing_csv.append((assignment_dir.name, csv_path))
-            continue
-        discovered.append((assignment_dir.name, csv_path))
-
-    if not discovered:
-        raise ValueError(f"No assignment subdirectories with pipeline_paths.json found under {assignment_root}")
-
+def build_source_data(
+    discovered: list[tuple[str, Path]],
+) -> tuple[
+    list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str, str]],
+    list[tuple[str, str, str]],
+]:
     source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str, str]] = []
     baseline_keys: set[tuple[str, str, str]] | None = None
     ordered_identity_keys: list[tuple[str, str, str]] = []
@@ -707,12 +671,86 @@ def main() -> int:
 
         source_data.append((source_name, rows_by_id, feedback_column, max_grade_column))
 
+    return source_data, ordered_identity_keys
+
+
+def main() -> int:
+    args = parse_args()
+    assignment_root = args.assignment_root.resolve()
+    if not assignment_root.is_dir():
+        raise FileNotFoundError(f"Assignment root not found: {assignment_root}")
+
+    token = assignment_root.name
+    grades_release_dir = assignment_root / "04_grades_release"
+    output_xlsx = grades_release_dir / f"{token}_component_grade_feedback_merged.xlsx"
+    weights_path = grades_release_dir / f"{token}_weights.json"
+    component_weights = load_component_weights(weights_path)
+
+    assignment_dirs = sorted(
+        [path for path in assignment_root.iterdir() if path.is_dir()],
+        key=lambda path: path.name,
+    )
+
+    discovered: list[tuple[str, Path]] = []
+    discovered_ssid: list[tuple[str, Path]] = []
+    skipped_missing_csv: list[tuple[str, Path]] = []
+    skipped_missing_ssid_csv: list[tuple[str, Path]] = []
+    first_config: dict[str, object] | None = None
+    first_iteration = ""
+    
+    for assignment_dir in assignment_dirs:
+        config = load_pipeline_paths_config(assignment_dir)
+        if config is None:
+            continue
+        if first_config is None:
+            first_config = config
+            layer4_prod = config.get("layer4_prod", {})
+            if isinstance(layer4_prod, dict):
+                release = layer4_prod.get("release", {})
+                if isinstance(release, dict):
+                    first_iteration = str(release.get("iteration", "")).strip()
+        csv_path = resolve_output_csv_from_config(assignment_dir, config)
+        if not csv_path.exists() or not csv_path.is_file():
+            skipped_missing_csv.append((assignment_dir.name, csv_path))
+            continue
+        discovered.append((assignment_dir.name, csv_path))
+
+        ssid_csv_path = csv_path.with_name(f"{csv_path.stem}_SSID{csv_path.suffix}")
+        if ssid_csv_path.exists() and ssid_csv_path.is_file():
+            discovered_ssid.append((assignment_dir.name, ssid_csv_path))
+        else:
+            skipped_missing_ssid_csv.append((assignment_dir.name, ssid_csv_path))
+
+    if not discovered:
+        raise ValueError(f"No assignment subdirectories with pipeline_paths.json found under {assignment_root}")
+
+    source_data, ordered_identity_keys = build_source_data(discovered)
+
     write_xlsx(output_xlsx, ordered_identity_keys, source_data, component_weights)
     
     # Write template CSV with standard gradebook submission columns
     template_filename = f"{token}_Grades_iter{first_iteration}.csv"
     template_path = grades_release_dir / template_filename
     write_template_csv(template_path, first_iteration, ordered_identity_keys, source_data, component_weights)
+
+    ssid_output_xlsx: Path | None = None
+    ssid_template_path: Path | None = None
+    ssid_source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str, str]] = []
+    ssid_ordered_identity_keys: list[tuple[str, str, str]] = []
+    if discovered_ssid:
+        ssid_source_data, ssid_ordered_identity_keys = build_source_data(discovered_ssid)
+        ssid_output_xlsx = grades_release_dir / f"{token}_component_grade_feedback_merged_SSID.xlsx"
+        write_xlsx(ssid_output_xlsx, ssid_ordered_identity_keys, ssid_source_data, component_weights)
+
+        ssid_template_filename = f"{token}_Grades_iter{first_iteration}_SSID.csv"
+        ssid_template_path = grades_release_dir / ssid_template_filename
+        write_template_csv(
+            ssid_template_path,
+            first_iteration,
+            ssid_ordered_identity_keys,
+            ssid_source_data,
+            component_weights,
+        )
 
     print(f"ASST_ROOT: {assignment_root}")
     print(f"Grades release dir: {grades_release_dir}")
@@ -725,9 +763,20 @@ def main() -> int:
         print(f"Skipped missing CSVs: {len(skipped_missing_csv)}")
         for source_name, csv_path in skipped_missing_csv:
             print(f"- {source_name}: {csv_path}")
+    print(f"SSID input sources found: {len(discovered_ssid)}")
+    for source_name, csv_path in discovered_ssid:
+        print(f"- {source_name}: {csv_path}")
+    if skipped_missing_ssid_csv:
+        print(f"Skipped missing SSID CSVs: {len(skipped_missing_ssid_csv)}")
+        for source_name, csv_path in skipped_missing_ssid_csv:
+            print(f"- {source_name}: {csv_path}")
     print(f"Rows merged: {len(ordered_identity_keys)}")
     print(f"Output XLSX: {output_xlsx}")
     print(f"Template CSV: {template_path}")
+    if ssid_output_xlsx and ssid_template_path:
+        print(f"SSID Rows merged: {len(ssid_ordered_identity_keys)}")
+        print(f"SSID Output XLSX: {ssid_output_xlsx}")
+        print(f"SSID Template CSV: {ssid_template_path}")
     return 0
 
 
