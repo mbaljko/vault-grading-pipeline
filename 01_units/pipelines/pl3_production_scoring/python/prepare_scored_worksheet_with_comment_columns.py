@@ -31,6 +31,7 @@ from pathlib import Path
 
 SUBMISSION_SCORE_COLUMN = "submission_numeric_score"
 SUBMISSION_MAX_SCORE_COLUMN = "submission_max_numeric_score"
+L3_COMMENT_CANDIDATES = ("L3_Comment", "L3_comment")
 
 
 def parse_args() -> argparse.Namespace:
@@ -137,6 +138,27 @@ def _section_label(prefix: str, section_prefix: str, strip_suffix: str) -> str:
     if strip_suffix and prefix.endswith(strip_suffix):
         prefix = prefix[: -len(strip_suffix)]
     return f"{section_prefix}{prefix}"
+
+
+def _section_label_from_component_columns(header: list[str]) -> str:
+    """Infer section label from component score columns like C_PESF1_SecF1."""
+    pattern = re.compile(r"^C_[^_]+_Sec([A-Z]\d+)(?:_numeric)?$")
+    section_ids: set[str] = set()
+    for col in header:
+        match = pattern.match(col)
+        if match:
+            section_ids.add(match.group(1))
+    if len(section_ids) == 1:
+        return f"Section {next(iter(section_ids))}"
+    return ""
+
+
+def _extract_l3_comment(row: dict[str, str]) -> str:
+    for candidate in L3_COMMENT_CANDIDATES:
+        comment = (row.get(candidate) or "").strip()
+        if comment:
+            return comment
+    return ""
 
 
 def _dimension_columns(header: list[str], match_regex: str) -> list[str]:
@@ -355,8 +377,10 @@ def main() -> None:
         else:
             max_score_str = f"{max_val:g}"
 
-    prefix = _response_text_prefix(header, response_text_regex) if response_text_regex else ""
-    section_label = _section_label(prefix, response_text_prefix, response_text_strip_suffix) if response_text_regex else ""
+    section_label = _section_label_from_component_columns(header)
+    if not section_label:
+        prefix = _response_text_prefix(header, response_text_regex) if response_text_regex else ""
+        section_label = _section_label(prefix, response_text_prefix, response_text_strip_suffix) if response_text_regex else ""
     dimension_columns = _dimension_columns(header, dimension_match_regex) if dimension_match_regex else []
     dim_count = len(dimension_columns)
 
@@ -430,6 +454,10 @@ def main() -> None:
                 )
             else:
                 feedback = ""
+
+            l3_comment = _extract_l3_comment(row)
+            if l3_comment:
+                feedback = f"{feedback}\n\n{l3_comment}" if feedback else l3_comment
 
             writer.writerow(
                 {
