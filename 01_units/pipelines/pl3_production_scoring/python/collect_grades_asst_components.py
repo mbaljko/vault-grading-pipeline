@@ -438,6 +438,48 @@ def _add_histogram_section(sheet, start_row: int, title: str, values: list[float
     return start_row + 1
 
 
+def _add_normalized_histogram_section(sheet, start_row: int, title: str, values: list[float]) -> int:
+    sheet.cell(row=start_row, column=1).value = title
+    start_row += 1
+    sheet.cell(row=start_row, column=1).value = "bin"
+    sheet.cell(row=start_row, column=2).value = "count"
+    start_row += 1
+
+    bucket_labels = ["0-50"] + [f"{lower}-{lower + 5}" for lower in range(50, 100, 5)]
+    frequencies = [0] * len(bucket_labels)
+
+    if values:
+        for value in values:
+            # Clamp to [0, 100] so all observations fit the requested normalized buckets.
+            normalized = min(max(value, 0.0), 100.0)
+            if normalized <= 50.0:
+                frequencies[0] += 1
+                continue
+            bucket_index = int((normalized - 50.0 - 1e-9) // 5.0) + 1
+            bucket_index = max(1, min(bucket_index, len(frequencies) - 1))
+            frequencies[bucket_index] += 1
+
+    first_data_row = start_row
+    for label, freq in zip(bucket_labels, frequencies):
+        sheet.cell(row=start_row, column=1).value = label
+        sheet.cell(row=start_row, column=2).value = freq
+        start_row += 1
+
+    chart = BarChart()
+    chart.title = "Histogram of normalized submission grade (0-100)"
+    chart.y_axis.title = "count"
+    chart.x_axis.title = "normalized bucket"
+    data_ref = Reference(sheet, min_col=2, min_row=first_data_row - 1, max_row=start_row - 1)
+    cats_ref = Reference(sheet, min_col=1, min_row=first_data_row, max_row=start_row - 1)
+    chart.add_data(data_ref, titles_from_data=True)
+    chart.set_categories(cats_ref)
+    chart.height = 7
+    chart.width = 12
+    sheet.add_chart(chart, f"D{first_data_row}")
+
+    return start_row + 1
+
+
 def write_xlsx(
     output_path: Path,
     ordered_identity_keys: list[tuple[str, str, str]],
@@ -449,6 +491,7 @@ def write_xlsx(
     sheet.title = "component_grades"
     summary_scores: list[float] = []
     summary_max_scores: list[float] = []
+    normalized_summary_scores: list[float] = []
 
     header = list(IDENTITY_COLUMNS)
     weighted_grade_headers: list[str] = []
@@ -559,6 +602,12 @@ def write_xlsx(
             summary_scores.append(weighted_total_score)
         if weighted_total_max is not None:
             summary_max_scores.append(weighted_total_max)
+        if (
+            weighted_total_score is not None
+            and weighted_total_max is not None
+            and not math.isclose(weighted_total_max, 0.0)
+        ):
+            normalized_summary_scores.append((weighted_total_score / weighted_total_max) * 100.0)
 
         sheet_row = sheet.max_row
         for idx, (weight_idx, raw_grade_idx, weighted_grade_idx) in enumerate(
@@ -632,11 +681,12 @@ def write_xlsx(
         "submission_max_numeric_score descriptive statistics",
         summary_max_scores,
     )
-    _add_histogram_section(
-        summary_sheet,
-        next_row,
-        "Histogram bins for submission_numeric_score",
-        summary_scores,
+    histogram_sheet = workbook.create_sheet(title="histogram")
+    _add_normalized_histogram_section(
+        histogram_sheet,
+        1,
+        "Histogram bins for normalized submission grade (0-100)",
+        normalized_summary_scores,
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
