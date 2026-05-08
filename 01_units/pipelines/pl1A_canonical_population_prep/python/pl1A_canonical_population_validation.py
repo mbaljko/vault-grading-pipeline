@@ -486,9 +486,11 @@ def default_mismatch_report_path(output_path: Path) -> Path:
 
 def build_identifier_mapping_rows(
     validation_rows: list[dict[str, str | int | None]],
+    ssid_rows: list[dict[str, str]],
 ) -> list[dict[str, str]]:
     mapping_rows: list[dict[str, str]] = []
     seen_pairs: set[tuple[str, str]] = set()
+    seen_ssid_ids: set[str] = set()
 
     for row in validation_rows:
         if row.get("__join_status") != "matched_unique":
@@ -515,6 +517,32 @@ def build_identifier_mapping_rows(
                 "SSID.Email address": str(row.get("SSID.Email address", "") or ""),
                 "User": str(row.get("User", "") or ""),
                 "Username": str(row.get("Username", "") or ""),
+            }
+        )
+
+        ssid_id = str(row.get("SSID.ID number", "") or "").strip()
+        if ssid_id:
+            seen_ssid_ids.add(ssid_id)
+
+    # Ensure every SSID roster row is represented in the mapping output,
+    # even when no LMS/grade-sheet match exists for that SSID.
+    for ssid_row in ssid_rows:
+        ssid_id = str(ssid_row.get("ID number", "") or "").strip()
+        if not ssid_id or ssid_id in seen_ssid_ids:
+            continue
+
+        seen_ssid_ids.add(ssid_id)
+        mapping_rows.append(
+            {
+                "submission_id": "",
+                "GW.Identifier": "",
+                "GW.Full name": "",
+                "GW.Email address": "",
+                "SSID.Full name": build_ssid_display_name(ssid_row),
+                "SSID.ID number": ssid_id,
+                "SSID.Email address": str(ssid_row.get("Email address", "") or ""),
+                "User": "",
+                "Username": "",
             }
         )
 
@@ -824,7 +852,7 @@ def main() -> int:
         requested_component_ids=requested_component_ids,
     )
     assert_no_duplicate_submission_component_rows(canonical_rows, output_path=output_path)
-    mapping_rows = build_identifier_mapping_rows(validation_rows)
+    mapping_rows = build_identifier_mapping_rows(validation_rows, ssid_rows)
     mismatch_report = build_mismatch_report(validation_rows, gw_rows, ssid_rows)
     write_output_rows(output_path, canonical_rows)
     write_mapping_rows(mapping_output_path, mapping_rows)

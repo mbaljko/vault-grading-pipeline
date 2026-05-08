@@ -47,6 +47,8 @@ suffix ``_SSID`` before the extension. In that sibling file, ``Identifier`` is
 replaced with ``SSID.ID number`` values (from --canonical-population-input).
 Rows from the grade upload file that do not have a corresponding SSID are
 excluded from the ``_SSID`` file and documented in a sibling Markdown report.
+The ``_SSID`` file also includes SSID roster rows that are not present in the
+grade upload file, with grade and feedback columns left blank.
 
 Example:
 	python populate_gradebook_from_inputs.py \
@@ -337,7 +339,9 @@ def _add_index_value(index: dict[str, set[str]], key: str, submission_id: str) -
 		index[key].add(submission_id)
 
 
-def load_canonical_indices(canonical_input: Path) -> tuple[dict[str, dict[str, set[str]]], dict[str, str]]:
+def load_canonical_indices(
+	canonical_input: Path,
+) -> tuple[dict[str, dict[str, set[str]]], dict[str, str], dict[str, dict[str, str]]]:
 	indices = {
 		"gw_identifier": defaultdict(set),
 		"gw_full_name": defaultdict(set),
@@ -345,6 +349,7 @@ def load_canonical_indices(canonical_input: Path) -> tuple[dict[str, dict[str, s
 		"username": defaultdict(set),
 	}
 	ssid_by_submission_id: dict[str, str] = {}
+	ssid_roster_rows: dict[str, dict[str, str]] = {}
 
 	with canonical_input.open("r", encoding="utf-8-sig", newline="") as handle:
 		reader = csv.DictReader(handle)
@@ -352,19 +357,33 @@ def load_canonical_indices(canonical_input: Path) -> tuple[dict[str, dict[str, s
 		submission_id_key = _require_column(normalized_fields, "submission_id", canonical_input)
 		gw_identifier_key = _require_column(normalized_fields, "GW.Identifier", canonical_input)
 		gw_full_name_key = _require_column(normalized_fields, "GW.Full name", canonical_input)
+		gw_email_key = normalized_fields.get("gw.email address")
 		user_key = _require_column(normalized_fields, "User", canonical_input)
 		username_key = _require_column(normalized_fields, "Username", canonical_input)
 		ssid_id_key = normalized_fields.get("ssid.id number")
+		ssid_full_name_key = normalized_fields.get("ssid.full name")
+		ssid_email_key = normalized_fields.get("ssid.email address")
 
 		for row in reader:
 			submission_id = (row.get(submission_id_key) or "").strip()
-			if not submission_id:
-				continue
-
 			if ssid_id_key:
 				ssid_id = (row.get(ssid_id_key) or "").strip()
-				if ssid_id and submission_id not in ssid_by_submission_id:
+				if ssid_id and submission_id and submission_id not in ssid_by_submission_id:
 					ssid_by_submission_id[submission_id] = ssid_id
+				if ssid_id and ssid_id not in ssid_roster_rows:
+					ssid_full_name = (row.get(ssid_full_name_key) or "").strip() if ssid_full_name_key else ""
+					gw_full_name = (row.get(gw_full_name_key) or "").strip()
+					user_name = (row.get(user_key) or "").strip()
+					ssid_email = (row.get(ssid_email_key) or "").strip() if ssid_email_key else ""
+					gw_email = (row.get(gw_email_key) or "").strip() if gw_email_key else ""
+					ssid_roster_rows[ssid_id] = {
+						"identifier": ssid_id,
+						"full_name": ssid_full_name or gw_full_name or user_name,
+						"email": ssid_email or gw_email,
+					}
+
+			if not submission_id:
+				continue
 
 			_add_index_value(
 				indices["gw_identifier"],
@@ -387,7 +406,7 @@ def load_canonical_indices(canonical_input: Path) -> tuple[dict[str, dict[str, s
 				submission_id,
 			)
 
-	return indices, ssid_by_submission_id
+	return indices, ssid_by_submission_id, ssid_roster_rows
 
 
 def sibling_ssid_output_path(output_file: Path) -> Path:
@@ -501,7 +520,7 @@ def populate_gradebook(
 ) -> tuple[int, list[tuple[str, str]], Path, Path, int]:
 	source_lookup = load_source_lookup(scored_input)
 	uniform_max_grade = resolve_uniform_max_grade(source_lookup)
-	canonical_indices, ssid_by_submission_id = load_canonical_indices(canonical_input)
+	canonical_indices, ssid_by_submission_id, ssid_roster_rows = load_canonical_indices(canonical_input)
 	used_submission_ids: set[str] = set()
 	ssid_output_file = sibling_ssid_output_path(output_file)
 	ssid_omissions_report_file = sibling_ssid_omissions_report_path(output_file)
@@ -591,8 +610,26 @@ def populate_gradebook(
 	with ssid_output_file.open("w", encoding="utf-8", newline="") as ssid_handle:
 		ssid_writer = csv.DictWriter(ssid_handle, fieldnames=fieldnames)
 		ssid_writer.writeheader()
+		seen_ssid_identifiers: set[str] = set()
 		for row in ssid_rows_to_write:
 			ssid_writer.writerow(row)
+			identifier_value = (row.get(identifier_key) or "").strip()
+			if identifier_value:
+				seen_ssid_identifiers.add(identifier_value)
+
+		# Also include SSID roster rows that are absent from the gradebook upload.
+		for ssid_identifier in sorted(ssid_roster_rows.keys()):
+			if ssid_identifier in seen_ssid_identifiers:
+				continue
+			roster_row = ssid_roster_rows[ssid_identifier]
+			blank_row = {field: "" for field in fieldnames}
+			blank_row[identifier_key] = roster_row.get("identifier", "")
+			blank_row[full_name_key] = roster_row.get("full_name", "")
+			blank_row[email_key] = roster_row.get("email", "")
+			blank_row[actual_grade_column] = ""
+			if feedback_column:
+				blank_row[feedback_column] = ""
+			ssid_writer.writerow(blank_row)
 
 	ssid_omissions_report = build_ssid_omissions_report(
 		gradebook_input=gradebook_input,
