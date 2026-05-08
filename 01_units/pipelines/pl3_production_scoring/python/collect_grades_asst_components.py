@@ -482,6 +482,31 @@ def write_xlsx(
 
     weighted_score_column_index = header.index(WEIGHTED_SCORE_COLUMN)
     weighted_max_column_index = header.index(MAX_SCORE_COLUMN)
+    raw_grade_column_indexes = [
+        index
+        for index, column_name in enumerate(header)
+        if isinstance(column_name, str) and column_name.startswith("Raw_Grade_")
+    ]
+    raw_max_column_indexes = [
+        index
+        for index, column_name in enumerate(header)
+        if isinstance(column_name, str) and column_name.startswith("Raw_Max_")
+    ]
+    weight_column_indexes = [
+        index
+        for index, column_name in enumerate(header)
+        if isinstance(column_name, str) and column_name.startswith("Weight_")
+    ]
+    weighted_grade_column_indexes = [
+        index
+        for index, column_name in enumerate(header)
+        if isinstance(column_name, str) and column_name.startswith("Weighted_Grade_")
+    ]
+    weighted_max_column_indexes = [
+        index
+        for index, column_name in enumerate(header)
+        if isinstance(column_name, str) and column_name.startswith("Weighted_Max_")
+    ]
     feedback_column_indexes = [
         index
         for index, column_name in enumerate(header)
@@ -520,10 +545,8 @@ def write_xlsx(
                 row_out.append("")
             parsed_weight = _parse_float(weight_value)
             row_out.append(parsed_weight if parsed_weight is not None else weight_value)
-            scaled_grade_value = scale_value_by_weight(grade_value, weight_value)
-            scaled_max_grade_value = scale_value_by_weight(max_grade_value, weight_value)
-            row_out.append(scaled_grade_value if scaled_grade_value is not None else "")
-            row_out.append(scaled_max_grade_value if scaled_max_grade_value is not None else "")
+            row_out.append("")
+            row_out.append("")
         row_out.append("")
         row_out.append("")
         row_out.append("")
@@ -538,11 +561,40 @@ def write_xlsx(
             summary_max_scores.append(weighted_total_max)
 
         sheet_row = sheet.max_row
+        for idx, (weight_idx, raw_grade_idx, weighted_grade_idx) in enumerate(
+            zip(weight_column_indexes, raw_grade_column_indexes, weighted_grade_column_indexes)
+        ):
+            weight_ref = f"{get_column_letter(weight_idx + 1)}{sheet_row}"
+            raw_grade_ref = f"{get_column_letter(raw_grade_idx + 1)}{sheet_row}"
+            weighted_grade_ref_col = weighted_grade_idx + 1
+            sheet.cell(row=sheet_row, column=weighted_grade_ref_col).value = (
+                f'=IF(OR({weight_ref}="",{raw_grade_ref}=""),"",{weight_ref}*{raw_grade_ref})'
+            )
+
+        for idx, (weight_idx, raw_max_idx, weighted_max_idx) in enumerate(
+            zip(weight_column_indexes, raw_max_column_indexes, weighted_max_column_indexes)
+        ):
+            weight_ref = f"{get_column_letter(weight_idx + 1)}{sheet_row}"
+            raw_max_ref = f"{get_column_letter(raw_max_idx + 1)}{sheet_row}"
+            weighted_max_ref_col = weighted_max_idx + 1
+            sheet.cell(row=sheet_row, column=weighted_max_ref_col).value = (
+                f'=IF(OR({weight_ref}="",{raw_max_ref}=""),"",{weight_ref}*{raw_max_ref})'
+            )
+
+        weighted_grade_refs = ",".join(
+            f"{get_column_letter(column_index + 1)}{sheet_row}"
+            for column_index in weighted_grade_column_indexes
+        )
         sheet.cell(row=sheet_row, column=weighted_score_column_index + 1).value = (
-            weighted_total_score if weighted_total_score is not None else ""
+            f"=IF(COUNTA({weighted_grade_refs})=0,\"\",SUM({weighted_grade_refs}))"
+        )
+
+        weighted_max_refs = ",".join(
+            f"{get_column_letter(column_index + 1)}{sheet_row}"
+            for column_index in weighted_max_column_indexes
         )
         sheet.cell(row=sheet_row, column=weighted_max_column_index + 1).value = (
-            weighted_total_max if weighted_total_max is not None else ""
+            f"=IF(COUNTA({weighted_max_refs})=0,\"\",SUM({weighted_max_refs}))"
         )
         if feedback_column_indexes:
             feedback_refs = [
