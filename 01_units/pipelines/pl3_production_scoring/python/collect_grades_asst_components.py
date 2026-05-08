@@ -853,12 +853,15 @@ def write_template_csv(
     source_data: list[tuple[str, dict[tuple[str, str, str], dict[str, str]], str, str]],
     component_weights: dict[str, str],
     is_ssid: bool = False,
+    token: str = "",
 ) -> None:
     """Write a gradebook CSV with stage02-like populated summary columns.
     
-    If is_ssid=True, relabels Identifier to SSID and adds grade_normalized column.
+    If is_ssid=True, relabels Identifier to SSID and adds a normalized grade column
+    named after the token (assignment name).
     """
     identifier_column = "SSID" if is_ssid else "Identifier"
+    normalized_grade_column = token if is_ssid else "grade_normalized"
     header = [
         identifier_column,
         "Full name",
@@ -868,7 +871,7 @@ def write_template_csv(
         "Maximum Grade",
     ]
     if is_ssid:
-        header.append("grade_normalized")
+        header.append(normalized_grade_column)
     header.extend([
         "Grade can be changed",
         "Last modified (submission)",
@@ -931,7 +934,7 @@ def write_template_csv(
                 "Feedback comments": aggregate_feedback_for_identity(key, source_data, component_weights),
             }
             if is_ssid:
-                row_out["grade_normalized"] = grade_normalized
+                row_out[normalized_grade_column] = grade_normalized
             writer.writerow(row_out)
 
 
@@ -1048,7 +1051,7 @@ def main() -> int:
     # Write template CSV with standard gradebook submission columns
     template_filename = f"{token}_Grades_iter{first_iteration}.csv"
     template_path = grades_release_dir / template_filename
-    write_template_csv(template_path, first_iteration, ordered_identity_keys, source_data, component_weights)
+    write_template_csv(template_path, first_iteration, ordered_identity_keys, source_data, component_weights, token=token)
 
     ssid_output_xlsx: Path | None = None
     ssid_template_path: Path | None = None
@@ -1068,6 +1071,7 @@ def main() -> int:
             ssid_source_data,
             component_weights,
             is_ssid=True,
+            token=token,
         )
 
     print(f"ASST_ROOT: {assignment_root}")
