@@ -1,5 +1,45 @@
 from __future__ import annotations
 
+"""Aggregate component-level grade exports for an umbrella assignment.
+
+This script scans assignment subdirectories under ``--assignment-root`` and
+collects component gradebook outputs produced by stage02. It builds merged
+umbrella outputs for both the regular grade files and, when present, the
+``_SSID`` variants.
+
+Inputs
+------
+- ``--assignment-root``
+    Umbrella directory that contains component subdirectories with
+    ``pipeline_paths.json``.
+- Per-component stage02 outputs discovered through each component's
+    ``pipeline_paths.json``:
+    - ``.../04_gradebook_populated/*_Grades_iterXX.csv``
+    - optional sibling ``.../*_Grades_iterXX_SSID.csv``
+- Optional weights file at
+    ``<assignment-root>/04_grades_release/<token>_weights.json``.
+
+Behavior
+--------
+- Resolves each component's populated gradebook CSV path from config.
+- Validates identity columns and enforces identity-set consistency across
+    all discovered components in a merge set.
+- Writes merged umbrella outputs with two component blocks:
+    - raw component grade/max/feedback columns
+    - weighted component grade/max columns (plus per-component weight)
+- Writes merged umbrella outputs for the regular set.
+- If SSID component files are discovered, writes a second merged SSID set.
+- Reports skipped components when expected CSV files are missing.
+
+Outputs
+-------
+Under ``<assignment-root>/04_grades_release/``:
+- ``<token>_component_grade_feedback_merged.xlsx``
+- ``<token>_Grades_iterXX.csv``
+- (when SSID sources exist) ``<token>_component_grade_feedback_merged_SSID.xlsx``
+- (when SSID sources exist) ``<token>_Grades_iterXX_SSID.csv``
+"""
+
 import argparse
 import csv
 import json
@@ -161,19 +201,19 @@ def load_component_weights(weights_path: Path) -> dict[str, str]:
     Keys may include or omit the "Weight_" prefix.
     """
     if not weights_path.is_file():
-        return {}
+        raise FileNotFoundError(f"Required weights file not found: {weights_path}")
 
     raw_text = weights_path.read_text(encoding="utf-8").strip()
     if not raw_text:
-        return {}
+        raise ValueError(f"Weights file is empty: {weights_path}")
 
     try:
         payload = json.loads(raw_text)
-    except json.JSONDecodeError:
-        return {}
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Weights file is not valid JSON: {weights_path}") from exc
 
     if not isinstance(payload, dict):
-        return {}
+        raise ValueError(f"Weights file must contain a JSON object: {weights_path}")
 
     candidate = payload.get("weights")
     if isinstance(candidate, dict):
@@ -193,6 +233,11 @@ def load_component_weights(weights_path: Path) -> dict[str, str]:
             result[normalized_key] = str(nested_weight)
         else:
             result[normalized_key] = str(value)
+    if not result:
+        raise ValueError(
+            f"No component weights found in required weights file: {weights_path}"
+        )
+
     return result
 
 
@@ -406,23 +451,23 @@ def write_xlsx(
     summary_max_scores: list[float] = []
 
     header = list(IDENTITY_COLUMNS)
-    duplicated_grade_headers: list[str] = []
-    duplicated_max_headers: list[str] = []
-    duplicated_weight_headers: list[str] = []
+    weighted_grade_headers: list[str] = []
+    weighted_max_headers: list[str] = []
+    weighted_weight_headers: list[str] = []
     for index, (source_name, _rows_by_id, _feedback_column, _max_grade_column) in enumerate(source_data):
         if index > 0:
             header.append(SEPARATOR_COLUMN)
-        header.append(f"Grade_{source_name}")
-        header.append(f"Max_{source_name}")
+        header.append(f"Raw_Grade_{source_name}")
+        header.append(f"Raw_Max_{source_name}")
         header.append(f"Feedback_{source_name}")
-        duplicated_weight_headers.append(f"Weight_{source_name}")
-        duplicated_grade_headers.append(f"Grade_{source_name}")
-        duplicated_max_headers.append(f"Max_{source_name}")
+        weighted_weight_headers.append(f"Weight_{source_name}")
+        weighted_grade_headers.append(f"Weighted_Grade_{source_name}")
+        weighted_max_headers.append(f"Weighted_Max_{source_name}")
     header.append(SEPARATOR_COLUMN)
     for index, (weight_header, grade_header, max_header) in enumerate(zip(
-        duplicated_weight_headers,
-        duplicated_grade_headers,
-        duplicated_max_headers,
+        weighted_weight_headers,
+        weighted_grade_headers,
+        weighted_max_headers,
     )):
         if index > 0:
             header.append(SEPARATOR_COLUMN)
@@ -438,13 +483,13 @@ def write_xlsx(
     weighted_grade_column_indexes = [
         index
         for index, column_name in enumerate(header)
-        if isinstance(column_name, str) and column_name.startswith("Grade_")
-    ][len(source_data):]
+        if isinstance(column_name, str) and column_name.startswith("Weighted_Grade_")
+    ]
     weighted_max_column_indexes = [
         index
         for index, column_name in enumerate(header)
-        if isinstance(column_name, str) and column_name.startswith("Max_")
-    ][len(source_data):]
+        if isinstance(column_name, str) and column_name.startswith("Weighted_Max_")
+    ]
     weighted_score_column_index = header.index(WEIGHTED_SCORE_COLUMN)
     weighted_max_column_index = header.index(MAX_SCORE_COLUMN)
     feedback_column_indexes = [
@@ -456,9 +501,9 @@ def write_xlsx(
 
     for key in ordered_identity_keys:
         row_out = list(key)
-        duplicated_grade_values: list[str] = []
-        duplicated_max_values: list[str] = []
-        duplicated_weight_values: list[str] = []
+        raw_grade_values: list[str] = []
+        raw_max_values: list[str] = []
+        weight_values: list[str] = []
         for index, (_source_name, rows_by_id, feedback_column, max_grade_column) in enumerate(source_data):
             if index > 0:
                 row_out.append("")
@@ -466,23 +511,20 @@ def write_xlsx(
             grade_value_raw = (source_row.get(GRADE_COLUMN, "") or "").strip()
             max_grade_value_raw = (source_row.get(max_grade_column, "") or "").strip()
             weight_value = component_weights.get(_source_name, "")
-            scaled_grade_value = scale_value_by_weight(grade_value_raw, weight_value)
-            scaled_max_grade_value = scale_value_by_weight(max_grade_value_raw, weight_value)
-            scaled_feedback_text = scale_feedback_score_pairs(
-                (source_row.get(feedback_column, "") or "").strip(),
-                weight_value,
-            )
-            row_out.append(scaled_grade_value if scaled_grade_value is not None else "")
-            row_out.append(scaled_max_grade_value if scaled_max_grade_value is not None else "")
-            row_out.append(scaled_feedback_text)
-            duplicated_grade_values.append(grade_value_raw)
-            duplicated_max_values.append(max_grade_value_raw)
-            duplicated_weight_values.append(weight_value)
+            feedback_text_raw = (source_row.get(feedback_column, "") or "").strip()
+            parsed_grade = _parse_float(grade_value_raw)
+            parsed_max_grade = _parse_float(max_grade_value_raw)
+            row_out.append(parsed_grade if parsed_grade is not None else grade_value_raw)
+            row_out.append(parsed_max_grade if parsed_max_grade is not None else max_grade_value_raw)
+            row_out.append(feedback_text_raw)
+            raw_grade_values.append(grade_value_raw)
+            raw_max_values.append(max_grade_value_raw)
+            weight_values.append(weight_value)
         row_out.append("")
         for index, (weight_value, grade_value, max_grade_value) in enumerate(zip(
-            duplicated_weight_values,
-            duplicated_grade_values,
-            duplicated_max_values,
+            weight_values,
+            raw_grade_values,
+            raw_max_values,
         )):
             if index > 0:
                 row_out.append("")
@@ -498,8 +540,8 @@ def write_xlsx(
         row_out.append("")
         sheet.append(row_out)
 
-        weighted_total_score = _compute_weighted_total(duplicated_grade_values, duplicated_weight_values)
-        weighted_total_max = _compute_weighted_total(duplicated_max_values, duplicated_weight_values)
+        weighted_total_score = _compute_weighted_total(raw_grade_values, weight_values)
+        weighted_total_max = _compute_weighted_total(raw_max_values, weight_values)
         if weighted_total_score is not None:
             summary_scores.append(weighted_total_score)
         if weighted_total_max is not None:
@@ -685,6 +727,7 @@ def main() -> int:
     output_xlsx = grades_release_dir / f"{token}_component_grade_feedback_merged.xlsx"
     weights_path = grades_release_dir / f"{token}_weights.json"
     component_weights = load_component_weights(weights_path)
+    weighted_components = set(component_weights.keys())
 
     assignment_dirs = sorted(
         [path for path in assignment_root.iterdir() if path.is_dir()],
@@ -698,10 +741,21 @@ def main() -> int:
     first_config: dict[str, object] | None = None
     first_iteration = ""
     
-    for assignment_dir in assignment_dirs:
+    assignment_dir_by_name = {path.name: path for path in assignment_dirs}
+    missing_component_dirs = sorted(weighted_components - set(assignment_dir_by_name.keys()))
+    if missing_component_dirs:
+        raise ValueError(
+            "Weights file lists components that are missing under assignment root: "
+            f"{missing_component_dirs}"
+        )
+
+    for component_name in sorted(weighted_components):
+        assignment_dir = assignment_dir_by_name[component_name]
         config = load_pipeline_paths_config(assignment_dir)
         if config is None:
-            continue
+            raise ValueError(
+                f"Missing pipeline_paths.json for weighted component: {assignment_dir}"
+            )
         if first_config is None:
             first_config = config
             layer4_prod = config.get("layer4_prod", {})
@@ -711,8 +765,9 @@ def main() -> int:
                     first_iteration = str(release.get("iteration", "")).strip()
         csv_path = resolve_output_csv_from_config(assignment_dir, config)
         if not csv_path.exists() or not csv_path.is_file():
-            skipped_missing_csv.append((assignment_dir.name, csv_path))
-            continue
+            raise FileNotFoundError(
+                f"Missing required gradebook CSV for weighted component {assignment_dir.name}: {csv_path}"
+            )
         discovered.append((assignment_dir.name, csv_path))
 
         ssid_csv_path = csv_path.with_name(f"{csv_path.stem}_SSID{csv_path.suffix}")
