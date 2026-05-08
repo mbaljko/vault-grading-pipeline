@@ -382,6 +382,33 @@ def _append_metric_rows(sheet, start_row: int, title: str, values: list[float]) 
     return start_row + 1
 
 
+def _metric_row_values(values: list[float]) -> dict[str, float | int | str]:
+    if not values:
+        return {
+            "count": 0,
+            "mean": "",
+            "median": "",
+            "stdev": "",
+            "min": "",
+            "q1": "",
+            "q3": "",
+            "max": "",
+        }
+
+    sorted_values = sorted(values)
+    q1, q3 = _quartiles(sorted_values)
+    return {
+        "count": len(sorted_values),
+        "mean": round(statistics.mean(sorted_values), 4),
+        "median": round(statistics.median(sorted_values), 4),
+        "stdev": round(statistics.stdev(sorted_values), 4) if len(sorted_values) > 1 else 0.0,
+        "min": round(sorted_values[0], 4),
+        "q1": round(q1, 4),
+        "q3": round(q3, 4),
+        "max": round(sorted_values[-1], 4),
+    }
+
+
 def _add_histogram_section(sheet, start_row: int, title: str, values: list[float]) -> int:
     sheet.cell(row=start_row, column=1).value = title
     start_row += 1
@@ -444,36 +471,40 @@ def _add_normalized_histogram_section(
     sheet,
     start_row: int,
     title: str,
-    values: list[float],
+    series_values: list[tuple[str, list[float]]],
 ) -> tuple[int, int, int]:
     sheet.cell(row=start_row, column=1).value = title
     start_row += 1
     sheet.cell(row=start_row, column=1).value = "bin"
-    sheet.cell(row=start_row, column=2).value = "count"
+    for index, (series_name, _values) in enumerate(series_values, start=2):
+        sheet.cell(row=start_row, column=index).value = series_name
     start_row += 1
 
     bucket_bounds = [(0, 50)] + [(lower, lower + 5) for lower in range(50, 100, 5)]
     bucket_labels = [f"{lower}-{upper}" for lower, upper in bucket_bounds]
-    frequencies = [0] * len(bucket_labels)
-
-    if values:
-        for value in values:
-            # Clamp to [0, 100] so all observations fit the requested normalized buckets.
-            normalized = min(max(value, 0.0), 100.0)
-            if normalized <= 50.0:
-                frequencies[0] += 1
-                continue
-            bucket_index = int((normalized - 50.0 - 1e-9) // 5.0) + 1
-            bucket_index = max(1, min(bucket_index, len(frequencies) - 1))
-            frequencies[bucket_index] += 1
+    frequencies_by_series: list[list[int]] = []
+    for _series_name, values in series_values:
+        frequencies = [0] * len(bucket_labels)
+        if values:
+            for value in values:
+                # Clamp to [0, 100] so all observations fit the requested normalized buckets.
+                normalized = min(max(value, 0.0), 100.0)
+                if normalized <= 50.0:
+                    frequencies[0] += 1
+                    continue
+                bucket_index = int((normalized - 50.0 - 1e-9) // 5.0) + 1
+                bucket_index = max(1, min(bucket_index, len(frequencies) - 1))
+                frequencies[bucket_index] += 1
+        frequencies_by_series.append(frequencies)
 
     first_data_row = start_row
-    for label, freq in zip(bucket_labels, frequencies):
+    for row_offset, label in enumerate(bucket_labels):
         label_cell = sheet.cell(row=start_row, column=1)
         # Keep bucket labels as text so Excel category axis uses explicit string bins.
         label_cell.value = str(label)
         label_cell.number_format = "@"
-        sheet.cell(row=start_row, column=2).value = freq
+        for series_index, frequencies in enumerate(frequencies_by_series, start=2):
+            sheet.cell(row=start_row, column=series_index).value = frequencies[row_offset]
         start_row += 1
 
     last_data_row = start_row - 1
@@ -489,9 +520,10 @@ def write_xlsx(
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "component_grades"
-    summary_scores: list[float] = []
-    summary_max_scores: list[float] = []
     normalized_summary_scores: list[float] = []
+    normalized_weighted_component_scores: dict[str, list[float]] = {
+        source_name: [] for source_name, _rows_by_id, _feedback_column, _max_grade_column in source_data
+    }
 
     header = list(IDENTITY_COLUMNS)
     weighted_grade_headers: list[str] = []
@@ -598,16 +630,29 @@ def write_xlsx(
 
         weighted_total_score = _compute_weighted_total(raw_grade_values, weight_values)
         weighted_total_max = _compute_weighted_total(raw_max_values, weight_values)
-        if weighted_total_score is not None:
-            summary_scores.append(weighted_total_score)
-        if weighted_total_max is not None:
-            summary_max_scores.append(weighted_total_max)
         if (
             weighted_total_score is not None
             and weighted_total_max is not None
             and not math.isclose(weighted_total_max, 0.0)
         ):
             normalized_summary_scores.append((weighted_total_score / weighted_total_max) * 100.0)
+
+        for source_name, raw_grade_value, raw_max_value, weight_value in zip(
+            [name for name, _rows_by_id, _feedback_column, _max_grade_column in source_data],
+            raw_grade_values,
+            raw_max_values,
+            weight_values,
+        ):
+            grade = _parse_float(raw_grade_value)
+            max_grade = _parse_float(raw_max_value)
+            weight = _parse_float(weight_value)
+            if grade is None or max_grade is None or weight is None:
+                continue
+            weighted_grade = grade * weight
+            weighted_max = max_grade * weight
+            if math.isclose(weighted_max, 0.0):
+                continue
+            normalized_weighted_component_scores[source_name].append((weighted_grade / weighted_max) * 100.0)
 
         sheet_row = sheet.max_row
         for idx, (weight_idx, raw_grade_idx, weighted_grade_idx) in enumerate(
@@ -668,25 +713,32 @@ def write_xlsx(
             )
 
     summary_sheet = workbook.create_sheet(title="summary_stats")
-    next_row = 1
-    next_row = _append_metric_rows(
-        summary_sheet,
-        next_row,
-        "submission_numeric_score descriptive statistics",
-        summary_scores,
-    )
-    next_row = _append_metric_rows(
-        summary_sheet,
-        next_row,
-        "submission_max_numeric_score descriptive statistics",
-        summary_max_scores,
-    )
+    summary_series_values: list[tuple[str, list[float]]] = [
+        ("submission_numeric_score_norm100", normalized_summary_scores)
+    ]
+    for source_name, _rows_by_id, _feedback_column, _max_grade_column in source_data:
+        summary_series_values.append(
+            (f"Weighted_Grade_{source_name}_norm100", normalized_weighted_component_scores[source_name])
+        )
+
+    summary_sheet.cell(row=1, column=1).value = "metric"
+    for col_index, (series_name, _values) in enumerate(summary_series_values, start=2):
+        summary_sheet.cell(row=1, column=col_index).value = series_name
+
+    metrics_order = ["count", "mean", "median", "stdev", "min", "q1", "q3", "max"]
+    for row_index, metric_name in enumerate(metrics_order, start=2):
+        summary_sheet.cell(row=row_index, column=1).value = metric_name
+        for col_index, (_series_name, values) in enumerate(summary_series_values, start=2):
+            metric_values = _metric_row_values(values)
+            summary_sheet.cell(row=row_index, column=col_index).value = metric_values[metric_name]
+
     histogram_data_sheet = workbook.create_sheet(title="histogram_data")
+    histogram_series_values = summary_series_values
     _next_row, first_data_row, last_data_row = _add_normalized_histogram_section(
         histogram_data_sheet,
         1,
-        "Histogram bins for normalized submission grade (0-100)",
-        normalized_summary_scores,
+        "Histogram bins for normalized submission and weighted component grades (0-100)",
+        histogram_series_values,
     )
     histogram_data_sheet.sheet_state = "visible"
 
