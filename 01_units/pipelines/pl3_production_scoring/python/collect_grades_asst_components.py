@@ -695,6 +695,8 @@ def write_xlsx(
     histogram_chart.title = "Histogram of normalized submission grade (0-100)"
     histogram_chart.y_axis.title = "count"
     histogram_chart.x_axis.title = "Normalized grade bucket (0-100)"
+    histogram_chart.x_axis.delete = False
+    histogram_chart.y_axis.delete = False
     histogram_chart.x_axis.tickLblPos = "low"
     histogram_chart.legend = None
     # Ensure category labels still render when source data lives on a hidden sheet.
