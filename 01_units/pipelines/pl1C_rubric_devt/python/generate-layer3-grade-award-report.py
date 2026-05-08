@@ -262,14 +262,20 @@ def build_layer3_dimension_rows(aggregate_counts: dict[str, Counter[str]]) -> li
         return []
 
     ordered_bins = [
-        ("0-little_to_no_demonstration", "little_to_no_demonstration"),
-        ("1-partial_demonstration", "partial_demonstration"),
-        ("2-demonstrated", "demonstrated"),
+        ("0-little_to_no_demonstration", ("little_to_no_demonstration",)),
+        ("1-partially_demonstrated", ("partially_demonstrated", "partial_demonstration")),
+        ("2-demonstrated", ("demonstrated",)),
     ]
     table_rows: list[list[str]] = []
-    for display_label, raw_label in ordered_bins:
+    for display_label, raw_labels in ordered_bins:
         table_rows.append(
-            [display_label, *[str(aggregate_counts[dimension_id].get(raw_label, 0)) for dimension_id in dimension_ids]]
+            [
+                display_label,
+                *[
+                    str(sum(aggregate_counts[dimension_id].get(raw_label, 0) for raw_label in raw_labels))
+                    for dimension_id in dimension_ids
+                ],
+            ]
         )
     table_rows.append(["Total", *[str(sum(aggregate_counts[dimension_id].values())) for dimension_id in dimension_ids]])
     return table_rows
@@ -302,25 +308,25 @@ def build_layer3_dimension_histogram_rows(
         return [], build_histogram_resolution_note(1)
 
     ordered_bins = [
-        ("0-little_to_no_demonstration", "little_to_no_demonstration"),
-        ("1-partial_demonstration", "partial_demonstration"),
-        ("2-demonstrated", "demonstrated"),
+        ("0-little_to_no_demonstration", ("little_to_no_demonstration",)),
+        ("1-partially_demonstrated", ("partially_demonstrated", "partial_demonstration")),
+        ("2-demonstrated", ("demonstrated",)),
     ]
     max_count = max(
         (
-            aggregate_counts[dimension_id].get(raw_label, 0)
+            sum(aggregate_counts[dimension_id].get(raw_label, 0) for raw_label in raw_labels)
             for dimension_id in dimension_ids
-            for _, raw_label in ordered_bins
+            for _, raw_labels in ordered_bins
         ),
         default=0,
     )
     resolution = compute_histogram_resolution(max_count)
     table_rows: list[list[str]] = []
-    for display_label, raw_label in ordered_bins:
+    for display_label, raw_labels in ordered_bins:
         count_lines: list[str] = []
         bar_lines: list[str] = []
         for dimension_id in dimension_ids:
-            bin_count = aggregate_counts[dimension_id].get(raw_label, 0)
+            bin_count = sum(aggregate_counts[dimension_id].get(raw_label, 0) for raw_label in raw_labels)
             count_lines.append(str(bin_count))
             bar_lines.append(render_histogram_bar(bin_count, resolution))
         table_rows.append([display_label, "<br>".join(count_lines), "<br>".join(bar_lines)])
@@ -340,17 +346,20 @@ def build_single_layer3_dimension_histogram_rows(
         return [], build_histogram_resolution_note(1)
 
     ordered_bins = [
-        ("0-little_to_no_demonstration", "little_to_no_demonstration"),
-        ("1-partial_demonstration", "partial_demonstration"),
-        ("2-demonstrated", "demonstrated"),
+        ("0-little_to_no_demonstration", ("little_to_no_demonstration",)),
+        ("1-partially_demonstrated", ("partially_demonstrated", "partial_demonstration")),
+        ("2-demonstrated", ("demonstrated",)),
     ]
     counts = aggregate_counts[dimension_id]
     total_count = sum(counts.values())
-    max_count = max((counts.get(raw_label, 0) for _, raw_label in ordered_bins), default=0)
+    max_count = max(
+        (sum(counts.get(raw_label, 0) for raw_label in raw_labels) for _, raw_labels in ordered_bins),
+        default=0,
+    )
     resolution = compute_histogram_resolution(max_count)
     table_rows: list[list[str]] = []
-    for display_label, raw_label in ordered_bins:
-        bin_count = counts.get(raw_label, 0)
+    for display_label, raw_labels in ordered_bins:
+        bin_count = sum(counts.get(raw_label, 0) for raw_label in raw_labels)
         table_rows.append([
             display_label,
             str(bin_count),
