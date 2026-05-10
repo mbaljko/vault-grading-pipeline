@@ -57,6 +57,7 @@ from openpyxl.utils import get_column_letter
 IDENTITY_COLUMNS = ["Identifier", "Full name", "Email address"]
 GRADE_COLUMN = "Grade"
 MAX_GRADE_COLUMN = "Maximum Grade"
+MAX_GRADE_COLUMN_CANDIDATES = [MAX_GRADE_COLUMN, "Maximum grade"]
 FEEDBACK_COLUMN_CANDIDATES = ["Feedback comments", "Feedback"]
 SEPARATOR_COLUMN = "."
 WEIGHTED_SCORE_COLUMN = "submission_numeric_score"
@@ -150,8 +151,11 @@ def read_grade_rows(csv_path: Path) -> tuple[list[str], list[dict[str, str]], st
         if column not in headers:
             raise ValueError(f"Missing required column '{column}' in {csv_path}")
 
-    if MAX_GRADE_COLUMN not in headers:
-        raise ValueError(f"Missing required column '{MAX_GRADE_COLUMN}' in {csv_path}")
+    max_grade_column = next((name for name in MAX_GRADE_COLUMN_CANDIDATES if name in headers), "")
+    if not max_grade_column:
+        raise ValueError(
+            f"Missing maximum-grade column in {csv_path}. Expected one of: {MAX_GRADE_COLUMN_CANDIDATES}"
+        )
 
     feedback_column = next((name for name in FEEDBACK_COLUMN_CANDIDATES if name in headers), "")
     if not feedback_column:
@@ -159,7 +163,7 @@ def read_grade_rows(csv_path: Path) -> tuple[list[str], list[dict[str, str]], st
             f"Missing feedback column in {csv_path}. Expected one of: {FEEDBACK_COLUMN_CANDIDATES}"
         )
 
-    return headers, rows, feedback_column, MAX_GRADE_COLUMN
+    return headers, rows, feedback_column, max_grade_column
 
 
 def identity_key(row: dict[str, str]) -> tuple[str, str, str]:

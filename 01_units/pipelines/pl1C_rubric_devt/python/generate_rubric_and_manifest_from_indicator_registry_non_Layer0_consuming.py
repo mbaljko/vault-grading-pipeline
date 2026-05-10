@@ -1266,6 +1266,26 @@ def resolve_indicator_binding_ids(indicator_binding_rule: str, expression_values
     return [token.strip() for token in re.findall(r"`([^`]+)`", indicator_binding_rule) if token.strip()]
 
 
+WILDCARD_INDICATOR_TOKEN_RE = re.compile(r"^I\*0?(\d+)$")
+
+
+def normalize_layer2_bound_indicator_ids(
+    component_id: str,
+    input_indicator_tokens: list[str],
+    bound_indicator_ids: list[str],
+) -> list[str]:
+    normalized_bound_ids: list[str] = []
+    for token, bound_indicator_id in zip(input_indicator_tokens, bound_indicator_ids):
+        token_match = WILDCARD_INDICATOR_TOKEN_RE.fullmatch(str(token).strip())
+        bound_id = str(bound_indicator_id).strip()
+        if token_match is not None and re.fullmatch(r"I\d+", bound_id):
+            local_slot = token_match.group(1).zfill(2)
+            normalized_bound_ids.append(derive_legacy_layer1_indicator_id(component_id, local_slot))
+            continue
+        normalized_bound_ids.append(bound_id)
+    return normalized_bound_ids
+
+
 def derive_layer2_scoring_payloads_from_reuse_tables(
     registry_path: Path,
     rule_templates: dict[str, dict[str, object]],
@@ -1337,6 +1357,11 @@ def derive_layer2_scoring_payloads_from_reuse_tables(
                     "component_block": component_block,
                 },
             )
+            bound_indicator_ids = normalize_layer2_bound_indicator_ids(
+                component_id,
+                input_indicator_tokens,
+                bound_indicator_ids,
+            )
             if len(bound_indicator_ids) != len(input_indicator_tokens):
                 raise ValueError(
                     "Layer 2 indicator binding rule did not resolve to the same number of indicators as the "
@@ -1363,10 +1388,15 @@ def parse_layer2_scoring_payloads(registry_path: Path) -> dict[tuple[str, str], 
         derivation_rules = list(rule_template.get("derivation_rules", []))
         bindings_by_component = dict(rule_template.get("bindings_by_component", {}))
         for component_id, bound_indicator_ids in bindings_by_component.items():
+            normalized_bound_ids = normalize_layer2_bound_indicator_ids(
+                component_id,
+                input_indicator_tokens,
+                [str(indicator_id) for indicator_id in bound_indicator_ids],
+            )
             payload = {
                 "dimension_template_id": dimension_template_id,
                 "input_indicator_tokens": input_indicator_tokens,
-                "bound_indicator_ids": bound_indicator_ids,
+                "bound_indicator_ids": normalized_bound_ids,
                 "derivation_rules": derivation_rules,
             }
             payloads[(component_id, dimension_template_id)] = serialize_scoring_payload(payload)
