@@ -263,8 +263,10 @@ def build_wide_output_rows(
 		return [], []
 	component_score_fields = [f"component_score__{component_id}" for component_id in bound_component_ids]
 	component_numeric_headers = [f"{component_id}_numeric" for component_id in bound_component_ids]
+	component_max_score_headers = [f"{component_id}_max_numeric" for component_id in bound_component_ids]
 	response_text_headers = [f"{component_id}_response_text" for component_id in (response_component_ids or [])]
 	component_comment_fields = derive_component_comment_fields(output_rows, response_component_ids)
+	
 	base_fieldnames = [fieldname for fieldname in WIDE_BASE_FIELDS if fieldname in output_rows[0]]
 	headers = list(base_fieldnames)
 	if response_text_headers:
@@ -279,6 +281,9 @@ def build_wide_output_rows(
 	if component_numeric_headers:
 		headers.append(".")
 		headers.extend(component_numeric_headers)
+	if component_max_score_headers:
+		headers.append(".")
+		headers.extend(component_max_score_headers)
 	if layer3_wide_blocks:
 		headers.append(".")
 		for index, block in enumerate(layer3_wide_blocks):
@@ -295,6 +300,18 @@ def build_wide_output_rows(
 		numeric_values = json.loads(raw_numeric_values) if raw_numeric_values else {}
 		if not isinstance(numeric_values, dict):
 			raise ValueError("source_component_numeric_values_json must decode to an object.")
+		
+		# Calculate component max score for this row
+		row_submission_max = (output_row.get("submission_max_numeric_score") or "").strip()
+		row_component_max_score_str = ""
+		if row_submission_max and bound_component_ids:
+			try:
+				max_val = float(row_submission_max)
+				component_max = max_val / len(bound_component_ids)
+				row_component_max_score_str = format_numeric(component_max)
+			except (ValueError, ZeroDivisionError):
+				pass
+		
 		wide_row = [output_row.get(fieldname, "") for fieldname in base_fieldnames]
 		if response_text_headers:
 			wide_row.append("")
@@ -313,6 +330,10 @@ def build_wide_output_rows(
 			wide_row.append("")
 			for component_id in bound_component_ids:
 				wide_row.append(str(numeric_values.get(component_id, "")))
+		if component_max_score_headers:
+			wide_row.append("")
+			for _ in bound_component_ids:
+				wide_row.append(row_component_max_score_str)
 		if layer3_wide_blocks:
 			wide_row.append("")
 			submission_id = str(output_row.get("submission_id", "")).strip()
