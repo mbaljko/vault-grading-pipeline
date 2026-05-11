@@ -300,6 +300,40 @@ def _build_feedback(
     return "\n".join(lines)
 
 
+def _get_component_numeric_score(row: dict[str, str], component_id: str) -> str:
+    """Extract the numeric score for a component from the row data.
+    
+    Looks for columns like {component_id}_numeric (e.g., SectionB1Response_numeric).
+    Returns formatted score string or empty string if not found.
+    """
+    numeric_col = f"{component_id}_numeric"
+    raw_value = (row.get(numeric_col) or "").strip()
+    if raw_value:
+        parsed = _parse_float_or_none(raw_value)
+        if parsed is not None:
+            return _format_numeric(parsed)
+    return ""
+
+
+def _get_component_max_score(row: dict[str, str],  grouped_component_layout: list[dict[str, object]]) -> str:
+    """Calculate or extract the max score for components.
+    
+    Attempts to find component-level max score. If not available,
+    proportionally distributes the submission max score across components.
+    """
+    submission_max = (row.get(SUBMISSION_MAX_SCORE_COLUMN) or "").strip()
+    if not submission_max:
+        return ""
+    try:
+        max_val = float(submission_max)
+        if len(grouped_component_layout) > 0:
+            component_max = max_val / len(grouped_component_layout)
+            return _format_numeric(component_max)
+    except (ValueError, ZeroDivisionError):
+        pass
+    return ""
+
+
 def _build_grouped_feedback(
     row: dict[str, str],
     summary_template: str,
@@ -325,8 +359,19 @@ def _build_grouped_feedback(
         )
     ]
 
+    component_max_score = _get_component_max_score(row, grouped_component_layout)
+    
     for component_info in grouped_component_layout:
-        lines.append(str(component_info["component_label"]))
+        component_label = str(component_info["component_label"])
+        component_numeric_score = _get_component_numeric_score(row, str(component_info["component_id"]))
+        
+        # Format component header with score: "SectionB1 (4/5)"
+        if component_numeric_score and component_max_score:
+            component_header = f"{component_label} ({component_numeric_score}/{component_max_score})"
+        else:
+            component_header = component_label
+        
+        lines.append(component_header)
         for dimension_name in component_info["dimension_columns"]:
             lines.append(
                 dimension_template.format(

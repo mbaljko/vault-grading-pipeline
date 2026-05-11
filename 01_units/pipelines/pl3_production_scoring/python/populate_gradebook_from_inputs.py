@@ -266,6 +266,9 @@ def _append_feedback_comment(base_feedback: str, l3_comment: str) -> str:
 		return l3
 	if not l3:
 		return base
+	segments = [segment.strip() for segment in l3.split("|") if segment.strip()]
+	if segments and all(segment in base for segment in segments):
+		return base
 	if l3 in base:
 		return re.sub(rf"(?:\r?\n\s*)+(?={re.escape(l3)})", "\n", base, count=1)
 	return f"{base}\n{l3}"
