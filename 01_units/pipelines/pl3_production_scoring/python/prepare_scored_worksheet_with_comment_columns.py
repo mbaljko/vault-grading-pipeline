@@ -303,23 +303,38 @@ def _build_feedback(
 def _get_component_numeric_score(row: dict[str, str], component_id: str) -> str:
     """Extract the numeric score for a component from the row data.
     
-    Looks for columns like {component_id}_numeric (e.g., SectionB1Response_numeric).
-    Returns formatted score string or empty string if not found.
+    Looks for columns like:
+    - {component_id}_numeric (e.g., SectionB1Response_numeric)
+    - C_*_Sec{section}#_numeric (e.g., C_AP1B_SecB1_numeric)
+    
+    Returns the raw score (not scaled) or empty string if not found.
     """
+    # Try direct pattern first
     numeric_col = f"{component_id}_numeric"
     raw_value = (row.get(numeric_col) or "").strip()
     if raw_value:
-        parsed = _parse_float_or_none(raw_value)
-        if parsed is not None:
-            return _format_numeric(parsed)
+        return raw_value
+    
+    # Extract section identifier from component_id (e.g., "B1" from "SectionB1Response")
+    section_match = re.match(r"Section([A-Z]\d+)", component_id)
+    if section_match:
+        section_id = section_match.group(1)
+        # Look for columns matching C_*_Sec{section_id}_numeric
+        pattern = re.compile(rf"C_.*_Sec{re.escape(section_id)}_numeric$")
+        for col, value in row.items():
+            if pattern.match(col):
+                raw_value = (value or "").strip()
+                if raw_value:
+                    return raw_value
+    
     return ""
 
 
-def _get_component_max_score(row: dict[str, str],  grouped_component_layout: list[dict[str, object]]) -> str:
-    """Calculate or extract the max score for components.
+def _get_component_max_score(row: dict[str, str], grouped_component_layout: list[dict[str, object]]) -> str:
+    """Calculate the max score for components using submission_max_numeric_score.
     
-    Attempts to find component-level max score. If not available,
-    proportionally distributes the submission max score across components.
+    The component max is derived by dividing the submission max by the number of components.
+    This represents the raw component max score.
     """
     submission_max = (row.get(SUBMISSION_MAX_SCORE_COLUMN) or "").strip()
     if not submission_max:
@@ -332,6 +347,43 @@ def _get_component_max_score(row: dict[str, str],  grouped_component_layout: lis
     except (ValueError, ZeroDivisionError):
         pass
     return ""
+
+
+def _scale_score_to_display(score_str: str, component_max_str: str) -> tuple[str, str]:
+    """Scale component score and max to display format (/5 scale).
+    
+    Derives the scale factor from component_max: if component_max is 1.0, 
+    scale by 5 for /5 display. If component_max is 0.6, scale by ~8.33, etc.
+    
+    Returns (scaled_score, scaled_max) as formatted strings.
+    """
+    try:
+        score = float(score_str) if score_str else 0.0
+        max_val = float(component_max_str) if component_max_str else 0.0
+        
+        if max_val > 0:
+            # Scale to 5-point display: scale_factor = 5 / component_max
+            scale_factor = 5.0 / max_val
+            scaled_score = score * scale_factor
+            scaled_max = 5.0
+            return (_format_component_score(_format_numeric(scaled_score)), 
+                    _format_component_score(_format_numeric(scaled_max)))
+    except (ValueError, ZeroDivisionError):
+        pass
+    return (score_str or "0", component_max_str or "0")
+
+
+def _format_component_score(score_str: str) -> str:
+    """Format a component score, showing as integer if it's a whole number."""
+    if not score_str:
+        return score_str
+    try:
+        value = float(score_str)
+        if value == int(value):
+            return str(int(value))
+        return f"{value:g}"  # Remove trailing zeros
+    except (ValueError, TypeError):
+        return score_str
 
 
 def _build_grouped_feedback(
@@ -365,9 +417,10 @@ def _build_grouped_feedback(
         component_label = str(component_info["component_label"])
         component_numeric_score = _get_component_numeric_score(row, str(component_info["component_id"]))
         
-        # Format component header with score: "SectionB1 (4/5)"
+        # Scale both score and max to display format (/5 scale based on submission_max)
         if component_numeric_score and component_max_score:
-            component_header = f"{component_label} ({component_numeric_score}/{component_max_score})"
+            scaled_score, scaled_max = _scale_score_to_display(component_numeric_score, component_max_score)
+            component_header = f"{component_label} ({scaled_score}/{scaled_max})"
         else:
             component_header = component_label
         
