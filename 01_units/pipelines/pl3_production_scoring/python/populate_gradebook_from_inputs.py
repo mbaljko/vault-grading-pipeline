@@ -259,6 +259,152 @@ def _parse_float(value: str) -> float | None:
 		return None
 
 
+def _format_component_score(score_str: str) -> str:
+	"""Format a component score, showing as integer if it's a whole number."""
+	if not score_str:
+		return score_str
+	try:
+		value = float(score_str)
+		if value == int(value):
+			return str(int(value))
+		return f"{value:g}"
+	except (ValueError, TypeError):
+		return score_str
+
+
+def _scale_score_to_display(score_str: str, component_max_str: str) -> tuple[str, str]:
+	"""Scale component score and max to display format (/5 scale based on component_max)."""
+	try:
+		score = float(score_str) if score_str else 0.0
+		max_val = float(component_max_str) if component_max_str else 0.0
+		
+		if max_val > 0:
+			scale_factor = 5.0 / max_val
+			scaled_score = score * scale_factor
+			scaled_max = 5.0
+			return (_format_component_score(f"{scaled_score:.2f}"), 
+					_format_component_score(f"{scaled_max:.2f}"))
+	except (ValueError, ZeroDivisionError):
+		pass
+	return (score_str or "0", component_max_str or "0")
+
+
+def _extract_component_info(
+	fieldnames: list[str] | None,
+	row: dict[str, str],
+) -> tuple[dict[str, dict[str, str]], list[str]]:
+	"""Extract component numeric and max scores from Layer 4 output.
+	
+	Returns (component_data_dict, component_ids_ordered) where component_data_dict
+	maps component_id to {numeric, max_numeric, comment}.
+	"""
+	if not fieldnames:
+		return {}, []
+	
+	component_data: dict[str, dict[str, str]] = {}
+	seen_components: list[str] = []
+	
+	# Find all C_*_numeric and C_*_max_numeric columns
+	numeric_pattern = re.compile(r"^C_.*_Sec([A-Z]\d+)_numeric$")
+	max_numeric_pattern = re.compile(r"^C_.*_Sec([A-Z]\d+)_max_numeric$")
+	comment_pattern = re.compile(r"^L3_comment__(.+)$")
+	
+	for fieldname in fieldnames:
+		# Match numeric score
+		numeric_match = numeric_pattern.match(fieldname)
+		if numeric_match:
+			section_id = numeric_match.group(1)
+			component_id = f"Section{section_id}Response"
+			if component_id not in component_data:
+				component_data[component_id] = {}
+				seen_components.append(component_id)
+			component_data[component_id]["numeric"] = (row.get(fieldname) or "").strip()
+		
+		# Match max numeric score
+		max_match = max_numeric_pattern.match(fieldname)
+		if max_match:
+			section_id = max_match.group(1)
+			component_id = f"Section{section_id}Response"
+			if component_id not in component_data:
+				component_data[component_id] = {}
+				seen_components.append(component_id)
+			component_data[component_id]["max_numeric"] = (row.get(fieldname) or "").strip()
+		
+		# Match comment
+		comment_match = comment_pattern.match(fieldname)
+		if comment_match:
+			component_id = comment_match.group(1)
+			if component_id not in component_data:
+				component_data[component_id] = {}
+				if component_id not in seen_components:
+					seen_components.append(component_id)
+			component_data[component_id]["comment"] = (row.get(fieldname) or "").strip()
+	
+	# Remove duplicates from seen_components while preserving order
+	unique_components = []
+	for comp_id in seen_components:
+		if comp_id not in unique_components:
+			unique_components.append(comp_id)
+	
+	return component_data, unique_components
+
+
+def _build_grouped_feedback_from_components(
+	feedback_base: str,
+	component_data: dict[str, dict[str, str]],
+	component_ids: list[str],
+	use_raw_scale: bool = True,
+) -> str:
+	"""Build grouped feedback using component scores and comments.
+	
+	If use_raw_scale=True, displays raw 1-point scale (e.g., 0.8/1).
+	If use_raw_scale=False, scales to 5-point display (e.g., 4/5).
+	"""
+	if not component_ids or not component_data:
+		return feedback_base
+	
+	# Check if any components have data
+	has_data = any(
+		component_data.get(comp_id, {}).get("numeric") or 
+		component_data.get(comp_id, {}).get("comment")
+		for comp_id in component_ids
+	)
+	
+	if not has_data:
+		return feedback_base
+	
+	lines = [(feedback_base or "")]
+	
+	for component_id in component_ids:
+		comp_info = component_data.get(component_id, {})
+		numeric_score = comp_info.get("numeric", "").strip()
+		max_score = comp_info.get("max_numeric", "").strip()
+		comment = comp_info.get("comment", "").strip()
+		
+		# Extract display name from component_id (e.g., "Section" + "B1" from "SectionB1Response")
+		display_match = re.match(r"Section([A-Z]\d+)", component_id)
+		component_label = f"Section{display_match.group(1)}" if display_match else component_id
+		
+		# Add component header with score if available
+		if numeric_score and max_score:
+			if use_raw_scale:
+				# Use raw 1-point scale
+				formatted_score = _format_component_score(numeric_score)
+				formatted_max = _format_component_score(max_score)
+			else:
+				# Scale to 5-point display
+				formatted_score, formatted_max = _scale_score_to_display(numeric_score, max_score)
+			lines.append(f"{component_label} ({formatted_score}/{formatted_max})")
+		else:
+			lines.append(component_label)
+		
+		# Add comment if available
+		if comment:
+			lines.append(comment)
+	
+	return "\n".join(lines)
+
+
 def _append_feedback_comment(base_feedback: str, l3_comment: str) -> str:
 	base = (base_feedback or "").strip()
 	l3 = (l3_comment or "").strip()
@@ -274,28 +420,28 @@ def _append_feedback_comment(base_feedback: str, l3_comment: str) -> str:
 	return f"{base}\n{l3}"
 
 
-def resolve_uniform_max_grade(source_lookup: dict[str, dict[str, str]]) -> str:
+def resolve_uniform_max_grade(source_lookup: dict[str, dict]) -> str:
 	"""Resolve one canonical maximum grade value to write on every destination row."""
 	numeric_values: list[float] = []
 	for values in source_lookup.values():
-		parsed = _parse_float(values.get("max_score", ""))
+		parsed = _parse_float(str(values.get("max_score", "") or ""))
 		if parsed is not None:
 			numeric_values.append(parsed)
 	if numeric_values:
 		return f"{max(numeric_values):.2f}"
 
 	raw_values = {
-		(values.get("max_score", "") or "").strip()
+		str(values.get("max_score", "") or "").strip()
 		for values in source_lookup.values()
-		if (values.get("max_score", "") or "").strip()
+		if str(values.get("max_score", "") or "").strip()
 	}
 	if len(raw_values) == 1:
 		return next(iter(raw_values))
 	return ""
 
 
-def load_source_lookup(scored_input: Path) -> dict[str, dict[str, str]]:
-	source_lookup: dict[str, dict[str, str]] = {}
+def load_source_lookup(scored_input: Path) -> dict[str, dict[str, str | dict]]:
+	source_lookup: dict[str, dict[str, str | dict]] = {}
 	fieldnames, rows = iter_scored_rows(scored_input)
 	normalized_fields = _normalized_field_lookup(fieldnames)
 	submission_id_key = _require_column(normalized_fields, "submission_id", scored_input)
@@ -312,6 +458,10 @@ def load_source_lookup(scored_input: Path) -> dict[str, dict[str, str]]:
 		max_score_value = (row.get(max_score_key) or "").strip() if max_score_key else ""
 		feedback_value = (row.get(feedback_key) or "") if feedback_key else ""
 		l3_comment_value = (row.get(l3_comment_key) or "") if l3_comment_key else ""
+		
+		# Extract component information from Layer 4 output
+		component_data, component_ids = _extract_component_info(fieldnames, row)
+		
 		existing_value = source_lookup.get(submission_id)
 		if existing_value is not None and existing_value.get("score", "") != score_value:
 			raise ValueError(
@@ -334,6 +484,8 @@ def load_source_lookup(scored_input: Path) -> dict[str, dict[str, str]]:
 			"max_score": max_score_value,
 			"feedback_comments": feedback_value,
 			"l3_comment": l3_comment_value,
+			"component_data": component_data,
+			"component_ids": component_ids,
 		}
 
 	return source_lookup
@@ -530,6 +682,9 @@ def populate_gradebook(
 	ssid_output_file = sibling_ssid_output_path(output_file)
 	ssid_omissions_report_file = sibling_ssid_omissions_report_path(output_file)
 
+	# Load scored input fieldnames for component extraction
+	scored_fieldnames, _ = iter_scored_rows(scored_input)
+
 	with gradebook_input.open("r", encoding="utf-8-sig", newline="") as handle:
 		reader = csv.DictReader(handle)
 		if not reader.fieldnames:
@@ -587,10 +742,32 @@ def populate_gradebook(
 					matched_rows += 1
 					row[actual_grade_column] = score_value
 				if feedback_column:
-					row[feedback_column] = _append_feedback_comment(
-						source_values.get("feedback_comments", ""),
-						source_values.get("l3_comment", ""),
-					)
+					component_data = source_values.get("component_data", {})
+					component_ids = source_values.get("component_ids", [])
+					feedback_comments_base = source_values.get("feedback_comments", "")
+					
+					# Build grouped feedback if component data is available
+					if component_data and component_ids:
+						# Extract only the summary line (first line) from Stage 01 feedback
+						# to avoid duplicating the Stage 01 grouped blocks
+						summary_line = ""
+						if feedback_comments_base:
+							lines = feedback_comments_base.split("\n")
+							if lines:
+								summary_line = lines[0]  # Just the "Overall result..." line
+						
+						feedback_with_components = _build_grouped_feedback_from_components(
+							summary_line,
+							component_data,
+							component_ids,
+							use_raw_scale=True,  # Use raw 1-point scale (1/1, 0.8/1)
+						)
+						row[feedback_column] = feedback_with_components
+					else:
+						row[feedback_column] = _append_feedback_comment(
+							feedback_comments_base,
+							source_values.get("l3_comment", ""),
+						)
 
 				output_row = {field: row.get(field, "") for field in fieldnames}
 				writer.writerow(output_row)
