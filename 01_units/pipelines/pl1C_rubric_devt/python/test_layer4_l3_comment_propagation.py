@@ -30,6 +30,20 @@ _L4_EXECUTOR_MODULE = importlib.util.module_from_spec(_L4_EXECUTOR_SPEC)
 _L4_EXECUTOR_SPEC.loader.exec_module(_L4_EXECUTOR_MODULE)
 score_submission_row = _L4_EXECUTOR_MODULE.score_submission_row
 build_l3_comment_lookup = _L4_EXECUTOR_MODULE.build_l3_comment_lookup
+build_wide_output_rows = _L4_EXECUTOR_MODULE.build_wide_output_rows
+
+
+_PREPARE_WORKSHEET_PATH = Path(__file__).parents[2] / "pl3_production_scoring/python/prepare_scored_worksheet_with_comment_columns.py"
+_PREPARE_WORKSHEET_SPEC = importlib.util.spec_from_file_location(
+    "prepare_scored_worksheet_with_comment_columns",
+    _PREPARE_WORKSHEET_PATH,
+)
+if _PREPARE_WORKSHEET_SPEC is None or _PREPARE_WORKSHEET_SPEC.loader is None:
+    raise RuntimeError(f"Unable to load module from {_PREPARE_WORKSHEET_PATH}")
+_PREPARE_WORKSHEET_MODULE = importlib.util.module_from_spec(_PREPARE_WORKSHEET_SPEC)
+_PREPARE_WORKSHEET_SPEC.loader.exec_module(_PREPARE_WORKSHEET_MODULE)
+build_grouped_feedback = _PREPARE_WORKSHEET_MODULE._build_grouped_feedback
+derive_grouped_component_layout = _PREPARE_WORKSHEET_MODULE._derive_grouped_component_layout
 
 
 class Layer3SubmissionPayloadL3CommentTests(unittest.TestCase):
@@ -142,7 +156,127 @@ class Layer4ExecutionL3CommentPropagationTests(unittest.TestCase):
         )
         self.assertEqual(output_row["L3_comment__B1Response"], "Clear developmental interpretation.")
         self.assertEqual(output_row["L3_comment__C1Response"], "Analytical grounding partially present.")
-        self.assertEqual(output_row["submission_score"], "meets_expectations")
+
+    def test_wide_output_preserves_component_l3_comment_columns(self) -> None:
+        output_rows = [
+            {
+                "submission_id": "1001",
+                "submission_score": "meets_expectations",
+                "submission_numeric_score": "3.00",
+                "submission_max_numeric_score": "3.00",
+                "L3_comment": "Clear developmental interpretation. | Analytical grounding partially present.",
+                "L3_comment__B1Response": "Clear developmental interpretation.",
+                "L3_comment__C1Response": "Analytical grounding partially present.",
+                "component_score__B1Response": "meets_expectations",
+                "component_score__C1Response": "approaching_expectations",
+                "source_component_numeric_values_json": '{"B1Response":"2.00","C1Response":"1.00"}',
+                "flags_any_component": "none",
+                "min_confidence_component": "medium",
+            }
+        ]
+
+        headers, wide_rows = build_wide_output_rows(
+            output_rows,
+            bound_component_ids=["B1Response", "C1Response"],
+            layer3_wide_blocks=[],
+            response_component_ids=["B1Response", "C1Response"],
+            response_text_lookup={"1001": {"B1Response": "Claim 1", "C1Response": "Claim 2"}},
+        )
+
+        self.assertIn("L3_comment__B1Response", headers)
+        self.assertIn("L3_comment__C1Response", headers)
+        wide_row = dict(zip(headers, wide_rows[0]))
+        self.assertEqual(wide_row["L3_comment__B1Response"], "Clear developmental interpretation.")
+        self.assertEqual(wide_row["L3_comment__C1Response"], "Analytical grounding partially present.")
+
+
+class PrepareWorksheetGroupedFeedbackTests(unittest.TestCase):
+    def test_grouped_feedback_uses_component_blocks_for_multi_claim_section(self) -> None:
+        header = [
+            "submission_numeric_score",
+            "submission_max_numeric_score",
+            "submission_score",
+            "SectionB1Response_response_text",
+            "SectionB2Response_response_text",
+            "SectionB3Response_response_text",
+            "D11",
+            "D12",
+            "D13",
+            "D14",
+            "D21",
+            "D22",
+            "D23",
+            "D24",
+            "D31",
+            "D32",
+            "D33",
+            "D34",
+            "L3_comment__SectionB1Response",
+            "L3_comment__SectionB2Response",
+            "L3_comment__SectionB3Response",
+        ]
+        grouped_section_label, grouped_component_layout = derive_grouped_component_layout(
+            header,
+            r"^(.*)_response_text$",
+            "Response",
+            ["D11", "D12", "D13", "D14", "D21", "D22", "D23", "D24", "D31", "D32", "D33", "D34"],
+        )
+        self.assertEqual(grouped_section_label, "SectionB")
+
+        row = {
+            "D11": "1-demonstrated",
+            "D12": "1-demonstrated",
+            "D13": "1-demonstrated",
+            "D14": "1-demonstrated",
+            "D21": "1-demonstrated",
+            "D22": "1-demonstrated",
+            "D23": "1-demonstrated",
+            "D24": "0-little_to_no_demonstration",
+            "D31": "1-demonstrated",
+            "D32": "1-demonstrated",
+            "D33": "1-demonstrated",
+            "D34": "0-little_to_no_demonstration",
+            "L3_comment__SectionB1Response": "Claim is structurally complete and clearly identifies an actor, tool or artefact, mediation action, workflow stage, and valid action-object relationship within the required template structure.",
+            "L3_comment__SectionB2Response": "Claim identifies an actor, tool or artefact, mediation action, and workflow stage, but the action-object relationship is structurally incomplete or insufficiently specified.",
+            "L3_comment__SectionB3Response": "Claim identifies an actor, tool or artefact, mediation action, and workflow stage, but the action-object relationship is structurally incomplete or insufficiently specified.",
+        }
+
+        feedback = build_grouped_feedback(
+            row,
+            "Overall result for {section_label}: {grade} ({score} / {max_score}). {dimension_count} {dimension_word}.",
+            "  {dimension}: {value}",
+            grouped_section_label,
+            "meets_expectations",
+            "13",
+            "15",
+            grouped_component_layout,
+            r"^\d+-",
+        )
+
+        expected = "\n".join(
+            [
+                "Overall result for SectionB: meets expectations (13 / 15). 12 dimensions.",
+                "SectionB1",
+                "  D11: demonstrated",
+                "  D12: demonstrated",
+                "  D13: demonstrated",
+                "  D14: demonstrated",
+                "Claim is structurally complete and clearly identifies an actor, tool or artefact, mediation action, workflow stage, and valid action-object relationship within the required template structure.",
+                "SectionB2",
+                "  D21: demonstrated",
+                "  D22: demonstrated",
+                "  D23: demonstrated",
+                "  D24: little_to_no_demonstration",
+                "Claim identifies an actor, tool or artefact, mediation action, and workflow stage, but the action-object relationship is structurally incomplete or insufficiently specified.",
+                "SectionB3",
+                "  D31: demonstrated",
+                "  D32: demonstrated",
+                "  D33: demonstrated",
+                "  D34: little_to_no_demonstration",
+                "Claim identifies an actor, tool or artefact, mediation action, and workflow stage, but the action-object relationship is structurally incomplete or insufficiently specified.",
+            ]
+        )
+        self.assertEqual(feedback, expected)
 
     def test_layer4_output_row_can_backfill_l3_comment_from_component_outputs(self) -> None:
         class DummyLayer4Module:

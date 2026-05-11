@@ -488,6 +488,7 @@
   },
   "active": "fe3cb8bfbc96d736",
   "lastOpenFiles": [
+    "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/test_layer4_l3_comment_propagation.cpython-313.pyc",
     "01_units/pipelines/pl3_production_scoring/python/ap1b_quick_pair_setup.py",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate-layer3-grade-award-report.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/test_layer3_l3_comment_output.cpython-313.pyc",
@@ -498,7 +499,6 @@
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/execute-layer4-submission-scoring-modules.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/generate-layer3-submission-payload.cpython-313.pyc",
     "01_units/pipelines/pl1C_rubric_devt/python/__pycache__/test_layer4_l3_comment_propagation.cpython-313-pytest-8.3.5.pyc",
-    "01_units/pipelines/pl1C_rubric_devt/python/test_layer4_l3_comment_propagation.py",
     "01_units/pipelines/pl1C_rubric_devt/docs/layer0_registry_supported_values.md",
     "01_units/pipelines/pl1C_rubric_devt/docs/layer1_registry_supported_values.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP1B.md",

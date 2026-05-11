@@ -32,6 +32,7 @@ from pathlib import Path
 SUBMISSION_SCORE_COLUMN = "submission_numeric_score"
 SUBMISSION_MAX_SCORE_COLUMN = "submission_max_numeric_score"
 L3_COMMENT_CANDIDATES = ("L3_Comment", "L3_comment")
+COMPONENT_INDEX_RE = re.compile(r"^(.*?)(\d+)$")
 
 
 def parse_args() -> argparse.Namespace:
@@ -153,12 +154,80 @@ def _section_label_from_component_columns(header: list[str]) -> str:
     return ""
 
 
+def _derive_grouped_component_layout(
+    header: list[str],
+    response_text_match_regex: str,
+    response_text_strip_suffix: str,
+    dimension_columns: list[str],
+) -> tuple[str, list[dict[str, object]]]:
+    if not response_text_match_regex:
+        return "", []
+
+    pattern = re.compile(response_text_match_regex)
+    component_layout: list[dict[str, object]] = []
+    for column_name in header:
+        match = pattern.match(column_name)
+        if match is None:
+            continue
+        component_id = match.group(1) if match.groups() else column_name
+        component_label = component_id
+        if response_text_strip_suffix and component_label.endswith(response_text_strip_suffix):
+            component_label = component_label[: -len(response_text_strip_suffix)]
+        component_match = COMPONENT_INDEX_RE.fullmatch(component_label)
+        if component_match is None:
+            return "", []
+        component_layout.append(
+            {
+                "component_id": component_id,
+                "component_label": component_label,
+                "section_root": component_match.group(1),
+                "component_index": component_match.group(2),
+                "dimension_columns": [],
+            }
+        )
+
+    if len(component_layout) <= 1:
+        return "", []
+
+    section_roots = {str(item["section_root"]) for item in component_layout}
+    if len(section_roots) != 1:
+        return "", []
+
+    for dimension_name in dimension_columns:
+        dimension_suffix = dimension_name[1:]
+        best_match: dict[str, object] | None = None
+        best_length = -1
+        for component_info in component_layout:
+            component_index = str(component_info["component_index"])
+            if dimension_suffix.startswith(component_index) and len(component_index) > best_length:
+                best_match = component_info
+                best_length = len(component_index)
+        if best_match is not None:
+            best_match["dimension_columns"].append(dimension_name)
+
+    if not any(component_info["dimension_columns"] for component_info in component_layout):
+        return "", []
+
+    return next(iter(section_roots)), component_layout
+
+
 def _extract_l3_comment(row: dict[str, str]) -> str:
     for candidate in L3_COMMENT_CANDIDATES:
         comment = (row.get(candidate) or "").strip()
         if comment:
             return comment
     return ""
+
+
+def _extract_component_l3_comment(row: dict[str, str], component_id: str) -> str:
+    return (row.get(f"L3_comment__{component_id}") or "").strip()
+
+
+def _has_grouped_component_comments(row: dict[str, str], grouped_component_layout: list[dict[str, object]]) -> bool:
+    return any(
+        _extract_component_l3_comment(row, str(component_info["component_id"]))
+        for component_info in grouped_component_layout
+    )
 
 
 def _dimension_columns(header: list[str], match_regex: str) -> list[str]:
@@ -228,6 +297,50 @@ def _build_feedback(
                 value=dim_value,
             )
         )
+    return "\n".join(lines)
+
+
+def _build_grouped_feedback(
+    row: dict[str, str],
+    summary_template: str,
+    dimension_template: str,
+    section_label: str,
+    grade: str,
+    score_str: str,
+    max_score_str: str,
+    grouped_component_layout: list[dict[str, object]],
+    strip_leading_regex: str,
+) -> str:
+    total_dimension_count = sum(len(component_info["dimension_columns"]) for component_info in grouped_component_layout)
+    grade_label = grade.replace("_", " ")
+    dimension_word = "dimension" if total_dimension_count == 1 else "dimensions"
+    lines = [
+        summary_template.format(
+            section_label=section_label,
+            grade=grade_label,
+            score=score_str,
+            max_score=max_score_str,
+            dimension_count=total_dimension_count,
+            dimension_word=dimension_word,
+        )
+    ]
+
+    for component_info in grouped_component_layout:
+        lines.append(str(component_info["component_label"]))
+        for dimension_name in component_info["dimension_columns"]:
+            lines.append(
+                dimension_template.format(
+                    dimension=dimension_name,
+                    value=_normalize_dimension_value(
+                        (row.get(dimension_name) or "").strip(),
+                        strip_leading_regex,
+                    ),
+                )
+            )
+        component_comment = _extract_component_l3_comment(row, str(component_info["component_id"]))
+        if component_comment:
+            lines.append(component_comment)
+
     return "\n".join(lines)
 
 
@@ -383,6 +496,12 @@ def main() -> None:
         section_label = _section_label(prefix, response_text_prefix, response_text_strip_suffix) if response_text_regex else ""
     dimension_columns = _dimension_columns(header, dimension_match_regex) if dimension_match_regex else []
     dim_count = len(dimension_columns)
+    grouped_section_label, grouped_component_layout = _derive_grouped_component_layout(
+        header,
+        response_text_regex,
+        response_text_strip_suffix,
+        dimension_columns,
+    )
 
     args.output_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -440,6 +559,19 @@ def main() -> None:
                     feedback_source_columns,
                     feedback_separator,
                 )
+            elif score_raw and grade_raw and grouped_section_label and max_score_str and grouped_component_layout:
+                denominator_score = _row_max_score_str(row) or max_score_str
+                feedback = _build_grouped_feedback(
+                    row,
+                    summary_template,
+                    dimension_template,
+                    grouped_section_label,
+                    grade_raw,
+                    score_raw,
+                    denominator_score,
+                    grouped_component_layout,
+                    strip_leading_regex,
+                )
             elif score_raw and grade_raw and section_label and max_score_str:
                 denominator_score = _row_max_score_str(row) or max_score_str
                 feedback = _build_feedback(
@@ -456,7 +588,10 @@ def main() -> None:
                 feedback = ""
 
             l3_comment = _extract_l3_comment(row)
-            if l3_comment:
+            grouped_comments_already_rendered = bool(
+                grouped_section_label and grouped_component_layout and _has_grouped_component_comments(row, grouped_component_layout)
+            )
+            if l3_comment and not grouped_comments_already_rendered:
                 feedback = f"{feedback}\n\n{l3_comment}" if feedback else l3_comment
 
             writer.writerow(

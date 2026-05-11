@@ -119,6 +119,18 @@ def aggregate_comments(values: list[str]) -> str:
 	return " | ".join(dict.fromkeys(non_empty_values))
 
 
+def derive_component_comment_fields(
+	output_rows: list[dict[str, str]],
+	response_component_ids: list[str] | None = None,
+) -> list[str]:
+	fields: list[str] = []
+	for component_id in response_component_ids or []:
+		field_name = f"L3_comment__{component_id}"
+		if any(str(row.get(field_name, "")).strip() for row in output_rows):
+			fields.append(field_name)
+	return fields
+
+
 def build_l3_comment_lookup(layer3_submission_payload_csv: Path) -> dict[str, dict[str, str]]:
 	component_output_dir = layer3_submission_payload_csv.parent
 	lookup: dict[str, dict[str, str]] = {}
@@ -252,11 +264,15 @@ def build_wide_output_rows(
 	component_score_fields = [f"component_score__{component_id}" for component_id in bound_component_ids]
 	component_numeric_headers = [f"{component_id}_numeric" for component_id in bound_component_ids]
 	response_text_headers = [f"{component_id}_response_text" for component_id in (response_component_ids or [])]
+	component_comment_fields = derive_component_comment_fields(output_rows, response_component_ids)
 	base_fieldnames = [fieldname for fieldname in WIDE_BASE_FIELDS if fieldname in output_rows[0]]
 	headers = list(base_fieldnames)
 	if response_text_headers:
 		headers.append(".")
 		headers.extend(response_text_headers)
+	if component_comment_fields:
+		headers.append(".")
+		headers.extend(component_comment_fields)
 	if component_score_fields:
 		headers.append(".")
 		headers.extend(bound_component_ids)
@@ -285,6 +301,10 @@ def build_wide_output_rows(
 			submission_id = str(output_row.get("submission_id", "")).strip()
 			for component_id in (response_component_ids or []):
 				wide_row.append((response_text_lookup or {}).get(submission_id, {}).get(component_id, ""))
+		if component_comment_fields:
+			wide_row.append("")
+			for fieldname in component_comment_fields:
+				wide_row.append(output_row.get(fieldname, ""))
 		if component_score_fields:
 			wide_row.append("")
 			for fieldname in component_score_fields:
