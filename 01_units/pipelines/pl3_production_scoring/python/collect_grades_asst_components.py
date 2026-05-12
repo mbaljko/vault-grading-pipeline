@@ -832,8 +832,9 @@ def write_xlsx(
     component_histogram_chart.legend.position = "r"  # Right legend
     component_histogram_chart.visible_cells_only = False
 
-    # Add each component series with its own color (skip the first submission score series)
-    for series_index, (series_name, _values) in enumerate(histogram_series_values[1:], start=2):
+    # Add each component series with its own color (skip the first submission score series).
+    # Columns are: A=bin, B=submission_numeric_score_norm100, C+=Weighted_Grade_*_norm100.
+    for series_index, (series_name, _values) in enumerate(histogram_series_values[1:], start=3):
         series_data_ref = Reference(
             histogram_data_sheet,
             min_col=series_index,
@@ -843,7 +844,7 @@ def write_xlsx(
         component_histogram_chart.add_data(series_data_ref, titles_from_data=True)
         
         # Get the most recently added series and set its color
-        color_index = (series_index - 2) % len(component_color_palette)
+        color_index = (series_index - 3) % len(component_color_palette)
         series_obj = component_histogram_chart.series[-1]
         series_obj.graphicalProperties.solidFill = component_color_palette[color_index]
 
