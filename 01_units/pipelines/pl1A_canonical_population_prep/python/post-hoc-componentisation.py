@@ -116,9 +116,9 @@ IN_THIS_SYSTEM_SEGMENT_RE = re.compile(r"(?i)(?P<segment>(?:-\s*)?in\s+(?:this|t
 BULLET_O_SEGMENT_RE = re.compile(r"(?im)(?:^|[\n\r])\s*(?P<segment>o)\s*(?=$|[\n\r])")
 STRUCTURED_ROW_BLOCK_RE = re.compile(
     r"(?s)<row\b[^>]*\bindex=[\"'](?P<index>\d+)[\"'][^>]*>\s*"
-    r"<claim1>(?P<claim_1>.*?)</claim1>\s*"
-    r"<claim2>(?P<claim_2>.*?)</claim2>\s*"
-    r"<claim3>(?P<claim_3>.*?)</claim3>\s*"
+    r"<(?P<tag_prefix>claim|constraint)1>(?P<claim_1>.*?)</(?P=tag_prefix)1>\s*"
+    r"<(?P=tag_prefix)2>(?P<claim_2>.*?)</(?P=tag_prefix)2>\s*"
+    r"<(?P=tag_prefix)3>(?P<claim_3>.*?)</(?P=tag_prefix)3>\s*"
     r"</row>"
 )
 
