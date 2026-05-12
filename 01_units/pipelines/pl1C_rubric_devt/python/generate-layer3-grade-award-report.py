@@ -222,6 +222,13 @@ def wildcard_indicator_sort_key(indicator_id: str) -> tuple[int, str]:
     return indicator_sort_key(indicator_id)
 
 
+def wildcard_dimension_sort_key(dimension_id: str) -> tuple[int, str]:
+    match = re.match(r"^D\*(\d+)$", dimension_id)
+    if match:
+        return int(match.group(1)), dimension_id
+    return 10**9, dimension_id
+
+
 def aggregate_layer2_indicator_counts(layer3_scored_csv: Path) -> dict[str, dict[str, Counter[str]]]:
     aggregate_counts: dict[str, dict[str, Counter[str]]] = defaultdict(lambda: defaultdict(Counter))
     for csv_path in discover_layer2_dimension_output_paths(layer3_scored_csv):
@@ -257,7 +264,7 @@ def aggregate_layer3_dimension_counts(rows: list[dict[str, str]]) -> dict[str, C
 
 
 def build_layer3_dimension_rows(aggregate_counts: dict[str, Counter[str]]) -> list[list[str]]:
-    dimension_ids = [dimension_id for dimension_id in ("D*1", "D*2", "D*3") if dimension_id in aggregate_counts]
+    dimension_ids = sorted(aggregate_counts, key=wildcard_dimension_sort_key)
     if not dimension_ids:
         return []
 
@@ -303,7 +310,7 @@ def build_histogram_resolution_note(resolution: int, max_width: int = MAX_HISTOG
 def build_layer3_dimension_histogram_rows(
     aggregate_counts: dict[str, Counter[str]],
 ) -> tuple[list[list[str]], str]:
-    dimension_ids = [dimension_id for dimension_id in ("D*1", "D*2", "D*3") if dimension_id in aggregate_counts]
+    dimension_ids = sorted(aggregate_counts, key=wildcard_dimension_sort_key)
     if not dimension_ids:
         return [], build_histogram_resolution_note(1)
 
@@ -463,10 +470,24 @@ def load_layer3_description_groups(snapshot_dir: Path) -> dict[str, list[tuple[s
         (
             table.get("rows", [])
             for table in tables
-            if {"component_id", "d*1", "d*2", "d*3"}.issubset(set(table.get("headers", [])))
+            if "component_id" in set(table.get("headers", [])) and any(
+                str(header).strip().lower().startswith("d*") for header in table.get("headers", [])
+            )
         ),
         [],
     )
+
+    binding_dimension_headers: list[str] = []
+    if binding_rows:
+        candidate_headers = {
+            str(key).strip().lower()
+            for row in binding_rows
+            for key in row.keys()
+        }
+        binding_dimension_headers = sorted(
+            [header for header in candidate_headers if re.match(r"^d\*\d+$", header)],
+            key=wildcard_dimension_sort_key,
+        )
 
     component_display_by_id: dict[str, tuple[str, str]] = {}
     for row in component_rows:
@@ -482,8 +503,8 @@ def load_layer3_description_groups(snapshot_dir: Path) -> dict[str, list[tuple[s
         display_item = component_display_by_id.get(component_id)
         if display_item is None:
             continue
-        for aggregate_dimension_id in ("D*1", "D*2", "D*3"):
-            concrete_dimension_id = str(row.get(aggregate_dimension_id.lower(), "")).strip()
+        for aggregate_dimension_id in binding_dimension_headers:
+            concrete_dimension_id = str(row.get(aggregate_dimension_id, "")).strip()
             if concrete_dimension_id:
                 descriptions_by_dimension[aggregate_dimension_id].append(
                     (concrete_dimension_id, display_item[0], display_item[1])
@@ -646,7 +667,7 @@ def generate_report(args: argparse.Namespace) -> Path:
     snapshot_dir = args.component_registry.resolve().parent
     layer3_description_groups = load_layer3_description_groups(snapshot_dir)
     indicator_description_groups = load_indicator_description_groups(snapshot_dir)
-    layer3_dimension_ids = [dimension_id for dimension_id in ("D*1", "D*2", "D*3") if dimension_id in layer3_dimension_counts]
+    layer3_dimension_ids = sorted(layer3_dimension_counts, key=wildcard_dimension_sort_key)
     layer3_dimension_display_ids = [f"`{dimension_id}`" for dimension_id in layer3_dimension_ids]
     layer3_dimension_rows = build_layer3_dimension_rows(layer3_dimension_counts)
     layer3_dimension_histogram_rows, layer3_dimension_histogram_note = build_layer3_dimension_histogram_rows(layer3_dimension_counts)
@@ -735,11 +756,10 @@ def generate_report(args: argparse.Namespace) -> Path:
                 ]
             )
 
-    disaggregate_dimension_ids = [
-        dimension_id
-        for dimension_id in ("D*1", "D*2", "D*3")
-        if dimension_id in layer3_dimension_counts or dimension_id in layer2_indicator_counts
-    ]
+    disaggregate_dimension_ids = sorted(
+        set(layer3_dimension_counts) | set(layer2_indicator_counts),
+        key=wildcard_dimension_sort_key,
+    )
     if disaggregate_dimension_ids:
         sections.extend([
             "## Layer 2/3 Report, Disaggregate",
