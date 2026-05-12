@@ -291,12 +291,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2D.md",
+                "file": "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP3D.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "_prompt_derive_pseudo_assignment_parsing_AP2D"
+              "title": "_prompt_derive_pseudo_assignment_parsing_AP3D"
             }
           }
         ],
@@ -446,13 +446,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2D.md",
+                "file": "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP3D.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of _prompt_derive_pseudo_assignment_parsing_AP2D"
+              "title": "Outline of _prompt_derive_pseudo_assignment_parsing_AP3D"
             }
           },
           {
@@ -488,8 +488,9 @@
   },
   "active": "fe3cb8bfbc96d736",
   "lastOpenFiles": [
-    "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP1D.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2D.md",
+    "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP3D.md",
+    "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP1D.md",
     "01_units/pipelines/pl1C_rubric_devt/docs/layer1_registry_supported_values.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP1B.md",
     "01_units/pipelines/pl1C_rubric_devt/docs/layer0_registry_supported_values.md",
@@ -522,7 +523,6 @@
     "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
     "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
     "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - single indicator.md",
-    "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1C_scaffold_stage13_Layer1_Indicator_Scoring_Prompt.md"
+    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - single indicator.md"
   ]
 }
