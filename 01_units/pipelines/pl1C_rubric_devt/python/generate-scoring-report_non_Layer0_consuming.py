@@ -1934,17 +1934,28 @@ def map_segment_bucket_to_columns(
 	bound_segment_id: str,
 ) -> list[str]:
 	column_specs = derive_segment_report_column_specs(required_layer0_records, bound_segment_id)
+	record_ids = parse_required_layer0_record_ids(required_layer0_records)
+	is_claim_segment = any(record_id == "S00" for record_id in record_ids) and any(
+		segment_id == "00_Claim" for segment_id, _ in column_specs
+	)
 	if column_specs == [("segment_text", "segment_text")]:
 		return [segment_bucket]
 	if len(column_specs) == 1:
+		if segment_bucket in BLANK_SEGMENT_BUCKETS and is_claim_segment:
+			return ["see original_submission for segment"]
 		return [segment_bucket]
 	if segment_bucket in BLANK_SEGMENT_BUCKETS:
+		if is_claim_segment:
+			return ["see original_submission for segment" for _ in column_specs]
 		return [segment_bucket for _ in column_specs]
 	segment_pairs = parse_paired_segment_bucket(segment_bucket)
 	segment_values_by_label = {label: value for label, value in segment_pairs}
 	values: list[str] = []
 	for segment_id, _ in column_specs:
-		values.append(segment_values_by_label.get(segment_id, "(blank segment text)"))
+		if segment_id == "00_Claim" and segment_bucket in BLANK_SEGMENT_BUCKETS:
+			values.append("see original_submission for segment")
+		else:
+			values.append(segment_values_by_label.get(segment_id, "(blank segment text)"))
 	return values
 
 
