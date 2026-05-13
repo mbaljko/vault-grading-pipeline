@@ -88,6 +88,7 @@ from lms_text_cleaning import (
 LEADING_ALLOWED_RE = re.compile(r"[a-z0-9]")
 TRAILING_DIGITS_RE = re.compile(r"(\d+)$")
 SSID_BASENAME = "SSID_base.csv"
+NAME_ALIAS_OVERRIDES_BASENAME = "name_alias_overrides.csv"
 
 
 def parse_args() -> argparse.Namespace:
@@ -164,6 +165,10 @@ def derive_ssid_input_path(gradework_sheet_input_path: Path) -> Path:
     return gradework_sheet_input_path.parent / SSID_BASENAME
 
 
+def derive_name_alias_overrides_input_path(gradework_sheet_input_path: Path) -> Path:
+    return gradework_sheet_input_path.parent / NAME_ALIAS_OVERRIDES_BASENAME
+
+
 def collapse_spaces(value: str | None) -> str | None:
     if value is None:
         return None
@@ -208,10 +213,44 @@ def norm_name_key(value: Any) -> str | None:
     return text or None
 
 
-def build_gw_index(rows: list[dict[str, str]]) -> dict[str, list[dict[str, str]]]:
+def canonicalize_name_key(value: Any, name_alias_overrides: dict[str, str]) -> str | None:
+    key = norm_name_key(value)
+    if key is None:
+        return None
+    return name_alias_overrides.get(key, key)
+
+
+def load_name_alias_overrides(input_path: Path) -> dict[str, str]:
+    """Load optional name alias overrides from CSV.
+
+    Expected columns (case-sensitive):
+    - alias_name
+    - canonical_name
+
+    Each row maps one alias to one canonical name key used for matching across
+    LMS_SUB, GRADE_SHEET, and SSID_ROSTER.
+    """
+    if not input_path.exists():
+        return {}
+
+    rows = load_csv_rows(input_path)
+    overrides: dict[str, str] = {}
+    for row in rows:
+        alias_key = norm_name_key(row.get("alias_name"))
+        canonical_key = norm_name_key(row.get("canonical_name"))
+        if not alias_key or not canonical_key:
+            continue
+        overrides[alias_key] = canonical_key
+    return overrides
+
+
+def build_gw_index(
+    rows: list[dict[str, str]],
+    name_alias_overrides: dict[str, str],
+) -> dict[str, list[dict[str, str]]]:
     keyed_rows: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in rows:
-        key = norm_name_key(row.get("Full name"))
+        key = canonicalize_name_key(row.get("Full name"), name_alias_overrides)
         if key is not None:
             keyed_rows[key].append(row)
     return keyed_rows
@@ -229,10 +268,13 @@ def build_ssid_display_name(row: dict[str, str] | None) -> str:
     return first_name or last_name
 
 
-def build_ssid_index(rows: list[dict[str, str]]) -> dict[str, list[dict[str, str]]]:
+def build_ssid_index(
+    rows: list[dict[str, str]],
+    name_alias_overrides: dict[str, str],
+) -> dict[str, list[dict[str, str]]]:
     keyed_rows: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in rows:
-        key = norm_name_key(build_ssid_display_name(row))
+        key = canonicalize_name_key(build_ssid_display_name(row), name_alias_overrides)
         if key is not None:
             keyed_rows[key].append(row)
     return keyed_rows
@@ -242,11 +284,12 @@ def build_output_rows(
     raw_rows: list[dict[str, str]],
     gw_index: dict[str, list[dict[str, str]]],
     ssid_index: dict[str, list[dict[str, str]]],
+    name_alias_overrides: dict[str, str],
 ) -> list[dict[str, str | int | None]]:
     output_rows: list[dict[str, str | int | None]] = []
 
     for row in raw_rows:
-        key_name = norm_name_key(row.get("User"))
+        key_name = canonicalize_name_key(row.get("User"), name_alias_overrides)
         gw_matches = gw_index.get(key_name or "", []) if key_name is not None else []
         gw_name_count = len(gw_matches) or None
 
@@ -553,6 +596,7 @@ def build_mismatch_report(
     validation_rows: list[dict[str, str | int | None]],
     gw_rows: list[dict[str, str]],
     ssid_rows: list[dict[str, str]],
+    name_alias_overrides: dict[str, str],
 ) -> str:
     def _md_cell(value: str) -> str:
         text = (value or "").replace("|", "\\|")
@@ -569,13 +613,13 @@ def build_mismatch_report(
 
     gw_rows_by_name: dict[str, list[dict[str, str]]] = defaultdict(list)
     for gw_row in gw_rows:
-        key_name = norm_name_key(gw_row.get("Full name"))
+        key_name = canonicalize_name_key(gw_row.get("Full name"), name_alias_overrides)
         if key_name:
             gw_rows_by_name[key_name].append(gw_row)
 
     ssid_rows_by_name: dict[str, list[dict[str, str]]] = defaultdict(list)
     for ssid_row in ssid_rows:
-        key_name = norm_name_key(build_ssid_display_name(ssid_row))
+        key_name = canonicalize_name_key(build_ssid_display_name(ssid_row), name_alias_overrides)
         if key_name:
             ssid_rows_by_name[key_name].append(ssid_row)
 
@@ -714,7 +758,7 @@ def build_mismatch_report(
 
     for row in unmatched_grade_identifier_rows:
         full_name = str(row.get("full_name", "") or "")
-        key_name = norm_name_key(full_name)
+        key_name = canonicalize_name_key(full_name, name_alias_overrides)
         ssid_match_count = len(ssid_rows_by_name.get(key_name or "", [])) if key_name else 0
         if ssid_match_count == 1:
             ssid_status = "name_match_in_ssid"
@@ -742,7 +786,7 @@ def build_mismatch_report(
         if (ssid_full_name, ssid_id_number, ssid_email) in matched_ssid_keys:
             continue
 
-        key_name = norm_name_key(ssid_full_name)
+        key_name = canonicalize_name_key(ssid_full_name, name_alias_overrides)
         gw_match_count = len(gw_rows_by_name.get(key_name or "", [])) if key_name else 0
         lms_match_count = lms_name_counts.get(key_name or "", 0)
 
@@ -1035,6 +1079,7 @@ def main() -> int:
     input_path = args.input_path.resolve()
     gradework_sheet_input_path = args.gradework_sheet_input_path.resolve()
     ssid_input_path = derive_ssid_input_path(gradework_sheet_input_path)
+    name_alias_overrides_input_path = derive_name_alias_overrides_input_path(gradework_sheet_input_path)
     output_path = args.output_path.resolve() if args.output_path else default_output_path(input_path)
     mapping_output_path = args.mapping_output_path.resolve() if args.mapping_output_path else default_mapping_output_path(output_path)
     mismatch_report_path = default_mismatch_report_path(output_path)
@@ -1043,9 +1088,10 @@ def main() -> int:
     raw_rows = load_csv_rows(input_path)
     gw_rows = load_csv_rows(gradework_sheet_input_path)
     ssid_rows = load_csv_rows(ssid_input_path)
-    gw_index = build_gw_index(gw_rows)
-    ssid_index = build_ssid_index(ssid_rows)
-    validation_rows = build_output_rows(raw_rows, gw_index, ssid_index)
+    name_alias_overrides = load_name_alias_overrides(name_alias_overrides_input_path)
+    gw_index = build_gw_index(gw_rows, name_alias_overrides)
+    ssid_index = build_ssid_index(ssid_rows, name_alias_overrides)
+    validation_rows = build_output_rows(raw_rows, gw_index, ssid_index, name_alias_overrides)
     canonical_rows = build_canonical_population_rows(
         raw_rows,
         validation_rows,
@@ -1053,7 +1099,7 @@ def main() -> int:
     )
     assert_no_duplicate_submission_component_rows(canonical_rows, output_path=output_path)
     mapping_rows = build_identifier_mapping_rows(validation_rows, ssid_rows)
-    mismatch_report = build_mismatch_report(validation_rows, gw_rows, ssid_rows)
+    mismatch_report = build_mismatch_report(validation_rows, gw_rows, ssid_rows, name_alias_overrides)
     write_output_rows(output_path, canonical_rows)
     write_mapping_rows(mapping_output_path, mapping_rows)
     write_text_output(mismatch_report_path, mismatch_report)
@@ -1061,6 +1107,8 @@ def main() -> int:
     print(f"[canonical_population] path={input_path}")
     print(f"[gradework_sheet] path={gradework_sheet_input_path}")
     print(f"[ssid_input] path={ssid_input_path}")
+    print(f"[name_alias_overrides_input] path={name_alias_overrides_input_path}")
+    print(f"[name_alias_overrides] loaded={len(name_alias_overrides)}")
     print(f"[output] path={output_path}")
     print(f"[mapping_output] path={mapping_output_path}")
     print(f"[mismatch_report] path={mismatch_report_path}")
