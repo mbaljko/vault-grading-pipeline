@@ -554,6 +554,37 @@ def build_mismatch_report(
     gw_rows: list[dict[str, str]],
     ssid_rows: list[dict[str, str]],
 ) -> str:
+    def _md_cell(value: str) -> str:
+        text = (value or "").replace("|", "\\|")
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+        text = text.replace("\n", "<br>")
+        return text
+
+    def _status_from_join_status(join_status: str, *, source: str) -> str:
+        if join_status == "matched_unique":
+            return "matched_unique"
+        if join_status == "excluded_ambiguous":
+            return f"ambiguous_{source}_name_match"
+        return f"no_{source}_match"
+
+    gw_rows_by_name: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for gw_row in gw_rows:
+        key_name = norm_name_key(gw_row.get("Full name"))
+        if key_name:
+            gw_rows_by_name[key_name].append(gw_row)
+
+    ssid_rows_by_name: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for ssid_row in ssid_rows:
+        key_name = norm_name_key(build_ssid_display_name(ssid_row))
+        if key_name:
+            ssid_rows_by_name[key_name].append(ssid_row)
+
+    lms_name_counts: Counter[str] = Counter()
+    for row in validation_rows:
+        key_name = str(row.get("__key_name", "") or "")
+        if key_name:
+            lms_name_counts[key_name] += 1
+
     matched_identifiers = {
         str(row.get("GW.Identifier", "") or "")
         for row in validation_rows
@@ -573,19 +604,26 @@ def build_mismatch_report(
         elif username:
             raw_rows_without_identifier.append(username)
 
-    unmatched_grade_identifiers: list[str] = []
+    unmatched_grade_identifier_rows: list[dict[str, str]] = []
     for row in gw_rows:
         identifier = str(row.get("Identifier", "") or "")
         if not identifier or identifier in matched_identifiers:
             continue
         submission_id = extract_trailing_digits(identifier)
-        if submission_id:
-            unmatched_grade_identifiers.append(f"{submission_id} -> {identifier}")
-        else:
-            unmatched_grade_identifiers.append(identifier)
+        unmatched_grade_identifier_rows.append(
+            {
+                "submission_id": submission_id or "",
+                "identifier": identifier,
+                "full_name": str(row.get("Full name", "") or ""),
+                "email": str(row.get("Email address", "") or ""),
+            }
+        )
 
     raw_rows_without_identifier = sorted(set(raw_rows_without_identifier))
-    unmatched_grade_identifiers = sorted(set(unmatched_grade_identifiers))
+    unmatched_grade_identifier_rows = sorted(
+        unmatched_grade_identifier_rows,
+        key=lambda item: (item.get("full_name", ""), item.get("identifier", "")),
+    )
 
     lms_rows_without_ssid_mapping: list[str] = []
     ambiguous_ssid_matches: list[str] = []
@@ -631,13 +669,132 @@ def build_mismatch_report(
     unmatched_ssid_rows = sorted(set(unmatched_ssid_rows))
     ssid_email_mismatches = sorted(set(ssid_email_mismatches))
 
+    mismatch_matrix_rows: list[dict[str, str]] = []
+
+    for row in validation_rows:
+        join_status = str(row.get("__join_status", "") or "")
+        ssid_join_status = str(row.get("__ssid_join_status", "") or "")
+        gw_email = str(row.get("GW.Email address", "") or "")
+        ssid_email = str(row.get("SSID.Email address", "") or "")
+        email_mismatch = (
+            ssid_join_status == "matched_unique"
+            and bool(gw_email)
+            and bool(ssid_email)
+            and gw_email.strip().lower() != ssid_email.strip().lower()
+        )
+        if join_status == "matched_unique" and ssid_join_status == "matched_unique" and not email_mismatch:
+            continue
+
+        user = str(row.get("User", "") or "")
+        username = str(row.get("Username", "") or "")
+        participant = user or str(row.get("GW.Full name", "") or "") or str(row.get("SSID.Full name", "") or "") or "<missing>"
+        if username:
+            participant = f"{participant} ({username})"
+
+        issue_flags: list[str] = []
+        if join_status != "matched_unique":
+            issue_flags.append("lms_to_grade_mismatch")
+        if ssid_join_status != "matched_unique":
+            issue_flags.append("lms_to_ssid_mismatch")
+        if email_mismatch:
+            issue_flags.append("grade_vs_ssid_email_mismatch")
+
+        mismatch_matrix_rows.append(
+            {
+                "participant": participant,
+                "submission_id": str(row.get("submission_id", "") or ""),
+                "gw_identifier": str(row.get("GW.Identifier", "") or ""),
+                "ssid_id": str(row.get("SSID.ID number", "") or ""),
+                "lms_status": "present",
+                "grade_status": _status_from_join_status(join_status, source="grade"),
+                "ssid_status": _status_from_join_status(ssid_join_status, source="ssid"),
+                "issues": ", ".join(issue_flags) or "<none>",
+            }
+        )
+
+    for row in unmatched_grade_identifier_rows:
+        full_name = str(row.get("full_name", "") or "")
+        key_name = norm_name_key(full_name)
+        ssid_match_count = len(ssid_rows_by_name.get(key_name or "", [])) if key_name else 0
+        if ssid_match_count == 1:
+            ssid_status = "name_match_in_ssid"
+        elif ssid_match_count > 1:
+            ssid_status = "ambiguous_ssid_name_match"
+        else:
+            ssid_status = "no_ssid_match"
+        mismatch_matrix_rows.append(
+            {
+                "participant": full_name or "<missing>",
+                "submission_id": str(row.get("submission_id", "") or ""),
+                "gw_identifier": str(row.get("identifier", "") or ""),
+                "ssid_id": "",
+                "lms_status": "missing",
+                "grade_status": "present_unmatched_identifier",
+                "ssid_status": ssid_status,
+                "issues": "grade_identifier_without_lms_mapping",
+            }
+        )
+
+    for ssid_row in ssid_rows:
+        ssid_full_name = build_ssid_display_name(ssid_row)
+        ssid_id_number = str(ssid_row.get("ID number", "") or "")
+        ssid_email = str(ssid_row.get("Email address", "") or "")
+        if (ssid_full_name, ssid_id_number, ssid_email) in matched_ssid_keys:
+            continue
+
+        key_name = norm_name_key(ssid_full_name)
+        gw_match_count = len(gw_rows_by_name.get(key_name or "", [])) if key_name else 0
+        lms_match_count = lms_name_counts.get(key_name or "", 0)
+
+        if gw_match_count == 0:
+            grade_status = "missing"
+        elif gw_match_count == 1:
+            grade_status = "name_match_only"
+        else:
+            grade_status = "ambiguous_grade_name_match"
+
+        if lms_match_count == 0:
+            lms_status = "missing"
+        elif lms_match_count == 1:
+            lms_status = "name_match_only"
+        else:
+            lms_status = "ambiguous_lms_name_match"
+
+        mismatch_matrix_rows.append(
+            {
+                "participant": ssid_full_name or "<missing>",
+                "submission_id": "",
+                "gw_identifier": "",
+                "ssid_id": ssid_id_number,
+                "lms_status": lms_status,
+                "grade_status": grade_status,
+                "ssid_status": "present_unmatched",
+                "issues": "ssid_row_without_confirmed_lms_mapping",
+            }
+        )
+
+    mismatch_matrix_rows = sorted(
+        mismatch_matrix_rows,
+        key=lambda item: (
+            item.get("participant", ""),
+            item.get("submission_id", ""),
+            item.get("gw_identifier", ""),
+            item.get("ssid_id", ""),
+        ),
+    )
+
     lines = [
         "# Mismatch Report",
         "",
-        "This report lists records that do not map cleanly between LMS submissions and the grading worksheet.",
+        "This report reconciles **three sources** against each other:",
+        "- LMS_SUB = LMS submissions (population input)",
+        "- GRADE_SHEET = grading worksheet (grade identifiers)",
+        "- SSID_ROSTER = SSID roster (SSID_base.csv)",
+        "",
+        "A row is listed as a mismatch when at least one source does not cleanly map to the other two.",
         "",
         f"- LMS rows without a grade Identifier mapping: {len(raw_rows_without_identifier)}",
-        f"- Grade Identifiers without an LMS mapping: {len(unmatched_grade_identifiers)}",
+        f"- Grade Identifiers without an LMS mapping: {len(unmatched_grade_identifier_rows)}",
         f"- LMS rows without an SSID mapping: {len(lms_rows_without_ssid_mapping)}",
         f"- SSID rows without an LMS mapping: {len(unmatched_ssid_rows)}",
         f"- LMS rows with ambiguous SSID matches: {len(ambiguous_ssid_matches)}",
@@ -664,8 +821,51 @@ def build_mismatch_report(
         ]
     )
 
-    if unmatched_grade_identifiers:
-        lines.extend(f"- {value}" for value in unmatched_grade_identifiers)
+    if unmatched_grade_identifier_rows:
+        lines.extend(
+            [
+                "| # | Full name | Identifier | submission_id | Email |",
+                "|---:|---|---|---|---|",
+            ]
+        )
+        for index, row in enumerate(unmatched_grade_identifier_rows, start=1):
+            full_name = _md_cell(str(row.get("full_name", "") or "<blank>"))
+            identifier = _md_cell(str(row.get("identifier", "") or "<blank>"))
+            submission_id = _md_cell(str(row.get("submission_id", "") or "<none>"))
+            email = _md_cell(str(row.get("email", "") or "<blank>"))
+            lines.append(f"| {index} | {full_name} | {identifier} | {submission_id} | {email} |")
+    else:
+        lines.append("- None")
+
+    lines.extend(
+        [
+            "",
+            "## Cross-Source Mismatch Status Table",
+            "",
+            "This table shows mismatch rows across all three sources and indicates source status under LMS_SUB, GRADE_SHEET, and SSID_ROSTER.",
+            "",
+        ]
+    )
+
+    if mismatch_matrix_rows:
+        lines.extend(
+            [
+                "| # | Participant | submission_id | GW.Identifier | SSID.ID number | LMS_SUB | GRADE_SHEET | SSID_ROSTER | issue flags |",
+                "|---:|---|---|---|---|---|---|---|---|",
+            ]
+        )
+        for index, row in enumerate(mismatch_matrix_rows, start=1):
+            participant = _md_cell(str(row.get("participant", "") or "<missing>"))
+            submission_id = _md_cell(str(row.get("submission_id", "") or "<none>"))
+            gw_identifier = _md_cell(str(row.get("gw_identifier", "") or "<none>"))
+            ssid_id = _md_cell(str(row.get("ssid_id", "") or "<none>"))
+            lms_status = _md_cell(str(row.get("lms_status", "") or "<none>"))
+            grade_status = _md_cell(str(row.get("grade_status", "") or "<none>"))
+            ssid_status = _md_cell(str(row.get("ssid_status", "") or "<none>"))
+            issues = _md_cell(str(row.get("issues", "") or "<none>"))
+            lines.append(
+                f"| {index} | {participant} | {submission_id} | {gw_identifier} | {ssid_id} | {lms_status} | {grade_status} | {ssid_status} | {issues} |"
+            )
     else:
         lines.append("- None")
 

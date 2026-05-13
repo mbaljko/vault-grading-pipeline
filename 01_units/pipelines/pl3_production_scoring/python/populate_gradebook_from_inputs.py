@@ -608,7 +608,51 @@ def build_ssid_omissions_report(
 			"|---:|---|---|---|---|---|---|---|",
 		]
 	)
-
+	
+	# Plain language explanation of the report and omission reasons
+	lines.extend(
+		[
+			"",
+			"## What This Report Means",
+			"",
+			"This report documents students from the LMS gradebook who were **excluded from the SSID output file** and therefore cannot receive grades in the system.",
+			"",
+			"Students appear in this report when one of the following occurs:",
+			"",
+			"### Reason: `no_canonical_match`",
+			"",
+			"**Plain Language**: The student could not be matched to a submitted assignment.",
+			"",
+			"**What happened**: The script attempted to match this gradebook entry to a student submission using three matching signals:",
+			"- Student ID (Identifier)",
+			"- Full name (from multiple sources: gradebook name and LMS username)",
+			"- Email address (local part of email matched against LMS username)",
+			"",
+			"**Result**: None of these matching signals found a submission for this student. Either the student did not submit work, or there is a mismatch between the gradebook entry and the submission records.",
+			"",
+			"**Action**: Verify the student's submission status. If the submission exists, check that the student's name and email in the gradebook match their submission records.",
+			"",
+			"### Reason: `missing_ssid_for_submission`",
+			"",
+			"**Plain Language**: The student has a submission, but their Student ID (SSID) is not in the system records.",
+			"",
+			"**What happened**: The script found a submitted assignment that matches this gradebook entry, so the grade could be populated. However, the canonical population table (which maps submissions to Student IDs) does not contain an SSID entry for this submission.",
+			"",
+			"**Result**: The student is excluded from the SSID output file because their Student ID cannot be determined, even though their grade was populated.",
+			"",
+			"**Action**: Verify that the student's SSID is recorded in the canonical population system. Check the submission records for any missing or incorrectly formatted SSID entries.",
+			"",
+		]
+	)
+	
+	lines.extend(
+		[
+			"## Omitted Rows Table",
+			"",
+			"| # | reason | Identifier | Full name | Email | submission_id | Grade | Feedback comments |",
+			"|---:|---|---|---|---|---|---|---|",
+		]
+	)
 	for index, row in enumerate(omitted_rows, start=1):
 		reason = _md_cell(row.get("reason", "unknown") or "unknown")
 		identifier = _md_cell(row.get("identifier", "") or "<blank>")
