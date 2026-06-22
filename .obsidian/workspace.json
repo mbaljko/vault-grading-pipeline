@@ -272,35 +272,21 @@
             }
           },
           {
-            "id": "30b7ed3094eafc89",
+            "id": "69ea35ce463a28b3",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v02.md",
+                "file": "README.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Rubric_SpecificationGuide_v02"
-            }
-          },
-          {
-            "id": "fe3cb8bfbc96d736",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "01_units/pipelines/pl1C_rubric_devt/docs/layer1_registry_supported_values.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "layer1_registry_supported_values"
+              "title": "README"
             }
           }
         ],
-        "currentTab": 19
+        "currentTab": 18
       }
     ],
     "direction": "vertical"
@@ -446,13 +432,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01_units/pipelines/pl1C_rubric_devt/docs/layer1_registry_supported_values.md",
+                "file": "README.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of layer1_registry_supported_values"
+              "title": "Outline of README"
             }
           },
           {
@@ -486,12 +472,17 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "fe3cb8bfbc96d736",
+  "active": "69ea35ce463a28b3",
   "lastOpenFiles": [
+    "Design Note - Extensible Architecture for `vault-grading-pipeline`.md",
+    "README.md",
+    "Untitled.md",
+    "01_units/pipelines/pl1C_rubric_devt/scaffold/pl1C_scaffold_stage13_Layer1_Indicator_Scoring_Prompt.md",
+    "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v02.md",
+    "01_units/pipelines/pl1C_rubric_devt/docs/layer1_registry_supported_values.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP3D.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP2D.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP1D.md",
-    "01_units/pipelines/pl1C_rubric_devt/docs/layer1_registry_supported_values.md",
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP1B.md",
     "01_units/pipelines/pl1C_rubric_devt/docs/layer0_registry_supported_values.md",
     "01_units/pipelines/pl3_production_scoring/python/__pycache__/test_populate_gradebook_from_inputs.cpython-313.pyc",
@@ -518,11 +509,6 @@
     "01_units/pipelines/pl1A_canonical_population_prep/llm_prompt/_prompt_derive_pseudo_assignment_parsing_AP3B.md",
     "01_units/pipelines/pl1A_canonical_population_prep/excel/README.md",
     "01_units/pipelines/pl1A_canonical_population_prep/excel/Pipeline1A_Excel_Implementation_Standard.md",
-    "01_units/pipelines/pl1A_canonical_population_prep/excel/Pipeline1A_Excel_Runbook.md",
-    "05_docs/01_design/pl1B_rubric_devt/Rubric_SpecificationGuide_v02.md",
-    "05_docs/01_design/pl1B_rubric_devt/Pipeline 1B — Layered Rubric Construction Pipeline.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Layer1_Generate_IndicatorTriagePanelReport_singleSBO.md",
-    "05_docs/01_design/pl1B_rubric_devt/_INSTRUCTIONS - REVIEWING ITP REPORTS.md",
-    "01_units/pipelines/pl1C_rubric_devt/llm_prompt/pl1B_prompt_stage13_Generate_Layer1_Indicator_Scoring_Prompt - single indicator.md"
+    "01_units/pipelines/pl1A_canonical_population_prep/excel/Pipeline1A_Excel_Runbook.md"
   ]
 }
